@@ -9,6 +9,7 @@ package golongtail
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 import "C"
 import (
+	"fmt"
 	"unsafe"
 	"runtime"
 
@@ -56,7 +57,7 @@ func CreateVersionIndexFromFolder(folderPath string, progressProxyData ProgressP
 
 	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
 	for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
-		compressionTypes[i] = 0	// Need to change LIZARD_DEFAULT_COMPRESSION_TYPE form macro!
+		compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE
 	}
 
 	vindex := C.CreateVersionIndex(
@@ -74,6 +75,123 @@ func CreateVersionIndexFromFolder(folderPath string, progressProxyData ProgressP
 	return vindex
 }
 
+//ReadVersionIndex ...
+func ReadVersionIndex(indexPath string) *C.struct_VersionIndex {
+	cIndexPath := C.CString(indexPath)
+	defer C.free(unsafe.Pointer(cIndexPath))
+
+	fs := C.CreateFSStorageAPI()
+	defer C.DestroyStorageAPI(fs)
+
+	vindex := C.ReadVersionIndex(fs, cIndexPath)
+
+	return vindex
+}
+
+//WriteVersionIndex ...
+func WriteVersionIndex(versionIndex *C.struct_VersionIndex, indexPath string) {
+	cIndexPath := C.CString(indexPath)
+	defer C.free(unsafe.Pointer(cIndexPath))
+
+	fs := C.CreateFSStorageAPI()
+	defer C.DestroyStorageAPI(fs)
+
+	C.WriteVersionIndex(fs, versionIndex, cIndexPath)
+}
+
+//UpSyncVersion ...
+func UpSyncVersion(versionPath string, versionIndexPath string, contentPath string, contentIndexPath string, missingContentPath string, missingContentIndexPath string, outputFormat string, maxChunksPerBlock int, targetBlockSize int, targetChunkSize int) error {
+	cVersionPath := C.CString(versionPath)
+	defer C.free(unsafe.Pointer(cVersionPath))
+
+	fs := C.CreateFSStorageAPI()
+	defer C.DestroyStorageAPI(fs)
+	hs := C.CreateMeowHashAPI()
+	defer C.DestroyHashAPI(hs)
+	jb := C.CreateBikeshedJobAPI(C.uint32_t(runtime.NumCPU()))
+	defer C.DestroyJobAPI(jb)
+
+	var vindex *C.struct_VersionIndex = nil
+	defer C.Longtail_Free(unsafe.Pointer(vindex))
+
+	if len(versionIndexPath) > 0 {
+		cVersionIndexPath := C.CString(versionIndexPath)
+		defer C.free(unsafe.Pointer(cVersionIndexPath))
+		vindex = C.ReadVersionIndex(fs, cVersionIndexPath)
+	}
+	if nil == vindex {
+		if len(versionPath) == 0 {
+			return fmt.Errorf("UpSyncVersion: version folder must be given if no valid version index is given")
+		}
+		fileInfos := C.GetFilesRecursively(fs, cVersionPath)
+		defer C.Longtail_Free(unsafe.Pointer(fileInfos))
+
+		compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
+		for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
+			compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE	// Currently we just use our only compression method
+		}
+
+		vindex = C.CreateVersionIndex(
+			fs,
+			hs,
+			jb,
+			(C.JobAPI_ProgressFunc)(C.progressProxy),
+			nil,
+			cVersionPath,
+			(*C.struct_Paths)(&fileInfos.m_Paths),
+			fileInfos.m_FileSizes,
+			(*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
+			C.uint32_t(targetChunkSize))
+
+		if vindex == nil {
+			return fmt.Errorf("UpSyncVersion: failed to create version index for folder `%s`", versionPath)
+		}
+	}
+
+	cContentPath := C.CString(contentPath)
+	defer C.free(unsafe.Pointer(cContentPath))
+
+	var cindex *C.struct_ContentIndex = nil
+	defer C.Longtail_Free(unsafe.Pointer(cindex))
+
+	if len(contentIndexPath) > 0 {
+		cContentIndexPath := C.CString(contentIndexPath)
+		defer C.free(unsafe.Pointer(cContentIndexPath))
+		cindex = C.ReadContentIndex(fs, cContentIndexPath)
+	}
+	if cindex == nil {
+		if len(contentPath) == 0 && len(contentIndexPath) == 0 {
+			cindex = C.CreateContentIndex(
+				hs,
+				C.uint64_t(0),
+				nil,
+				nil,
+				nil,
+				C.uint32_t(targetBlockSize),
+				C.uint32_t(maxChunksPerBlock))
+			if cindex == nil {
+				return fmt.Errorf("UpSyncVersion: failed to create empty content index")
+			}
+		}
+		if len(contentPath) == 0 {
+			return fmt.Errorf("UpSyncVersion: content folder must be given if no valid content index is given")
+		}
+	}
+
+	missingContentIndex := C.CreateMissingContent(
+		hs,
+		cindex,
+		vindex,
+		C.uint32_t(targetBlockSize),
+		C.uint32_t(maxChunksPerBlock))
+	defer C.free(unsafe.Pointer(missingContentIndex))
+
+	if missingContentIndex == nil {
+		return fmt.Errorf("UpSyncVersion: Failed to generate content index for missing content")
+	}
+
+	return nil
+}
 /*
 //ChunkFolder hello
 func ChunkFolder(folderPath string) int32 {

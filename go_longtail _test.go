@@ -42,6 +42,21 @@ func TestCreateVersionIndexFromFolder(t *testing.T) {
 	LongtailFree(unsafe.Pointer(vi))
 }
 
+func TestReadWriteVersionIndex(t *testing.T) {
+	vi := CreateVersionIndexFromFolder("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
+	if vi == nil {
+		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")
+	}
+	defer LongtailFree(unsafe.Pointer(vi))
+
+	WriteVersionIndex(vi, "C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor.lvi")
+	vi2 := ReadVersionIndex("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor.lvi")
+	if vi2 == nil {
+		t.Errorf("ReadVersionIndex() = nil, want !nil")
+	}
+	defer LongtailFree(unsafe.Pointer(vi2))
+}
+
 /*
 func TestChunkFolder(t *testing.T) {
 	expected := int32(194061)

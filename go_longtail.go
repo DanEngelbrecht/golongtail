@@ -1,4 +1,4 @@
-package main
+package golongtail
 
 // #cgo CFLAGS: -g -std=gnu99
 // #cgo LDFLAGS: -L. -l:longtail_lib.a
@@ -10,8 +10,8 @@ package main
 import "C"
 import (
 	"fmt"
-    "runtime"
 	"unsafe"
+	"runtime"
 
 	"github.com/mattn/go-pointer"
 )
@@ -29,7 +29,7 @@ func makeProgressProxy(progressFunc progressFunc, context interface{}) progressP
 
 type progressData struct {
 	oldPercent int
-	task string
+	task       string
 }
 
 func progress(context interface{}, total int, current int) {
@@ -47,25 +47,18 @@ func progress(context interface{}, total int, current int) {
 	}
 	if p.oldPercent != 0 {
 		if p.oldPercent != 100 {
-			fmt.Printf("100%%");
+			fmt.Printf("100%%")
 		}
 		fmt.Print(" Done\n")
 	}
 }
 
-func main() {
-
-	    size := C.GetVersionIndexSize(
-	      10,
-	      20,
-	      30,
-	      40)
-	  println(size)
-
-	progressProxy := makeProgressProxy(progress, &progressData{task : "Indexing"})
+//ChunkFolder hello
+func ChunkFolder(folder_path string) int32 {
+	progressProxy := makeProgressProxy(progress, &progressData{task: "Indexing"})
 	c := pointer.Save(&progressProxy)
 
-	path := C.CString("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor")
+	path := C.CString(folder_path)
 	defer C.free(unsafe.Pointer(path))
 
 	fs := C.CreateFSStorageAPI()
@@ -74,7 +67,7 @@ func main() {
 	fileInfos := C.GetFilesRecursively(fs, path)
 	fmt.Printf("Files found: %d\n", int(*fileInfos.m_Paths.m_PathCount))
 
-	compressionTypes := make([]C.uint32_t,int(*fileInfos.m_Paths.m_PathCount))
+	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
 	for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
 		compressionTypes[i] = 0
 	}
@@ -91,7 +84,8 @@ func main() {
 		(*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
 		C.uint32_t(32768))
 
-	fmt.Printf("Chunks made: %d\n", int(*vi.m_ChunkCount))
+	chunkCount := int32(*vi.m_ChunkCount);
+	fmt.Printf("Chunks made: %d\n", chunkCount)
 
 	C.Longtail_Free(unsafe.Pointer(vi))
 
@@ -101,9 +95,23 @@ func main() {
 	C.DestroyStorageAPI(fs)
 	pointer.Unref(c)
 
-	return
+	return chunkCount
 }
 
+/*
+func main() {
+
+	size := C.GetVersionIndexSize(
+		10,
+		20,
+		30,
+		40)
+	println(size)
+
+
+	return
+}
+*/
 //export progressProxy
 func progressProxy(progress unsafe.Pointer, total C.uint32_t, done C.uint32_t) {
 	progressProxy := pointer.Restore(progress).(*progressProxyData)

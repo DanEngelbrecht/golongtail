@@ -7,8 +7,25 @@ package golongtail
 // #include "longtail/lib/longtail_lib.h"
 // #include <stdlib.h>
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
+// static StorageAPI_HOpenFile Storage_OpenWriteFile(struct StorageAPI* api, const char* path, uint64_t initial_size)
+// {
+//   return api->OpenWriteFile(api, path, initial_size);
+// }
+// static int Storage_Write(struct StorageAPI* api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+// {
+//   return api->Write(api, f, offset, length, input);
+// }
+// static void Storage_CloseWrite(struct StorageAPI* api, StorageAPI_HOpenFile f)
+// {
+//   return api->CloseWrite(api, f);
+// }
+// static const char* GetPath(const uint32_t* name_offsets, const char* name_data, uint32_t index)
+// {
+//   return &name_data[name_offsets[index]];
+// }
 import "C"
 import (
+	"fmt"
 	"runtime"
 	"unsafe"
 
@@ -27,6 +44,23 @@ type ProgressProxyData struct {
 //MakeProgressProxy create data for progress function
 func MakeProgressProxy(progressFunc ProgressFunc, context interface{}) ProgressProxyData {
 	return ProgressProxyData{progressFunc, context}
+}
+
+func WriteToStorage(fs *C.struct_StorageAPI, path string, data []byte) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	if C.EnsureParentPathExists(fs, cPath) == 0 {
+		return fmt.Errorf("WriteToStorage: failed to create parent path for `%s`", path)
+	}
+	f := C.Storage_OpenWriteFile(fs, cPath, 0)
+	if f == nil {
+		return fmt.Errorf("WriteToStorage: failed to create file at `%s`", path)
+	}
+	defer C.Storage_CloseWrite(fs, f)
+	if C.Storage_Write(fs, f, 0, (C.uint64_t)(len(data)), (unsafe.Pointer(&data[0]))) == 0 {
+		return fmt.Errorf("WriteToStorage: failed to write %d bytes to file `%s`", len(data), path)
+	}
+	return nil
 }
 
 func CreateMeowHashAPI() *C.struct_HashAPI {
@@ -99,6 +133,16 @@ func GetFilesRecursively(fs *C.struct_StorageAPI, rootPath string) *C.struct_Fil
 	return C.GetFilesRecursively(fs, cFolderPath)
 }
 
+func GetPath(paths *C.struct_Paths, index uint32) string {
+	cPath := C.GetPath(paths.m_Offsets, paths.m_Data, C.uint32_t(index))
+	return C.GoString(cPath)
+}
+
+func GetVersionIndexPath(vindex *C.struct_VersionIndex, index uint32) string {
+	cPath := C.GetPath(vindex.m_NameOffsets, vindex.m_NameData, C.uint32_t(index))
+	return C.GoString(cPath)
+}
+
 func CreateVersionIndex(
 	fs *C.struct_StorageAPI,
 	hash *C.struct_HashAPI,
@@ -136,6 +180,70 @@ func CreateVersionIndex(
 	return vindex
 }
 
+func WriteVersionIndex(fs *C.struct_StorageAPI, index *C.struct_VersionIndex, path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	if C.WriteVersionIndex(fs, index, cPath) == 0 {
+		return fmt.Errorf("WriteVersionIndex: failed to write index to `%s`", path)
+	}
+	return nil
+}
+
+func ReadVersionIndex(fs *C.struct_StorageAPI, path string) *C.struct_VersionIndex {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	return C.ReadVersionIndex(fs, cPath)
+}
+
+func CreateContentIndex(
+	hash *C.struct_HashAPI,
+	chunkCount uint64,
+	chunkHashes []uint64,
+	chunkSizes []uint32,
+	compressionTypes []uint32,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) *C.struct_ContentIndex {
+
+	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
+	cChunkSizes := (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
+	cCompressionTypes := (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
+
+	cindex := C.CreateContentIndex(
+		hash,
+		C.uint64_t(chunkCount),
+		cChunkHashes,
+		cChunkSizes,
+		cCompressionTypes,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock))
+
+	return cindex
+}
+
+func WriteContentIndex(fs *C.struct_StorageAPI, index *C.struct_ContentIndex, path string) error {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	if C.WriteContentIndex(fs, index, cPath) == 0 {
+		return fmt.Errorf("WriteContentIndex: failed to write index to `%s`", path)
+	}
+	return nil
+}
+
+func ReadContentIndex(fs *C.struct_StorageAPI, path string) *C.struct_ContentIndex {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	return C.ReadContentIndex(fs, cPath)
+}
+
+//WriteContent
+//ReadContent
+//CreateMissingContent
+//RetargetContent
+//MergeContentIndex
+//WriteVersion
+//CreateVersionDiff
+//ChangeVersion
+
 //GetVersionIndex ...
 func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, progressProxyData ProgressProxyData) *C.struct_VersionIndex {
 	progressContext := pointer.Save(&progressProxyData)
@@ -157,7 +265,7 @@ func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, pr
 	defer C.Longtail_Free(unsafe.Pointer(fileInfos))
 
 	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
-	for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
+	for i := 0; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
 		compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE
 	}
 
@@ -176,29 +284,6 @@ func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, pr
 	return vindex
 }
 
-//ReadVersionIndex ...
-func ReadVersionIndex(indexPath string) *C.struct_VersionIndex {
-	cIndexPath := C.CString(indexPath)
-	defer C.free(unsafe.Pointer(cIndexPath))
-
-	fs := C.CreateFSStorageAPI()
-	defer C.DestroyStorageAPI(fs)
-
-	vindex := C.ReadVersionIndex(fs, cIndexPath)
-
-	return vindex
-}
-
-//WriteVersionIndex ...
-func WriteVersionIndex(versionIndex *C.struct_VersionIndex, indexPath string) {
-	cIndexPath := C.CString(indexPath)
-	defer C.free(unsafe.Pointer(cIndexPath))
-
-	fs := C.CreateFSStorageAPI()
-	defer C.DestroyStorageAPI(fs)
-
-	C.WriteVersionIndex(fs, versionIndex, cIndexPath)
-}
 /*
 //UpSyncVersion ...
 func UpSyncVersion(versionPath string, versionIndexPath string, contentPath string, contentIndexPath string, missingContentPath string, missingContentIndexPath string, outputFormat string, maxChunksPerBlock int, targetBlockSize int, targetChunkSize int) (*C.struct_ContentIndex, error) {

@@ -38,33 +38,59 @@ func TestCreateVersionIndexFromFolder(t *testing.T) {
 	fs := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(fs)
 
-	vi := CreateVersionIndexFromFolder("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
-	if vi == nil {
-		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")
-	}
-	LongtailFree(unsafe.Pointer(vi))
-}
+	WriteToStorage(fs, "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(fs, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(fs, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
 
-func TestReadWriteVersionIndex(t *testing.T) {
-	vi := CreateVersionIndexFromFolder("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
+	vi := CreateVersionIndexFromFolder(fs, "", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
 	if vi == nil {
 		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")
 	}
 	defer LongtailFree(unsafe.Pointer(vi))
 
-	WriteVersionIndex(vi, "C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor.lvi")
-	vi2 := ReadVersionIndex("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor.lvi")
+	expected_asset_count := uint32(5)
+	if ret := uint32(*vi.m_AssetCount); ret != expected_asset_count {
+		t.Errorf("CreateVersionIndexFromFolder() asset count = %q, want %q", ret, expected_asset_count)
+	}
+	expected_chunk_count := uint32(3)
+	if ret := uint32(*vi.m_ChunkCount); ret != expected_chunk_count {
+		t.Errorf("CreateVersionIndexFromFolder() chunk count = %q, want %q", ret, expected_chunk_count)
+	}
+}
+
+func TestReadWriteVersionIndex(t *testing.T) {
+	fs := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(fs)
+
+	WriteToStorage(fs, "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(fs, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(fs, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+
+	vi := CreateVersionIndexFromFolder(fs, "", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
+	if vi == nil {
+		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")
+	}
+	defer LongtailFree(unsafe.Pointer(vi))
+
+	expected_err := error(nil)
+	if ret := WriteVersionIndex(fs, vi, "test.lvi"); ret != expected_err {
+		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expected_err)
+	}
+
+	vi2 := ReadVersionIndex(fs, "test.lvi")
 	if vi2 == nil {
 		t.Errorf("ReadVersionIndex() = nil, want !nil")
 	}
 	defer LongtailFree(unsafe.Pointer(vi2))
-}
 
-/*
-func TestChunkFolder(t *testing.T) {
-	expected := int32(194061)
-	if ret := ChunkFolder("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor"); ret != expected {
-		t.Errorf("ChunkFolder() = %q, want %q", ret, expected)
+	if (*vi2.m_AssetCount) != (*vi.m_AssetCount) {
+		t.Errorf("ReadVersionIndex() asset count = %q, want %q", (*vi2.m_AssetCount), (*vi.m_AssetCount))
+	}
+
+	for i := uint32(0); i < uint32(*vi.m_AssetCount); i++ {
+		expected := GetVersionIndexPath(vi, i)
+		if ret := GetVersionIndexPath(vi2, i); ret != expected {
+			t.Errorf("ReadVersionIndex() path %d = %q, want %q", int(i), ret, expected)
+		}
 	}
 }
-*/

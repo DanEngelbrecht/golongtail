@@ -100,7 +100,7 @@ func WriteVersionIndex(versionIndex *C.struct_VersionIndex, indexPath string) {
 }
 
 //UpSyncVersion ...
-func UpSyncVersion(versionPath string, versionIndexPath string, contentPath string, contentIndexPath string, missingContentPath string, missingContentIndexPath string, outputFormat string, maxChunksPerBlock int, targetBlockSize int, targetChunkSize int) error {
+func UpSyncVersion(versionPath string, versionIndexPath string, contentPath string, contentIndexPath string, missingContentPath string, missingContentIndexPath string, outputFormat string, maxChunksPerBlock int, targetBlockSize int, targetChunkSize int) (*C.struct_ContentIndex, error) {
 	cVersionPath := C.CString(versionPath)
 	defer C.free(unsafe.Pointer(cVersionPath))
 
@@ -114,14 +114,15 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 	var vindex *C.struct_VersionIndex = nil
 	defer C.Longtail_Free(unsafe.Pointer(vindex))
 
+	cVersionIndexPath := C.CString(versionIndexPath)
+	defer C.free(unsafe.Pointer(cVersionIndexPath))
+
 	if len(versionIndexPath) > 0 {
-		cVersionIndexPath := C.CString(versionIndexPath)
-		defer C.free(unsafe.Pointer(cVersionIndexPath))
 		vindex = C.ReadVersionIndex(fs, cVersionIndexPath)
 	}
 	if nil == vindex {
 		if len(versionPath) == 0 {
-			return fmt.Errorf("UpSyncVersion: version folder must be given if no valid version index is given")
+			return nil, fmt.Errorf("UpSyncVersion: version folder must be given if no valid version index is given")
 		}
 		fileInfos := C.GetFilesRecursively(fs, cVersionPath)
 		defer C.Longtail_Free(unsafe.Pointer(fileInfos))
@@ -144,7 +145,7 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 			C.uint32_t(targetChunkSize))
 
 		if vindex == nil {
-			return fmt.Errorf("UpSyncVersion: failed to create version index for folder `%s`", versionPath)
+			return nil, fmt.Errorf("UpSyncVersion: failed to create version index for folder `%s`", versionPath)
 		}
 	}
 
@@ -154,9 +155,10 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 	var cindex *C.struct_ContentIndex = nil
 	defer C.Longtail_Free(unsafe.Pointer(cindex))
 
+	cContentIndexPath := C.CString(contentIndexPath)
+	defer C.free(unsafe.Pointer(cContentIndexPath))
+
 	if len(contentIndexPath) > 0 {
-		cContentIndexPath := C.CString(contentIndexPath)
-		defer C.free(unsafe.Pointer(cContentIndexPath))
 		cindex = C.ReadContentIndex(fs, cContentIndexPath)
 	}
 	if cindex == nil {
@@ -170,11 +172,11 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 				C.uint32_t(targetBlockSize),
 				C.uint32_t(maxChunksPerBlock))
 			if cindex == nil {
-				return fmt.Errorf("UpSyncVersion: failed to create empty content index")
+				return nil, fmt.Errorf("UpSyncVersion: failed to create empty content index")
 			}
 		}
 		if len(contentPath) == 0 {
-			return fmt.Errorf("UpSyncVersion: content folder must be given if no valid content index is given")
+			return nil, fmt.Errorf("UpSyncVersion: content folder must be given if no valid content index is given")
 		}
 	}
 
@@ -184,13 +186,57 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 		vindex,
 		C.uint32_t(targetBlockSize),
 		C.uint32_t(maxChunksPerBlock))
-	defer C.free(unsafe.Pointer(missingContentIndex))
 
 	if missingContentIndex == nil {
-		return fmt.Errorf("UpSyncVersion: Failed to generate content index for missing content")
+		return nil, fmt.Errorf("UpSyncVersion: Failed to generate content index for missing content")
 	}
 
-	return nil
+	cr := C.CreateDefaultCompressionRegistry()
+	defer C.DestroyCompressionRegistry(cr)
+
+	cMissingContentPath := C.CString(missingContentPath)
+	defer C.free(unsafe.Pointer(cMissingContentPath))
+
+	ok := C.WriteContent(
+		fs,
+		fs,
+		cr,
+		jb,
+		nil,
+		nil,
+		missingContentIndex,
+		vindex,
+		cVersionPath,
+		cMissingContentPath)
+
+	if ok == 0 {
+		C.Longtail_Free(unsafe.Pointer(missingContentIndex))
+		return nil, fmt.Errorf("UpSyncVersion: Failed to create new content from `%s` to `%s`", versionPath, missingContentPath)
+	}
+
+	if len(versionIndexPath) > 0 {
+		ok = C.WriteVersionIndex(
+			fs,
+			vindex,
+			cVersionIndexPath)
+		if ok == 0 {
+			C.Longtail_Free(unsafe.Pointer(missingContentIndex))
+			return nil, fmt.Errorf("UpSyncVersion: Failed to write the new version index to `%s`", versionIndexPath)
+		}
+	}
+
+	if len(contentIndexPath) > 0 {
+		ok = C.WriteContentIndex(
+			fs,
+			cindex,
+			cContentIndexPath)
+		if ok == 0 {
+			C.Longtail_Free(unsafe.Pointer(missingContentIndex))
+			return nil, fmt.Errorf("UpSyncVersion: Failed to write the new content index to `%s`", contentIndexPath)
+		}
+	}
+
+	return missingContentIndex, nil
 }
 /*
 //ChunkFolder hello

@@ -35,6 +35,9 @@ func progress(context interface{}, total int, current int) {
 }
 
 func TestCreateVersionIndexFromFolder(t *testing.T) {
+	fs := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(fs)
+
 	vi := CreateVersionIndexFromFolder("C:\\Temp\\longtail\\local\\WinEditor\\git2f7f84a05fc290c717c8b5c0e59f8121481151e6_Win64_Editor", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
 	if vi == nil {
 		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")

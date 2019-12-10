@@ -9,9 +9,8 @@ package golongtail
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 import "C"
 import (
-	"fmt"
-	"unsafe"
 	"runtime"
+	"unsafe"
 
 	"github.com/mattn/go-pointer"
 )
@@ -30,21 +29,123 @@ func MakeProgressProxy(progressFunc ProgressFunc, context interface{}) ProgressP
 	return ProgressProxyData{progressFunc, context}
 }
 
-//LongtailFree ...
+func CreateMeowHashAPI() *C.struct_HashAPI {
+	return C.CreateMeowHashAPI()
+}
+
+func DestroyHashAPI(api *C.struct_HashAPI) {
+	C.DestroyHashAPI(api)
+}
+
+func CreateFSStorageAPI() *C.struct_StorageAPI {
+	return C.CreateFSStorageAPI()
+}
+
+func CreateInMemStorageAPI() *C.struct_StorageAPI {
+	return C.CreateInMemStorageAPI()
+}
+
+func DestroyStorageAPI(api *C.struct_StorageAPI) {
+	C.DestroyStorageAPI(api)
+}
+
+func CreateLizardCompressionAPI() *C.struct_CompressionAPI {
+	return C.CreateLizardCompressionAPI()
+}
+
+func DestroyCompressionAPI(api *C.struct_CompressionAPI) {
+	C.DestroyCompressionAPI(api)
+}
+
+func CreateBikeshedJobAPI(workerCount uint32) *C.struct_JobAPI {
+	return C.CreateBikeshedJobAPI(C.uint32_t(workerCount))
+}
+
+func DestroyJobAPI(api *C.struct_JobAPI) {
+	C.DestroyJobAPI(api)
+}
+
+func CreateDefaultCompressionRegistry() *C.struct_CompressionRegistry {
+	return C.CreateDefaultCompressionRegistry()
+}
+
+func DestroyCompressionRegistry(registry *C.struct_CompressionRegistry) {
+	C.DestroyCompressionRegistry(registry)
+}
+
+func GetNoCompressionType() uint32 {
+	return uint32(C.NO_COMPRESSION_TYPE)
+}
+
+func GetLizardDefaultCompressionType() uint32 {
+	return uint32(C.LIZARD_DEFAULT_COMPRESSION_TYPE)
+}
+
+func LongtailAlloc(size uint64) unsafe.Pointer {
+	return C.Longtail_Alloc(C.size_t(size))
+}
+
 func LongtailFree(data unsafe.Pointer) {
 	C.Longtail_Free(data)
 }
 
+func Longtail_Strdup(s *C.char) *C.char {
+	return C.Longtail_Strdup(s)
+}
+
+func GetFilesRecursively(fs *C.struct_StorageAPI, rootPath string) *C.struct_FileInfos {
+	cFolderPath := C.CString(rootPath)
+	defer C.free(unsafe.Pointer(cFolderPath))
+	return C.GetFilesRecursively(fs, cFolderPath)
+}
+
+func CreateVersionIndex(
+	fs *C.struct_StorageAPI,
+	hash *C.struct_HashAPI,
+	job *C.struct_JobAPI,
+	progressFunc ProgressFunc,
+	context interface{},
+	rootPath string,
+	paths *C.struct_Paths,
+	assetSizes [] uint64,
+	assetCompressionTypes []uint32,
+	maxChunkSize uint32) *C.struct_VersionIndex {
+
+	progressProxyData := MakeProgressProxy(progressFunc, context)
+	progressContext := pointer.Save(&progressProxyData)
+	defer pointer.Unref(progressContext)
+
+	cRootPath := C.CString(rootPath)
+	defer C.free(unsafe.Pointer(cRootPath))
+	
+	cAssetSizes := (*C.uint64_t)(unsafe.Pointer(&assetSizes[0]))
+	cAssetCompressionTypes := (*C.uint32_t)(unsafe.Pointer(&assetCompressionTypes[0]))
+
+	vindex := C.CreateVersionIndex(
+		fs,
+		hash,
+		job,
+		(C.JobAPI_ProgressFunc)(C.progressProxy),
+		progressContext,
+		cRootPath,
+		paths,
+		cAssetSizes,
+		cAssetCompressionTypes,
+		C.uint32_t(maxChunkSize))
+
+	return vindex
+}
+
 //GetVersionIndex ...
-func CreateVersionIndexFromFolder(folderPath string, progressProxyData ProgressProxyData) *C.struct_VersionIndex {
+func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, progressProxyData ProgressProxyData) *C.struct_VersionIndex {
 	progressContext := pointer.Save(&progressProxyData)
 	defer pointer.Unref(progressContext)
 
 	cFolderPath := C.CString(folderPath)
 	defer C.free(unsafe.Pointer(cFolderPath))
 
-	fs := C.CreateFSStorageAPI()
-	defer C.DestroyStorageAPI(fs)
+	//	fs := C.CreateFSStorageAPI()
+	//	defer C.DestroyStorageAPI(fs)
 
 	hs := C.CreateMeowHashAPI()
 	defer C.DestroyHashAPI(hs)
@@ -98,7 +199,7 @@ func WriteVersionIndex(versionIndex *C.struct_VersionIndex, indexPath string) {
 
 	C.WriteVersionIndex(fs, versionIndex, cIndexPath)
 }
-
+/*
 //UpSyncVersion ...
 func UpSyncVersion(versionPath string, versionIndexPath string, contentPath string, contentIndexPath string, missingContentPath string, missingContentIndexPath string, outputFormat string, maxChunksPerBlock int, targetBlockSize int, targetChunkSize int) (*C.struct_ContentIndex, error) {
 	cVersionPath := C.CString(versionPath)
@@ -129,7 +230,7 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 
 		compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
 		for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
-			compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE	// Currently we just use our only compression method
+			compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE // Currently we just use our only compression method
 		}
 
 		vindex = C.CreateVersionIndex(
@@ -238,6 +339,7 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 
 	return missingContentIndex, nil
 }
+*/
 /*
 //ChunkFolder hello
 func ChunkFolder(folderPath string) int32 {

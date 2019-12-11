@@ -1,6 +1,7 @@
 package golongtail
 
 import (
+	"runtime"
 	"testing"
 	"unsafe"
 )
@@ -34,63 +35,134 @@ func progress(context interface{}, total int, current int) {
 	}
 }
 
-func TestCreateVersionIndexFromFolder(t *testing.T) {
-	fs := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(fs)
+func TestCreateVersionIndex(t *testing.T) {
+	storageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(storageAPI)
+	hashAPI := CreateMeowHashAPI()
+	defer DestroyHashAPI(hashAPI)
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer DestroyJobAPI(jobAPI)
 
-	WriteToStorage(fs, "first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(fs, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(fs, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(storageAPI, "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(storageAPI, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(storageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(storageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	vi := CreateVersionIndexFromFolder(fs, "", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
-	if vi == nil {
-		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")
+	err, vi := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		progress,
+		&progressData{task: "Indexing", t: t},
+		"",
+		GetLizardDefaultCompressionType(),
+		32768)
+
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("CreateVersionIndexFromFolder() %q != %q", err, expected)
 	}
 	defer LongtailFree(unsafe.Pointer(vi))
 
-	expected_asset_count := uint32(5)
-	if ret := uint32(*vi.m_AssetCount); ret != expected_asset_count {
-		t.Errorf("CreateVersionIndexFromFolder() asset count = %q, want %q", ret, expected_asset_count)
+	expectedAssetCount := uint32(14)
+	if ret := uint32(*vi.m_AssetCount); ret != expectedAssetCount {
+		t.Errorf("CreateVersionIndexFromFolder() asset count = %d, want %d", ret, expectedAssetCount)
 	}
-	expected_chunk_count := uint32(3)
-	if ret := uint32(*vi.m_ChunkCount); ret != expected_chunk_count {
-		t.Errorf("CreateVersionIndexFromFolder() chunk count = %q, want %q", ret, expected_chunk_count)
+	expectedChunkCount := uint32(3)
+	if ret := uint32(*vi.m_ChunkCount); ret != expectedChunkCount {
+		t.Errorf("CreateVersionIndexFromFolder() chunk count = %d, want %d", ret, expectedChunkCount)
 	}
 }
 
 func TestReadWriteVersionIndex(t *testing.T) {
-	fs := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(fs)
+	storageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(storageAPI)
+	hashAPI := CreateMeowHashAPI()
+	defer DestroyHashAPI(hashAPI)
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer DestroyJobAPI(jobAPI)
 
-	WriteToStorage(fs, "first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(fs, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(fs, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(storageAPI, "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(storageAPI, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(storageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(storageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	vi := CreateVersionIndexFromFolder(fs, "", MakeProgressProxy(progress, &progressData{task: "Indexing", t: t}))
-	if vi == nil {
-		t.Errorf("CreateVersionIndexFromFolder() = nil, want !nil")
+	err, vi := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		progress,
+		&progressData{task: "Indexing", t: t},
+		"",
+		GetLizardDefaultCompressionType(),
+		32768)
+
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("CreateVersionIndexFromFolder() %q != %q", err, expected)
 	}
 	defer LongtailFree(unsafe.Pointer(vi))
 
-	expected_err := error(nil)
-	if ret := WriteVersionIndex(fs, vi, "test.lvi"); ret != expected_err {
-		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expected_err)
+	expectedErr := error(nil)
+	if ret := WriteVersionIndex(storageAPI, vi, "test.lvi"); ret != expectedErr {
+		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expectedErr)
 	}
 
-	vi2 := ReadVersionIndex(fs, "test.lvi")
+	vi2 := ReadVersionIndex(storageAPI, "test.lvi")
 	if vi2 == nil {
 		t.Errorf("ReadVersionIndex() = nil, want !nil")
 	}
 	defer LongtailFree(unsafe.Pointer(vi2))
 
 	if (*vi2.m_AssetCount) != (*vi.m_AssetCount) {
-		t.Errorf("ReadVersionIndex() asset count = %q, want %q", (*vi2.m_AssetCount), (*vi.m_AssetCount))
+		t.Errorf("ReadVersionIndex() asset count = %d, want %d", (*vi2.m_AssetCount), (*vi.m_AssetCount))
 	}
 
 	for i := uint32(0); i < uint32(*vi.m_AssetCount); i++ {
 		expected := GetVersionIndexPath(vi, i)
 		if ret := GetVersionIndexPath(vi2, i); ret != expected {
-			t.Errorf("ReadVersionIndex() path %d = %q, want %q", int(i), ret, expected)
+			t.Errorf("ReadVersionIndex() path %d = %s, want %s", int(i), ret, expected)
 		}
+	}
+}
+func TestUpSyncVersion(t *testing.T) {
+	versionStorageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(versionStorageAPI)
+	hashAPI := CreateMeowHashAPI()
+	defer DestroyHashAPI(hashAPI)
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer DestroyJobAPI(jobAPI)
+	contentStorageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(contentStorageAPI)
+
+	WriteToStorage(versionStorageAPI, "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(versionStorageAPI, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(versionStorageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(versionStorageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+
+	err, blockHashes := GetMissingBlocks(
+		contentStorageAPI,
+		versionStorageAPI,
+		hashAPI,
+		jobAPI,
+		progress,
+		&progressData{task: "Upsyncing", t: t},
+		"",
+		"version.lvi",
+		"store",
+		"store.lci",
+		"upload",
+		"missing.lci",
+		GetLizardDefaultCompressionType(),
+		4096,
+		32768,
+		32758*12)
+	expectedErr := error(nil)
+	if err != expectedErr {
+		t.Errorf("UpSyncVersion() err = %q, want %q", err, expectedErr)
+	}
+	expectedBlockCount := 1
+	if len(blockHashes) != expectedBlockCount {
+		t.Errorf("UpSyncVersion() len(blockHashes) = %d, want %d", len(blockHashes), expectedBlockCount)
 	}
 }

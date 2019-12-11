@@ -26,6 +26,7 @@ package golongtail
 import "C"
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"unsafe"
 
@@ -46,19 +47,21 @@ func MakeProgressProxy(progressFunc ProgressFunc, context interface{}) ProgressP
 	return ProgressProxyData{progressFunc, context}
 }
 
-func WriteToStorage(fs *C.struct_StorageAPI, path string, data []byte) error {
+func WriteToStorage(storageApi *C.struct_StorageAPI, path string, data []byte) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	if C.EnsureParentPathExists(fs, cPath) == 0 {
+	if C.EnsureParentPathExists(storageApi, cPath) == 0 {
 		return fmt.Errorf("WriteToStorage: failed to create parent path for `%s`", path)
 	}
-	f := C.Storage_OpenWriteFile(fs, cPath, 0)
+	f := C.Storage_OpenWriteFile(storageApi, cPath, 0)
 	if f == nil {
 		return fmt.Errorf("WriteToStorage: failed to create file at `%s`", path)
 	}
-	defer C.Storage_CloseWrite(fs, f)
-	if C.Storage_Write(fs, f, 0, (C.uint64_t)(len(data)), (unsafe.Pointer(&data[0]))) == 0 {
-		return fmt.Errorf("WriteToStorage: failed to write %d bytes to file `%s`", len(data), path)
+	defer C.Storage_CloseWrite(storageApi, f)
+	if len(data) > 0 {
+		if C.Storage_Write(storageApi, f, 0, (C.uint64_t)(len(data)), (unsafe.Pointer(&data[0]))) == 0 {
+			return fmt.Errorf("WriteToStorage: failed to write %d bytes to file `%s`", len(data), path)
+		}
 	}
 	return nil
 }
@@ -127,10 +130,10 @@ func Longtail_Strdup(s *C.char) *C.char {
 	return C.Longtail_Strdup(s)
 }
 
-func GetFilesRecursively(fs *C.struct_StorageAPI, rootPath string) *C.struct_FileInfos {
+func GetFilesRecursively(storageApi *C.struct_StorageAPI, rootPath string) *C.struct_FileInfos {
 	cFolderPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cFolderPath))
-	return C.GetFilesRecursively(fs, cFolderPath)
+	return C.GetFilesRecursively(storageApi, cFolderPath)
 }
 
 func GetPath(paths *C.struct_Paths, index uint32) string {
@@ -144,72 +147,89 @@ func GetVersionIndexPath(vindex *C.struct_VersionIndex, index uint32) string {
 }
 
 func CreateVersionIndex(
-	fs *C.struct_StorageAPI,
-	hash *C.struct_HashAPI,
-	job *C.struct_JobAPI,
+	storageApi *C.struct_StorageAPI,
+	hashAPI *C.struct_HashAPI,
+	jobAPI *C.struct_JobAPI,
 	progressFunc ProgressFunc,
-	context interface{},
-	rootPath string,
-	paths *C.struct_Paths,
-	assetSizes [] uint64,
-	assetCompressionTypes []uint32,
-	maxChunkSize uint32) *C.struct_VersionIndex {
+	progressContext interface{},
+	versionPath string,
+	compressionType uint32,
+	targetChunkSize uint32) (error, *C.struct_VersionIndex) {
 
-	progressProxyData := MakeProgressProxy(progressFunc, context)
-	progressContext := pointer.Save(&progressProxyData)
-	defer pointer.Unref(progressContext)
+	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	cProgressProxyData := pointer.Save(&progressProxyData)
+	defer pointer.Unref(cProgressProxyData)
 
-	cRootPath := C.CString(rootPath)
-	defer C.free(unsafe.Pointer(cRootPath))
-	
-	cAssetSizes := (*C.uint64_t)(unsafe.Pointer(&assetSizes[0]))
-	cAssetCompressionTypes := (*C.uint32_t)(unsafe.Pointer(&assetCompressionTypes[0]))
+	cVersionPath := C.CString(versionPath)
+	defer C.free(unsafe.Pointer(cVersionPath))
+
+	fileInfos := C.GetFilesRecursively(storageApi, cVersionPath)
+	defer C.Longtail_Free(unsafe.Pointer(fileInfos))
+
+	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
+	for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
+		compressionTypes[i] = C.uint32_t(compressionType)
+	}
 
 	vindex := C.CreateVersionIndex(
-		fs,
-		hash,
-		job,
+		storageApi,
+		hashAPI,
+		jobAPI,
 		(C.JobAPI_ProgressFunc)(C.progressProxy),
-		progressContext,
-		cRootPath,
-		paths,
-		cAssetSizes,
-		cAssetCompressionTypes,
-		C.uint32_t(maxChunkSize))
+		cProgressProxyData,
+		cVersionPath,
+		(*C.struct_Paths)(&fileInfos.m_Paths),
+		fileInfos.m_FileSizes,
+		(*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
+		C.uint32_t(targetChunkSize))
 
-	return vindex
+	if vindex == nil {
+		return fmt.Errorf("CreateVersionIndex: failed to create version index"), nil
+	}
+
+	return nil, vindex
 }
 
-func WriteVersionIndex(fs *C.struct_StorageAPI, index *C.struct_VersionIndex, path string) error {
+func WriteVersionIndex(storageApi *C.struct_StorageAPI, index *C.struct_VersionIndex, path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	if C.WriteVersionIndex(fs, index, cPath) == 0 {
+	if C.WriteVersionIndex(storageApi, index, cPath) == 0 {
 		return fmt.Errorf("WriteVersionIndex: failed to write index to `%s`", path)
 	}
 	return nil
 }
 
-func ReadVersionIndex(fs *C.struct_StorageAPI, path string) *C.struct_VersionIndex {
+func ReadVersionIndex(storageApi *C.struct_StorageAPI, path string) *C.struct_VersionIndex {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	return C.ReadVersionIndex(fs, cPath)
+	return C.ReadVersionIndex(storageApi, cPath)
 }
 
 func CreateContentIndex(
-	hash *C.struct_HashAPI,
+	hashAPI *C.struct_HashAPI,
 	chunkCount uint64,
 	chunkHashes []uint64,
 	chunkSizes []uint32,
 	compressionTypes []uint32,
 	maxBlockSize uint32,
-	maxChunksPerBlock uint32) *C.struct_ContentIndex {
+	maxChunksPerBlock uint32) (error, *C.struct_ContentIndex) {
 
+	if chunkCount == 0 {
+		return nil, C.CreateContentIndex(
+			hashAPI,
+			0,
+			nil,
+			nil,
+			nil,
+			C.uint32_t(maxBlockSize),
+			C.uint32_t(maxChunksPerBlock))
+	}
 	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
 	cChunkSizes := (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
 	cCompressionTypes := (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
 
 	cindex := C.CreateContentIndex(
-		hash,
+		hashAPI,
 		C.uint64_t(chunkCount),
 		cChunkHashes,
 		cChunkSizes,
@@ -217,43 +237,236 @@ func CreateContentIndex(
 		C.uint32_t(maxBlockSize),
 		C.uint32_t(maxChunksPerBlock))
 
-	return cindex
+	if cindex == nil {
+		return fmt.Errorf("CreateContentIndex: failed to create content index"), nil
+	}
+
+	return nil, cindex
 }
 
-func WriteContentIndex(fs *C.struct_StorageAPI, index *C.struct_ContentIndex, path string) error {
+func WriteContentIndex(storageApi *C.struct_StorageAPI, index *C.struct_ContentIndex, path string) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	if C.WriteContentIndex(fs, index, cPath) == 0 {
+	if C.WriteContentIndex(storageApi, index, cPath) == 0 {
 		return fmt.Errorf("WriteContentIndex: failed to write index to `%s`", path)
 	}
 	return nil
 }
 
-func ReadContentIndex(fs *C.struct_StorageAPI, path string) *C.struct_ContentIndex {
+func ReadContentIndex(storageApi *C.struct_StorageAPI, path string) *C.struct_ContentIndex {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	return C.ReadContentIndex(fs, cPath)
+	return C.ReadContentIndex(storageApi, cPath)
 }
 
-//WriteContent
-//ReadContent
-//CreateMissingContent
-//RetargetContent
-//MergeContentIndex
-//WriteVersion
-//CreateVersionDiff
-//ChangeVersion
+func WriteContent(
+	sourceStorageAPI *C.struct_StorageAPI,
+	targetStorageApi *C.struct_StorageAPI,
+	compressionRegistry *C.struct_CompressionRegistry,
+	jobAPI *C.struct_JobAPI,
+	progressFunc ProgressFunc,
+	progressContext interface{},
+	contentIndex *C.struct_ContentIndex,
+	versionIndex *C.struct_VersionIndex,
+	versionFolderPath string,
+	contentFolderPath string) error {
+
+	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	cProgressProxyData := pointer.Save(&progressProxyData)
+	defer pointer.Unref(cProgressProxyData)
+
+	cVersionFolderPath := C.CString(versionFolderPath)
+	defer C.free(unsafe.Pointer(cVersionFolderPath))
+
+	cContentFolderPath := C.CString(contentFolderPath)
+	defer C.free(unsafe.Pointer(cContentFolderPath))
+
+	ok := C.WriteContent(
+		sourceStorageAPI,
+		targetStorageApi,
+		compressionRegistry,
+		jobAPI,
+		(C.JobAPI_ProgressFunc)(C.progressProxy),
+		cProgressProxyData,
+		contentIndex,
+		versionIndex,
+		cVersionFolderPath,
+		cContentFolderPath)
+	if ok == 0 {
+		return fmt.Errorf("WriteContent: failed to write content to `%s`", contentFolderPath)
+	}
+	return nil
+}
+
+func ReadContent(
+	sourceStorageAPI *C.struct_StorageAPI,
+	hashAPI *C.struct_HashAPI,
+	jobAPI *C.struct_JobAPI,
+	progressFunc ProgressFunc,
+	progressContext interface{},
+	contentFolderPath string) (error, *C.struct_ContentIndex) {
+
+	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	cProgressProxyData := pointer.Save(&progressProxyData)
+	defer pointer.Unref(cProgressProxyData)
+
+	cContentFolderPath := C.CString(contentFolderPath)
+	defer C.free(unsafe.Pointer(cContentFolderPath))
+
+	contentIndex := C.ReadContent(
+		sourceStorageAPI,
+		hashAPI,
+		jobAPI,
+		(C.JobAPI_ProgressFunc)(C.progressProxy),
+		cProgressProxyData,
+		cContentFolderPath)
+	if contentIndex == nil {
+		return fmt.Errorf("ReadContent: failed to read content from `%s`", contentFolderPath), nil
+	}
+	return nil, contentIndex
+}
+
+func CreateMissingContent(
+	hashAPI *C.struct_HashAPI,
+	contentIndex *C.struct_ContentIndex,
+	versionIndex *C.struct_VersionIndex,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (error, *C.struct_ContentIndex) {
+
+	missingContentIndex := C.CreateMissingContent(
+		hashAPI,
+		contentIndex,
+		versionIndex,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock))
+	if missingContentIndex == nil {
+		return fmt.Errorf("CreateMissingContent: failed to make missing content"), nil
+	}
+	return nil, missingContentIndex
+}
+
+func RetargetContent(
+	referenceContentIndex *C.struct_ContentIndex,
+	contentIndex *C.struct_ContentIndex) (error, *C.struct_ContentIndex) {
+	retargetedContentIndex := C.RetargetContent(referenceContentIndex, contentIndex)
+	if retargetedContentIndex == nil {
+		return fmt.Errorf("RetargetContent: failed to make retargeted content"), nil
+	}
+	return nil, retargetedContentIndex
+}
+
+func MergeContentIndex(
+	localContentIndex *C.struct_ContentIndex,
+	remoteContentIndex *C.struct_ContentIndex) (error, *C.struct_ContentIndex) {
+	mergedContentIndex := C.MergeContentIndex(localContentIndex, remoteContentIndex)
+	if mergedContentIndex == nil {
+		return fmt.Errorf("MergeContentIndex: failed to merge content indexes"), nil
+	}
+	return nil, mergedContentIndex
+}
+
+func WriteVersion(
+	contentStorageAPI *C.struct_StorageAPI,
+	versionStorageAPI *C.struct_StorageAPI,
+	compressionRegistry *C.struct_CompressionRegistry,
+	jobAPI *C.struct_JobAPI,
+	progressFunc ProgressFunc,
+	progressContext interface{},
+	contentIndex *C.struct_ContentIndex,
+	versionIndex *C.struct_VersionIndex,
+	contentFolderPath string,
+	versionFolderPath string) error {
+
+	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	cProgressProxyData := pointer.Save(&progressProxyData)
+	defer pointer.Unref(cProgressProxyData)
+
+	cContentFolderPath := C.CString(contentFolderPath)
+	defer C.free(unsafe.Pointer(cContentFolderPath))
+
+	cVersionFolderPath := C.CString(versionFolderPath)
+	defer C.free(unsafe.Pointer(cVersionFolderPath))
+
+	ok := C.WriteVersion(
+		contentStorageAPI,
+		versionStorageAPI,
+		compressionRegistry,
+		jobAPI,
+		(C.JobAPI_ProgressFunc)(C.progressProxy),
+		cProgressProxyData,
+		contentIndex,
+		versionIndex,
+		cContentFolderPath,
+		cVersionFolderPath)
+	if ok == 0 {
+		return fmt.Errorf("WriteVersion: failed to write version to `%s` from `%s`", versionFolderPath, contentFolderPath)
+	}
+	return nil
+}
+
+//CreateVersionDiff do we really need this? Maybe ChangeVersion should create one on the fly?
+func CreateVersionDiff(
+	sourceVersionIndex *C.struct_VersionIndex,
+	targetVersionIndex *C.struct_VersionIndex) (error, *C.struct_VersionDiff) {
+	versionDiff := C.CreateVersionDiff(sourceVersionIndex, targetVersionIndex)
+	if versionDiff == nil {
+		return fmt.Errorf("CreateVersionDiff: failed to diff versions"), nil
+	}
+	return nil, versionDiff
+}
+
+func ChangeVersion(
+	contentStorageAPI *C.struct_StorageAPI,
+	versionStorageAPI *C.struct_StorageAPI,
+	hashAPI *C.struct_HashAPI,
+	jobAPI *C.struct_JobAPI,
+	progressFunc ProgressFunc,
+	progressContext interface{},
+	compressionRegistry *C.struct_CompressionRegistry,
+	contentIndex *C.struct_ContentIndex,
+	sourceVersionIndex *C.struct_VersionIndex,
+	targetVersionIndex *C.struct_VersionIndex,
+	versionDiff *C.struct_VersionDiff,
+	contentFolderPath string,
+	versionFolderPath string) error {
+
+	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	cProgressProxyData := pointer.Save(&progressProxyData)
+	defer pointer.Unref(cProgressProxyData)
+
+	cContentFolderPath := C.CString(contentFolderPath)
+	defer C.free(unsafe.Pointer(cContentFolderPath))
+
+	cVersionFolderPath := C.CString(versionFolderPath)
+	defer C.free(unsafe.Pointer(cVersionFolderPath))
+
+	ok := C.ChangeVersion(
+		contentStorageAPI,
+		versionStorageAPI,
+		hashAPI,
+		jobAPI,
+		(C.JobAPI_ProgressFunc)(C.progressProxy),
+		cProgressProxyData,
+		compressionRegistry,
+		contentIndex,
+		sourceVersionIndex,
+		targetVersionIndex,
+		versionDiff,
+		cContentFolderPath,
+		cVersionFolderPath)
+	if ok == 0 {
+		return fmt.Errorf("ChangeVersion: failed to update version `%s` from `%s`", versionFolderPath, contentFolderPath)
+	}
+	return nil
+}
 
 //GetVersionIndex ...
-func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, progressProxyData ProgressProxyData) *C.struct_VersionIndex {
+func CreateVersionIndexFromFolder(storageApi *C.struct_StorageAPI, folderPath string, progressProxyData ProgressProxyData) *C.struct_VersionIndex {
 	progressContext := pointer.Save(&progressProxyData)
 	defer pointer.Unref(progressContext)
 
 	cFolderPath := C.CString(folderPath)
 	defer C.free(unsafe.Pointer(cFolderPath))
-
-	//	fs := C.CreateFSStorageAPI()
-	//	defer C.DestroyStorageAPI(fs)
 
 	hs := C.CreateMeowHashAPI()
 	defer C.DestroyHashAPI(hs)
@@ -261,7 +474,7 @@ func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, pr
 	jb := C.CreateBikeshedJobAPI(C.uint32_t(runtime.NumCPU()))
 	defer C.DestroyJobAPI(jb)
 
-	fileInfos := C.GetFilesRecursively(fs, cFolderPath)
+	fileInfos := C.GetFilesRecursively(storageApi, cFolderPath)
 	defer C.Longtail_Free(unsafe.Pointer(fileInfos))
 
 	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
@@ -270,7 +483,7 @@ func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, pr
 	}
 
 	vindex := C.CreateVersionIndex(
-		fs,
+		storageApi,
 		hs,
 		jb,
 		(C.JobAPI_ProgressFunc)(C.progressProxy),
@@ -284,54 +497,45 @@ func CreateVersionIndexFromFolder(fs *C.struct_StorageAPI, folderPath string, pr
 	return vindex
 }
 
-/*
 //UpSyncVersion ...
-func UpSyncVersion(versionPath string, versionIndexPath string, contentPath string, contentIndexPath string, missingContentPath string, missingContentIndexPath string, outputFormat string, maxChunksPerBlock int, targetBlockSize int, targetChunkSize int) (*C.struct_ContentIndex, error) {
-	cVersionPath := C.CString(versionPath)
-	defer C.free(unsafe.Pointer(cVersionPath))
-
-	fs := C.CreateFSStorageAPI()
-	defer C.DestroyStorageAPI(fs)
-	hs := C.CreateMeowHashAPI()
-	defer C.DestroyHashAPI(hs)
-	jb := C.CreateBikeshedJobAPI(C.uint32_t(runtime.NumCPU()))
-	defer C.DestroyJobAPI(jb)
+func GetMissingBlocks(
+	contentStorageAPI *C.struct_StorageAPI,
+	versionStorageAPI *C.struct_StorageAPI,
+	hashAPI *C.struct_HashAPI,
+	jobAPI *C.struct_JobAPI,
+	progressFunc ProgressFunc,
+	progressContext interface{},
+	versionPath string,
+	versionIndexPath string,
+	contentPath string,
+	contentIndexPath string,
+	missingContentPath string,
+	missingContentIndexPath string,
+	compressionType uint32,
+	maxChunksPerBlock uint32,
+	targetBlockSize uint32,
+	targetChunkSize uint32) (error, []uint64) {
 
 	var vindex *C.struct_VersionIndex = nil
 	defer C.Longtail_Free(unsafe.Pointer(vindex))
-
-	cVersionIndexPath := C.CString(versionIndexPath)
-	defer C.free(unsafe.Pointer(cVersionIndexPath))
+	err := error(nil)
 
 	if len(versionIndexPath) > 0 {
-		vindex = C.ReadVersionIndex(fs, cVersionIndexPath)
+		vindex = ReadVersionIndex(versionStorageAPI, versionIndexPath)
 	}
 	if nil == vindex {
-		if len(versionPath) == 0 {
-			return nil, fmt.Errorf("UpSyncVersion: version folder must be given if no valid version index is given")
-		}
-		fileInfos := C.GetFilesRecursively(fs, cVersionPath)
-		defer C.Longtail_Free(unsafe.Pointer(fileInfos))
+		err, vindex = CreateVersionIndex(
+			versionStorageAPI,
+			hashAPI,
+			jobAPI,
+			progressFunc,
+			progressContext,
+			versionPath,
+			compressionType,
+			targetChunkSize)
 
-		compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
-		for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
-			compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE // Currently we just use our only compression method
-		}
-
-		vindex = C.CreateVersionIndex(
-			fs,
-			hs,
-			jb,
-			(C.JobAPI_ProgressFunc)(C.progressProxy),
-			nil,
-			cVersionPath,
-			(*C.struct_Paths)(&fileInfos.m_Paths),
-			fileInfos.m_FileSizes,
-			(*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
-			C.uint32_t(targetChunkSize))
-
-		if vindex == nil {
-			return nil, fmt.Errorf("UpSyncVersion: failed to create version index for folder `%s`", versionPath)
+		if err != nil {
+			return err, nil
 		}
 	}
 
@@ -345,86 +549,89 @@ func UpSyncVersion(versionPath string, versionIndexPath string, contentPath stri
 	defer C.free(unsafe.Pointer(cContentIndexPath))
 
 	if len(contentIndexPath) > 0 {
-		cindex = C.ReadContentIndex(fs, cContentIndexPath)
+		cindex = ReadContentIndex(contentStorageAPI, contentIndexPath)
 	}
 	if cindex == nil {
-		if len(contentPath) == 0 && len(contentIndexPath) == 0 {
-			cindex = C.CreateContentIndex(
-				hs,
-				C.uint64_t(0),
-				nil,
-				nil,
-				nil,
-				C.uint32_t(targetBlockSize),
-				C.uint32_t(maxChunksPerBlock))
-			if cindex == nil {
-				return nil, fmt.Errorf("UpSyncVersion: failed to create empty content index")
-			}
-		}
-		if len(contentPath) == 0 {
-			return nil, fmt.Errorf("UpSyncVersion: content folder must be given if no valid content index is given")
+		err, cindex = CreateContentIndex(
+			hashAPI,
+			0,
+			nil,
+			nil,
+			nil,
+			targetBlockSize,
+			maxChunksPerBlock)
+		if err != nil {
+			return err, nil
 		}
 	}
 
-	missingContentIndex := C.CreateMissingContent(
-		hs,
+	err, missingContentIndex := CreateMissingContent(
+		hashAPI,
 		cindex,
 		vindex,
-		C.uint32_t(targetBlockSize),
-		C.uint32_t(maxChunksPerBlock))
+		targetBlockSize,
+		maxChunksPerBlock)
+	defer C.Longtail_Free(unsafe.Pointer(missingContentIndex))
 
-	if missingContentIndex == nil {
-		return nil, fmt.Errorf("UpSyncVersion: Failed to generate content index for missing content")
+	if err != nil {
+		return err, nil
 	}
 
-	cr := C.CreateDefaultCompressionRegistry()
-	defer C.DestroyCompressionRegistry(cr)
+	compressionRegistry := C.CreateDefaultCompressionRegistry()
+	defer C.DestroyCompressionRegistry(compressionRegistry)
 
-	cMissingContentPath := C.CString(missingContentPath)
-	defer C.free(unsafe.Pointer(cMissingContentPath))
-
-	ok := C.WriteContent(
-		fs,
-		fs,
-		cr,
-		jb,
-		nil,
-		nil,
+	err = WriteContent(
+		versionStorageAPI,
+		contentStorageAPI,
+		compressionRegistry,
+		jobAPI,
+		progressFunc,
+		progressContext,
 		missingContentIndex,
 		vindex,
-		cVersionPath,
-		cMissingContentPath)
+		versionPath,
+		missingContentPath)
 
-	if ok == 0 {
-		C.Longtail_Free(unsafe.Pointer(missingContentIndex))
-		return nil, fmt.Errorf("UpSyncVersion: Failed to create new content from `%s` to `%s`", versionPath, missingContentPath)
+	if err != nil {
+		return err, nil
 	}
 
 	if len(versionIndexPath) > 0 {
-		ok = C.WriteVersionIndex(
-			fs,
+		err = WriteVersionIndex(
+			contentStorageAPI,
 			vindex,
-			cVersionIndexPath)
-		if ok == 0 {
-			C.Longtail_Free(unsafe.Pointer(missingContentIndex))
-			return nil, fmt.Errorf("UpSyncVersion: Failed to write the new version index to `%s`", versionIndexPath)
+			versionIndexPath)
+		if err != nil {
+			return err, nil
 		}
 	}
 
 	if len(contentIndexPath) > 0 {
-		ok = C.WriteContentIndex(
-			fs,
+		err = WriteContentIndex(
+			contentStorageAPI,
 			cindex,
-			cContentIndexPath)
-		if ok == 0 {
-			C.Longtail_Free(unsafe.Pointer(missingContentIndex))
-			return nil, fmt.Errorf("UpSyncVersion: Failed to write the new content index to `%s`", contentIndexPath)
+			contentIndexPath)
+		if err != nil {
+			return err, nil
 		}
 	}
 
-	return missingContentIndex, nil
+	blockCount := uint64(*missingContentIndex.m_BlockCount)
+	blockHashes := make([]uint64, blockCount)
+
+    var oids []uint64
+    sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&oids)))
+    sliceHeader.Cap = int(blockCount)
+    sliceHeader.Len = int(blockCount)
+    sliceHeader.Data = uintptr(unsafe.Pointer(missingContentIndex.m_BlockHashes))
+
+	for i := 0 ; i < int(blockCount); i++ {
+		blockHashes[i] = oids[i]
+	}
+
+	return nil, blockHashes
 }
-*/
+
 /*
 //ChunkFolder hello
 func ChunkFolder(folderPath string) int32 {
@@ -434,10 +641,10 @@ func ChunkFolder(folderPath string) int32 {
 	path := C.CString(folderPath)
 	defer C.free(unsafe.Pointer(path))
 
-	fs := C.CreateFSStorageAPI()
+	storageApi := C.CreateFSStorageAPI()
 	hs := C.CreateMeowHashAPI()
 	jb := C.CreateBikeshedJobAPI(C.uint32_t(runtime.NumCPU()))
-	fileInfos := C.GetFilesRecursively(fs, path)
+	fileInfos := C.GetFilesRecursively(storageApi, path)
 	fmt.Printf("Files found: %d\n", int(*fileInfos.m_Paths.m_PathCount))
 
 	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
@@ -446,7 +653,7 @@ func ChunkFolder(folderPath string) int32 {
 	}
 
 	vi := C.CreateVersionIndex(
-		fs,
+		storageApi,
 		hs,
 		jb,
 		(C.JobAPI_ProgressFunc)(C.progressProxy),
@@ -465,7 +672,7 @@ func ChunkFolder(folderPath string) int32 {
 	C.Longtail_Free(unsafe.Pointer(fileInfos))
 	C.DestroyJobAPI(jb)
 	C.DestroyHashAPI(hs)
-	C.DestroyStorageAPI(fs)
+	C.DestroyStorageAPI(storageApi)
 	pointer.Unref(c)
 
 	return chunkCount

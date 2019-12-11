@@ -26,7 +26,6 @@ package golongtail
 import "C"
 import (
 	"fmt"
-	"reflect"
 	"runtime"
 	"unsafe"
 
@@ -498,7 +497,7 @@ func CreateVersionIndexFromFolder(storageApi *C.struct_StorageAPI, folderPath st
 }
 
 //UpSyncVersion ...
-func GetMissingBlocks(
+func GetMissingContent(
 	contentStorageAPI *C.struct_StorageAPI,
 	versionStorageAPI *C.struct_StorageAPI,
 	hashAPI *C.struct_HashAPI,
@@ -510,11 +509,10 @@ func GetMissingBlocks(
 	contentPath string,
 	contentIndexPath string,
 	missingContentPath string,
-	missingContentIndexPath string,
 	compressionType uint32,
 	maxChunksPerBlock uint32,
 	targetBlockSize uint32,
-	targetChunkSize uint32) (error, []uint64) {
+	targetChunkSize uint32) (error, *C.struct_ContentIndex) {
 
 	var vindex *C.struct_VersionIndex = nil
 	defer C.Longtail_Free(unsafe.Pointer(vindex))
@@ -571,7 +569,6 @@ func GetMissingBlocks(
 		vindex,
 		targetBlockSize,
 		maxChunksPerBlock)
-	defer C.Longtail_Free(unsafe.Pointer(missingContentIndex))
 
 	if err != nil {
 		return err, nil
@@ -593,6 +590,7 @@ func GetMissingBlocks(
 		missingContentPath)
 
 	if err != nil {
+		C.Longtail_Free(unsafe.Pointer(missingContentIndex))
 		return err, nil
 	}
 
@@ -602,6 +600,7 @@ func GetMissingBlocks(
 			vindex,
 			versionIndexPath)
 		if err != nil {
+			C.Longtail_Free(unsafe.Pointer(missingContentIndex))
 			return err, nil
 		}
 	}
@@ -612,10 +611,11 @@ func GetMissingBlocks(
 			cindex,
 			contentIndexPath)
 		if err != nil {
+			C.Longtail_Free(unsafe.Pointer(missingContentIndex))
 			return err, nil
 		}
 	}
-
+/*
 	blockCount := uint64(*missingContentIndex.m_BlockCount)
 	blockHashes := make([]uint64, blockCount)
 
@@ -628,8 +628,12 @@ func GetMissingBlocks(
 	for i := 0 ; i < int(blockCount); i++ {
 		blockHashes[i] = oids[i]
 	}
+*/
+	return nil, missingContentIndex
+}
 
-	return nil, blockHashes
+func GetPathsForContentBlocks(contentIndex *C.struct_ContentIndex) *C.struct_Paths {
+	return C.GetPathsForContentBlocks(contentIndex)
 }
 
 /*

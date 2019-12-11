@@ -113,11 +113,13 @@ struct VersionDiff;
 
 char* Longtail_Strdup(const char* path);
 
+int EnsureParentPathExists(
+    struct StorageAPI* storage_api,
+    const char* path);
+
 struct FileInfos* GetFilesRecursively(
     struct StorageAPI* storage_api,
     const char* root_path);
-
-int EnsureParentPathExists(struct StorageAPI* storage_api, const char* path);
 
 struct VersionIndex* CreateVersionIndex(
     struct StorageAPI* storage_api,
@@ -184,6 +186,9 @@ struct ContentIndex* CreateMissingContent(
     const struct VersionIndex* version,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block);
+
+struct Paths* GetPathsForContentBlocks(
+    struct ContentIndex* content_index);
 
 struct ContentIndex* RetargetContent(
     const struct ContentIndex* reference_content_index,

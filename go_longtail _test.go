@@ -135,34 +135,58 @@ func TestUpSyncVersion(t *testing.T) {
 	contentStorageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(contentStorageAPI)
 
-	WriteToStorage(versionStorageAPI, "first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(versionStorageAPI, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(versionStorageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	WriteToStorage(versionStorageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	WriteToStorage(versionStorageAPI, "source/current/first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(versionStorageAPI, "source/current/second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(versionStorageAPI, "source/current/top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(versionStorageAPI, "source/current/first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	err, blockHashes := GetMissingBlocks(
+	storeIndex := ReadContentIndex(contentStorageAPI, "remote/store.lci")
+	if storeIndex == nil {
+		var err error
+		err, storeIndex = CreateContentIndex(hashAPI, 0, nil, nil, nil, 32768*12, 4096)
+		if err != nil {
+			t.Errorf("CreateContentIndex() err = %q, want %q", err, error(nil))
+		}
+	}
+	defer LongtailFree(unsafe.Pointer(storeIndex))
+
+	err, missingContentIndex := GetMissingContent(
 		contentStorageAPI,
 		versionStorageAPI,
 		hashAPI,
 		jobAPI,
 		progress,
 		&progressData{task: "Upsyncing", t: t},
-		"",
-		"version.lvi",
-		"store",
-		"store.lci",
-		"upload",
-		"missing.lci",
+		"source/current",
+		"current.lvi",
+		"source/cache",
+		"remote/store.lci",
+		"source/cache",
 		GetLizardDefaultCompressionType(),
 		4096,
 		32768,
 		32758*12)
-	expectedErr := error(nil)
-	if err != expectedErr {
-		t.Errorf("UpSyncVersion() err = %q, want %q", err, expectedErr)
+	if err != nil {
+		t.Errorf("GetMissingContent() err = %q, want %q", err, error(nil))
 	}
+	defer LongtailFree(unsafe.Pointer(missingContentIndex))
+
 	expectedBlockCount := 1
-	if len(blockHashes) != expectedBlockCount {
-		t.Errorf("UpSyncVersion() len(blockHashes) = %d, want %d", len(blockHashes), expectedBlockCount)
+	if int(*missingContentIndex.m_BlockCount) != expectedBlockCount {
+		t.Errorf("UpSyncVersion() len(blockHashes) = %d, want %d", int(*missingContentIndex.m_BlockCount), expectedBlockCount)
 	}
+
+	missingPaths := GetPathsForContentBlocks(missingContentIndex)
+	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
+		path := GetPath(missingPaths, uint32(i))
+		t.Logf("New block path: `%s`", path)
+	}
+
+	err, mergedContentIndex := MergeContentIndex(storeIndex, missingContentIndex)
+	if err != nil {
+		t.Errorf("MergeContentIndex() err = %q, want %q", err, error(nil))
+	}
+	defer LongtailFree(unsafe.Pointer(mergedContentIndex))
+
+	WriteContentIndex(contentStorageAPI, mergedContentIndex, "remote/store.lci")
 }

@@ -243,11 +243,6 @@ func LongtailFree(data unsafe.Pointer) {
   C.Longtail_Free(data)
 }
 
-// Longtail_Strdup ...
-func Longtail_Strdup(s *C.char) *C.char {
-  return C.Longtail_Strdup(s)
-}
-
 // GetFilesRecursively ...
 func GetFilesRecursively(storageAPI *C.struct_StorageAPI, rootPath string) *C.struct_FileInfos {
   cFolderPath := C.CString(rootPath)
@@ -548,7 +543,7 @@ func CreateVersionDiff(
   return versionDiff, nil
 }
 
-//CreateVersionDiff ...
+//ChangeVersion ...
 func ChangeVersion(
   contentStorageAPI *C.struct_StorageAPI,
   versionStorageAPI *C.struct_StorageAPI,
@@ -793,7 +788,7 @@ func SetLogger(logFunc logFunc, logContext interface{}) unsafe.Pointer {
   return cLogProxyData
 }
 
-//SetLogLevel ...
+//ClearLogger ...
 func ClearLogger(logger unsafe.Pointer) {
   C.Longtail_SetLog(nil, nil)
   pointer.Unref(logger)

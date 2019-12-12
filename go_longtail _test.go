@@ -36,7 +36,7 @@ func progress(context interface{}, total int, current int) {
 }
 
 type loggerData struct {
-	t	*testing.T
+	t *testing.T
 }
 
 func logger(context interface{}, level int, log string) {
@@ -61,7 +61,7 @@ func TestCreateVersionIndex(t *testing.T) {
 	WriteToStorage(storageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
 	WriteToStorage(storageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	err, vi := CreateVersionIndex(
+	vi, err := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
 		jobAPI,
@@ -104,7 +104,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 	WriteToStorage(storageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
 	WriteToStorage(storageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	err, vi := CreateVersionIndex(
+	vi, err := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
 		jobAPI,
@@ -147,33 +147,37 @@ func TestUpSyncVersion(t *testing.T) {
 	defer ClearLogger(l)
 	SetLogLevel(3)
 
-	versionStorageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(versionStorageAPI)
+	upsyncStorageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(upsyncStorageAPI)
 	hashAPI := CreateMeowHashAPI()
 	defer DestroyHashAPI(hashAPI)
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer DestroyJobAPI(jobAPI)
-	contentStorageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(contentStorageAPI)
+	remoteStorageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(remoteStorageAPI)
 
-	WriteToStorage(versionStorageAPI, "source/current/first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(versionStorageAPI, "source/current/second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(versionStorageAPI, "source/current/top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	WriteToStorage(versionStorageAPI, "source/current/first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	WriteToStorage(upsyncStorageAPI, "source/current/first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(upsyncStorageAPI, "source/current/second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(upsyncStorageAPI, "source/current/top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(upsyncStorageAPI, "source/current/first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	storeIndex := ReadContentIndex(contentStorageAPI, "remote/store.lci")
+	storeIndex := ReadContentIndex(remoteStorageAPI, "remote/store.lci")
 	if storeIndex == nil {
 		var err error
-		err, storeIndex = CreateContentIndex(hashAPI, 0, nil, nil, nil, 32768*12, 4096)
+		storeIndex, err = CreateContentIndex(hashAPI, 0, nil, nil, nil, 32768*12, 4096)
 		if err != nil {
 			t.Errorf("CreateContentIndex() err = %q, want %q", err, error(nil))
 		}
 	}
 	defer LongtailFree(unsafe.Pointer(storeIndex))
+	err := WriteContentIndex(upsyncStorageAPI, storeIndex, "store.lci")
+	if err != nil {
+		t.Errorf("WriteContentIndex() err = %q, want %q", err, error(nil))
+	}
 
-	err, missingContentIndex := GetMissingContent(
-		contentStorageAPI,
-		versionStorageAPI,
+	missingContentIndex, err := GetMissingContent(
+		upsyncStorageAPI,
+		upsyncStorageAPI,
 		hashAPI,
 		jobAPI,
 		progress,
@@ -181,7 +185,7 @@ func TestUpSyncVersion(t *testing.T) {
 		"source/current",
 		"current.lvi",
 		"source/cache",
-		"remote/store.lci",
+		"local.lci",
 		"source/cache",
 		GetLizardDefaultCompressionType(),
 		4096,
@@ -203,11 +207,20 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Logf("New block path: `%s`", path)
 	}
 
-	err, mergedContentIndex := MergeContentIndex(storeIndex, missingContentIndex)
+	mergedContentIndex, err := MergeContentIndex(storeIndex, missingContentIndex)
 	if err != nil {
 		t.Errorf("MergeContentIndex() err = %q, want %q", err, error(nil))
 	}
 	defer LongtailFree(unsafe.Pointer(mergedContentIndex))
 
-	WriteContentIndex(contentStorageAPI, mergedContentIndex, "remote/store.lci")
+	WriteContentIndex(remoteStorageAPI, mergedContentIndex, "remote/store.lci")
+
+	downStorageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(downStorageAPI)
+
+	/*	err := ChangeVersion(
+		contentStorageAPI,
+		versionStorageAPI,
+	)*/
+
 }

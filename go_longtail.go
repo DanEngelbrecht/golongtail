@@ -7,6 +7,7 @@ package golongtail
 // #include "longtail/lib/longtail_lib.h"
 // #include <stdlib.h>
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
+// void logProxy(void* context, int level, char* str);
 // static StorageAPI_HOpenFile Storage_OpenWriteFile(struct StorageAPI* api, const char* path, uint64_t initial_size)
 // {
 //   return api->OpenWriteFile(api, path, initial_size);
@@ -32,18 +33,25 @@ import (
 	"github.com/mattn/go-pointer"
 )
 
-//ProgressFunc ...
-type ProgressFunc func(context interface{}, total int, current int)
+type progressFunc func(context interface{}, total int, current int)
 
-//ProgressProxyData ...
-type ProgressProxyData struct {
-	ProgressFunc ProgressFunc
+type progressProxyData struct {
+	progressFunc progressFunc
 	Context      interface{}
 }
 
-//MakeProgressProxy create data for progress function
-func MakeProgressProxy(progressFunc ProgressFunc, context interface{}) ProgressProxyData {
-	return ProgressProxyData{progressFunc, context}
+func makeProgressProxy(progressFunc progressFunc, context interface{}) progressProxyData {
+	return progressProxyData{progressFunc, context}
+}
+
+type logFunc func(context interface{}, level int, log string)
+type logProxyData struct {
+	logFunc 	logFunc
+	Context     interface{}
+}
+
+func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
+	return logProxyData{logFunc, context}
 }
 
 func WriteToStorage(storageApi *C.struct_StorageAPI, path string, data []byte) error {
@@ -149,13 +157,13 @@ func CreateVersionIndex(
 	storageApi *C.struct_StorageAPI,
 	hashAPI *C.struct_HashAPI,
 	jobAPI *C.struct_JobAPI,
-	progressFunc ProgressFunc,
+	progressFunc progressFunc,
 	progressContext interface{},
 	versionPath string,
 	compressionType uint32,
 	targetChunkSize uint32) (error, *C.struct_VersionIndex) {
 
-	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := pointer.Save(&progressProxyData)
 	defer pointer.Unref(cProgressProxyData)
 
@@ -263,14 +271,14 @@ func WriteContent(
 	targetStorageApi *C.struct_StorageAPI,
 	compressionRegistry *C.struct_CompressionRegistry,
 	jobAPI *C.struct_JobAPI,
-	progressFunc ProgressFunc,
+	progressFunc progressFunc,
 	progressContext interface{},
 	contentIndex *C.struct_ContentIndex,
 	versionIndex *C.struct_VersionIndex,
 	versionFolderPath string,
 	contentFolderPath string) error {
 
-	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := pointer.Save(&progressProxyData)
 	defer pointer.Unref(cProgressProxyData)
 
@@ -301,11 +309,11 @@ func ReadContent(
 	sourceStorageAPI *C.struct_StorageAPI,
 	hashAPI *C.struct_HashAPI,
 	jobAPI *C.struct_JobAPI,
-	progressFunc ProgressFunc,
+	progressFunc progressFunc,
 	progressContext interface{},
 	contentFolderPath string) (error, *C.struct_ContentIndex) {
 
-	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := pointer.Save(&progressProxyData)
 	defer pointer.Unref(cProgressProxyData)
 
@@ -369,14 +377,14 @@ func WriteVersion(
 	versionStorageAPI *C.struct_StorageAPI,
 	compressionRegistry *C.struct_CompressionRegistry,
 	jobAPI *C.struct_JobAPI,
-	progressFunc ProgressFunc,
+	progressFunc progressFunc,
 	progressContext interface{},
 	contentIndex *C.struct_ContentIndex,
 	versionIndex *C.struct_VersionIndex,
 	contentFolderPath string,
 	versionFolderPath string) error {
 
-	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := pointer.Save(&progressProxyData)
 	defer pointer.Unref(cProgressProxyData)
 
@@ -419,7 +427,7 @@ func ChangeVersion(
 	versionStorageAPI *C.struct_StorageAPI,
 	hashAPI *C.struct_HashAPI,
 	jobAPI *C.struct_JobAPI,
-	progressFunc ProgressFunc,
+	progressFunc progressFunc,
 	progressContext interface{},
 	compressionRegistry *C.struct_CompressionRegistry,
 	contentIndex *C.struct_ContentIndex,
@@ -429,7 +437,7 @@ func ChangeVersion(
 	contentFolderPath string,
 	versionFolderPath string) error {
 
-	progressProxyData := MakeProgressProxy(progressFunc, progressContext)
+	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := pointer.Save(&progressProxyData)
 	defer pointer.Unref(cProgressProxyData)
 
@@ -460,7 +468,7 @@ func ChangeVersion(
 }
 
 //GetVersionIndex ...
-func CreateVersionIndexFromFolder(storageApi *C.struct_StorageAPI, folderPath string, progressProxyData ProgressProxyData) *C.struct_VersionIndex {
+func CreateVersionIndexFromFolder(storageApi *C.struct_StorageAPI, folderPath string, progressProxyData progressProxyData) *C.struct_VersionIndex {
 	progressContext := pointer.Save(&progressProxyData)
 	defer pointer.Unref(progressContext)
 
@@ -502,7 +510,7 @@ func GetMissingContent(
 	versionStorageAPI *C.struct_StorageAPI,
 	hashAPI *C.struct_HashAPI,
 	jobAPI *C.struct_JobAPI,
-	progressFunc ProgressFunc,
+	progressFunc progressFunc,
 	progressContext interface{},
 	versionPath string,
 	versionIndexPath string,
@@ -636,54 +644,31 @@ func GetPathsForContentBlocks(contentIndex *C.struct_ContentIndex) *C.struct_Pat
 	return C.GetPathsForContentBlocks(contentIndex)
 }
 
-/*
-//ChunkFolder hello
-func ChunkFolder(folderPath string) int32 {
-	progressProxy := makeProgressProxy(progress, &progressData{task: "Indexing"})
-	c := pointer.Save(&progressProxy)
-
-	path := C.CString(folderPath)
-	defer C.free(unsafe.Pointer(path))
-
-	storageApi := C.CreateFSStorageAPI()
-	hs := C.CreateMeowHashAPI()
-	jb := C.CreateBikeshedJobAPI(C.uint32_t(runtime.NumCPU()))
-	fileInfos := C.GetFilesRecursively(storageApi, path)
-	fmt.Printf("Files found: %d\n", int(*fileInfos.m_Paths.m_PathCount))
-
-	compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
-	for i := 1; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
-		compressionTypes[i] = 0
-	}
-
-	vi := C.CreateVersionIndex(
-		storageApi,
-		hs,
-		jb,
-		(C.JobAPI_ProgressFunc)(C.progressProxy),
-		c,
-		path,
-		(*C.struct_Paths)(&fileInfos.m_Paths),
-		fileInfos.m_FileSizes,
-		(*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
-		C.uint32_t(32768))
-
-	chunkCount := int32(*vi.m_ChunkCount);
-	fmt.Printf("Chunks made: %d\n", chunkCount)
-
-	C.Longtail_Free(unsafe.Pointer(vi))
-
-	C.Longtail_Free(unsafe.Pointer(fileInfos))
-	C.DestroyJobAPI(jb)
-	C.DestroyHashAPI(hs)
-	C.DestroyStorageAPI(storageApi)
-	pointer.Unref(c)
-
-	return chunkCount
-}
-*/
 //export progressProxy
 func progressProxy(progress unsafe.Pointer, total C.uint32_t, done C.uint32_t) {
-	progressProxy := pointer.Restore(progress).(*ProgressProxyData)
-	progressProxy.ProgressFunc(progressProxy.Context, int(total), int(done))
+	progressProxyData := pointer.Restore(progress).(*progressProxyData)
+	progressProxyData.progressFunc(progressProxyData.Context, int(total), int(done))
+}
+
+//export logProxy
+func logProxy(context unsafe.Pointer, level C.int, log *C.char) {
+	logProxyData := pointer.Restore(context).(*logProxyData)
+	logProxyData.logFunc(logProxyData.Context, int(level), C.GoString(log))
+}
+
+func SetLogger(logFunc logFunc, logContext interface{}) unsafe.Pointer {
+	logProxyData := makeLogProxy(logFunc, logContext)
+	cLogProxyData := pointer.Save(&logProxyData)
+
+	C.Longtail_SetLog(C.Longtail_Log(C.logProxy), cLogProxyData)
+	return cLogProxyData
+}
+
+func ClearLogger(logger unsafe.Pointer) {
+	C.Longtail_SetLog(nil, nil)
+	pointer.Unref(logger)
+}
+
+func SetLogLevel(level int) {
+	C.Longtail_SetLogLevel(C.int(level))
 }

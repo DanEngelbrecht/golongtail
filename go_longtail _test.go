@@ -35,7 +35,20 @@ func progress(context interface{}, total int, current int) {
 	}
 }
 
+type loggerData struct {
+	t	*testing.T
+}
+
+func logger(context interface{}, level int, log string) {
+	p := context.(*loggerData)
+	p.t.Logf("%d: %s: ", level, log)
+}
+
 func TestCreateVersionIndex(t *testing.T) {
+	l := SetLogger(logger, &loggerData{t: t})
+	defer ClearLogger(l)
+	SetLogLevel(3)
+
 	storageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(storageAPI)
 	hashAPI := CreateMeowHashAPI()
@@ -75,6 +88,10 @@ func TestCreateVersionIndex(t *testing.T) {
 }
 
 func TestReadWriteVersionIndex(t *testing.T) {
+	l := SetLogger(logger, &loggerData{t: t})
+	defer ClearLogger(l)
+	SetLogLevel(3)
+
 	storageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(storageAPI)
 	hashAPI := CreateMeowHashAPI()
@@ -126,6 +143,10 @@ func TestReadWriteVersionIndex(t *testing.T) {
 	}
 }
 func TestUpSyncVersion(t *testing.T) {
+	l := SetLogger(logger, &loggerData{t: t})
+	defer ClearLogger(l)
+	SetLogLevel(3)
+
 	versionStorageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(versionStorageAPI)
 	hashAPI := CreateMeowHashAPI()

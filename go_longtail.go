@@ -44,19 +44,7 @@ package golongtail
 // {
 //   return &name_data[name_offsets[index]];
 // }
-// static uint64_t GetBlockSize(struct StorageAPI* api, const char* rootPath, const char* blockPath)
-// {
-//    char* full_path = api->ConcatPath(api, rootPath, blockPath);
-//    StorageAPI_HOpenFile block_file = api->OpenReadFile(api, full_path);
-//    if (!block_file) {
-//      Longtail_Free(full_path);
-//      return 0;
-//    }
-//    uint64_t blockSize = api->GetSize(api, block_file);
-//    api->CloseRead(api, block_file);
-//    return blockSize;
-// }
-// static void* ReadBlock(struct StorageAPI* api, const char* rootPath, const char* blockPath)
+// static void* ReadFromStorage(struct StorageAPI* api, const char* rootPath, const char* blockPath)
 // {
 //    char* full_path = api->ConcatPath(api, rootPath, blockPath);
 //    StorageAPI_HOpenFile block_file = api->OpenReadFile(api, full_path);
@@ -71,7 +59,7 @@ package golongtail
 //    Longtail_Free(full_path);
 //    return buffer;
 // }
-// static int WriteBlock(struct StorageAPI* api, const char* rootPath, const char* blockPath, uint64_t blockSize, void* blockData)
+// static int WriteToStorage(struct StorageAPI* api, const char* rootPath, const char* blockPath, uint64_t blockSize, void* blockData)
 // {
 //    char* full_path = api->ConcatPath(api, rootPath, blockPath);
 //    StorageAPI_HOpenFile block_file = api->OpenWriteFile(api, full_path, blockSize);
@@ -93,13 +81,13 @@ import (
   "github.com/mattn/go-pointer"
 )
 
-// ReadBlock ...
-func ReadBlock(api *C.struct_StorageAPI, rootPath string, blockPath string) ([]byte, error) {
+// ReadFromStorage ...
+func ReadFromStorage(api *C.struct_StorageAPI, rootPath string, path string) ([]byte, error) {
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
-	cBlockPath := C.CString(blockPath)
-	defer C.free(unsafe.Pointer(cBlockPath))
-	cFullPath := C.Storage_ConcatPath(api, cRootPath, cBlockPath)
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	cFullPath := C.Storage_ConcatPath(api, cRootPath, cPath)
 	defer C.free(unsafe.Pointer(cFullPath))
 
 	f := C.Storage_OpenReadFile(api, cFullPath)
@@ -110,19 +98,25 @@ func ReadBlock(api *C.struct_StorageAPI, rootPath string, blockPath string) ([]b
 	return blockData, nil
 }
 
-// WriteBlock ...
-func WriteBlock(api *C.struct_StorageAPI, rootPath string, blockPath string, blockData []int) error {
+// WriteToStorage ...
+func WriteToStorage(api *C.struct_StorageAPI, rootPath string, path string, blockData []byte) error {
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
-	cBlockPath := C.CString(blockPath)
-	defer C.free(unsafe.Pointer(cBlockPath))
-	cFullPath := C.Storage_ConcatPath(api, cRootPath, cBlockPath)
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	cFullPath := C.Storage_ConcatPath(api, cRootPath, cPath)
 	defer C.free(unsafe.Pointer(cFullPath))
+
+  if C.EnsureParentPathExists(api, cFullPath) == 0 {
+    return fmt.Errorf("WriteToStorage: failed to create parent path folder `%s` path `%s`", rootPath, path)
+  }
 
 	blockSize := C.uint64_t(len(blockData))
 
-	f := C.Storage_OpenWriteFile(api, cFullPath, blockSize)
-	C.Storage_Write(api, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
+  f := C.Storage_OpenWriteFile(api, cFullPath, blockSize)
+  if blockSize > 0 {
+    C.Storage_Write(api, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
+  }
 	C.Storage_CloseWrite(api, f)
 	return nil
 }
@@ -147,7 +141,7 @@ type logProxyData struct {
 func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
   return logProxyData{logFunc, context}
 }
-
+/*
 // WriteToStorage ...
 func WriteToStorage(storageAPI *C.struct_StorageAPI, path string, data []byte) error {
   cPath := C.CString(path)
@@ -167,7 +161,7 @@ func WriteToStorage(storageAPI *C.struct_StorageAPI, path string, data []byte) e
   }
   return nil
 }
-
+*/
 // CreateMeowHashAPI ...
 func CreateMeowHashAPI() *C.struct_HashAPI {
   return C.CreateMeowHashAPI()

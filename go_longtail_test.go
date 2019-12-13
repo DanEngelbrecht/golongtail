@@ -56,10 +56,10 @@ func TestCreateVersionIndex(t *testing.T) {
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer DestroyJobAPI(jobAPI)
 
-	WriteToStorage(storageAPI, "first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(storageAPI, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(storageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	WriteToStorage(storageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	WriteToStorage(storageAPI, "", "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(storageAPI, "", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(storageAPI, "", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(storageAPI, "", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
 	vi, err := CreateVersionIndex(
 		storageAPI,
@@ -99,10 +99,10 @@ func TestReadWriteVersionIndex(t *testing.T) {
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer DestroyJobAPI(jobAPI)
 
-	WriteToStorage(storageAPI, "first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(storageAPI, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(storageAPI, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	WriteToStorage(storageAPI, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	WriteToStorage(storageAPI, "", "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(storageAPI, "", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(storageAPI, "", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(storageAPI, "", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
 	vi, err := CreateVersionIndex(
 		storageAPI,
@@ -156,12 +156,12 @@ func TestUpSyncVersion(t *testing.T) {
 	remoteStorageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(remoteStorageAPI)
 
-	WriteToStorage(upsyncStorageAPI, "source/current/first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(upsyncStorageAPI, "source/current/second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(upsyncStorageAPI, "source/current/top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	WriteToStorage(upsyncStorageAPI, "source/current/first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	WriteToStorage(upsyncStorageAPI, "source/current", "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(upsyncStorageAPI, "source/current", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(upsyncStorageAPI, "source/current", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(upsyncStorageAPI, "source/current", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	storeIndex := ReadContentIndex(remoteStorageAPI, "remote/store.lci")
+	storeIndex := ReadContentIndex(remoteStorageAPI, "store.lci")
 	if storeIndex == nil {
 		var err error
 		storeIndex, err = CreateContentIndex(hashAPI, 0, nil, nil, nil, 32768*12, 4096)
@@ -204,7 +204,15 @@ func TestUpSyncVersion(t *testing.T) {
 	missingPaths := GetPathsForContentBlocks(missingContentIndex)
 	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
 		path := GetPath(missingPaths, uint32(i))
-		t.Logf("New block path: `%s`", path)
+		block, err := ReadFromStorage(upsyncStorageAPI, "source/cache", path)
+		if err != nil {
+			t.Errorf("UpSyncVersion() ReadFromStorage(%s, %s) = %q, want %q", "source/cache", path, err, error(nil))
+		}
+		err = WriteToStorage(remoteStorageAPI, "store", path, block)
+		if err != nil {
+			t.Errorf("UpSyncVersion() WriteToStorage(%s, %s) = %q, want %q", "source/cache", path, err, error(nil))
+		}
+		t.Logf("Copied block: `%s` from `%s` to `%s`", path, "source/cache", "store")
 	}
 
 	mergedContentIndex, err := MergeContentIndex(storeIndex, missingContentIndex)
@@ -213,7 +221,7 @@ func TestUpSyncVersion(t *testing.T) {
 	}
 	defer LongtailFree(unsafe.Pointer(mergedContentIndex))
 
-	WriteContentIndex(remoteStorageAPI, mergedContentIndex, "remote/store.lci")
+	WriteContentIndex(remoteStorageAPI, mergedContentIndex, "store.lci")
 
 	downStorageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(downStorageAPI)

@@ -1,6 +1,7 @@
 package golongtail
 
 import (
+//	"fmt"
 	"runtime"
 	"testing"
 	"unsafe"
@@ -41,7 +42,8 @@ type loggerData struct {
 
 func logger(context interface{}, level int, log string) {
 	p := context.(*loggerData)
-	p.t.Logf("%d: %s: ", level, log)
+	p.t.Logf("%d: %s", level, log)
+//	fmt.Printf("%d: %s\n", level, log)
 }
 
 func TestCreateVersionIndex(t *testing.T) {
@@ -272,12 +274,9 @@ func TestUpSyncVersion(t *testing.T) {
 		if err != nil {
 			t.Errorf("UpSyncVersion() ReadContent(%s) = %q, want %q", "cache", err, error(nil))
 		}
-		if cacheContentIndex == nil {
-			t.Errorf("UpSyncVersion() ReadContent(%s) = cacheContentIndex == nil", "cache")
-		}
 	}
 	defer LongtailFree(unsafe.Pointer(cacheContentIndex))
-	t.Logf("Blocks in cache: %d", int(*cacheContentIndex.m_BlockCount))
+	t.Logf("Blocks in cacheContentIndex: %d", int(*cacheContentIndex.m_BlockCount))
 
 	missingContentIndex, err = CreateMissingContent(
 		hashAPI,
@@ -288,6 +287,7 @@ func TestUpSyncVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("UpSyncVersion() CreateMissingContent() = %q, want %q", err, error(nil))
 	}
+	t.Logf("Blocks in missingContentIndex: %d", int(*missingContentIndex.m_BlockCount))
 
 	requestContent, err := RetargetContent(
 		remoteStorageIndex,
@@ -296,8 +296,10 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("UpSyncVersion() RetargetContent() = %q, want %q", err, error(nil))
 	}
 	defer LongtailFree(unsafe.Pointer(requestContent))
+	t.Logf("Blocks in requestContent: %d", int(*requestContent.m_BlockCount))
 
 	missingPaths = GetPathsForContentBlocks(requestContent)
+	t.Logf("Path count for content: %d", int(*missingPaths.m_PathCount))
 	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
 		path := GetPath(missingPaths, uint32(i))
 		block, err := ReadFromStorage(remoteStorageAPI, "store", path)
@@ -310,11 +312,39 @@ func TestUpSyncVersion(t *testing.T) {
 		}
 		t.Logf("Copied block: `%s` from `%s` to `%s`", path, "store", "cache")
 	}
+	defer LongtailFree(unsafe.Pointer(missingPaths))
 
-	compressionRegistry := nil
-	cacheIndex := nil
-	currentVersionIndex := nil
-	versionDiff := nil
+	mergedCacheContentIndex, err := MergeContentIndex(cacheContentIndex, requestContent)
+	if err != nil {
+		t.Errorf("UpSyncVersion() MergeContentIndex(%s, %s) = %q, want %q", "cache", "store", err, error(nil))
+	}
+	t.Logf("Blocks in cacheContentIndex after merge: %d", int(*mergedCacheContentIndex.m_BlockCount))
+	defer LongtailFree(unsafe.Pointer(mergedCacheContentIndex))
+
+	compressionRegistry := CreateDefaultCompressionRegistry()
+	defer DestroyCompressionRegistry(compressionRegistry)
+	t.Log("Created compression registry")
+
+	currentVersionIndex, err := CreateVersionIndex(
+		downSyncStorageAPI,
+		hashAPI,
+		jobAPI,
+		progress,
+		&progressData{task: "Indexing version", t: t},
+		"current",
+		GetLizardDefaultCompressionType(),
+		32768)
+	if err != nil {
+		t.Errorf("UpSyncVersion() CreateVersionIndex(%s) = %q, want %q", "current", err, error(nil))
+	}
+	defer LongtailFree(unsafe.Pointer(currentVersionIndex))
+	t.Logf("Asset count for currentVersionIndex: %d", int(*currentVersionIndex.m_AssetCount))
+
+	versionDiff, err := CreateVersionDiff(currentVersionIndex, targetVersionIndex)
+	if err != nil {
+		t.Errorf("UpSyncVersion() CreateVersionDiff(%s, %s) = %q, want %q", "current", "version.lvi", err, error(nil))
+	}
+	defer LongtailFree(unsafe.Pointer(versionDiff))
 
 	err = ChangeVersion(
 		downSyncStorageAPI,
@@ -324,7 +354,7 @@ func TestUpSyncVersion(t *testing.T) {
 		progress,
 		&progressData{task: "Updating version", t: t},
 		compressionRegistry,
-		cacheIndex,
+		mergedCacheContentIndex,
 		currentVersionIndex,
 		targetVersionIndex,
 		versionDiff,

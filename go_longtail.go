@@ -285,6 +285,11 @@ func CreateVersionIndex(
     compressionTypes[i] = C.uint32_t(compressionType)
   }
 
+  cCompressionTypes := unsafe.Pointer(nil)
+  if len(compressionTypes) > 0 {
+    cCompressionTypes = unsafe.Pointer(&compressionTypes[0])
+  }
+
   vindex := C.CreateVersionIndex(
     storageAPI,
     hashAPI,
@@ -294,7 +299,7 @@ func CreateVersionIndex(
     cVersionPath,
     (*C.struct_Paths)(&fileInfos.m_Paths),
     fileInfos.m_FileSizes,
-    (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
+    (*C.uint32_t)(cCompressionTypes),
     C.uint32_t(targetChunkSize))
 
   if vindex == nil {

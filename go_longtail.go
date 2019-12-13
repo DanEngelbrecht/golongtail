@@ -89,8 +89,11 @@ func ReadFromStorage(api *C.struct_StorageAPI, rootPath string, path string) ([]
 	defer C.free(unsafe.Pointer(cPath))
 	cFullPath := C.Storage_ConcatPath(api, cRootPath, cPath)
 	defer C.free(unsafe.Pointer(cFullPath))
-
+	
 	f := C.Storage_OpenReadFile(api, cFullPath)
+	if f == nil {
+	  return nil, nil
+	}
 	blockSize := C.Storage_GetSize(api, f)
 	blockData := make([]uint8, int(blockSize))
 	C.Storage_Read(api, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
@@ -674,6 +677,14 @@ func GetMissingContent(
     cindex = ReadContentIndex(contentStorageAPI, contentIndexPath)
   }
   if cindex == nil {
+    cindex, err = ReadContent(
+      contentStorageAPI,
+      hashAPI,
+      jobAPI,
+      progressFunc,
+      progressContext,
+      contentPath)
+/*
     cindex, err = CreateContentIndex(
       hashAPI,
       0,
@@ -681,7 +692,7 @@ func GetMissingContent(
       nil,
       nil,
       targetBlockSize,
-      maxChunksPerBlock)
+      maxChunksPerBlock)*/
     if err != nil {
       return nil, err
     }

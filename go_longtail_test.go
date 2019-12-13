@@ -142,10 +142,11 @@ func TestReadWriteVersionIndex(t *testing.T) {
 		}
 	}
 }
+
 func TestUpSyncVersion(t *testing.T) {
 	l := SetLogger(logger, &loggerData{t: t})
 	defer ClearLogger(l)
-	SetLogLevel(3)
+	SetLogLevel(0)
 
 	upsyncStorageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(upsyncStorageAPI)
@@ -156,11 +157,13 @@ func TestUpSyncVersion(t *testing.T) {
 	remoteStorageAPI := CreateInMemStorageAPI()
 	defer DestroyStorageAPI(remoteStorageAPI)
 
-	WriteToStorage(upsyncStorageAPI, "source/current", "first_folder/my_file.txt", []byte("the content of my_file"))
-	WriteToStorage(upsyncStorageAPI, "source/current", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	WriteToStorage(upsyncStorageAPI, "source/current", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	WriteToStorage(upsyncStorageAPI, "source/current", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	t.Logf("Creating `current`")
+	WriteToStorage(upsyncStorageAPI, "current", "first_folder/my_file.txt", []byte("the content of my_file"))
+	WriteToStorage(upsyncStorageAPI, "current", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	WriteToStorage(upsyncStorageAPI, "current", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	WriteToStorage(upsyncStorageAPI, "current", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
+	t.Logf("Reading remote `store.lci`")
 	storeIndex := ReadContentIndex(remoteStorageAPI, "store.lci")
 	if storeIndex == nil {
 		var err error
@@ -175,18 +178,19 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("WriteContentIndex() err = %q, want %q", err, error(nil))
 	}
 
+	t.Logf("Get missing content for `current` / `cache`")
 	missingContentIndex, err := GetMissingContent(
 		upsyncStorageAPI,
 		upsyncStorageAPI,
 		hashAPI,
 		jobAPI,
 		progress,
-		&progressData{task: "Upsyncing", t: t},
-		"source/current",
+		&progressData{task: "Indexing", t: t},
+		"current",
 		"current.lvi",
-		"source/cache",
-		"local.lci",
-		"source/cache",
+		"cache",
+		"cache.lci",
+		"cache",
 		GetLizardDefaultCompressionType(),
 		4096,
 		32768,
@@ -201,34 +205,132 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("UpSyncVersion() len(blockHashes) = %d, want %d", int(*missingContentIndex.m_BlockCount), expectedBlockCount)
 	}
 
+	t.Logf("Copying blocks from `cache` / `store`")
 	missingPaths := GetPathsForContentBlocks(missingContentIndex)
 	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
 		path := GetPath(missingPaths, uint32(i))
-		block, err := ReadFromStorage(upsyncStorageAPI, "source/cache", path)
+		block, err := ReadFromStorage(upsyncStorageAPI, "cache", path)
 		if err != nil {
-			t.Errorf("UpSyncVersion() ReadFromStorage(%s, %s) = %q, want %q", "source/cache", path, err, error(nil))
+			t.Errorf("UpSyncVersion() ReadFromStorage(%s, %s) = %q, want %q", "cache", path, err, error(nil))
 		}
 		err = WriteToStorage(remoteStorageAPI, "store", path, block)
 		if err != nil {
-			t.Errorf("UpSyncVersion() WriteToStorage(%s, %s) = %q, want %q", "source/cache", path, err, error(nil))
+			t.Errorf("UpSyncVersion() WriteToStorage(%s, %s) = %q, want %q", "store", path, err, error(nil))
 		}
-		t.Logf("Copied block: `%s` from `%s` to `%s`", path, "source/cache", "store")
+		t.Logf("Copied block: `%s` from `%s` to `%s`", path, "cache", "store")
 	}
 
-	mergedContentIndex, err := MergeContentIndex(storeIndex, missingContentIndex)
+	t.Logf("Reading remote index from `store`")
+	version, err := ReadFromStorage(upsyncStorageAPI, "", "current.lvi")
 	if err != nil {
-		t.Errorf("MergeContentIndex() err = %q, want %q", err, error(nil))
+		t.Errorf("UpSyncVersion() ReadFromStorage(%s, %s) = %q, want %q", "", "local.lci", err, error(nil))
 	}
-	defer LongtailFree(unsafe.Pointer(mergedContentIndex))
+	err = WriteToStorage(remoteStorageAPI, "", "version.lvi", version)
+	if err != nil {
+		t.Errorf("UpSyncVersion() WriteToStorage(%s, %s) = %q, want %q", "", "version.lvi", err, error(nil))
+	}
 
-	WriteContentIndex(remoteStorageAPI, mergedContentIndex, "store.lci")
+	t.Logf("Updating remote index from `store`")
+	storeIndex, err = MergeContentIndex(storeIndex, missingContentIndex)
+	if err != nil {
+		t.Errorf("UpSyncVersion() MergeContentIndex() err = %q, want %q", err, error(nil))
+	}
+	WriteContentIndex(remoteStorageAPI, storeIndex, "store.lci")
 
-	downStorageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(downStorageAPI)
+	t.Logf("Starting downsync to `current`")
+	downSyncStorageAPI := CreateInMemStorageAPI()
+	defer DestroyStorageAPI(downSyncStorageAPI)
 
-	/*	err := ChangeVersion(
-		contentStorageAPI,
-		versionStorageAPI,
-	)*/
+	t.Logf("Reading remote index from `store`")
+	remoteStorageIndex := ReadContentIndex(remoteStorageAPI, "store.lci")
+	if remoteStorageIndex == nil {
+		t.Errorf("UpSyncVersion() ReadContentIndex() failed")
+	}
+	defer LongtailFree(unsafe.Pointer(remoteStorageIndex))
+	t.Logf("Blocks in store: %d", int(*remoteStorageIndex.m_BlockCount))
 
+	t.Logf("Reading version index from `version.lvi`")
+	targetVersionIndex := ReadVersionIndex(remoteStorageAPI, "version.lvi")
+	if err != nil {
+		t.Errorf("UpSyncVersion() ReadVersionIndex(%s) = %q, want %q", "version.lvi", err, error(nil))
+	}
+	if targetVersionIndex == nil {
+		t.Errorf("UpSyncVersion() ReadVersionIndex(%s) = targetVersionIndex == nil", "version.lvi")
+	}
+	defer LongtailFree(unsafe.Pointer(targetVersionIndex))
+	t.Logf("Assets in version: %d", int(*targetVersionIndex.m_AssetCount))
+
+	cacheContentIndex := ReadContentIndex(downSyncStorageAPI, "cache.lci")
+	if cacheContentIndex == nil {
+		cacheContentIndex, err = ReadContent(
+			downSyncStorageAPI,
+			hashAPI,
+			jobAPI,
+			progress,
+			&progressData{task: "Reading local cache", t: t},
+			"cache")
+		if err != nil {
+			t.Errorf("UpSyncVersion() ReadContent(%s) = %q, want %q", "cache", err, error(nil))
+		}
+		if cacheContentIndex == nil {
+			t.Errorf("UpSyncVersion() ReadContent(%s) = cacheContentIndex == nil", "cache")
+		}
+	}
+	defer LongtailFree(unsafe.Pointer(cacheContentIndex))
+	t.Logf("Blocks in cache: %d", int(*cacheContentIndex.m_BlockCount))
+
+	missingContentIndex, err = CreateMissingContent(
+		hashAPI,
+		cacheContentIndex,
+		targetVersionIndex,
+		32758*12,
+		4096)
+	if err != nil {
+		t.Errorf("UpSyncVersion() CreateMissingContent() = %q, want %q", err, error(nil))
+	}
+
+	requestContent, err := RetargetContent(
+		remoteStorageIndex,
+		missingContentIndex)
+	if err != nil {
+		t.Errorf("UpSyncVersion() RetargetContent() = %q, want %q", err, error(nil))
+	}
+	defer LongtailFree(unsafe.Pointer(requestContent))
+
+	missingPaths = GetPathsForContentBlocks(requestContent)
+	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
+		path := GetPath(missingPaths, uint32(i))
+		block, err := ReadFromStorage(remoteStorageAPI, "store", path)
+		if err != nil {
+			t.Errorf("UpSyncVersion() ReadFromStorage(%s, %s) = %q, want %q", "store", path, err, error(nil))
+		}
+		err = WriteToStorage(downSyncStorageAPI, "cache", path, block)
+		if err != nil {
+			t.Errorf("UpSyncVersion() WriteToStorage(%s, %s) = %q, want %q", "cache", path, err, error(nil))
+		}
+		t.Logf("Copied block: `%s` from `%s` to `%s`", path, "store", "cache")
+	}
+
+	compressionRegistry := nil
+	cacheIndex := nil
+	currentVersionIndex := nil
+	versionDiff := nil
+
+	err = ChangeVersion(
+		downSyncStorageAPI,
+		downSyncStorageAPI,
+		hashAPI,
+		jobAPI,
+		progress,
+		&progressData{task: "Updating version", t: t},
+		compressionRegistry,
+		cacheIndex,
+		currentVersionIndex,
+		targetVersionIndex,
+		versionDiff,
+		"cache",
+		"current")
+	if err != nil {
+		t.Errorf("UpSyncVersion() ChangeVersion(%s, %s) = %q, want %q", "cache", "current", err, error(nil))
+	}
 }

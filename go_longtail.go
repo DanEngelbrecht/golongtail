@@ -8,35 +8,46 @@ package golongtail
 // #include <stdlib.h>
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 // void logProxy(void* context, int level, char* str);
-// static StorageAPI_HOpenFile Storage_OpenWriteFile(struct StorageAPI* api, const char* path, uint64_t initial_size)
+// static Longtail_StorageAPI_HOpenFile Storage_OpenWriteFile(struct Longtail_StorageAPI* api, const char* path, uint64_t initial_size)
 // {
-//   return api->OpenWriteFile(api, path, initial_size);
+//   Longtail_StorageAPI_HOpenFile f;
+//   int err = api->OpenWriteFile(api, path, initial_size, &f);
+//   if (err) {
+//     return 0;
+//   }
+//   return f;
 // }
-// static int Storage_Write(struct StorageAPI* api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+// static int Storage_Write(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 // {
 //   return api->Write(api, f, offset, length, input);
 // }
-// static void Storage_CloseWrite(struct StorageAPI* api, StorageAPI_HOpenFile f)
+// static Longtail_StorageAPI_HOpenFile Storage_OpenReadFile(struct Longtail_StorageAPI* api, const char* path)
 // {
-//   return api->CloseWrite(api, f);
+//   Longtail_StorageAPI_HOpenFile f;
+//   int err = api->OpenReadFile(api, path, &f);
+//   if (err) {
+//     return 0;
+//   }
+//   return f;
 // }
-// static StorageAPI_HOpenFile Storage_OpenReadFile(struct StorageAPI* api, const char* path)
-// {
-//   return api->OpenReadFile(api, path);
-// }
-// static int Storage_Read(struct StorageAPI* api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
+// static int Storage_Read(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 // {
 //   return api->Read(api, f, offset, length, output);
 // }
-// static void Storage_CloseRead(struct StorageAPI* api, StorageAPI_HOpenFile f)
+// static void Storage_CloseFile(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f)
 // {
-//   return api->CloseRead(api, f);
+//   return api->CloseFile(api, f);
 // }
-// static uint64_t Storage_GetSize(struct StorageAPI* api, StorageAPI_HOpenFile f)
+// static uint64_t Storage_GetSize(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f)
 // {
-//   return api->GetSize(api, f);
+//   uint64_t s;
+//   int err = api->GetSize(api, f, &s);
+//   if (err) {
+//     return 0;
+//   }
+//   return s;
 // }
-// static char* Storage_ConcatPath(struct StorageAPI* api, const char* root_path, const char* sub_path)
+// static char* Storage_ConcatPath(struct Longtail_StorageAPI* api, const char* root_path, const char* sub_path)
 // {
 //   return api->ConcatPath(api, root_path, sub_path);
 // }
@@ -44,45 +55,54 @@ package golongtail
 // {
 //   return &name_data[name_offsets[index]];
 // }
-// static void* ReadFromStorage(struct StorageAPI* api, const char* rootPath, const char* blockPath)
+// static void* ReadFromStorage(struct Longtail_StorageAPI* api, const char* rootPath, const char* blockPath)
 // {
 //    char* full_path = api->ConcatPath(api, rootPath, blockPath);
-//    StorageAPI_HOpenFile block_file = api->OpenReadFile(api, full_path);
-//    if (!block_file) {
+//    Longtail_StorageAPI_HOpenFile block_file;
+//    int err = api->OpenReadFile(api, full_path, &block_file);
+//    if (err) {
 //      Longtail_Free(full_path);
 //      return 0;
 //    }
-//    uint64_t blockSize = api->GetSize(api, block_file);
+//    uint64_t blockSize;
+//    err = api->GetSize(api, block_file, &blockSize);
+//    if (err) {
+//      api->CloseFile(api, block_file);
+//      Longtail_Free(full_path);
+//      return 0;
+//    }
 //    void* buffer = Longtail_Alloc((size_t)blockSize);
 //    api->Read(api, block_file, 0, blockSize, buffer);
-//    api->CloseRead(api, block_file);
+//    api->CloseFile(api, block_file);
 //    Longtail_Free(full_path);
 //    return buffer;
 // }
-// static int WriteToStorage(struct StorageAPI* api, const char* rootPath, const char* blockPath, uint64_t blockSize, void* blockData)
+// static int WriteToStorage(struct Longtail_StorageAPI* api, const char* rootPath, const char* blockPath, uint64_t blockSize, void* blockData)
 // {
 //    char* full_path = api->ConcatPath(api, rootPath, blockPath);
-//    StorageAPI_HOpenFile block_file = api->OpenWriteFile(api, full_path, blockSize);
-//    if (!block_file) {
+//    Longtail_StorageAPI_HOpenFile block_file;
+//    int err = api->OpenWriteFile(api, full_path, blockSize, &block_file);
+//    if (err) {
 //      Longtail_Free(full_path);
 //      return 0;
 //    }
 //    api->Write(api, block_file, 0, blockSize, blockData);
-//    api->CloseWrite(api, block_file);
+//    api->CloseFile(api, block_file);
 //    Longtail_Free(full_path);
 //    return 1;
 // }
 import "C"
 import (
+  "path/filepath"
   "fmt"
-  "runtime"
+  "os"
   "unsafe"
 
   "github.com/mattn/go-pointer"
 )
 
 // ReadFromStorage ...
-func ReadFromStorage(api *C.struct_StorageAPI, rootPath string, path string) ([]byte, error) {
+func ReadFromStorage(api *C.struct_Longtail_StorageAPI, rootPath string, path string) ([]byte, error) {
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -97,12 +117,12 @@ func ReadFromStorage(api *C.struct_StorageAPI, rootPath string, path string) ([]
 	blockSize := C.Storage_GetSize(api, f)
 	blockData := make([]uint8, int(blockSize))
 	C.Storage_Read(api, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
-	C.Storage_CloseRead(api, f)
+	C.Storage_CloseFile(api, f)
 	return blockData, nil
 }
 
 // WriteToStorage ...
-func WriteToStorage(api *C.struct_StorageAPI, rootPath string, path string, blockData []byte) error {
+func WriteToStorage(api *C.struct_Longtail_StorageAPI, rootPath string, path string, blockData []byte) error {
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -110,8 +130,9 @@ func WriteToStorage(api *C.struct_StorageAPI, rootPath string, path string, bloc
 	cFullPath := C.Storage_ConcatPath(api, cRootPath, cPath)
 	defer C.free(unsafe.Pointer(cFullPath))
 
-  if C.EnsureParentPathExists(api, cFullPath) == 0 {
-    return fmt.Errorf("WriteToStorage: failed to create parent path folder `%s` path `%s`", rootPath, path)
+  err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
+  if err != nil {
+    return err
   }
 
 	blockSize := C.uint64_t(len(blockData))
@@ -120,7 +141,7 @@ func WriteToStorage(api *C.struct_StorageAPI, rootPath string, path string, bloc
   if blockSize > 0 {
     C.Storage_Write(api, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
   }
-	C.Storage_CloseWrite(api, f)
+	C.Storage_CloseFile(api, f)
 	return nil
 }
 
@@ -146,7 +167,7 @@ func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
 }
 /*
 // WriteToStorage ...
-func WriteToStorage(storageAPI *C.struct_StorageAPI, path string, data []byte) error {
+func WriteToStorage(storageAPI *C.struct_Longtail_StorageAPI, path string, data []byte) error {
   cPath := C.CString(path)
   defer C.free(unsafe.Pointer(cPath))
   if C.EnsureParentPathExists(storageAPI, cPath) == 0 {
@@ -166,68 +187,68 @@ func WriteToStorage(storageAPI *C.struct_StorageAPI, path string, data []byte) e
 }
 */
 // CreateMeowHashAPI ...
-func CreateMeowHashAPI() *C.struct_HashAPI {
-  return C.CreateMeowHashAPI()
+func CreateMeowHashAPI() *C.struct_Longtail_HashAPI {
+  return C.Longtail_CreateMeowHashAPI()
 }
 
 // DestroyHashAPI ...
-func DestroyHashAPI(api *C.struct_HashAPI) {
-  C.DestroyHashAPI(api)
+func DestroyHashAPI(api *C.struct_Longtail_HashAPI) {
+  C.Longtail_DestroyHashAPI(api)
 }
 
 // CreateFSStorageAPI ...
-func CreateFSStorageAPI() *C.struct_StorageAPI {
-  return C.CreateFSStorageAPI()
+func CreateFSStorageAPI() *C.struct_Longtail_StorageAPI {
+  return C.Longtail_CreateFSStorageAPI()
 }
 
 // CreateInMemStorageAPI ...
-func CreateInMemStorageAPI() *C.struct_StorageAPI {
-  return C.CreateInMemStorageAPI()
+func CreateInMemStorageAPI() *C.struct_Longtail_StorageAPI {
+  return C.Longtail_CreateInMemStorageAPI()
 }
 
 // DestroyStorageAPI ...
-func DestroyStorageAPI(api *C.struct_StorageAPI) {
-  C.DestroyStorageAPI(api)
+func DestroyStorageAPI(api *C.struct_Longtail_StorageAPI) {
+  C.Longtail_DestroyStorageAPI(api)
 }
 
 // CreateLizardCompressionAPI ...
-func CreateLizardCompressionAPI() *C.struct_CompressionAPI {
-  return C.CreateLizardCompressionAPI()
+func CreateLizardCompressionAPI() *C.struct_Longtail_CompressionAPI {
+  return C.Longtail_CreateLizardCompressionAPI()
 }
 
 // DestroyCompressionAPI ...
-func DestroyCompressionAPI(api *C.struct_CompressionAPI) {
-  C.DestroyCompressionAPI(api)
+func DestroyCompressionAPI(api *C.struct_Longtail_CompressionAPI) {
+  C.Longtail_DestroyCompressionAPI(api)
 }
 
 // CreateBikeshedJobAPI ...
-func CreateBikeshedJobAPI(workerCount uint32) *C.struct_JobAPI {
-  return C.CreateBikeshedJobAPI(C.uint32_t(workerCount))
+func CreateBikeshedJobAPI(workerCount uint32) *C.struct_Longtail_JobAPI {
+  return C.Longtail_CreateBikeshedJobAPI(C.uint32_t(workerCount))
 }
 
 // DestroyJobAPI ...
-func DestroyJobAPI(api *C.struct_JobAPI) {
-  C.DestroyJobAPI(api)
+func DestroyJobAPI(api *C.struct_Longtail_JobAPI) {
+  C.Longtail_DestroyJobAPI(api)
 }
 
-// CreateDefaultCompressionRegistry ...
-func CreateDefaultCompressionRegistry() *C.struct_CompressionRegistry {
-  return C.CreateDefaultCompressionRegistry()
+// Longtail_CreateDefaultCompressionRegistry ...
+func CreateDefaultCompressionRegistry() *C.struct_Longtail_CompressionRegistry {
+  return C.Longtail_CreateDefaultCompressionRegistry()
 }
 
 // DestroyCompressionRegistry ...
-func DestroyCompressionRegistry(registry *C.struct_CompressionRegistry) {
-  C.DestroyCompressionRegistry(registry)
+func DestroyCompressionRegistry(registry *C.struct_Longtail_CompressionRegistry) {
+  C.Longtail_DestroyCompressionRegistry(registry)
 }
 
 // GetNoCompressionType ...
 func GetNoCompressionType() uint32 {
-  return uint32(C.NO_COMPRESSION_TYPE)
+  return uint32(C.LONGTAIL_NO_COMPRESSION_TYPE)
 }
 
 // GetLizardDefaultCompressionType ...
 func GetLizardDefaultCompressionType() uint32 {
-  return uint32(C.LIZARD_DEFAULT_COMPRESSION_TYPE)
+  return uint32(C.LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE)
 }
 
 // LongtailAlloc ...
@@ -241,34 +262,39 @@ func LongtailFree(data unsafe.Pointer) {
 }
 
 // GetFilesRecursively ...
-func GetFilesRecursively(storageAPI *C.struct_StorageAPI, rootPath string) *C.struct_FileInfos {
+func GetFilesRecursively(storageAPI *C.struct_Longtail_StorageAPI, rootPath string) (*C.struct_Longtail_FileInfos, error) {
   cFolderPath := C.CString(rootPath)
   defer C.free(unsafe.Pointer(cFolderPath))
-  return C.GetFilesRecursively(storageAPI, cFolderPath)
+  var fileInfos *C.struct_Longtail_FileInfos
+  errno := C.Longtail_GetFilesRecursively(storageAPI, cFolderPath, &fileInfos)
+  if errno != 0 {
+    return nil, fmt.Errorf("GetFilesRecursively: failed with error %d", errno)
+  }
+  return fileInfos, nil
 }
 
 // GetPath ...
-func GetPath(paths *C.struct_Paths, index uint32) string {
+func GetPath(paths *C.struct_Longtail_Paths, index uint32) string {
   cPath := C.GetPath(paths.m_Offsets, paths.m_Data, C.uint32_t(index))
   return C.GoString(cPath)
 }
 
 // GetVersionIndexPath ...
-func GetVersionIndexPath(vindex *C.struct_VersionIndex, index uint32) string {
+func GetVersionIndexPath(vindex *C.struct_Longtail_VersionIndex, index uint32) string {
   cPath := C.GetPath(vindex.m_NameOffsets, vindex.m_NameData, C.uint32_t(index))
   return C.GoString(cPath)
 }
 
 // CreateVersionIndex ...
 func CreateVersionIndex(
-  storageAPI *C.struct_StorageAPI,
-  hashAPI *C.struct_HashAPI,
-  jobAPI *C.struct_JobAPI,
+  storageAPI *C.struct_Longtail_StorageAPI,
+  hashAPI *C.struct_Longtail_HashAPI,
+  jobAPI *C.struct_Longtail_JobAPI,
   progressFunc progressFunc,
   progressContext interface{},
   versionPath string,
   compressionType uint32,
-  targetChunkSize uint32) (*C.struct_VersionIndex, error) {
+  targetChunkSize uint32) (*C.struct_Longtail_VersionIndex, error) {
 
   progressProxyData := makeProgressProxy(progressFunc, progressContext)
   cProgressProxyData := pointer.Save(&progressProxyData)
@@ -277,7 +303,11 @@ func CreateVersionIndex(
   cVersionPath := C.CString(versionPath)
   defer C.free(unsafe.Pointer(cVersionPath))
 
-  fileInfos := C.GetFilesRecursively(storageAPI, cVersionPath)
+  var fileInfos *C.struct_Longtail_FileInfos
+  errno := C.Longtail_GetFilesRecursively(storageAPI, cVersionPath, &fileInfos)
+  if errno != 0 {
+    return nil, fmt.Errorf("GetFilesRecursively: scan folder `%s` failed with error %d", versionPath, errno)
+  }
   defer C.Longtail_Free(unsafe.Pointer(fileInfos))
 
   compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
@@ -290,109 +320,129 @@ func CreateVersionIndex(
     cCompressionTypes = unsafe.Pointer(&compressionTypes[0])
   }
 
-  vindex := C.CreateVersionIndex(
+  var vindex *C.struct_Longtail_VersionIndex
+  errno = C.Longtail_CreateVersionIndex(
     storageAPI,
     hashAPI,
     jobAPI,
-    (C.JobAPI_ProgressFunc)(C.progressProxy),
+    (C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
     cProgressProxyData,
     cVersionPath,
-    (*C.struct_Paths)(&fileInfos.m_Paths),
+    (*C.struct_Longtail_Paths)(&fileInfos.m_Paths),
     fileInfos.m_FileSizes,
     (*C.uint32_t)(cCompressionTypes),
-    C.uint32_t(targetChunkSize))
+    C.uint32_t(targetChunkSize),
+    &vindex)
 
-  if vindex == nil {
-    return nil, fmt.Errorf("CreateVersionIndex: failed to create version index")
+  if errno != 0 {
+    return nil, fmt.Errorf("CreateVersionIndex: failed with error %d", errno)
   }
 
   return vindex, nil
 }
 
 // WriteVersionIndex ...
-func WriteVersionIndex(storageAPI *C.struct_StorageAPI, index *C.struct_VersionIndex, path string) error {
+func WriteVersionIndex(storageAPI *C.struct_Longtail_StorageAPI, index *C.struct_Longtail_VersionIndex, path string) error {
   cPath := C.CString(path)
   defer C.free(unsafe.Pointer(cPath))
-  if C.WriteVersionIndex(storageAPI, index, cPath) == 0 {
-    return fmt.Errorf("WriteVersionIndex: failed to write index to `%s`", path)
+  errno := C.Longtail_WriteVersionIndex(storageAPI, index, cPath)
+  if errno != 0 {
+    return fmt.Errorf("WriteVersionIndex: write index to `%s` failed with error %d", path, errno)
   }
   return nil
 }
 
 // ReadVersionIndex ...
-func ReadVersionIndex(storageAPI *C.struct_StorageAPI, path string) *C.struct_VersionIndex {
+func ReadVersionIndex(storageAPI *C.struct_Longtail_StorageAPI, path string) (*C.struct_Longtail_VersionIndex, error) {
   cPath := C.CString(path)
   defer C.free(unsafe.Pointer(cPath))
-  return C.ReadVersionIndex(storageAPI, cPath)
+  var vindex *C.struct_Longtail_VersionIndex
+  errno := C.Longtail_ReadVersionIndex(storageAPI, cPath, &vindex)
+  if errno != 0 {
+    return nil, fmt.Errorf("ReadVersionIndex: read index from `%s` failed with error %d", path, errno)
+  }
+  return vindex, nil
 }
 
 // CreateContentIndex ...
 func CreateContentIndex(
-  hashAPI *C.struct_HashAPI,
+  hashAPI *C.struct_Longtail_HashAPI,
   chunkCount uint64,
   chunkHashes []uint64,
   chunkSizes []uint32,
   compressionTypes []uint32,
   maxBlockSize uint32,
-  maxChunksPerBlock uint32) (*C.struct_ContentIndex, error) {
+  maxChunksPerBlock uint32) (*C.struct_Longtail_ContentIndex, error) {
 
+  var cindex *C.struct_Longtail_ContentIndex
   if chunkCount == 0 {
-    return C.CreateContentIndex(
+    errno := C.Longtail_CreateContentIndex(
       hashAPI,
       0,
       nil,
       nil,
       nil,
       C.uint32_t(maxBlockSize),
-      C.uint32_t(maxChunksPerBlock)), nil
+      C.uint32_t(maxChunksPerBlock),
+      &cindex)
+    if errno != 0 {
+      return nil, fmt.Errorf("CreateContentIndex: create empty content index failed with error %d", errno)
+    }
   }
   cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
   cChunkSizes := (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
   cCompressionTypes := (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
 
-  cindex := C.CreateContentIndex(
+  errno := C.Longtail_CreateContentIndex(
     hashAPI,
     C.uint64_t(chunkCount),
     cChunkHashes,
     cChunkSizes,
     cCompressionTypes,
     C.uint32_t(maxBlockSize),
-    C.uint32_t(maxChunksPerBlock))
+    C.uint32_t(maxChunksPerBlock),
+    &cindex)
 
-  if cindex == nil {
-    return nil, fmt.Errorf("CreateContentIndex: failed to create content index")
+  if errno != 0 {
+    return nil, fmt.Errorf("CreateContentIndex: create content index failed with error %d", errno)
   }
 
   return cindex, nil
 }
 
 // WriteContentIndex ...
-func WriteContentIndex(storageAPI *C.struct_StorageAPI, index *C.struct_ContentIndex, path string) error {
+func WriteContentIndex(storageAPI *C.struct_Longtail_StorageAPI, index *C.struct_Longtail_ContentIndex, path string) error {
   cPath := C.CString(path)
   defer C.free(unsafe.Pointer(cPath))
-  if C.WriteContentIndex(storageAPI, index, cPath) == 0 {
-    return fmt.Errorf("WriteContentIndex: failed to write index to `%s`", path)
+  errno := C.Longtail_WriteContentIndex(storageAPI, index, cPath) 
+  if errno != 0 {
+    return fmt.Errorf("WriteContentIndex: write index to `%s` failed with error %d", path, errno)
   }
   return nil
 }
 
 // ReadContentIndex ...
-func ReadContentIndex(storageAPI *C.struct_StorageAPI, path string) *C.struct_ContentIndex {
+func ReadContentIndex(storageAPI *C.struct_Longtail_StorageAPI, path string) (*C.struct_Longtail_ContentIndex, error) {
   cPath := C.CString(path)
   defer C.free(unsafe.Pointer(cPath))
-  return C.ReadContentIndex(storageAPI, cPath)
+  var cindex *C.struct_Longtail_ContentIndex
+  errno := C.Longtail_ReadContentIndex(storageAPI, cPath, &cindex)
+  if errno != 0 {
+    return nil, fmt.Errorf("ReadContentIndex: read index from `%s` failed with error %d", path, errno)
+  }
+  return cindex, nil
 }
 
 // WriteContent ...
 func WriteContent(
-  sourceStorageAPI *C.struct_StorageAPI,
-  targetStorageAPI *C.struct_StorageAPI,
-  compressionRegistry *C.struct_CompressionRegistry,
-  jobAPI *C.struct_JobAPI,
+  sourceStorageAPI *C.struct_Longtail_StorageAPI,
+  targetStorageAPI *C.struct_Longtail_StorageAPI,
+  compressionRegistry *C.struct_Longtail_CompressionRegistry,
+  jobAPI *C.struct_Longtail_JobAPI,
   progressFunc progressFunc,
   progressContext interface{},
-  contentIndex *C.struct_ContentIndex,
-  versionIndex *C.struct_VersionIndex,
+  contentIndex *C.struct_Longtail_ContentIndex,
+  versionIndex *C.struct_Longtail_VersionIndex,
   versionFolderPath string,
   contentFolderPath string) error {
 
@@ -406,31 +456,31 @@ func WriteContent(
   cContentFolderPath := C.CString(contentFolderPath)
   defer C.free(unsafe.Pointer(cContentFolderPath))
 
-  ok := C.WriteContent(
+  errno := C.Longtail_WriteContent(
     sourceStorageAPI,
     targetStorageAPI,
     compressionRegistry,
     jobAPI,
-    (C.JobAPI_ProgressFunc)(C.progressProxy),
+    (C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
     cProgressProxyData,
     contentIndex,
     versionIndex,
     cVersionFolderPath,
     cContentFolderPath)
-  if ok == 0 {
-    return fmt.Errorf("WriteContent: failed to write content to `%s`", contentFolderPath)
+  if errno != 0 {
+    return fmt.Errorf("WriteContent: write content to `%s` failed with error %d", contentFolderPath, errno)
   }
   return nil
 }
 
 // ReadContent ...
 func ReadContent(
-  sourceStorageAPI *C.struct_StorageAPI,
-  hashAPI *C.struct_HashAPI,
-  jobAPI *C.struct_JobAPI,
+  sourceStorageAPI *C.struct_Longtail_StorageAPI,
+  hashAPI *C.struct_Longtail_HashAPI,
+  jobAPI *C.struct_Longtail_JobAPI,
   progressFunc progressFunc,
   progressContext interface{},
-  contentFolderPath string) (*C.struct_ContentIndex, error) {
+  contentFolderPath string) (*C.struct_Longtail_ContentIndex, error) {
 
   progressProxyData := makeProgressProxy(progressFunc, progressContext)
   cProgressProxyData := pointer.Save(&progressProxyData)
@@ -439,71 +489,77 @@ func ReadContent(
   cContentFolderPath := C.CString(contentFolderPath)
   defer C.free(unsafe.Pointer(cContentFolderPath))
 
-  contentIndex := C.ReadContent(
+  var contentIndex *C.struct_Longtail_ContentIndex
+  errno := C.Longtail_ReadContent(
     sourceStorageAPI,
     hashAPI,
     jobAPI,
-    (C.JobAPI_ProgressFunc)(C.progressProxy),
+    (C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
     cProgressProxyData,
-    cContentFolderPath)
-  if contentIndex == nil {
-    return nil, fmt.Errorf("ReadContent: failed to read content from `%s`", contentFolderPath)
+    cContentFolderPath,
+    &contentIndex)
+  if errno != 0 {
+    return nil, fmt.Errorf("ReadContent: read content from `%s` failed with error %d", contentFolderPath, errno)
   }
   return contentIndex, nil
 }
 
 // CreateMissingContent ...
 func CreateMissingContent(
-  hashAPI *C.struct_HashAPI,
-  contentIndex *C.struct_ContentIndex,
-  versionIndex *C.struct_VersionIndex,
+  hashAPI *C.struct_Longtail_HashAPI,
+  contentIndex *C.struct_Longtail_ContentIndex,
+  versionIndex *C.struct_Longtail_VersionIndex,
   maxBlockSize uint32,
-  maxChunksPerBlock uint32) (*C.struct_ContentIndex, error) {
+  maxChunksPerBlock uint32) (*C.struct_Longtail_ContentIndex, error) {
 
-  missingContentIndex := C.CreateMissingContent(
+  var missingContentIndex *C.struct_Longtail_ContentIndex
+  errno := C.Longtail_CreateMissingContent(
     hashAPI,
     contentIndex,
     versionIndex,
     C.uint32_t(maxBlockSize),
-    C.uint32_t(maxChunksPerBlock))
-  if missingContentIndex == nil {
-    return nil, fmt.Errorf("CreateMissingContent: failed to make missing content")
+    C.uint32_t(maxChunksPerBlock),
+    &missingContentIndex)
+  if errno != 0 {
+    return nil, fmt.Errorf("CreateMissingContent: make missing content failed with error %d", errno)
   }
   return missingContentIndex, nil
 }
 
 // RetargetContent ...
 func RetargetContent(
-  referenceContentIndex *C.struct_ContentIndex,
-  contentIndex *C.struct_ContentIndex) (*C.struct_ContentIndex, error) {
-  retargetedContentIndex := C.RetargetContent(referenceContentIndex, contentIndex)
-  if retargetedContentIndex == nil {
-    return nil, fmt.Errorf("RetargetContent: failed to make retargeted content")
+  referenceContentIndex *C.struct_Longtail_ContentIndex,
+  contentIndex *C.struct_Longtail_ContentIndex) (*C.struct_Longtail_ContentIndex, error) {
+  var retargetedContentIndex *C.struct_Longtail_ContentIndex
+  errno := C.Longtail_RetargetContent(referenceContentIndex, contentIndex, &retargetedContentIndex)
+  if errno != 0 {
+    return nil, fmt.Errorf("RetargetContent: retarget content failed with error %d", errno)
   }
   return retargetedContentIndex, nil
 }
 
 // MergeContentIndex ...
 func MergeContentIndex(
-  localContentIndex *C.struct_ContentIndex,
-  remoteContentIndex *C.struct_ContentIndex) (*C.struct_ContentIndex, error) {
-  mergedContentIndex := C.MergeContentIndex(localContentIndex, remoteContentIndex)
-  if mergedContentIndex == nil {
-    return nil, fmt.Errorf("MergeContentIndex: failed to merge content indexes")
+  localContentIndex *C.struct_Longtail_ContentIndex,
+  remoteContentIndex *C.struct_Longtail_ContentIndex) (*C.struct_Longtail_ContentIndex, error) {
+  var mergedContentIndex *C.struct_Longtail_ContentIndex
+  errno := C.Longtail_MergeContentIndex(localContentIndex, remoteContentIndex, &mergedContentIndex)
+  if errno != 0 {
+    return nil, fmt.Errorf("MergeContentIndex: merge content indexes failed with error %d", errno)
   }
   return mergedContentIndex, nil
 }
 
 // WriteVersion ...
 func WriteVersion(
-  contentStorageAPI *C.struct_StorageAPI,
-  versionStorageAPI *C.struct_StorageAPI,
-  compressionRegistry *C.struct_CompressionRegistry,
-  jobAPI *C.struct_JobAPI,
+  contentStorageAPI *C.struct_Longtail_StorageAPI,
+  versionStorageAPI *C.struct_Longtail_StorageAPI,
+  compressionRegistry *C.struct_Longtail_CompressionRegistry,
+  jobAPI *C.struct_Longtail_JobAPI,
   progressFunc progressFunc,
   progressContext interface{},
-  contentIndex *C.struct_ContentIndex,
-  versionIndex *C.struct_VersionIndex,
+  contentIndex *C.struct_Longtail_ContentIndex,
+  versionIndex *C.struct_Longtail_VersionIndex,
   contentFolderPath string,
   versionFolderPath string) error {
 
@@ -517,47 +573,48 @@ func WriteVersion(
   cVersionFolderPath := C.CString(versionFolderPath)
   defer C.free(unsafe.Pointer(cVersionFolderPath))
 
-  ok := C.WriteVersion(
+  errno := C.Longtail_WriteVersion(
     contentStorageAPI,
     versionStorageAPI,
     compressionRegistry,
     jobAPI,
-    (C.JobAPI_ProgressFunc)(C.progressProxy),
+    (C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
     cProgressProxyData,
     contentIndex,
     versionIndex,
     cContentFolderPath,
     cVersionFolderPath)
-  if ok == 0 {
-    return fmt.Errorf("WriteVersion: failed to write version to `%s` from `%s`", versionFolderPath, contentFolderPath)
+  if errno != 0 {
+    return fmt.Errorf("WriteVersion: write version to `%s` from `%s` failed with error %d", versionFolderPath, contentFolderPath, errno)
   }
   return nil
 }
 
 //CreateVersionDiff do we really need this? Maybe ChangeVersion should create one on the fly?
 func CreateVersionDiff(
-  sourceVersionIndex *C.struct_VersionIndex,
-  targetVersionIndex *C.struct_VersionIndex) (*C.struct_VersionDiff, error) {
-  versionDiff := C.CreateVersionDiff(sourceVersionIndex, targetVersionIndex)
-  if versionDiff == nil {
-    return nil, fmt.Errorf("CreateVersionDiff: failed to diff versions")
+  sourceVersionIndex *C.struct_Longtail_VersionIndex,
+  targetVersionIndex *C.struct_Longtail_VersionIndex) (*C.struct_Longtail_VersionDiff, error) {
+  var versionDiff *C.struct_Longtail_VersionDiff
+  errno := C.Longtail_CreateVersionDiff(sourceVersionIndex, targetVersionIndex, &versionDiff)
+  if errno != 0 {
+    return nil, fmt.Errorf("CreateVersionDiff: diff versions failed with error %d", errno)
   }
   return versionDiff, nil
 }
 
 //ChangeVersion ...
 func ChangeVersion(
-  contentStorageAPI *C.struct_StorageAPI,
-  versionStorageAPI *C.struct_StorageAPI,
-  hashAPI *C.struct_HashAPI,
-  jobAPI *C.struct_JobAPI,
+  contentStorageAPI *C.struct_Longtail_StorageAPI,
+  versionStorageAPI *C.struct_Longtail_StorageAPI,
+  hashAPI *C.struct_Longtail_HashAPI,
+  jobAPI *C.struct_Longtail_JobAPI,
   progressFunc progressFunc,
   progressContext interface{},
-  compressionRegistry *C.struct_CompressionRegistry,
-  contentIndex *C.struct_ContentIndex,
-  sourceVersionIndex *C.struct_VersionIndex,
-  targetVersionIndex *C.struct_VersionIndex,
-  versionDiff *C.struct_VersionDiff,
+  compressionRegistry *C.struct_Longtail_CompressionRegistry,
+  contentIndex *C.struct_Longtail_ContentIndex,
+  sourceVersionIndex *C.struct_Longtail_VersionIndex,
+  targetVersionIndex *C.struct_Longtail_VersionIndex,
+  versionDiff *C.struct_Longtail_VersionDiff,
   contentFolderPath string,
   versionFolderPath string) error {
 
@@ -571,12 +628,12 @@ func ChangeVersion(
   cVersionFolderPath := C.CString(versionFolderPath)
   defer C.free(unsafe.Pointer(cVersionFolderPath))
 
-  ok := C.ChangeVersion(
+  errno := C.Longtail_ChangeVersion(
     contentStorageAPI,
     versionStorageAPI,
     hashAPI,
     jobAPI,
-    (C.JobAPI_ProgressFunc)(C.progressProxy),
+    (C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
     cProgressProxyData,
     compressionRegistry,
     contentIndex,
@@ -585,55 +642,18 @@ func ChangeVersion(
     versionDiff,
     cContentFolderPath,
     cVersionFolderPath)
-  if ok == 0 {
-    return fmt.Errorf("ChangeVersion: failed to update version `%s` from `%s`", versionFolderPath, contentFolderPath)
+  if errno != 0 {
+    return fmt.Errorf("ChangeVersion: update version `%s` from `%s` failed with error %d", versionFolderPath, contentFolderPath, errno)
   }
   return nil
 }
 
-//CreateVersionIndexFromFolder ...
-func CreateVersionIndexFromFolder(storageAPI *C.struct_StorageAPI, folderPath string, progressProxyData progressProxyData) *C.struct_VersionIndex {
-  progressContext := pointer.Save(&progressProxyData)
-  defer pointer.Unref(progressContext)
-
-  cFolderPath := C.CString(folderPath)
-  defer C.free(unsafe.Pointer(cFolderPath))
-
-  hs := C.CreateMeowHashAPI()
-  defer C.DestroyHashAPI(hs)
-
-  jb := C.CreateBikeshedJobAPI(C.uint32_t(runtime.NumCPU()))
-  defer C.DestroyJobAPI(jb)
-
-  fileInfos := C.GetFilesRecursively(storageAPI, cFolderPath)
-  defer C.Longtail_Free(unsafe.Pointer(fileInfos))
-
-  compressionTypes := make([]C.uint32_t, int(*fileInfos.m_Paths.m_PathCount))
-  for i := 0; i < int(*fileInfos.m_Paths.m_PathCount); i++ {
-    compressionTypes[i] = C.LIZARD_DEFAULT_COMPRESSION_TYPE
-  }
-
-  vindex := C.CreateVersionIndex(
-    storageAPI,
-    hs,
-    jb,
-    (C.JobAPI_ProgressFunc)(C.progressProxy),
-    progressContext,
-    cFolderPath,
-    (*C.struct_Paths)(&fileInfos.m_Paths),
-    fileInfos.m_FileSizes,
-    (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0])),
-    C.uint32_t(32768))
-
-  return vindex
-}
-
-//GetMissingContent ...
+//GetMissingContent ... this is handy, but not what we should expose other than for tests!
 func GetMissingContent(
-  contentStorageAPI *C.struct_StorageAPI,
-  versionStorageAPI *C.struct_StorageAPI,
-  hashAPI *C.struct_HashAPI,
-  jobAPI *C.struct_JobAPI,
+  contentStorageAPI *C.struct_Longtail_StorageAPI,
+  versionStorageAPI *C.struct_Longtail_StorageAPI,
+  hashAPI *C.struct_Longtail_HashAPI,
+  jobAPI *C.struct_Longtail_JobAPI,
   progressFunc progressFunc,
   progressContext interface{},
   versionPath string,
@@ -644,16 +664,16 @@ func GetMissingContent(
   compressionType uint32,
   maxChunksPerBlock uint32,
   targetBlockSize uint32,
-  targetChunkSize uint32) (*C.struct_ContentIndex, error) {
+  targetChunkSize uint32) (*C.struct_Longtail_ContentIndex, error) {
 
-  var vindex *C.struct_VersionIndex = nil
+  var vindex *C.struct_Longtail_VersionIndex = nil
   defer C.Longtail_Free(unsafe.Pointer(vindex))
   err := error(nil)
 
   if len(versionIndexPath) > 0 {
-    vindex = ReadVersionIndex(versionStorageAPI, versionIndexPath)
+    vindex, _ = ReadVersionIndex(versionStorageAPI, versionIndexPath)
   }
-  if nil == vindex {
+  if err != nil {
     vindex, err = CreateVersionIndex(
       versionStorageAPI,
       hashAPI,
@@ -672,16 +692,16 @@ func GetMissingContent(
   cContentPath := C.CString(contentPath)
   defer C.free(unsafe.Pointer(cContentPath))
 
-  var cindex *C.struct_ContentIndex = nil
+  var cindex *C.struct_Longtail_ContentIndex = nil
   defer C.Longtail_Free(unsafe.Pointer(cindex))
 
   cContentIndexPath := C.CString(contentIndexPath)
   defer C.free(unsafe.Pointer(cContentIndexPath))
 
   if len(contentIndexPath) > 0 {
-    cindex = ReadContentIndex(contentStorageAPI, contentIndexPath)
+    cindex, _ = ReadContentIndex(contentStorageAPI, contentIndexPath)
   }
-  if cindex == nil {
+  if err != nil {
     cindex, err = ReadContent(
       contentStorageAPI,
       hashAPI,
@@ -689,15 +709,6 @@ func GetMissingContent(
       progressFunc,
       progressContext,
       contentPath)
-/*
-    cindex, err = CreateContentIndex(
-      hashAPI,
-      0,
-      nil,
-      nil,
-      nil,
-      targetBlockSize,
-      maxChunksPerBlock)*/
     if err != nil {
       return nil, err
     }
@@ -714,8 +725,8 @@ func GetMissingContent(
     return nil, err
   }
 
-  compressionRegistry := C.CreateDefaultCompressionRegistry()
-  defer C.DestroyCompressionRegistry(compressionRegistry)
+  compressionRegistry := C.Longtail_CreateDefaultCompressionRegistry()
+  defer C.Longtail_DestroyCompressionRegistry(compressionRegistry)
 
   err = WriteContent(
     versionStorageAPI,
@@ -755,26 +766,17 @@ func GetMissingContent(
       return nil, err
     }
   }
-/*
-  blockCount := uint64(*missingContentIndex.m_BlockCount)
-  blockHashes := make([]uint64, blockCount)
-
-    var oids []uint64
-    sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&oids)))
-    sliceHeader.Cap = int(blockCount)
-    sliceHeader.Len = int(blockCount)
-    sliceHeader.Data = uintptr(unsafe.Pointer(missingContentIndex.m_BlockHashes))
-
-  for i := 0 ; i < int(blockCount); i++ {
-    blockHashes[i] = oids[i]
-  }
-*/
   return missingContentIndex, nil
 }
 
 //GetPathsForContentBlocks ...
-func GetPathsForContentBlocks(contentIndex *C.struct_ContentIndex) *C.struct_Paths {
-  return C.GetPathsForContentBlocks(contentIndex)
+func GetPathsForContentBlocks(contentIndex *C.struct_Longtail_ContentIndex) (*C.struct_Longtail_Paths, error) {
+  var paths *C.struct_Longtail_Paths
+  errno := C.Longtail_GetPathsForContentBlocks(contentIndex, &paths)
+  if errno != 0 {
+    return nil, fmt.Errorf("GetPathsForContentBlocks: get paths failed with error %d", errno)
+  }
+  return paths, nil
 }
 
 //export progressProxy

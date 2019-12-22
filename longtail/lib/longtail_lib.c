@@ -13,18 +13,15 @@
 #include "../third-party/lizard/lib/lizard_compress.h"
 #include "../third-party/meow_hash/meow_hash_x64_aesni.h"
 
+#if defined(__GNUC__) || defined(__clang__)
+    #pragma GCC diagnostic pop
+#endif
+
 #include <stdio.h>
+#include <errno.h>
 
-const uint32_t NO_COMPRESSION_TYPE = 0u;
-const uint32_t LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
-
-#define TEST_LOG(fmt, ...) \
-    fprintf(stderr, "--- ");fprintf(stderr, fmt, __VA_ARGS__);
-
-int GetCPUCount()
-{
-    return (int)Longtail_GetCPUCount();
-}
+const uint32_t LONGTAIL_NO_COMPRESSION_TYPE = 0u;
+const uint32_t LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE = (((uint32_t)'1') << 24) + (((uint32_t)'s') << 16) + (((uint32_t)'\0') << 8) + ((uint32_t)'d');
 
 struct ReadyCallback
 {
@@ -52,7 +49,11 @@ static void ReadyCallback_Wait(struct ReadyCallback* cb)
 static void ReadyCallback_Init(struct ReadyCallback* ready_callback)
 {
     ready_callback->cb.SignalReady = ReadyCallback_Ready;
-    ready_callback->m_Semaphore = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0);
+    int err = Longtail_CreateSema(Longtail_Alloc(Longtail_GetSemaSize()), 0, &ready_callback->m_Semaphore);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create semaphore for ReadyCallback error: %d", err)
+    }
 }
 
 
@@ -72,10 +73,6 @@ static void ThreadWorker_Init(struct ThreadWorker* thread_worker)
     thread_worker->thread = 0;
 }
 
-static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
-{
-}
-
 static int32_t ThreadWorker_Execute(void* context)
 {
     struct ThreadWorker* thread_worker = (struct ThreadWorker*)(context);
@@ -90,29 +87,41 @@ static int32_t ThreadWorker_Execute(void* context)
     return 0;
 }
 
-int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
+static int ThreadWorker_CreateThread(struct ThreadWorker* thread_worker, Bikeshed in_shed, HLongtail_Sema in_semaphore, int32_t volatile* in_stop)
 {
     thread_worker->shed               = in_shed;
     thread_worker->stop               = in_stop;
     thread_worker->semaphore          = in_semaphore;
-    thread_worker->thread             = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker);
-    return thread_worker->thread != 0;
+    int err = Longtail_CreateThread(Longtail_Alloc(Longtail_GetThreadSize()), ThreadWorker_Execute, 0, thread_worker, &thread_worker->thread);
+    if (err == 0) {
+         return 1;
+    }
+    return 0;
 }
 
-void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
+static void ThreadWorker_JoinThread(struct ThreadWorker* thread_worker)
 {
-    Longtail_JoinThread(thread_worker->thread, LONGTAIL_TIMEOUT_INFINITE);
+    int err = Longtail_JoinThread(thread_worker->thread, LONGTAIL_TIMEOUT_INFINITE);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtain_JoinThread failed with error %d", err)
+    }
 }
 
-void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
+static void ThreadWorker_DisposeThread(struct ThreadWorker* thread_worker)
 {
     Longtail_DeleteThread(thread_worker->thread);
 	Longtail_Free(thread_worker->thread);
 }
 
+static void ThreadWorker_Dispose(struct ThreadWorker* thread_worker)
+{
+    ThreadWorker_DisposeThread(thread_worker);
+}
+
 struct ManagedHashAPI
 {
-    struct HashAPI m_API;
+    struct Longtail_HashAPI m_API;
     void (*Dispose)(struct ManagedHashAPI* managed_hash_api);
 };
 
@@ -121,25 +130,35 @@ struct MeowHashAPI
     struct ManagedHashAPI m_ManagedAPI;
 };
 
-static HashAPI_HContext MeowHash_BeginContext(struct HashAPI* hash_api)
+static int MeowHash_BeginContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext* out_context)
 {
     meow_state* state = (meow_state*)Longtail_Alloc(sizeof(meow_state));
     MeowBegin(state, MeowDefaultSeed);
-    return (HashAPI_HContext)state;
+    *out_context = (Longtail_HashAPI_HContext)state;
+    return 0;
 }
 
-static void MeowHash_Hash(struct HashAPI* hash_api, HashAPI_HContext context, uint32_t length, void* data)
+static void MeowHash_Hash(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context, uint32_t length, void* data)
 {
     meow_state* state = (meow_state*)context;
     MeowAbsorb(state, length, data);
 }
 
-static uint64_t MeowHash_EndContext(struct HashAPI* hash_api, HashAPI_HContext context)
+static uint64_t MeowHash_EndContext(struct Longtail_HashAPI* hash_api, Longtail_HashAPI_HContext context)
 {
     meow_state* state = (meow_state*)context;
-    uint64_t hash = MeowU64From(MeowEnd(state, 0), 0);
+    uint64_t hash = (uint64_t)MeowU64From(MeowEnd(state, 0), 0);
 	Longtail_Free(state);
     return hash;
+}
+
+static int MeowHash_HashBuffer(struct Longtail_HashAPI* hash_api, uint32_t length, void* data, uint64_t* out_hash)
+{
+    meow_state state;
+    MeowBegin(&state, MeowDefaultSeed);
+    MeowAbsorb(&state, length, data);
+    *out_hash = MeowU64From(MeowEnd(&state, 0), 0);
+    return 0;
 }
 
 static void MeowHash_Dispose(struct ManagedHashAPI* hash_api)
@@ -151,17 +170,18 @@ static void MeowHash_Init(struct MeowHashAPI* hash_api)
     hash_api->m_ManagedAPI.m_API.BeginContext = MeowHash_BeginContext;
     hash_api->m_ManagedAPI.m_API.Hash = MeowHash_Hash;
     hash_api->m_ManagedAPI.m_API.EndContext = MeowHash_EndContext;
+    hash_api->m_ManagedAPI.m_API.HashBuffer = MeowHash_HashBuffer;
     hash_api->m_ManagedAPI.Dispose = MeowHash_Dispose;
 }
 
-struct HashAPI* CreateMeowHashAPI()
+struct Longtail_HashAPI* Longtail_CreateMeowHashAPI()
 {
     struct MeowHashAPI* meow_hash = (struct MeowHashAPI*)Longtail_Alloc(sizeof(struct MeowHashAPI));
     MeowHash_Init(meow_hash);
     return &meow_hash->m_ManagedAPI.m_API;
 }
 
-void DestroyHashAPI(struct HashAPI* hash_api)
+void Longtail_DestroyHashAPI(struct Longtail_HashAPI* hash_api)
 {
     struct ManagedHashAPI* managed = (struct ManagedHashAPI*)hash_api;
     managed->Dispose(managed);
@@ -179,7 +199,7 @@ void DestroyHashAPI(struct HashAPI* hash_api)
 
 struct ManagedStorageAPI
 {
-    struct StorageAPI m_API;
+    struct Longtail_StorageAPI m_API;
     void (*Dispose)(struct ManagedStorageAPI* managed_storage_api);
 };
 
@@ -192,76 +212,83 @@ static void FSStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
 {
 }
 
-static StorageAPI_HOpenFile FSStorageAPI_OpenReadFile(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Longtail_OpenReadFile(tmp_path);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenReadFile(tmp_path, &r);
     Longtail_Free(tmp_path);
-    return r;
+    if (err != 0)
+    {
+        return err;
+    }
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)r;
+    return 0;
 }
 
-static uint64_t FSStorageAPI_GetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
+static int FSStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
 {
-    return Longtail_GetFileSize((HLongtail_OpenReadFile)f);
+    return Longtail_GetFileSize((HLongtail_OpenFile)f, out_size);
 }
 
-static int FSStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
+static int FSStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
-    return Longtail_Read((HLongtail_OpenReadFile)f, offset,length, output);
+    return Longtail_Read((HLongtail_OpenFile)f, offset,length, output);
 }
 
-static void FSStorageAPI_CloseRead(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
-{
-    Longtail_CloseReadFile((HLongtail_OpenReadFile)f);
-}
-
-static StorageAPI_HOpenFile FSStorageAPI_OpenWriteFile(struct StorageAPI* storage_api, const char* path, uint64_t initial_size)
+static int FSStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    StorageAPI_HOpenFile r = (StorageAPI_HOpenFile)Longtail_OpenWriteFile(tmp_path, initial_size);
+    HLongtail_OpenFile r;
+    int err = Longtail_OpenWriteFile(tmp_path, initial_size, &r);
     Longtail_Free(tmp_path);
-    return r;
+    if (err)
+    {
+        return err;
+    }
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)r;
+    return 0;
 }
 
-static int FSStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+static int FSStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
-    return Longtail_Write((HLongtail_OpenWriteFile)f, offset,length, input);
+    return Longtail_Write((HLongtail_OpenFile)f, offset,length, input);
 }
 
-static int FSStorageAPI_SetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length)
+static int FSStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
 {
-    return Longtail_SetFileSize((HLongtail_OpenWriteFile)f, length);
+    return Longtail_SetFileSize((HLongtail_OpenFile)f, length);
 }
 
-static void FSStorageAPI_CloseWrite(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
+static void FSStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
 {
-    Longtail_CloseWriteFile((HLongtail_OpenWriteFile)f);
+    Longtail_CloseFile((HLongtail_OpenFile)f);
 }
 
-static int FSStorageAPI_CreateDir(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_CreateDirectory(tmp_path);
+    int err = Longtail_CreateDirectory(tmp_path);
     Longtail_Free(tmp_path);
-    return ok;
+    return err;
 }
 
-static int FSStorageAPI_RenameFile(struct StorageAPI* storage_api, const char* source_path, const char* target_path)
+static int FSStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
 {
     char* tmp_source_path = Longtail_Strdup(source_path);
     Longtail_DenormalizePath(tmp_source_path);
     char* tmp_target_path = Longtail_Strdup(target_path);
     Longtail_DenormalizePath(tmp_target_path);
-    int ok = Longtail_MoveFile(tmp_source_path, tmp_target_path);
+    int err = Longtail_MoveFile(tmp_source_path, tmp_target_path);
     Longtail_Free(tmp_target_path);
     Longtail_Free(tmp_source_path);
-    return ok;
+    return err;
 }
 
-static char* FSStorageAPI_ConcatPath(struct StorageAPI* storage_api, const char* root_path, const char* sub_path)
+static char* FSStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
 {
     // TODO: Trove is inconsistent - it works on normalized paths!
     char* path = (char*)Longtail_ConcatPath(root_path, sub_path);
@@ -269,7 +296,7 @@ static char* FSStorageAPI_ConcatPath(struct StorageAPI* storage_api, const char*
     return path;
 }
 
-static int FSStorageAPI_IsDir(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
@@ -278,7 +305,7 @@ static int FSStorageAPI_IsDir(struct StorageAPI* storage_api, const char* path)
     return is_dir;
 }
 
-static int FSStorageAPI_IsFile(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
@@ -287,60 +314,63 @@ static int FSStorageAPI_IsFile(struct StorageAPI* storage_api, const char* path)
     return is_file;
 }
 
-static int FSStorageAPI_RemoveDir(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_RemoveDir(tmp_path);
-    return ok;
+    int err = Longtail_RemoveDir(tmp_path);
+    Longtail_Free(tmp_path);
+    return err;
 }
 
-static int FSStorageAPI_RemoveFile(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_RemoveFile(tmp_path);
+    int err = Longtail_RemoveFile(tmp_path);
     Longtail_Free(tmp_path);
-    return ok;
+    return err;
 }
 
-static StorageAPI_HIterator FSStorageAPI_StartFind(struct StorageAPI* storage_api, const char* path)
+static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
 {
-    StorageAPI_HIterator iterator = (StorageAPI_HIterator)Longtail_Alloc(Longtail_GetFSIteratorSize());
+    Longtail_StorageAPI_HIterator iterator = (Longtail_StorageAPI_HIterator)Longtail_Alloc(Longtail_GetFSIteratorSize());
     char* tmp_path = Longtail_Strdup(path);
     Longtail_DenormalizePath(tmp_path);
-    int ok = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
+    int err = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
     Longtail_Free(tmp_path);
-    if (!ok)
+    if (err)
     {
 		Longtail_Free(iterator);
         iterator = 0;
+        return err;
     }
-    return iterator;
+    *out_iterator = iterator;
+    return 0;
 }
 
-static int FSStorageAPI_FindNext(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static int FSStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     return Longtail_FindNext((HLongtail_FSIterator)iterator);
 }
 
-static void FSStorageAPI_CloseFind(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static void FSStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     Longtail_CloseFind((HLongtail_FSIterator)iterator);
 	Longtail_Free(iterator);
 }
 
-static const char* FSStorageAPI_GetFileName(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static const char* FSStorageAPI_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     return Longtail_GetFileName((HLongtail_FSIterator)iterator);
 }
 
-static const char* FSStorageAPI_GetDirectoryName(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static const char* FSStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     return Longtail_GetDirectoryName((HLongtail_FSIterator)iterator);
 }
 
-static uint64_t FSStorageAPI_GetEntrySize(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static uint64_t FSStorageAPI_GetEntrySize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     return Longtail_GetEntrySize((HLongtail_FSIterator)iterator);
 }
@@ -350,11 +380,10 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
     storage_api->m_StorageAPI.m_API.OpenReadFile = FSStorageAPI_OpenReadFile;
     storage_api->m_StorageAPI.m_API.GetSize = FSStorageAPI_GetSize;
     storage_api->m_StorageAPI.m_API.Read = FSStorageAPI_Read;
-    storage_api->m_StorageAPI.m_API.CloseRead = FSStorageAPI_CloseRead;
     storage_api->m_StorageAPI.m_API.OpenWriteFile = FSStorageAPI_OpenWriteFile;
     storage_api->m_StorageAPI.m_API.Write = FSStorageAPI_Write;
     storage_api->m_StorageAPI.m_API.SetSize = FSStorageAPI_SetSize;
-    storage_api->m_StorageAPI.m_API.CloseWrite = FSStorageAPI_CloseWrite;
+    storage_api->m_StorageAPI.m_API.CloseFile = FSStorageAPI_CloseFile;
     storage_api->m_StorageAPI.m_API.CreateDir = FSStorageAPI_CreateDir;
     storage_api->m_StorageAPI.m_API.RenameFile = FSStorageAPI_RenameFile;
     storage_api->m_StorageAPI.m_API.ConcatPath = FSStorageAPI_ConcatPath;
@@ -372,7 +401,7 @@ static void FSStorageAPI_Init(struct FSStorageAPI* storage_api)
 }
 
 
-struct StorageAPI* CreateFSStorageAPI()
+struct Longtail_StorageAPI* Longtail_CreateFSStorageAPI()
 {
     struct FSStorageAPI* storage_api = (struct FSStorageAPI*)Longtail_Alloc(sizeof(struct FSStorageAPI));
     FSStorageAPI_Init(storage_api);
@@ -395,7 +424,7 @@ struct Lookup
 struct InMemStorageAPI
 {
     struct ManagedStorageAPI m_StorageAPI;
-    struct HashAPI* m_HashAPI;
+    struct Longtail_HashAPI* m_HashAPI;
     struct Lookup* m_PathHashToContent;
     struct PathEntry* m_PathEntries;
     HLongtail_SpinLock m_SpinLock;
@@ -404,7 +433,7 @@ struct InMemStorageAPI
 static void InMemStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
 {
     struct InMemStorageAPI* in_mem_storage_api = (struct InMemStorageAPI*)storage_api;
-    size_t c = arrlen(in_mem_storage_api->m_PathEntries);
+    size_t c = (size_t)arrlen(in_mem_storage_api->m_PathEntries);
     while(c--)
     {
         struct PathEntry* path_entry = &in_mem_storage_api->m_PathEntries[c];
@@ -418,17 +447,22 @@ static void InMemStorageAPI_Dispose(struct ManagedStorageAPI* storage_api)
     in_mem_storage_api->m_PathHashToContent = 0;
     arrfree(in_mem_storage_api->m_PathEntries);
     in_mem_storage_api->m_PathEntries = 0;
-    DestroyHashAPI(in_mem_storage_api->m_HashAPI);
+    Longtail_DestroyHashAPI(in_mem_storage_api->m_HashAPI);
 }
 
-static uint64_t InMemStorageAPI_GetPathHash(struct HashAPI* hash_api, const char* path)
+static uint64_t InMemStorageAPI_GetPathHash(struct Longtail_HashAPI* hash_api, const char* path)
 {
-    HashAPI_HContext context = hash_api->BeginContext(hash_api);
-    hash_api->Hash(hash_api, context, (uint32_t)strlen(path), (void*)path);
-    return hash_api->EndContext(hash_api, context);
+    uint64_t hash;
+    int err = hash_api->HashBuffer(hash_api, (uint32_t)strlen(path), (void*)path, &hash);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "InMemStorageAPI_GetPathHash: Failed to create hash context for path `%s`", path)
+        return (uint64_t)-1;
+    }
+    return hash;
 }
 
-static StorageAPI_HOpenFile InMemStorageAPI_OpenReadFile(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -437,13 +471,31 @@ static StorageAPI_HOpenFile InMemStorageAPI_OpenReadFile(struct StorageAPI* stor
     if (it != -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return (StorageAPI_HOpenFile)path_hash;
+        *out_open_file = (Longtail_StorageAPI_HOpenFile)path_hash;
+        return 0;
     }
     Longtail_UnlockSpinLock(instance->m_SpinLock);
+    return ENOENT;
+}
+
+static int InMemStorageAPI_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size)
+{
+    struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
+    Longtail_LockSpinLock(instance->m_SpinLock);
+    TLongtail_Hash path_hash = (TLongtail_Hash)f;
+    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
+    if (it == -1) {
+        Longtail_UnlockSpinLock(instance->m_SpinLock);
+        return ENOENT;
+    }
+    struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
+    uint64_t size = (uint64_t)arrlen(path_entry->m_Content);
+    Longtail_UnlockSpinLock(instance->m_SpinLock);
+    *out_size = size;
     return 0;
 }
 
-static uint64_t InMemStorageAPI_GetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
+static int InMemStorageAPI_Read(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -451,37 +503,17 @@ static uint64_t InMemStorageAPI_GetSize(struct StorageAPI* storage_api, StorageA
     intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
     if (it == -1) {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
-    }
-    struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
-    uint64_t size = arrlen(path_entry->m_Content);
-    Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return size;
-}
-
-static int InMemStorageAPI_Read(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
-{
-    struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
-    Longtail_LockSpinLock(instance->m_SpinLock);
-    TLongtail_Hash path_hash = (TLongtail_Hash)f;
-    intptr_t it = hmgeti(instance->m_PathHashToContent, path_hash);
-    if (it == -1) {
-        Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     struct PathEntry* path_entry = (struct PathEntry*)&instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     if ((ptrdiff_t)(offset + length) > arrlen(path_entry->m_Content))
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return EIO;
     }
     memcpy(output, &path_entry->m_Content[offset], length);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
-}
-
-static void InMemStorageAPI_CloseRead(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
-{
+    return 0;
 }
 
 static TLongtail_Hash InMemStorageAPI_GetParentPathHash(struct InMemStorageAPI* instance, const char* path)
@@ -510,16 +542,15 @@ static const char* InMemStorageAPI_GetFileNamePart(const char* path)
     return &file_name[1];
 }
 
-static StorageAPI_HOpenFile InMemStorageAPI_OpenWriteFile(struct StorageAPI* storage_api, const char* path, uint64_t initial_size)
+static int InMemStorageAPI_OpenWriteFile(struct Longtail_StorageAPI* storage_api, const char* path, uint64_t initial_size, Longtail_StorageAPI_HOpenFile* out_open_file)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     TLongtail_Hash parent_path_hash = InMemStorageAPI_GetParentPathHash(instance, path);
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
-        TEST_LOG("InMemStorageAPI_OpenWriteFile `%s` failed - parent folder does not exist\n", path)
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
     struct PathEntry* path_entry = 0;
@@ -536,15 +567,16 @@ static StorageAPI_HOpenFile InMemStorageAPI_OpenWriteFile(struct StorageAPI* sto
         path_entry->m_ParentHash = parent_path_hash;
         path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
         path_entry->m_Content = 0;
-        hmput(instance->m_PathHashToContent, path_hash, entry_index);
+        hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     }
     arrsetcap(path_entry->m_Content, initial_size == 0 ? 16 : (uint32_t)initial_size);
     arrsetlen(path_entry->m_Content, (uint32_t)initial_size);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return (StorageAPI_HOpenFile)path_hash;
+    *out_open_file = (Longtail_StorageAPI_HOpenFile)path_hash;
+    return 0;
 }
 
-static int InMemStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+static int InMemStorageAPI_Write(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -553,14 +585,14 @@ static int InMemStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpe
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     ptrdiff_t size = arrlen(path_entry->m_Content);
     if ((ptrdiff_t)offset > size)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return EIO;
     }
     if ((ptrdiff_t)(offset + length) > size)
     {
@@ -570,10 +602,10 @@ static int InMemStorageAPI_Write(struct StorageAPI* storage_api, StorageAPI_HOpe
     arrsetlen(path_entry->m_Content, (uint32_t)size);
     memcpy(&(path_entry->m_Content)[offset], input, length);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
+    return 0;
 }
 
-static int InMemStorageAPI_SetSize(struct StorageAPI* storage_api, StorageAPI_HOpenFile f, uint64_t length)
+static int InMemStorageAPI_SetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t length)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -582,28 +614,27 @@ static int InMemStorageAPI_SetSize(struct StorageAPI* storage_api, StorageAPI_HO
     if (it == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[it].value];
     arrsetlen(path_entry->m_Content, (uint32_t)length);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
+    return 0;
 }
 
-static void InMemStorageAPI_CloseWrite(struct StorageAPI* storage_api, StorageAPI_HOpenFile f)
+static void InMemStorageAPI_CloseFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f)
 {
 }
 
-static int InMemStorageAPI_CreateDir(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_CreateDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
     TLongtail_Hash parent_path_hash = InMemStorageAPI_GetParentPathHash(instance, path);
     if (parent_path_hash != 0 && hmgeti(instance->m_PathHashToContent, parent_path_hash) == -1)
     {
-        TEST_LOG("InMemStorageAPI_CreateDir `%s` failed - parent folder does not exist\n", path)
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     TLongtail_Hash path_hash = InMemStorageAPI_GetPathHash(instance->m_HashAPI, path);
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, path_hash);
@@ -613,11 +644,10 @@ static int InMemStorageAPI_CreateDir(struct StorageAPI* storage_api, const char*
         if (source_entry->m_Content == 0)
         {
             Longtail_UnlockSpinLock(instance->m_SpinLock);
-            return 1;
+            return 0;
         }
-        TEST_LOG("InMemStorageAPI_CreateDir `%s` failed - path exists and is not a directory\n", path)
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return EIO;
     }
 
     ptrdiff_t entry_index = arrlen(instance->m_PathEntries);
@@ -626,12 +656,12 @@ static int InMemStorageAPI_CreateDir(struct StorageAPI* storage_api, const char*
     path_entry->m_ParentHash = parent_path_hash;
     path_entry->m_FileName = Longtail_Strdup(InMemStorageAPI_GetFileNamePart(path));
     path_entry->m_Content = 0;
-    hmput(instance->m_PathHashToContent, path_hash, entry_index);
+    hmput(instance->m_PathHashToContent, path_hash, (uint32_t)entry_index);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
+    return 0;
 }
 
-static int InMemStorageAPI_RenameFile(struct StorageAPI* storage_api, const char* source_path, const char* target_path)
+static int InMemStorageAPI_RenameFile(struct Longtail_StorageAPI* storage_api, const char* source_path, const char* target_path)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -639,9 +669,8 @@ static int InMemStorageAPI_RenameFile(struct StorageAPI* storage_api, const char
     intptr_t source_path_ptr = hmgeti(instance->m_PathHashToContent, source_path_hash);
     if (source_path_ptr == -1)
     {
-        TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - source path does not exist\n", source_path, target_path)
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     struct PathEntry* source_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
 
@@ -649,9 +678,8 @@ static int InMemStorageAPI_RenameFile(struct StorageAPI* storage_api, const char
     intptr_t target_path_ptr = hmgeti(instance->m_PathHashToContent, target_path_hash);
     if (target_path_ptr != -1)
     {
-        TEST_LOG("InMemStorageAPI_RenameFile from `%s` to `%s` failed - target path already exist\n", source_path, target_path)
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return EEXIST;
     }
     source_entry->m_ParentHash = InMemStorageAPI_GetParentPathHash(instance, target_path);
     Longtail_Free(source_entry->m_FileName);
@@ -659,10 +687,10 @@ static int InMemStorageAPI_RenameFile(struct StorageAPI* storage_api, const char
     hmput(instance->m_PathHashToContent, target_path_hash, instance->m_PathHashToContent[source_path_ptr].value);
     hmdel(instance->m_PathHashToContent, source_path_hash);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
+    return 0;
 }
 
-static char* InMemStorageAPI_ConcatPath(struct StorageAPI* storage_api, const char* root_path, const char* sub_path)
+static char* InMemStorageAPI_ConcatPath(struct Longtail_StorageAPI* storage_api, const char* root_path, const char* sub_path)
 {
     if (root_path[0] == 0)
     {
@@ -676,7 +704,7 @@ static char* InMemStorageAPI_ConcatPath(struct StorageAPI* storage_api, const ch
     return path;
 }
 
-static int InMemStorageAPI_IsDir(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_IsDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -691,7 +719,7 @@ static int InMemStorageAPI_IsDir(struct StorageAPI* storage_api, const char* pat
     Longtail_UnlockSpinLock(instance->m_SpinLock);
     return source_entry->m_Content == 0;
 }
-static int InMemStorageAPI_IsFile(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_IsFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -707,7 +735,7 @@ static int InMemStorageAPI_IsFile(struct StorageAPI* storage_api, const char* pa
     return source_entry->m_Content != 0;
 }
 
-static int InMemStorageAPI_RemoveDir(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_RemoveDir(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -716,14 +744,14 @@ static int InMemStorageAPI_RemoveDir(struct StorageAPI* storage_api, const char*
     if (source_path_ptr == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
     if (path_entry->m_Content)
     {
         // Not a directory
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return EINVAL;
     }
     Longtail_Free(path_entry->m_FileName);
     path_entry->m_FileName = 0;
@@ -732,10 +760,10 @@ static int InMemStorageAPI_RemoveDir(struct StorageAPI* storage_api, const char*
     path_entry->m_ParentHash = 0;
     hmdel(instance->m_PathHashToContent, path_hash);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
+    return 0;
 }
 
-static int InMemStorageAPI_RemoveFile(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_RemoveFile(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -744,14 +772,14 @@ static int InMemStorageAPI_RemoveFile(struct StorageAPI* storage_api, const char
     if (source_path_ptr == -1)
     {
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return ENOENT;
     }
     struct PathEntry* path_entry = &instance->m_PathEntries[instance->m_PathHashToContent[source_path_ptr].value];
     if (!path_entry->m_Content)
     {
         // Not a file
         Longtail_UnlockSpinLock(instance->m_SpinLock);
-        return 0;
+        return EINVAL;
     }
     Longtail_Free(path_entry->m_FileName);
     path_entry->m_FileName = 0;
@@ -760,10 +788,10 @@ static int InMemStorageAPI_RemoveFile(struct StorageAPI* storage_api, const char
     path_entry->m_ParentHash = 0;
     hmdel(instance->m_PathHashToContent, path_hash);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return 1;
+    return 0;
 }
 
-static StorageAPI_HIterator InMemStorageAPI_StartFind(struct StorageAPI* storage_api, const char* path)
+static int InMemStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     Longtail_LockSpinLock(instance->m_SpinLock);
@@ -774,16 +802,17 @@ static StorageAPI_HIterator InMemStorageAPI_StartFind(struct StorageAPI* storage
     {
         if (instance->m_PathEntries[*i].m_ParentHash == path_hash)
         {
-            return (StorageAPI_HIterator)i;
+            *out_iterator = (Longtail_StorageAPI_HIterator)i;
+            return 0;
         }
         *i += 1;
     }
     Longtail_Free(i);
     Longtail_UnlockSpinLock(instance->m_SpinLock);
-    return (StorageAPI_HIterator)0;
+    return ENOENT;
 }
 
-static int InMemStorageAPI_FindNext(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static int InMemStorageAPI_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
@@ -793,13 +822,13 @@ static int InMemStorageAPI_FindNext(struct StorageAPI* storage_api, StorageAPI_H
     {
         if (instance->m_PathEntries[*i].m_ParentHash == path_hash)
         {
-            return 1;
+            return 0;
         }
         *i += 1;
     }
-    return 0;
+    return ENOENT;
 }
-static void InMemStorageAPI_CloseFind(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static void InMemStorageAPI_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
@@ -807,7 +836,7 @@ static void InMemStorageAPI_CloseFind(struct StorageAPI* storage_api, StorageAPI
     Longtail_UnlockSpinLock(instance->m_SpinLock);
 }
 
-static const char* InMemStorageAPI_GetFileName(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static const char* InMemStorageAPI_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     ptrdiff_t* i = (ptrdiff_t*)iterator;
@@ -819,7 +848,7 @@ static const char* InMemStorageAPI_GetFileName(struct StorageAPI* storage_api, S
     return file_name;
 }
 
-static const char* InMemStorageAPI_GetDirectoryName(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static const char* InMemStorageAPI_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t* i = (uint32_t*)iterator;
@@ -830,7 +859,7 @@ static const char* InMemStorageAPI_GetDirectoryName(struct StorageAPI* storage_a
     return instance->m_PathEntries[*i].m_FileName;
 }
 
-static uint64_t InMemStorageAPI_GetEntrySize(struct StorageAPI* storage_api, StorageAPI_HIterator iterator)
+static uint64_t InMemStorageAPI_GetEntrySize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator)
 {
     struct InMemStorageAPI* instance = (struct InMemStorageAPI*)storage_api;
     uint32_t* i = (uint32_t*)iterator;
@@ -838,7 +867,7 @@ static uint64_t InMemStorageAPI_GetEntrySize(struct StorageAPI* storage_api, Sto
     {
         return 0;
     }
-    return arrlen(instance->m_PathEntries[*i].m_Content);
+    return (uint64_t)arrlen(instance->m_PathEntries[*i].m_Content);
 }
 
 static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
@@ -846,11 +875,10 @@ static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_StorageAPI.m_API.OpenReadFile = InMemStorageAPI_OpenReadFile;
     storage_api->m_StorageAPI.m_API.GetSize = InMemStorageAPI_GetSize;
     storage_api->m_StorageAPI.m_API.Read = InMemStorageAPI_Read;
-    storage_api->m_StorageAPI.m_API.CloseRead = InMemStorageAPI_CloseRead;
     storage_api->m_StorageAPI.m_API.OpenWriteFile = InMemStorageAPI_OpenWriteFile;
     storage_api->m_StorageAPI.m_API.Write = InMemStorageAPI_Write;
     storage_api->m_StorageAPI.m_API.SetSize = InMemStorageAPI_SetSize;
-    storage_api->m_StorageAPI.m_API.CloseWrite = InMemStorageAPI_CloseWrite;
+    storage_api->m_StorageAPI.m_API.CloseFile = InMemStorageAPI_CloseFile;
     storage_api->m_StorageAPI.m_API.CreateDir = InMemStorageAPI_CreateDir;
     storage_api->m_StorageAPI.m_API.RenameFile = InMemStorageAPI_RenameFile;
     storage_api->m_StorageAPI.m_API.ConcatPath = InMemStorageAPI_ConcatPath;
@@ -866,13 +894,17 @@ static void InMemStorageAPI_Init(struct InMemStorageAPI* storage_api)
     storage_api->m_StorageAPI.m_API.GetEntrySize = InMemStorageAPI_GetEntrySize;
     storage_api->m_StorageAPI.Dispose = InMemStorageAPI_Dispose;
 
-    storage_api->m_HashAPI = CreateMeowHashAPI();
+    storage_api->m_HashAPI = Longtail_CreateMeowHashAPI();
     storage_api->m_PathHashToContent = 0;
     storage_api->m_PathEntries = 0;
-    storage_api->m_SpinLock = Longtail_CreateSpinLock(&storage_api[1]);
+    int err = Longtail_CreateSpinLock(&storage_api[1], &storage_api->m_SpinLock);
+    if (err != 0)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Failed to create spinlock for in mem storage api error: %d", err)
+    }
 }
 
-struct StorageAPI* CreateInMemStorageAPI()
+struct Longtail_StorageAPI* Longtail_CreateInMemStorageAPI()
 {
     struct InMemStorageAPI* storage_api = (struct InMemStorageAPI*)Longtail_Alloc(sizeof(struct InMemStorageAPI) + Longtail_GetSpinLockSize());
     InMemStorageAPI_Init(storage_api);
@@ -881,7 +913,7 @@ struct StorageAPI* CreateInMemStorageAPI()
 
 
 
-void DestroyStorageAPI(struct StorageAPI* storage_api)
+void Longtail_DestroyStorageAPI(struct Longtail_StorageAPI* storage_api)
 {
     struct ManagedStorageAPI* managed = (struct ManagedStorageAPI*)storage_api;
     managed->Dispose(managed);
@@ -894,14 +926,14 @@ void DestroyStorageAPI(struct StorageAPI* storage_api)
 
 struct ManagedJobAPI
 {
-    struct JobAPI m_API;
+    struct Longtail_JobAPI m_API;
     void (*Dispose)(struct ManagedJobAPI* managed_job_api);
 };
 
 struct JobWrapper
 {
     struct BikeshedJobAPI* m_JobAPI;
-    JobAPI_JobFunc m_JobFunc;
+    Longtail_JobAPI_JobFunc m_JobFunc;
     void* m_Context;
 };
 
@@ -936,53 +968,53 @@ static enum Bikeshed_TaskResult Bikeshed_Job(Bikeshed shed, Bikeshed_TaskID task
     return BIKESHED_TASK_RESULT_COMPLETE;
 }
 
-static int Bikeshed_GetWorkerCount(struct JobAPI* job_api)
+static uint32_t Bikeshed_GetWorkerCount(struct Longtail_JobAPI* job_api)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     return bikeshed_job_api->m_WorkerCount;
 }
 
-static int Bikeshed_ReserveJobs(struct JobAPI* job_api, uint32_t job_count)
+static int Bikeshed_ReserveJobs(struct Longtail_JobAPI* job_api, uint32_t job_count)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     if (bikeshed_job_api->m_PendingJobCount)
     {
-        return 0;
+        return EBUSY;
     }
     if (bikeshed_job_api->m_SubmittedJobCount)
     {
-        return 0;
+        return EBUSY;
     }
     if (bikeshed_job_api->m_ReservedJobs)
     {
-        return 0;
+        return EBUSY;
     }
     if (bikeshed_job_api->m_ReservedJobCount)
     {
-        return 0;
+        return EBUSY;
     }
     bikeshed_job_api->m_ReservedJobs = (struct JobWrapper*)Longtail_Alloc(sizeof(struct JobWrapper) * job_count);
     bikeshed_job_api->m_ReservedTasksIDs = (Bikeshed_TaskID*)Longtail_Alloc(sizeof(Bikeshed_TaskID) * job_count);
     if (bikeshed_job_api->m_ReservedJobs && bikeshed_job_api->m_ReservedTasksIDs)
     {
         bikeshed_job_api->m_ReservedJobCount = job_count;
-        return 1;
+        return 0;
     }
 	Longtail_Free(bikeshed_job_api->m_ReservedTasksIDs);
 	Longtail_Free(bikeshed_job_api->m_ReservedJobs);
-    return 0;
+    return ENOMEM;
 }
 
-static JobAPI_Jobs Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_JobFunc job_funcs[], void* job_contexts[])
+static int Bikeshed_CreateJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t new_job_count = Longtail_AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, (int32_t)job_count);
     if (new_job_count > (int32_t)bikeshed_job_api->m_ReservedJobCount)
     {
         Longtail_AtomicAdd32(&bikeshed_job_api->m_SubmittedJobCount, -((int32_t)job_count));
-        return 0;
+        return ENOMEM;
     }
-    int32_t job_range_start = new_job_count - job_count;
+    uint32_t job_range_start = (uint32_t)(new_job_count - job_count);
 
     BikeShed_TaskFunc* func = (BikeShed_TaskFunc*)Longtail_Alloc(sizeof(BikeShed_TaskFunc) * job_count);
     void** ctx = (void**)Longtail_Alloc(sizeof(void*) * job_count);
@@ -1002,29 +1034,32 @@ static JobAPI_Jobs Bikeshed_CreateJobs(struct JobAPI* job_api, uint32_t job_coun
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
 
-    Longtail_AtomicAdd32(&bikeshed_job_api->m_PendingJobCount, job_count);
+    Longtail_AtomicAdd32(&bikeshed_job_api->m_PendingJobCount, (int)job_count);
 
 	Longtail_Free(ctx);
 	Longtail_Free(func);
-    return task_ids;
+    *out_jobs = task_ids;
+    return 0;
 }
 
-static void Bikeshed_AddDependecies(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs, uint32_t dependency_job_count, JobAPI_Jobs dependency_jobs)
+static int Bikeshed_AddDependecies(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     while (!Bikeshed_AddDependencies(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs, dependency_job_count, (Bikeshed_TaskID*)dependency_jobs))
     {
         Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0);
     }
+    return 0;
 }
 
-static void Bikeshed_ReadyJobs(struct JobAPI* job_api, uint32_t job_count, JobAPI_Jobs jobs)
+static int Bikeshed_ReadyJobs(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     Bikeshed_ReadyTasks(bikeshed_job_api->m_Shed, job_count, (Bikeshed_TaskID*)jobs);
+    return 0;
 }
 
-static void Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAPI_ProgressFunc process_func)
+static int Bikeshed_WaitForAllJobs(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc process_func)
 {
     struct BikeshedJobAPI* bikeshed_job_api = (struct BikeshedJobAPI*)job_api;
     int32_t old_pending_count = 0;
@@ -1032,7 +1067,7 @@ static void Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAP
     {
         if (process_func)
         {
-            process_func(context, bikeshed_job_api->m_ReservedJobCount, bikeshed_job_api->m_JobsCompleted);
+            process_func(context, (uint32_t)bikeshed_job_api->m_ReservedJobCount, (uint32_t)bikeshed_job_api->m_JobsCompleted);
         }
         if (Bikeshed_ExecuteOne(bikeshed_job_api->m_Shed, 0))
         {
@@ -1046,7 +1081,7 @@ static void Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAP
     }
     if (process_func)
     {
-        process_func(context, bikeshed_job_api->m_SubmittedJobCount, bikeshed_job_api->m_SubmittedJobCount);
+        process_func(context, (uint32_t)bikeshed_job_api->m_SubmittedJobCount, (uint32_t)bikeshed_job_api->m_SubmittedJobCount);
     }
     bikeshed_job_api->m_SubmittedJobCount = 0;
 	Longtail_Free(bikeshed_job_api->m_ReservedTasksIDs);
@@ -1055,6 +1090,7 @@ static void Bikeshed_WaitForAllJobs(struct JobAPI* job_api, void* context, JobAP
     bikeshed_job_api->m_ReservedJobs = 0;
     bikeshed_job_api->m_JobsCompleted = 0;
     bikeshed_job_api->m_ReservedJobCount = 0;
+    return 0;
 }
 
 static void Bikeshed_Dispose(struct ManagedJobAPI* job_api)
@@ -1068,10 +1104,11 @@ static void Bikeshed_Dispose(struct ManagedJobAPI* job_api)
     }
     for (uint32_t i = 0; i < bikeshed_job_api->m_WorkerCount; ++i)
     {
-        ThreadWorker_DisposeThread(&bikeshed_job_api->m_Workers[i]);
+        ThreadWorker_Dispose(&bikeshed_job_api->m_Workers[i]);
     }
 	Longtail_Free(bikeshed_job_api->m_Workers);
 	Longtail_Free(bikeshed_job_api->m_Shed);
+	ReadyCallback_Dispose(&bikeshed_job_api->m_ReadyCallback);
 }
 
 static void Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
@@ -1105,14 +1142,14 @@ static void Bikeshed_Init(struct BikeshedJobAPI* job_api, uint32_t worker_count)
     }
 }
 
-struct JobAPI* CreateBikeshedJobAPI(uint32_t worker_count)
+struct Longtail_JobAPI* Longtail_CreateBikeshedJobAPI(uint32_t worker_count)
 {
     struct BikeshedJobAPI* job_api = (struct BikeshedJobAPI*)Longtail_Alloc(sizeof(struct BikeshedJobAPI));
     Bikeshed_Init(job_api, worker_count);
     return &job_api->m_ManagedAPI.m_API;
 }
 
-void DestroyJobAPI(struct JobAPI* job_api)
+void Longtail_DestroyJobAPI(struct Longtail_JobAPI* job_api)
 {
     struct ManagedJobAPI* managed = (struct ManagedJobAPI*)job_api;
     managed->Dispose(managed);
@@ -1121,7 +1158,7 @@ void DestroyJobAPI(struct JobAPI* job_api)
 
 struct ManagedCompressionAPI
 {
-    struct CompressionAPI m_API;
+    struct Longtail_CompressionAPI m_API;
     void (*Dispose)(struct ManagedCompressionAPI* managed_compression_api);
 };
 
@@ -1137,49 +1174,60 @@ void LizardCompressionAPI_Dispose(struct ManagedCompressionAPI* compression_api)
 static int LizardCompressionAPI_DefaultCompressionSetting = 44;
 static int LizardCompressionAPI_MaxCompressionSetting = LIZARD_MAX_CLEVEL;
 
-static CompressionAPI_HSettings LizardCompressionAPI_GetDefaultSettings(struct CompressionAPI* compression_api)
+static Longtail_CompressionAPI_HSettings LizardCompressionAPI_GetDefaultSettings(struct Longtail_CompressionAPI* compression_api)
 {
-    return (CompressionAPI_HSettings)&LizardCompressionAPI_DefaultCompressionSetting;
+    return (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_DefaultCompressionSetting;
 }
 
-static CompressionAPI_HSettings LizardCompressionAPI_GetMaxCompressionSetting(struct CompressionAPI* compression_api)
+static Longtail_CompressionAPI_HSettings LizardCompressionAPI_GetMaxCompressionSetting(struct Longtail_CompressionAPI* compression_api)
 {
-    return (CompressionAPI_HSettings)&LizardCompressionAPI_MaxCompressionSetting;
+    return (Longtail_CompressionAPI_HSettings)&LizardCompressionAPI_MaxCompressionSetting;
 }
 
-static CompressionAPI_HCompressionContext LizardCompressionAPI_CreateCompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HSettings settings)
+static int LizardCompressionAPI_CreateCompressionContext(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, Longtail_CompressionAPI_HCompressionContext* out_context)
 {
-    return (CompressionAPI_HCompressionContext)settings;
+    *out_context = (Longtail_CompressionAPI_HCompressionContext)settings;
+    return 0;
 }
 
-static size_t LizardCompressionAPI_GetMaxCompressedSize(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, size_t size)
+static size_t LizardCompressionAPI_GetMaxCompressedSize(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, size_t size)
 {
     return (size_t)Lizard_compressBound((int)size);
 }
 
-static size_t LizardCompressionAPI_Compress(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size)
+static int LizardCompressionAPI_Compress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_size)
 {
     int compression_setting = *(int*)context;
     int compressed_size = Lizard_compress(uncompressed, compressed, (int)uncompressed_size, (int)max_compressed_size, compression_setting);
-    return (size_t)(compressed_size >= 0 ? compressed_size : 0);
+    if (compressed_size == 0)
+    {
+        return ENOMEM;
+    }
+    *out_size = (size_t)(compressed_size);
+    return 0;
 }
 
-static void LizardCompressionAPI_DeleteCompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HCompressionContext context)
+static void LizardCompressionAPI_DeleteCompressionContext(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HCompressionContext context)
 {
 }
 
-static CompressionAPI_HDecompressionContext LizardCompressionAPI_CreateDecompressionContext(struct CompressionAPI* compression_api)
+static Longtail_CompressionAPI_HDecompressionContext LizardCompressionAPI_CreateDecompressionContext(struct Longtail_CompressionAPI* compression_api)
 {
-    return (CompressionAPI_HDecompressionContext)LizardCompressionAPI_GetDefaultSettings(compression_api);
+    return (Longtail_CompressionAPI_HDecompressionContext)LizardCompressionAPI_GetDefaultSettings(compression_api);
 }
 
-static size_t LizardCompressionAPI_Decompress(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size)
+static int LizardCompressionAPI_Decompress(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context, const char* compressed, char* uncompressed, size_t compressed_size, size_t uncompressed_size, size_t* out_size)
 {
     int result = Lizard_decompress_safe(compressed, uncompressed, (int)compressed_size, (int)uncompressed_size);
-    return (size_t)(result >= 0 ? result : 0);
+    if (result < 0)
+    {
+        return EBADF;
+    }
+    *out_size = (size_t)(result);
+    return 0;
 }
 
-static void LizardCompressionAPI_DeleteDecompressionContext(struct CompressionAPI* compression_api, CompressionAPI_HDecompressionContext context)
+static void LizardCompressionAPI_DeleteDecompressionContext(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context)
 {
 }
 
@@ -1197,14 +1245,14 @@ static void LizardCompressionAPI_Init(struct LizardCompressionAPI* compression_a
     compression_api->m_CompressionAPI.Dispose = LizardCompressionAPI_Dispose;
 }
 
-struct CompressionAPI* CreateLizardCompressionAPI()
+struct Longtail_CompressionAPI* Longtail_CreateLizardCompressionAPI()
 {
     struct LizardCompressionAPI* compression_api = (struct LizardCompressionAPI*)Longtail_Alloc(sizeof(struct LizardCompressionAPI));
     LizardCompressionAPI_Init(compression_api);
     return &compression_api->m_CompressionAPI.m_API;
 }
 
-void DestroyCompressionAPI(struct CompressionAPI* compression_api)
+void Longtail_DestroyCompressionAPI(struct Longtail_CompressionAPI* compression_api)
 {
     struct ManagedCompressionAPI* managed = (struct ManagedCompressionAPI*)compression_api;
     managed->Dispose(managed);
@@ -1213,33 +1261,33 @@ void DestroyCompressionAPI(struct CompressionAPI* compression_api)
 
 
 // TODO: Ugly hack!
-static struct CompressionAPI* lizard_compression_api = 0;
+static struct Longtail_CompressionAPI* lizard_compression_api = 0;
 
-struct CompressionRegistry* CreateDefaultCompressionRegistry()
+struct Longtail_CompressionRegistry* Longtail_CreateDefaultCompressionRegistry()
 {
     if (lizard_compression_api != 0)
     {
         return 0;
     }
-    lizard_compression_api = CreateLizardCompressionAPI();
-    static struct CompressionAPI* compression_apis[1];
+    lizard_compression_api = Longtail_CreateLizardCompressionAPI();
+    static struct Longtail_CompressionAPI* compression_apis[1];
     compression_apis[0] = lizard_compression_api;
     static uint32_t compression_types[1];
-    compression_types[0] = LIZARD_DEFAULT_COMPRESSION_TYPE;
-    static CompressionAPI_HSettings compression_settings[1];
+    compression_types[0] = LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE;
+    static Longtail_CompressionAPI_HSettings compression_settings[1];
     compression_settings[0] = lizard_compression_api->GetDefaultSettings(lizard_compression_api);
 
-    struct CompressionRegistry* compression_registry = CreateCompressionRegistry(
+    struct Longtail_CompressionRegistry* compression_registry = Longtail_CreateCompressionRegistry(
         1,
         &compression_types[0],
-        (const struct CompressionAPI**)&compression_apis[0],
+        (const struct Longtail_CompressionAPI**)&compression_apis[0],
         &compression_settings[0]);
     return compression_registry;
 }
 
-void DestroyCompressionRegistry(struct CompressionRegistry* compression_registry)
+void Longtail_DestroyCompressionRegistry(struct Longtail_CompressionRegistry* compression_registry)
 {
     Longtail_Free(compression_registry);
-    DestroyCompressionAPI(lizard_compression_api);
+    Longtail_DestroyCompressionAPI(lizard_compression_api);
     lizard_compression_api = 0;
 }

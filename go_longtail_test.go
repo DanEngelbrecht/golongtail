@@ -1,7 +1,7 @@
 package golongtail
 
 import (
-//	"fmt"
+	//	"fmt"
 	"runtime"
 	"testing"
 	"unsafe"
@@ -43,7 +43,7 @@ type loggerData struct {
 func logger(context interface{}, level int, log string) {
 	p := context.(*loggerData)
 	p.t.Logf("%d: %s", level, log)
-//	fmt.Printf("%d: %s\n", level, log)
+	//	fmt.Printf("%d: %s\n", level, log)
 }
 
 func TestCreateVersionIndex(t *testing.T) {
@@ -75,17 +75,17 @@ func TestCreateVersionIndex(t *testing.T) {
 
 	expected := error(nil)
 	if err != nil {
-		t.Errorf("CreateVersionIndexFromFolder() %q != %q", err, expected)
+		t.Errorf("CreateVersionIndex() %q != %q", err, expected)
 	}
 	defer LongtailFree(unsafe.Pointer(vi))
 
 	expectedAssetCount := uint32(14)
 	if ret := uint32(*vi.m_AssetCount); ret != expectedAssetCount {
-		t.Errorf("CreateVersionIndexFromFolder() asset count = %d, want %d", ret, expectedAssetCount)
+		t.Errorf("CreateVersionIndex() asset count = %d, want %d", ret, expectedAssetCount)
 	}
 	expectedChunkCount := uint32(3)
 	if ret := uint32(*vi.m_ChunkCount); ret != expectedChunkCount {
-		t.Errorf("CreateVersionIndexFromFolder() chunk count = %d, want %d", ret, expectedChunkCount)
+		t.Errorf("CreateVersionIndex() chunk count = %d, want %d", ret, expectedChunkCount)
 	}
 }
 
@@ -118,7 +118,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 
 	expected := error(nil)
 	if err != nil {
-		t.Errorf("CreateVersionIndexFromFolder() %q != %q", err, expected)
+		t.Errorf("CreateVersionIndex() %q != %q", err, expected)
 	}
 	defer LongtailFree(unsafe.Pointer(vi))
 
@@ -127,9 +127,9 @@ func TestReadWriteVersionIndex(t *testing.T) {
 		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expectedErr)
 	}
 
-	vi2 := ReadVersionIndex(storageAPI, "test.lvi")
-	if vi2 == nil {
-		t.Errorf("ReadVersionIndex() = nil, want !nil")
+	vi2, ret := ReadVersionIndex(storageAPI, "test.lvi")
+	if ret != nil {
+		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expectedErr)
 	}
 	defer LongtailFree(unsafe.Pointer(vi2))
 
@@ -166,7 +166,7 @@ func TestUpSyncVersion(t *testing.T) {
 	WriteToStorage(upsyncStorageAPI, "current", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
 	t.Logf("Reading remote `store.lci`")
-	storeIndex := ReadContentIndex(remoteStorageAPI, "store.lci")
+	storeIndex, _ := ReadContentIndex(remoteStorageAPI, "store.lci")
 	if storeIndex == nil {
 		var err error
 		storeIndex, err = CreateContentIndex(hashAPI, 0, nil, nil, nil, 32768*12, 4096)
@@ -208,7 +208,8 @@ func TestUpSyncVersion(t *testing.T) {
 	}
 
 	t.Logf("Copying blocks from `cache` / `store`")
-	missingPaths := GetPathsForContentBlocks(missingContentIndex)
+	missingPaths, err := GetPathsForContentBlocks(missingContentIndex)
+	t.Errorf("UpSyncVersion() GetPathsForContentBlocks(%s, %s) = %q, want %q", "", "local.lci", err, error(nil))
 	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
 		path := GetPath(missingPaths, uint32(i))
 		block, err := ReadFromStorage(upsyncStorageAPI, "cache", path)
@@ -244,15 +245,15 @@ func TestUpSyncVersion(t *testing.T) {
 	defer DestroyStorageAPI(downSyncStorageAPI)
 
 	t.Logf("Reading remote index from `store`")
-	remoteStorageIndex := ReadContentIndex(remoteStorageAPI, "store.lci")
-	if remoteStorageIndex == nil {
-		t.Errorf("UpSyncVersion() ReadContentIndex() failed")
+	remoteStorageIndex, err := ReadContentIndex(remoteStorageAPI, "store.lci")
+	if err != nil {
+		t.Errorf("UpSyncVersion() ReadContentIndex(%s) = %q, want %q", "store.lci", err, error(nil))
 	}
 	defer LongtailFree(unsafe.Pointer(remoteStorageIndex))
 	t.Logf("Blocks in store: %d", int(*remoteStorageIndex.m_BlockCount))
 
 	t.Logf("Reading version index from `version.lvi`")
-	targetVersionIndex := ReadVersionIndex(remoteStorageAPI, "version.lvi")
+	targetVersionIndex, err := ReadVersionIndex(remoteStorageAPI, "version.lvi")
 	if err != nil {
 		t.Errorf("UpSyncVersion() ReadVersionIndex(%s) = %q, want %q", "version.lvi", err, error(nil))
 	}
@@ -262,7 +263,7 @@ func TestUpSyncVersion(t *testing.T) {
 	defer LongtailFree(unsafe.Pointer(targetVersionIndex))
 	t.Logf("Assets in version: %d", int(*targetVersionIndex.m_AssetCount))
 
-	cacheContentIndex := ReadContentIndex(downSyncStorageAPI, "cache.lci")
+	cacheContentIndex, _ := ReadContentIndex(downSyncStorageAPI, "cache.lci")
 	if cacheContentIndex == nil {
 		cacheContentIndex, err = ReadContent(
 			downSyncStorageAPI,
@@ -298,7 +299,10 @@ func TestUpSyncVersion(t *testing.T) {
 	defer LongtailFree(unsafe.Pointer(requestContent))
 	t.Logf("Blocks in requestContent: %d", int(*requestContent.m_BlockCount))
 
-	missingPaths = GetPathsForContentBlocks(requestContent)
+	missingPaths, err = GetPathsForContentBlocks(requestContent)
+	if err != nil {
+		t.Errorf("UpSyncVersion() GetPathsForContentBlocks() = %q, want %q", err, error(nil))
+	}
 	t.Logf("Path count for content: %d", int(*missingPaths.m_PathCount))
 	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
 		path := GetPath(missingPaths, uint32(i))

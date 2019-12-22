@@ -4,7 +4,6 @@ import (
 	//	"fmt"
 	"runtime"
 	"testing"
-	"unsafe"
 )
 
 type progressData struct {
@@ -56,17 +55,17 @@ func CreateVersionIndexUtil(
 	versionPath string,
 	compressionType uint32,
 	targetChunkSize uint32) (Longtail_VersionIndex, error) {
-  
+
 	fileInfos, err := GetFilesRecursively(storageAPI, versionPath)
 	if err != nil {
-		return Longtail_VersionIndex{cVersionIndex : nil}, err
+		return Longtail_VersionIndex{cVersionIndex: nil}, err
 	}
 	defer fileInfos.Dispose()
 
-	pathCount := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
+	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)
-	for i := 1; i < pathCount; i++ {
-	  compressionTypes[i] = compressionType
+	for i := uint32(0); i < pathCount; i++ {
+		compressionTypes[i] = compressionType
 	}
 
 	vindex, err := CreateVersionIndex(
@@ -83,9 +82,9 @@ func CreateVersionIndexUtil(
 
 	return vindex, err
 }
-  
-  //GetMissingContentUtil ... this is handy, but not what we should expose other than for tests!
-  func GetMissingContentUtil(
+
+//GetMissingContentUtil ... this is handy, but not what we should expose other than for tests!
+func GetMissingContentUtil(
 	contentStorageAPI Longtail_StorageAPI,
 	versionStorageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
@@ -101,105 +100,105 @@ func CreateVersionIndexUtil(
 	maxChunksPerBlock uint32,
 	targetBlockSize uint32,
 	targetChunkSize uint32) (Longtail_ContentIndex, error) {
-  
+
 	var vindex Longtail_VersionIndex
 	err := error(nil)
-  
+
 	if len(versionIndexPath) > 0 {
-	  vindex, err = ReadVersionIndex(versionStorageAPI, versionIndexPath)
+		vindex, err = ReadVersionIndex(versionStorageAPI, versionIndexPath)
 	}
 	if err != nil {
-	  vindex, err = CreateVersionIndexUtil(
-		versionStorageAPI,
-		hashAPI,
-		jobAPI,
-		progressFunc,
-		progressContext,
-		versionPath,
-		compressionType,
-		targetChunkSize)
-  
-	  if err != nil {
-		return Longtail_ContentIndex{cContentIndex : nil}, err
-	  }
+		vindex, err = CreateVersionIndexUtil(
+			versionStorageAPI,
+			hashAPI,
+			jobAPI,
+			progressFunc,
+			progressContext,
+			versionPath,
+			compressionType,
+			targetChunkSize)
+
+		if err != nil {
+			return Longtail_ContentIndex{cContentIndex: nil}, err
+		}
 	}
 	defer vindex.Dispose()
-  
+
 	var cindex Longtail_ContentIndex
 
 	if len(contentIndexPath) > 0 {
-	  cindex, err = ReadContentIndex(contentStorageAPI, contentIndexPath)
+		cindex, err = ReadContentIndex(contentStorageAPI, contentIndexPath)
 	}
 	if err != nil {
-	  cindex, err = ReadContent(
-		contentStorageAPI,
+		cindex, err = ReadContent(
+			contentStorageAPI,
+			hashAPI,
+			jobAPI,
+			progressFunc,
+			progressContext,
+			contentPath)
+		if err != nil {
+			return Longtail_ContentIndex{cContentIndex: nil}, err
+		}
+	}
+	defer cindex.Dispose()
+
+	missingContentIndex, err := CreateMissingContent(
 		hashAPI,
+		cindex,
+		vindex,
+		targetBlockSize,
+		maxChunksPerBlock)
+
+	if err != nil {
+		return Longtail_ContentIndex{cContentIndex: nil}, err
+	}
+
+	compressionRegistry := CreateDefaultCompressionRegistry()
+	defer compressionRegistry.Dispose()
+
+	err = WriteContent(
+		versionStorageAPI,
+		contentStorageAPI,
+		compressionRegistry,
 		jobAPI,
 		progressFunc,
 		progressContext,
-		contentPath)
-	  if err != nil {
-		return Longtail_ContentIndex{cContentIndex : nil}, err
-	  }
-	}
-	defer cindex.Dispose()
-  
-	missingContentIndex, err := CreateMissingContent(
-	  hashAPI,
-	  cindex,
-	  vindex,
-	  targetBlockSize,
-	  maxChunksPerBlock)
-  
-	if err != nil {
-	  return Longtail_ContentIndex{cContentIndex : nil}, err
-	}
-  
-	compressionRegistry := CreateDefaultCompressionRegistry()
-	defer compressionRegistry.Dispose()
-  
-	err = WriteContent(
-	  versionStorageAPI,
-	  contentStorageAPI,
-	  compressionRegistry,
-	  jobAPI,
-	  progressFunc,
-	  progressContext,
-	  missingContentIndex,
-	  vindex,
-	  versionPath,
-	  missingContentPath)
-  
-	if err != nil {
-      missingContentIndex.Dispose()
-	  return Longtail_ContentIndex{cContentIndex : nil}, err
-	}
-  
-	if len(versionIndexPath) > 0 {
-	  err = WriteVersionIndex(
-		contentStorageAPI,
+		missingContentIndex,
 		vindex,
-		versionIndexPath)
-	  if err != nil {
+		versionPath,
+		missingContentPath)
+
+	if err != nil {
 		missingContentIndex.Dispose()
-		return Longtail_ContentIndex{cContentIndex : nil}, err
-	  }
+		return Longtail_ContentIndex{cContentIndex: nil}, err
 	}
-  
+
+	if len(versionIndexPath) > 0 {
+		err = WriteVersionIndex(
+			contentStorageAPI,
+			vindex,
+			versionIndexPath)
+		if err != nil {
+			missingContentIndex.Dispose()
+			return Longtail_ContentIndex{cContentIndex: nil}, err
+		}
+	}
+
 	if len(contentIndexPath) > 0 {
-	  err = WriteContentIndex(
-		contentStorageAPI,
-		cindex,
-		contentIndexPath)
-	  if err != nil {
-		missingContentIndex.Dispose()
-		return Longtail_ContentIndex{cContentIndex : nil}, err
-	  }
+		err = WriteContentIndex(
+			contentStorageAPI,
+			cindex,
+			contentIndexPath)
+		if err != nil {
+			missingContentIndex.Dispose()
+			return Longtail_ContentIndex{cContentIndex: nil}, err
+		}
 	}
 	return missingContentIndex, nil
-  }
-  
-  func TestCreateVersionIndex(t *testing.T) {
+}
+
+func TestCreateVersionIndex(t *testing.T) {
 	l := SetLogger(logger, &loggerData{t: t})
 	defer ClearLogger(l)
 	SetLogLevel(3)
@@ -230,14 +229,14 @@ func CreateVersionIndexUtil(
 	if err != nil {
 		t.Errorf("CreateVersionIndex() %q != %q", err, expected)
 	}
-	defer LongtailFree(unsafe.Pointer(vi))
+	defer vi.Dispose()
 
 	expectedAssetCount := uint32(14)
-	if ret := uint32(*vi.m_AssetCount); ret != expectedAssetCount {
+	if ret := vi.GetAssetCount(); ret != expectedAssetCount {
 		t.Errorf("CreateVersionIndex() asset count = %d, want %d", ret, expectedAssetCount)
 	}
 	expectedChunkCount := uint32(3)
-	if ret := uint32(*vi.m_ChunkCount); ret != expectedChunkCount {
+	if ret := vi.GetChunkCount(); ret != expectedChunkCount {
 		t.Errorf("CreateVersionIndex() chunk count = %d, want %d", ret, expectedChunkCount)
 	}
 }
@@ -248,16 +247,29 @@ func TestReadWriteVersionIndex(t *testing.T) {
 	SetLogLevel(3)
 
 	storageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(storageAPI)
+	defer storageAPI.Dispose()
 	hashAPI := CreateMeowHashAPI()
-	defer DestroyHashAPI(hashAPI)
+	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
-	defer DestroyJobAPI(jobAPI)
+	defer jobAPI.Dispose()
 
 	WriteToStorage(storageAPI, "", "first_folder/my_file.txt", []byte("the content of my_file"))
 	WriteToStorage(storageAPI, "", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
 	WriteToStorage(storageAPI, "", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
 	WriteToStorage(storageAPI, "", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+
+	fileInfos, err := GetFilesRecursively(storageAPI, "")
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("GetFilesRecursively() %q != %q", err, expected)
+	}
+	defer fileInfos.Dispose()
+
+	pathCount := fileInfos.GetFileCount()
+	compressionTypes := make([]uint32, pathCount)
+	for i := uint32(0); i < pathCount; i++ {
+		compressionTypes[i] = GetLizardDefaultCompressionType()
+	}
 
 	vi, err := CreateVersionIndex(
 		storageAPI,
@@ -266,31 +278,31 @@ func TestReadWriteVersionIndex(t *testing.T) {
 		progress,
 		&progressData{task: "Indexing", t: t},
 		"",
-		GetLizardDefaultCompressionType(),
+		fileInfos.GetPaths(),
+		fileInfos.GetFileSizes(),
+		compressionTypes,
 		32768)
 
-	expected := error(nil)
 	if err != nil {
 		t.Errorf("CreateVersionIndex() %q != %q", err, expected)
 	}
-	defer LongtailFree(unsafe.Pointer(vi))
+	defer vi.Dispose()
 
-	expectedErr := error(nil)
-	if ret := WriteVersionIndex(storageAPI, vi, "test.lvi"); ret != expectedErr {
-		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expectedErr)
+	if ret := WriteVersionIndex(storageAPI, vi, "test.lvi"); ret != expected {
+		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expected)
 	}
 
 	vi2, ret := ReadVersionIndex(storageAPI, "test.lvi")
-	if ret != nil {
-		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expectedErr)
+	if ret != expected {
+		t.Errorf("WriteVersionIndex() = %q, want %q", ret, expected)
 	}
-	defer LongtailFree(unsafe.Pointer(vi2))
+	defer vi2.Dispose()
 
-	if (*vi2.m_AssetCount) != (*vi.m_AssetCount) {
-		t.Errorf("ReadVersionIndex() asset count = %d, want %d", (*vi2.m_AssetCount), (*vi.m_AssetCount))
+	if vi2.GetAssetCount() != vi.GetAssetCount() {
+		t.Errorf("ReadVersionIndex() asset count = %d, want %d", vi2.GetAssetCount(), vi.GetAssetCount())
 	}
 
-	for i := uint32(0); i < uint32(*vi.m_AssetCount); i++ {
+	for i := uint32(0); i < vi.GetAssetCount(); i++ {
 		expected := GetVersionIndexPath(vi, i)
 		if ret := GetVersionIndexPath(vi2, i); ret != expected {
 			t.Errorf("ReadVersionIndex() path %d = %s, want %s", int(i), ret, expected)
@@ -304,13 +316,13 @@ func TestUpSyncVersion(t *testing.T) {
 	SetLogLevel(0)
 
 	upsyncStorageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(upsyncStorageAPI)
+	defer upsyncStorageAPI.Dispose()
 	hashAPI := CreateMeowHashAPI()
-	defer DestroyHashAPI(hashAPI)
+	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
-	defer DestroyJobAPI(jobAPI)
+	defer jobAPI.Dispose()
 	remoteStorageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(remoteStorageAPI)
+	defer remoteStorageAPI.Dispose()
 
 	t.Logf("Creating `current`")
 	WriteToStorage(upsyncStorageAPI, "current", "first_folder/my_file.txt", []byte("the content of my_file"))
@@ -319,22 +331,21 @@ func TestUpSyncVersion(t *testing.T) {
 	WriteToStorage(upsyncStorageAPI, "current", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
 	t.Logf("Reading remote `store.lci`")
-	storeIndex, _ := ReadContentIndex(remoteStorageAPI, "store.lci")
-	if storeIndex == nil {
-		var err error
+	storeIndex, err := ReadContentIndex(remoteStorageAPI, "store.lci")
+	if err != nil {
 		storeIndex, err = CreateContentIndex(hashAPI, 0, nil, nil, nil, 32768*12, 4096)
 		if err != nil {
 			t.Errorf("CreateContentIndex() err = %q, want %q", err, error(nil))
 		}
 	}
-	defer LongtailFree(unsafe.Pointer(storeIndex))
-	err := WriteContentIndex(upsyncStorageAPI, storeIndex, "store.lci")
+	defer storeIndex.Dispose()
+	err = WriteContentIndex(upsyncStorageAPI, storeIndex, "store.lci")
 	if err != nil {
 		t.Errorf("WriteContentIndex() err = %q, want %q", err, error(nil))
 	}
 
 	t.Logf("Get missing content for `current` / `cache`")
-	missingContentIndex, err := GetMissingContent(
+	missingContentIndex, err := GetMissingContentUtil(
 		upsyncStorageAPI,
 		upsyncStorageAPI,
 		hashAPI,
@@ -353,17 +364,19 @@ func TestUpSyncVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("GetMissingContent() err = %q, want %q", err, error(nil))
 	}
-	defer LongtailFree(unsafe.Pointer(missingContentIndex))
+	defer missingContentIndex.Dispose()
 
-	expectedBlockCount := 1
-	if int(*missingContentIndex.m_BlockCount) != expectedBlockCount {
-		t.Errorf("UpSyncVersion() len(blockHashes) = %d, want %d", int(*missingContentIndex.m_BlockCount), expectedBlockCount)
+	var expectedBlockCount uint64 = 1
+	if missingContentIndex.GetBlockCount() != expectedBlockCount {
+		t.Errorf("UpSyncVersion() len(blockHashes) = %d, want %d", missingContentIndex.GetBlockCount(), expectedBlockCount)
 	}
 
 	t.Logf("Copying blocks from `cache` / `store`")
 	missingPaths, err := GetPathsForContentBlocks(missingContentIndex)
-	t.Errorf("UpSyncVersion() GetPathsForContentBlocks(%s, %s) = %q, want %q", "", "local.lci", err, error(nil))
-	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
+	if err != nil {
+		t.Errorf("UpSyncVersion() GetPathsForContentBlocks(%s, %s) = %q, want %q", "", "local.lci", err, error(nil))
+	}
+	for i := uint32(0); i < missingPaths.GetPathCount(); i++ {
 		path := GetPath(missingPaths, uint32(i))
 		block, err := ReadFromStorage(upsyncStorageAPI, "cache", path)
 		if err != nil {
@@ -395,29 +408,26 @@ func TestUpSyncVersion(t *testing.T) {
 
 	t.Logf("Starting downsync to `current`")
 	downSyncStorageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(downSyncStorageAPI)
+	defer downSyncStorageAPI.Dispose()
 
 	t.Logf("Reading remote index from `store`")
 	remoteStorageIndex, err := ReadContentIndex(remoteStorageAPI, "store.lci")
 	if err != nil {
 		t.Errorf("UpSyncVersion() ReadContentIndex(%s) = %q, want %q", "store.lci", err, error(nil))
 	}
-	defer LongtailFree(unsafe.Pointer(remoteStorageIndex))
-	t.Logf("Blocks in store: %d", int(*remoteStorageIndex.m_BlockCount))
+	defer remoteStorageIndex.Dispose()
+	t.Logf("Blocks in store: %d", remoteStorageIndex.GetBlockCount())
 
 	t.Logf("Reading version index from `version.lvi`")
 	targetVersionIndex, err := ReadVersionIndex(remoteStorageAPI, "version.lvi")
 	if err != nil {
 		t.Errorf("UpSyncVersion() ReadVersionIndex(%s) = %q, want %q", "version.lvi", err, error(nil))
 	}
-	if targetVersionIndex == nil {
-		t.Errorf("UpSyncVersion() ReadVersionIndex(%s) = targetVersionIndex == nil", "version.lvi")
-	}
-	defer LongtailFree(unsafe.Pointer(targetVersionIndex))
-	t.Logf("Assets in version: %d", int(*targetVersionIndex.m_AssetCount))
+	defer targetVersionIndex.Dispose()
+	t.Logf("Assets in version: %d", targetVersionIndex.GetAssetCount())
 
-	cacheContentIndex, _ := ReadContentIndex(downSyncStorageAPI, "cache.lci")
-	if cacheContentIndex == nil {
+	cacheContentIndex, err := ReadContentIndex(downSyncStorageAPI, "cache.lci")
+	if err != nil {
 		cacheContentIndex, err = ReadContent(
 			downSyncStorageAPI,
 			hashAPI,
@@ -429,8 +439,8 @@ func TestUpSyncVersion(t *testing.T) {
 			t.Errorf("UpSyncVersion() ReadContent(%s) = %q, want %q", "cache", err, error(nil))
 		}
 	}
-	defer LongtailFree(unsafe.Pointer(cacheContentIndex))
-	t.Logf("Blocks in cacheContentIndex: %d", int(*cacheContentIndex.m_BlockCount))
+	defer cacheContentIndex.Dispose()
+	t.Logf("Blocks in cacheContentIndex: %d", cacheContentIndex.GetBlockCount())
 
 	missingContentIndex, err = CreateMissingContent(
 		hashAPI,
@@ -441,7 +451,7 @@ func TestUpSyncVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("UpSyncVersion() CreateMissingContent() = %q, want %q", err, error(nil))
 	}
-	t.Logf("Blocks in missingContentIndex: %d", int(*missingContentIndex.m_BlockCount))
+	t.Logf("Blocks in missingContentIndex: %d", missingContentIndex.GetBlockCount())
 
 	requestContent, err := RetargetContent(
 		remoteStorageIndex,
@@ -449,15 +459,15 @@ func TestUpSyncVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("UpSyncVersion() RetargetContent() = %q, want %q", err, error(nil))
 	}
-	defer LongtailFree(unsafe.Pointer(requestContent))
-	t.Logf("Blocks in requestContent: %d", int(*requestContent.m_BlockCount))
+	defer requestContent.Dispose()
+	t.Logf("Blocks in requestContent: %d", requestContent.GetBlockCount())
 
 	missingPaths, err = GetPathsForContentBlocks(requestContent)
 	if err != nil {
 		t.Errorf("UpSyncVersion() GetPathsForContentBlocks() = %q, want %q", err, error(nil))
 	}
-	t.Logf("Path count for content: %d", int(*missingPaths.m_PathCount))
-	for i := 0; i < int(*missingPaths.m_PathCount); i++ {
+	t.Logf("Path count for content: %d", missingPaths.GetPathCount())
+	for i := uint32(0); i < missingPaths.GetPathCount(); i++ {
 		path := GetPath(missingPaths, uint32(i))
 		block, err := ReadFromStorage(remoteStorageAPI, "store", path)
 		if err != nil {
@@ -469,20 +479,20 @@ func TestUpSyncVersion(t *testing.T) {
 		}
 		t.Logf("Copied block: `%s` from `%s` to `%s`", path, "store", "cache")
 	}
-	defer LongtailFree(unsafe.Pointer(missingPaths))
+	defer missingPaths.Dispose()
 
 	mergedCacheContentIndex, err := MergeContentIndex(cacheContentIndex, requestContent)
 	if err != nil {
 		t.Errorf("UpSyncVersion() MergeContentIndex(%s, %s) = %q, want %q", "cache", "store", err, error(nil))
 	}
-	t.Logf("Blocks in cacheContentIndex after merge: %d", int(*mergedCacheContentIndex.m_BlockCount))
-	defer LongtailFree(unsafe.Pointer(mergedCacheContentIndex))
+	t.Logf("Blocks in cacheContentIndex after merge: %d", mergedCacheContentIndex.GetBlockCount())
+	defer mergedCacheContentIndex.Dispose()
 
 	compressionRegistry := CreateDefaultCompressionRegistry()
-	defer DestroyCompressionRegistry(compressionRegistry)
+	defer compressionRegistry.Dispose()
 	t.Log("Created compression registry")
 
-	currentVersionIndex, err := CreateVersionIndex(
+	currentVersionIndex, err := CreateVersionIndexUtil(
 		downSyncStorageAPI,
 		hashAPI,
 		jobAPI,
@@ -494,14 +504,14 @@ func TestUpSyncVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("UpSyncVersion() CreateVersionIndex(%s) = %q, want %q", "current", err, error(nil))
 	}
-	defer LongtailFree(unsafe.Pointer(currentVersionIndex))
-	t.Logf("Asset count for currentVersionIndex: %d", int(*currentVersionIndex.m_AssetCount))
+	defer currentVersionIndex.Dispose()
+	t.Logf("Asset count for currentVersionIndex: %d", currentVersionIndex.GetAssetCount())
 
 	versionDiff, err := CreateVersionDiff(currentVersionIndex, targetVersionIndex)
 	if err != nil {
 		t.Errorf("UpSyncVersion() CreateVersionDiff(%s, %s) = %q, want %q", "current", "version.lvi", err, error(nil))
 	}
-	defer LongtailFree(unsafe.Pointer(versionDiff))
+	defer versionDiff.Dispose()
 
 	err = ChangeVersion(
 		downSyncStorageAPI,

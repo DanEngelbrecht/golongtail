@@ -69,6 +69,8 @@ struct Longtail_CompressionAPI
     void (*DeleteDecompressionContext)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HDecompressionContext context);
 };
 
+int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
+
 struct Longtail_CompressionRegistry;
 
 struct Longtail_CompressionRegistry* Longtail_CreateCompressionRegistry(

@@ -180,7 +180,7 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
     return err;
 }
 
-static int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
+int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(path != 0, return EINVAL)

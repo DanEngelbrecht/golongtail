@@ -94,8 +94,7 @@ package golongtail
 import "C"
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"reflect"
 	"unsafe"
 
 	"github.com/mattn/go-pointer"
@@ -170,9 +169,9 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
 	defer C.free(unsafe.Pointer(cFullPath))
 
-	err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
-	if err != nil {
-		return err
+	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
+	if errno != 0 {
+		return fmt.Errorf("WriteToStorage: EnsureParentPathExists(%s) failed with error %d", path, errno)
 	}
 
 	blockSize := C.uint64_t(len(blockData))
@@ -232,24 +231,54 @@ func (paths *Longtail_Paths) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(paths.cPaths))
 }
 
+func (paths *Longtail_Paths) GetPathCount() uint32 {
+	return uint32(*paths.cPaths.m_PathCount)
+}
+
 func (fileInfos *Longtail_FileInfos) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
 }
 
+func carray2slice(array *C.uint64_t, len int) []uint64 {
+	var list []uint64
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	sliceHeader.Cap = len
+	sliceHeader.Len = len
+	sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	return list
+}
+
+func (fileInfos *Longtail_FileInfos) GetFileCount() uint32 {
+	return uint32(*fileInfos.cFileInfos.m_Paths.m_PathCount)
+}
+
 func (fileInfos *Longtail_FileInfos) GetFileSizes() []uint64 {
-  return nil
+	size := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
+	return carray2slice(fileInfos.cFileInfos.m_FileSizes, size)
 }
 
 func (fileInfos *Longtail_FileInfos) GetPaths() Longtail_Paths {
-  return Longtail_Paths {cPaths : &fileInfos.cFileInfos.m_Paths}
+	return Longtail_Paths{cPaths: &fileInfos.cFileInfos.m_Paths}
 }
 
 func (contentIndex *Longtail_ContentIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(contentIndex.cContentIndex))
 }
 
+func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {
+	return uint64(*contentIndex.cContentIndex.m_BlockCount)
+}
+
 func (versionIndex *Longtail_VersionIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))
+}
+
+func (versionIndex *Longtail_VersionIndex) GetAssetCount() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_AssetCount)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetChunkCount() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_ChunkCount)
 }
 
 func (versionDiff *Longtail_VersionDiff) Dispose() {
@@ -453,9 +482,14 @@ func CreateContentIndex(
 			return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: create empty content index failed with error %d", errno)
 		}
 	}
-	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
-	cChunkSizes := (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
-	cCompressionTypes := (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
+	var cChunkHashes *C.TLongtail_Hash
+	var cChunkSizes *C.uint32_t
+	var cCompressionTypes *C.uint32_t
+	if chunkCount > 0 {
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
+		cChunkSizes = (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
+		cCompressionTypes = (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
+	}
 
 	errno := C.Longtail_CreateContentIndex(
 		hashAPI.cHashAPI,
@@ -595,9 +629,9 @@ func GetPathsForContentBlocks(contentIndex Longtail_ContentIndex) (Longtail_Path
 	var paths *C.struct_Longtail_Paths
 	errno := C.Longtail_GetPathsForContentBlocks(contentIndex.cContentIndex, &paths)
 	if errno != 0 {
-		return Longtail_Paths{cPaths : nil}, fmt.Errorf("GetPathsForContentBlocks: get paths failed with error %d", errno)
+		return Longtail_Paths{cPaths: nil}, fmt.Errorf("GetPathsForContentBlocks: get paths failed with error %d", errno)
 	}
-	return Longtail_Paths{cPaths : paths}, nil
+	return Longtail_Paths{cPaths: paths}, nil
 }
 
 // RetargetContent ...
@@ -607,9 +641,9 @@ func RetargetContent(
 	var retargetedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_RetargetContent(referenceContentIndex.cContentIndex, contentIndex.cContentIndex, &retargetedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex : nil}, fmt.Errorf("RetargetContent: retarget content failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("RetargetContent: retarget content failed with error %d", errno)
 	}
-	return Longtail_ContentIndex{cContentIndex : retargetedContentIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: retargetedContentIndex}, nil
 }
 
 // MergeContentIndex ...
@@ -619,9 +653,9 @@ func MergeContentIndex(
 	var mergedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_MergeContentIndex(localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex : nil}, fmt.Errorf("MergeContentIndex: merge content indexes failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("MergeContentIndex: merge content indexes failed with error %d", errno)
 	}
-	return Longtail_ContentIndex{cContentIndex : mergedContentIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, nil
 }
 
 // WriteVersion ...
@@ -671,9 +705,9 @@ func CreateVersionDiff(
 	var versionDiff *C.struct_Longtail_VersionDiff
 	errno := C.Longtail_CreateVersionDiff(sourceVersionIndex.cVersionIndex, targetVersionIndex.cVersionIndex, &versionDiff)
 	if errno != 0 {
-		return Longtail_VersionDiff{cVersionDiff : nil}, fmt.Errorf("CreateVersionDiff: diff versions failed with error %d", errno)
+		return Longtail_VersionDiff{cVersionDiff: nil}, fmt.Errorf("CreateVersionDiff: diff versions failed with error %d", errno)
 	}
-	return Longtail_VersionDiff{cVersionDiff : versionDiff}, nil
+	return Longtail_VersionDiff{cVersionDiff: versionDiff}, nil
 }
 
 //ChangeVersion ...

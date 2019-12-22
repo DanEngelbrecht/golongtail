@@ -46,24 +46,177 @@ func logger(context interface{}, level int, log string) {
 	//	fmt.Printf("%d: %s\n", level, log)
 }
 
-func TestCreateVersionIndex(t *testing.T) {
+// CreateVersionIndexUtil ...
+func CreateVersionIndexUtil(
+	storageAPI Longtail_StorageAPI,
+	hashAPI Longtail_HashAPI,
+	jobAPI Longtail_JobAPI,
+	progressFunc progressFunc,
+	progressContext interface{},
+	versionPath string,
+	compressionType uint32,
+	targetChunkSize uint32) (Longtail_VersionIndex, error) {
+  
+	fileInfos, err := GetFilesRecursively(storageAPI, versionPath)
+	if err != nil {
+		return Longtail_VersionIndex{cVersionIndex : nil}, err
+	}
+	defer fileInfos.Dispose()
+
+	pathCount := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
+	compressionTypes := make([]uint32, pathCount)
+	for i := 1; i < pathCount; i++ {
+	  compressionTypes[i] = compressionType
+	}
+
+	vindex, err := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		progressFunc,
+		progressContext,
+		versionPath,
+		fileInfos.GetPaths(),
+		fileInfos.GetFileSizes(),
+		compressionTypes,
+		targetChunkSize)
+
+	return vindex, err
+}
+  
+  //GetMissingContentUtil ... this is handy, but not what we should expose other than for tests!
+  func GetMissingContentUtil(
+	contentStorageAPI Longtail_StorageAPI,
+	versionStorageAPI Longtail_StorageAPI,
+	hashAPI Longtail_HashAPI,
+	jobAPI Longtail_JobAPI,
+	progressFunc progressFunc,
+	progressContext interface{},
+	versionPath string,
+	versionIndexPath string,
+	contentPath string,
+	contentIndexPath string,
+	missingContentPath string,
+	compressionType uint32,
+	maxChunksPerBlock uint32,
+	targetBlockSize uint32,
+	targetChunkSize uint32) (Longtail_ContentIndex, error) {
+  
+	var vindex Longtail_VersionIndex
+	err := error(nil)
+  
+	if len(versionIndexPath) > 0 {
+	  vindex, err = ReadVersionIndex(versionStorageAPI, versionIndexPath)
+	}
+	if err != nil {
+	  vindex, err = CreateVersionIndexUtil(
+		versionStorageAPI,
+		hashAPI,
+		jobAPI,
+		progressFunc,
+		progressContext,
+		versionPath,
+		compressionType,
+		targetChunkSize)
+  
+	  if err != nil {
+		return Longtail_ContentIndex{cContentIndex : nil}, err
+	  }
+	}
+	defer vindex.Dispose()
+  
+	var cindex Longtail_ContentIndex
+
+	if len(contentIndexPath) > 0 {
+	  cindex, err = ReadContentIndex(contentStorageAPI, contentIndexPath)
+	}
+	if err != nil {
+	  cindex, err = ReadContent(
+		contentStorageAPI,
+		hashAPI,
+		jobAPI,
+		progressFunc,
+		progressContext,
+		contentPath)
+	  if err != nil {
+		return Longtail_ContentIndex{cContentIndex : nil}, err
+	  }
+	}
+	defer cindex.Dispose()
+  
+	missingContentIndex, err := CreateMissingContent(
+	  hashAPI,
+	  cindex,
+	  vindex,
+	  targetBlockSize,
+	  maxChunksPerBlock)
+  
+	if err != nil {
+	  return Longtail_ContentIndex{cContentIndex : nil}, err
+	}
+  
+	compressionRegistry := CreateDefaultCompressionRegistry()
+	defer compressionRegistry.Dispose()
+  
+	err = WriteContent(
+	  versionStorageAPI,
+	  contentStorageAPI,
+	  compressionRegistry,
+	  jobAPI,
+	  progressFunc,
+	  progressContext,
+	  missingContentIndex,
+	  vindex,
+	  versionPath,
+	  missingContentPath)
+  
+	if err != nil {
+      missingContentIndex.Dispose()
+	  return Longtail_ContentIndex{cContentIndex : nil}, err
+	}
+  
+	if len(versionIndexPath) > 0 {
+	  err = WriteVersionIndex(
+		contentStorageAPI,
+		vindex,
+		versionIndexPath)
+	  if err != nil {
+		missingContentIndex.Dispose()
+		return Longtail_ContentIndex{cContentIndex : nil}, err
+	  }
+	}
+  
+	if len(contentIndexPath) > 0 {
+	  err = WriteContentIndex(
+		contentStorageAPI,
+		cindex,
+		contentIndexPath)
+	  if err != nil {
+		missingContentIndex.Dispose()
+		return Longtail_ContentIndex{cContentIndex : nil}, err
+	  }
+	}
+	return missingContentIndex, nil
+  }
+  
+  func TestCreateVersionIndex(t *testing.T) {
 	l := SetLogger(logger, &loggerData{t: t})
 	defer ClearLogger(l)
 	SetLogLevel(3)
 
 	storageAPI := CreateInMemStorageAPI()
-	defer DestroyStorageAPI(storageAPI)
+	defer storageAPI.Dispose()
 	hashAPI := CreateMeowHashAPI()
-	defer DestroyHashAPI(hashAPI)
+	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
-	defer DestroyJobAPI(jobAPI)
+	defer jobAPI.Dispose()
 
 	WriteToStorage(storageAPI, "", "first_folder/my_file.txt", []byte("the content of my_file"))
 	WriteToStorage(storageAPI, "", "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
 	WriteToStorage(storageAPI, "", "top_level.txt", []byte("the top level file is also a text file with dummy content"))
 	WriteToStorage(storageAPI, "", "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 
-	vi, err := CreateVersionIndex(
+	vi, err := CreateVersionIndexUtil(
 		storageAPI,
 		hashAPI,
 		jobAPI,

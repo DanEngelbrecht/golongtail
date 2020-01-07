@@ -1,10 +1,10 @@
-package golongtail
+package longtail
 
 // #cgo CFLAGS: -g -std=gnu99
-// #cgo LDFLAGS: -L. -l:longtail_lib.a
+// #cgo LDFLAGS: -L. -l:import/longtail_lib.a
 // #define _GNU_SOURCE
-// #include "longtail/src/longtail.h"
-// #include "longtail/lib/longtail_lib.h"
+// #include "import/src/longtail.h"
+// #include "import/lib/longtail_lib.h"
 // #include <stdlib.h>
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 // void logProxy(void* context, int level, char* str);

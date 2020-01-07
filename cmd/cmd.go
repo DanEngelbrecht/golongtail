@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/url"
+	"runtime"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
@@ -99,30 +100,71 @@ func main() {
 	fmt.Println("cmd")
 	fs := longtail.CreateFSStorageAPI()
 	defer fs.Dispose()
+	hash := longtail.CreateMeowHashAPI()
+	defer hash.Dispose()
+	jobs := longtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer jobs.Dispose()
 
-	loc, err := url.Parse("gs://ue4-jenkins-artifacts/chunks")
+	storeURL := "gs://ue4-jenkins-artifacts/chunks"
+	loc, err := url.Parse(storeURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	fmt.Printf("Connecting to `%s`\n", storeURL)
 	chunkStore, err := NewGCSStoreBase(loc)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer chunkStore.Close()
 
-	blob := "0000/000022a7d087269b03956429b1c2278de308e06791a62e39a6b17dbda78ea32a.cacnk"
-	fmt.Printf("Fetching blob `%s`\n", blob)
-	data, err := chunkStore.getObjectBlob(context.Background(), blob)
+	versionPath := "C:/Temp/longtail/local/WinEditor/git75a99408249875e875f8fba52b75ea0f5f12a00e_Win64_Editor"
+
+	fmt.Printf("Indexing files and folders in `%s`\n", versionPath)
+	fileInfos, err := longtail.GetFilesRecursively(fs, versionPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Block `%s` is %d bytes\n", blob, len(data))
+	defer fileInfos.Dispose()
 
-	testBlob := "xxxx/remove_me.cacnk"
-	err = chunkStore.putObjectBlob(context.Background(), testBlob, "application/zstd", data)
+	pathCount := fileInfos.GetFileCount()
+	fmt.Printf("Found `%d` assets\n", pathCount)
+
+	compressionType := longtail.GetLizardDefaultCompressionType()
+	compressionTypes := make([]uint32, pathCount)
+	for i := uint32(0); i < pathCount; i++ {
+		compressionTypes[i] = compressionType
+	}
+
+	fmt.Printf("Indexing `%s`\n", versionPath)
+	vindex, err := longtail.CreateVersionIndex(
+		fs,
+		hash,
+		jobs,
+		nil,
+		nil,
+		versionPath,
+		fileInfos.GetPaths(),
+		fileInfos.GetFileSizes(),
+		compressionTypes,
+		65536*4)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer vindex.Dispose()
+	/*
+		blob := "0000/000022a7d087269b03956429b1c2278de308e06791a62e39a6b17dbda78ea32a.cacnk"
+		fmt.Printf("Fetching blob `%s`\n", blob)
+		data, err := chunkStore.getObjectBlob(context.Background(), blob)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Block `%s` is %d bytes\n", blob, len(data))
 
+		testBlob := "xxxx/remove_me.cacnk"
+		err = chunkStore.putObjectBlob(context.Background(), testBlob, "application/zstd", data)
+		if err != nil {
+			log.Fatal(err)
+		}
+	*/
 }

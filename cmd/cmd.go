@@ -14,6 +14,22 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtail"
 )
 
+type loggerData struct {
+}
+
+func logger(context interface{}, level int, message string) {
+	switch level {
+	case 0:
+		log.Printf("DEBUG: %s", message)
+	case 1:
+		log.Printf("INFO: %s", message)
+	case 2:
+		log.Printf("WARNING: %s", message)
+	case 3:
+		log.Fatal(message)
+	}
+}
+
 // GCSStoreBase is the base object for all chunk and index stores with GCS backing
 type GCSStoreBase struct {
 	Location string
@@ -97,7 +113,10 @@ func (s GCSStoreBase) getObjectBlob(ctx context.Context, key string) ([]byte, er
 }
 
 func main() {
-	fmt.Println("cmd")
+	l := longtail.SetLogger(logger, &loggerData{})
+	defer longtail.ClearLogger(l)
+	longtail.SetLogLevel(0)
+
 	fs := longtail.CreateFSStorageAPI()
 	defer fs.Dispose()
 	hash := longtail.CreateMeowHashAPI()
@@ -128,7 +147,7 @@ func main() {
 	defer fileInfos.Dispose()
 
 	pathCount := fileInfos.GetFileCount()
-	fmt.Printf("Found `%d` assets\n", pathCount)
+	fmt.Printf("Found %d assets\n", pathCount)
 
 	compressionType := longtail.GetLizardDefaultCompressionType()
 	compressionTypes := make([]uint32, pathCount)

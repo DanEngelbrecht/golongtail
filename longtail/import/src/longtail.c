@@ -1196,6 +1196,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex: From `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
 
     uint32_t path_count = *paths->m_PathCount;
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
@@ -1900,10 +1901,10 @@ struct WriteBlockJob
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    sprintf(out_name, "0x%016" PRIx64, block_hash);
-//    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-//    memmove(out_name, &out_name[5], 4);
-//    out_name[4] = '/';
+//    sprintf(out_name, "0x%016" PRIx64, block_hash);
+    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
+    memmove(out_name, &out_name[5], 4);
+    out_name[4] = '/';
 }
 
 static int ReadBlockData(
@@ -3969,6 +3970,8 @@ int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent: From %u pick %u chunks", (uint32_t)*reference_content_index->m_ChunkCount, (uint32_t)*content_index->m_ChunkCount)
+
     struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
     for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
     {
@@ -4072,6 +4075,8 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex: Merge %u with %u chunks", (uint32_t)*local_content_index->m_ChunkCount, (uint32_t)*remote_content_index->m_ChunkCount)
+
     LONGTAIL_FATAL_ASSERT_PRIVATE(local_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(remote_content_index != 0, return EINVAL)
 
@@ -4229,6 +4234,8 @@ int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Diff %u with %u assets", (uint32_t)*source_version->m_AssetCount, (uint32_t)*target_version->m_AssetCount)
+
     LONGTAIL_FATAL_ASSERT_PRIVATE(source_version != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(target_version != 0, return EINVAL)
 

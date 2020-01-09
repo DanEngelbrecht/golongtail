@@ -1,5 +1,9 @@
 #include "longtail.h"
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE)
+#define __USE_GNU
+#endif
+
 #include "stb_ds.h"
 
 #include <stdio.h>
@@ -1913,7 +1917,6 @@ struct WriteBlockJob
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-//    sprintf(out_name, "0x%016" PRIx64, block_hash);
     sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
     memmove(out_name, &out_name[5], 4);
     out_name[4] = '/';

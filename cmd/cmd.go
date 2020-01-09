@@ -629,7 +629,7 @@ func main() {
 	kingpin.CommandLine.DefaultEnvars()
 	kingpin.Parse()
 
-	logLevel, err := ParseLevel(*logLevel)
+	logLevel, err := parseLevel(*logLevel)
 	if err != nil {
 		log.Fatal(err)
 	}

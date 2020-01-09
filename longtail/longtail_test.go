@@ -198,6 +198,28 @@ func GetMissingContentUtil(
 	return missingContentIndex, nil
 }
 
+func TestInit(t *testing.T) {
+	l := SetLogger(logger, &loggerData{t: t})
+	defer ClearLogger(l)
+	SetLogLevel(3)
+
+	storageAPI := CreateInMemStorageAPI()
+	if storageAPI.cStorageAPI == nil {
+		t.Errorf("CreateInMemStorageAPI() storageAPI.cStorageAPI == nil")
+	}
+	defer storageAPI.Dispose()
+	hashAPI := CreateMeowHashAPI()
+	if hashAPI.cHashAPI == nil {
+		t.Errorf("CreateMeowHashAPI() hashAPI.cHashAPI == nil")
+	}
+	defer hashAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	if jobAPI.cJobAPI == nil {
+		t.Errorf("CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
+	}
+	defer jobAPI.Dispose()
+}
+
 func TestCreateVersionIndex(t *testing.T) {
 	l := SetLogger(logger, &loggerData{t: t})
 	defer ClearLogger(l)

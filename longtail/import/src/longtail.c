@@ -1,11 +1,16 @@
 #include "longtail.h"
 
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE)
+#define __USE_GNU
+#endif
+
 #include "stb_ds.h"
 
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <stdlib.h>
 
 //#define SLOW_VALIDATION
 

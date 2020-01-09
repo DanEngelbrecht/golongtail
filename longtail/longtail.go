@@ -138,7 +138,11 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 	}
 
 	blockSize := C.uint64_t(len(blockData))
-	errno = C.Storage_Write(storageAPI.cStorageAPI, cFullPath, blockSize, unsafe.Pointer(&blockData[0]))
+	var data unsafe.Pointer
+	if blockSize > 0 {
+		data = unsafe.Pointer(&blockData[0])
+	}
+	errno = C.Storage_Write(storageAPI.cStorageAPI, cFullPath, blockSize, data)
 	if errno != 0 {
 		return fmt.Errorf("WriteToStorage: Storage_Write(%s) failed with error %d", path, errno)
 	}

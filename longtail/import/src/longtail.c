@@ -338,6 +338,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                     err = entry_processor(context, asset_folder, dir_name, 1, 0);
                     if (err)
                     {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process dir `%s` in `%s` failed with %d", dir_name, asset_folder, err)
                         break;
                     }
                     if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
@@ -361,6 +362,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                         err = entry_processor(context, asset_folder, file_name, 0, size);
                         if (err)
                         {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process file `%s` in `%s` failed with %d", file_name, asset_folder, err)
                             break;
                         }
                     }
@@ -373,8 +375,18 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
         {
             err = 0;
         }
+        else if (err != 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: StartFind on `%s` failed with %d", asset_folder, err)
+            break;
+        }
         Longtail_Free((void*)asset_folder);
         asset_folder = 0;
+    }
+    while (folder_index < (uint32_t)arrlen(folder_paths))
+    {
+        const char* asset_folder = folder_paths[folder_index++];
+        Longtail_Free((void*)asset_folder);
     }
     arrfree(folder_paths);
     folder_paths = 0;

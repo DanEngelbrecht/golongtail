@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/DanEngelbrecht/golongtail/longtail"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type loggerData struct {
@@ -45,21 +46,21 @@ func progress(context interface{}, total int, current int) {
 	p := context.(*progressData)
 	if current < total {
 		if !p.inited {
-			log.Printf("%s: ", p.task)
+			fmt.Printf("%s: ", p.task)
 			p.inited = true
 		}
 		percentDone := (100 * current) / total
 		if (percentDone - p.oldPercent) >= 5 {
-			log.Printf("%d%% ", percentDone)
+			fmt.Printf("%d%% ", percentDone)
 			p.oldPercent = percentDone
 		}
 		return
 	}
 	if p.inited {
 		if p.oldPercent != 100 {
-			log.Printf("100%%")
+			fmt.Printf("100%%")
 		}
-		log.Printf(" Done\n")
+		fmt.Printf(" Done\n")
 	}
 }
 
@@ -164,7 +165,6 @@ func (s GCSStoreBase) storeTempObjectBlob(ctx context.Context, key string, fs lo
 }
 
 func trace(s string) (string, time.Time) {
-	log.Printf("trace start: %s\n", s)
 	return s, time.Now()
 }
 
@@ -296,17 +296,18 @@ func upSyncVersion(
 		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
-		fmt.Printf("Storing %d blocks\n", int(blockCount))
+		fmt.Printf("Storing %d blocks to `%s`\n", int(blockCount), gcsBucket)
 		workerCount := uint32(runtime.NumCPU())
 		if workerCount > blockCount {
 			workerCount = blockCount
 		}
+		// TODO: Refactor using channels and add proper progress
 		var wg sync.WaitGroup
 		wg.Add(int(workerCount))
 		for i := uint32(0); i < workerCount; i++ {
 			start := (blockCount * i) / workerCount
 			end := ((blockCount * (i + 1)) / workerCount)
-			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
+			//			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
 			go func(start uint32, end uint32) {
 				workerIndexStore, err := NewGCSStoreBase(loc)
 				if err != nil {
@@ -329,12 +330,12 @@ func upSyncVersion(
 						continue
 					}
 
-					err = indexStore.putObjectBlob(context.Background(), "chunks/"+path, "application/octet-stream", block)
+					err = indexStore.putObjectBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
 					if err != nil {
 						log.Printf("Failed to write block: `%s`, %v", path, err)
 						continue
 					}
-					log.Printf("Copied block: `%s` from `%s` to `%s`", path, localCachePath, "chunks")
+					//					log.Printf("Copied block: `%s` from `%s` to `%s`", path, localCachePath, "chunks")
 				}
 				wg.Done()
 			}(start, end)
@@ -512,17 +513,18 @@ func downSyncVersion(
 		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
-		fmt.Printf("Fetching %d blocks\n", int(blockCount))
+		fmt.Printf("Fetching %d blocks from `%s`\n", int(blockCount), gcsBucket)
 		workerCount := uint32(runtime.NumCPU())
 		if workerCount > blockCount {
 			workerCount = blockCount
 		}
+		// TODO: Refactor using channels and add proper progress
 		var wg sync.WaitGroup
 		wg.Add(int(workerCount))
 		for i := uint32(0); i < workerCount; i++ {
 			start := (blockCount * i) / workerCount
 			end := ((blockCount * (i + 1)) / workerCount)
-			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
+			//			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
 			go func(start uint32, end uint32) {
 				workerIndexStore, err := NewGCSStoreBase(loc)
 				if err != nil {
@@ -546,7 +548,7 @@ func downSyncVersion(
 						log.Printf("Failed to store block: `%s`, %v", path, err)
 						continue
 					}
-					log.Printf("Copied block: `%s` from `%s` to `%s`", path, "chunks", localCachePath)
+					//					log.Printf("Copied block: `%s` from `%s` to `%s`", path, "chunks", localCachePath)
 				}
 				wg.Done()
 			}(start, end)
@@ -587,42 +589,100 @@ func downSyncVersion(
 	return nil
 }
 
+func parseLevel(lvl string) (int, error) {
+	switch strings.ToLower(lvl) {
+	case "debug":
+		return 0, nil
+	case "info":
+		return 1, nil
+	case "warn":
+		return 2, nil
+	case "error":
+		return 3, nil
+	case "off":
+		return 4, nil
+	}
+
+	return -1, fmt.Errorf("not a valid log Level: %q", lvl)
+}
+
+var (
+	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
+	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
+	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
+
+	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
+	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
+	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
+	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
+
+	commandDownSync     = kingpin.Command("downsync", "Download a folder")
+	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
+	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").String()
+	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").String()
+)
+
 func main() {
-	targetChunkSize := uint32(32758)
-	targetBlockSize := uint32(32758 * 16)
-	maxChunksPerBlock := uint32(1024)
+	kingpin.HelpFlag.Short('h')
+	kingpin.CommandLine.DefaultEnvars()
+	kingpin.Parse()
+
+	logLevel, err := ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	l := longtail.SetLogger(logger, &loggerData{})
 	defer longtail.ClearLogger(l)
-	longtail.SetLogLevel(0)
+	longtail.SetLogLevel(logLevel)
 
-	//var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d", "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-	var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"} //, "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-	// var versions = [...]string{"b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-
-	for _, version := range versions {
-		sourceFolderPath := "C:/Temp/longtail/local/WinEditor/git" + version + "_Win64_Editor"
-		targetFilePath := "index/" + version + ".lvi"
-		err := upSyncVersion("gs://test_block_storage", sourceFolderPath, targetFilePath, path.Join(os.TempDir(), "longtail_upload_store"), targetChunkSize, targetBlockSize, maxChunksPerBlock)
+	switch kingpin.Parse() {
+	case commandUpSync.FullCommand():
+		err := upSyncVersion(*storageURI, *sourceFolderPath, *targetFilePath, *upSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandDownSync.FullCommand():
+		err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
-	for _, version := range versions {
-		targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
-		sourceFilePath := "index/" + version + ".lvi"
-		err := downSyncVersion("gs://test_block_storage", sourceFilePath, targetFolderPath, path.Join(os.TempDir(), "longtail_download_store"), targetChunkSize, targetBlockSize, maxChunksPerBlock)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
+
 	/*
-		for _, version := range versions {
-			targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
-			sourceFilePath := "index/" + version + ".lvi"
-			err := downSyncVersion("gs://test_block_storage", sourceFilePath, targetFolderPath, path.Join(os.TempDir(), "longtail_download_store"), targetChunkSize, targetBlockSize, maxChunksPerBlock)
-			if err != nil {
-				log.Fatal(err)
+		// var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d", "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
+		// var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"} //, "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
+		// var versions = [...]string{"b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
+
+		var versions = [...]string{
+			"2f7f84a05fc290c717c8b5c0e59f8121481151e6",
+			"916600e1ecb9da13f75835cd1b2d2e6a67f1a92d",
+			"fdeb1390885c2f426700ca653433730d1ca78dab",
+			"81cccf054b23a0b5a941612ef0a2a836b6e02fd6",
+			"558af6b2a10d9ab5a267b219af4f795a17cc032f",
+			"c2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c"}
+
+		if true {
+			for _, version := range versions {
+				sourceFolderPath := "C:/Temp/longtail/local/WinEditor/git" + version + "_Win64_Editor"
+				targetFilePath := "index/" + version + ".lvi"
+				err := upSyncVersion(*storageURI, *sourceFolderPath, *targetFilePath, *upSyncContentPath, targetChunkSize, targetBlockSize, maxChunksPerBlock)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		}
+
+		if true {
+			for _, version := range versions {
+				targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
+				sourceFilePath := "index/" + version + ".lvi"
+				err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, targetChunkSize, targetBlockSize, maxChunksPerBlock)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
 	*/

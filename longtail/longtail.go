@@ -147,7 +147,7 @@ func ReadFromStorage(storageAPI Longtail_StorageAPI, rootPath string, path strin
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
-	defer C.free(unsafe.Pointer(cFullPath))
+	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	f := C.Storage_OpenReadFile(storageAPI.cStorageAPI, cFullPath)
 	if f == nil {
@@ -167,7 +167,7 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
-	defer C.free(unsafe.Pointer(cFullPath))
+	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
 	if errno != 0 {

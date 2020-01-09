@@ -112,6 +112,7 @@ func (s GCSStoreBase) putObjectBlob(ctx context.Context, key string, contentType
 
 	_, err := objWriter.Write(blob)
 	if err != nil {
+		objWriter.Close()
 		return errors.Wrap(err, s.String())
 	}
 
@@ -130,9 +131,7 @@ func (s GCSStoreBase) putObjectBlob(ctx context.Context, key string, contentType
 
 func (s GCSStoreBase) getObjectBlob(ctx context.Context, key string) ([]byte, error) {
 	objHandle := s.bucket.Object(key)
-
 	obj, err := objHandle.NewReader(ctx)
-
 	if err != nil {
 		return nil, errors.Wrap(err, s.String())
 	}
@@ -298,36 +297,47 @@ func upSyncVersion(
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
 		fmt.Printf("Storing %d blocks\n", int(blockCount))
+		workerCount := uint32(runtime.NumCPU())
+		if workerCount > blockCount {
+			workerCount = blockCount
+		}
 		var wg sync.WaitGroup
-		wg.Add(int(blockCount))
-		var mux sync.Mutex
-		for i := uint32(0); i < blockCount; i++ {
-			go func(i uint32) {
-				path := longtail.GetPath(missingPaths, i)
-
-				if indexStore.hasObjectBlob(context.Background(), "chunks/"+path) {
-					wg.Done()
-					return
-				}
-
-				block, err := longtail.ReadFromStorage(fs, localCachePath, path)
+		wg.Add(int(workerCount))
+		for i := uint32(0); i < workerCount; i++ {
+			start := (blockCount * i) / workerCount
+			end := ((blockCount * (i + 1)) / workerCount)
+			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
+			go func(start uint32, end uint32) {
+				workerIndexStore, err := NewGCSStoreBase(loc)
 				if err != nil {
-					log.Printf("Failed to read block: `%s`, %v", path, err)
+					log.Printf("Failed to connect to: `%s`, %v", gcsBucket, err)
 					wg.Done()
 					return
 				}
+				defer workerIndexStore.Close()
 
-				mux.Lock()
-				err = indexStore.putObjectBlob(context.Background(), "chunks/"+path, "application/octet-stream", block)
-				mux.Unlock()
-				if err != nil {
-					log.Printf("Failed to write block: `%s`, %v", path, err)
-					wg.Done()
-					return
+				for p := start; p < end; p++ {
+					path := longtail.GetPath(missingPaths, p)
+
+					if indexStore.hasObjectBlob(context.Background(), "chunks/"+path) {
+						continue
+					}
+
+					block, err := longtail.ReadFromStorage(fs, localCachePath, path)
+					if err != nil {
+						log.Printf("Failed to read block: `%s`, %v", path, err)
+						continue
+					}
+
+					err = indexStore.putObjectBlob(context.Background(), "chunks/"+path, "application/octet-stream", block)
+					if err != nil {
+						log.Printf("Failed to write block: `%s`, %v", path, err)
+						continue
+					}
+					log.Printf("Copied block: `%s` from `%s` to `%s`", path, localCachePath, "chunks")
 				}
-				log.Printf("Copied block: `%s` from `%s` to `%s`", path, localCachePath, "chunks")
 				wg.Done()
-			}(i)
+			}(start, end)
 		}
 		wg.Wait()
 
@@ -503,32 +513,43 @@ func downSyncVersion(
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
 		fmt.Printf("Fetching %d blocks\n", int(blockCount))
+		workerCount := uint32(runtime.NumCPU())
+		if workerCount > blockCount {
+			workerCount = blockCount
+		}
 		var wg sync.WaitGroup
-		wg.Add(int(blockCount))
-		var mux sync.Mutex
-		for i := uint32(0); i < blockCount; i++ {
-			go func(i uint32) {
-				path := longtail.GetPath(missingPaths, i)
-
-				mux.Lock()
-				blockData, err := indexStore.getObjectBlob(context.Background(), "chunks/"+path)
-				mux.Unlock()
+		wg.Add(int(workerCount))
+		for i := uint32(0); i < workerCount; i++ {
+			start := (blockCount * i) / workerCount
+			end := ((blockCount * (i + 1)) / workerCount)
+			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
+			go func(start uint32, end uint32) {
+				workerIndexStore, err := NewGCSStoreBase(loc)
 				if err != nil {
-					log.Printf("Failed to read block: `%s`, %v", path, err)
+					log.Printf("Failed to connect to: `%s`, %v", gcsBucket, err)
 					wg.Done()
 					return
 				}
+				defer workerIndexStore.Close()
 
-				err = longtail.WriteToStorage(fs, localCachePath, path, blockData)
-				if err != nil {
-					log.Printf("Failed to store block: `%s`, %v", path, err)
-					wg.Done()
-					return
+				for p := start; p < end; p++ {
+					path := longtail.GetPath(missingPaths, p)
+
+					blockData, err := indexStore.getObjectBlob(context.Background(), "chunks/"+path)
+					if err != nil {
+						log.Printf("Failed to read block: `%s`, %v", path, err)
+						continue
+					}
+
+					err = longtail.WriteToStorage(fs, localCachePath, path, blockData)
+					if err != nil {
+						log.Printf("Failed to store block: `%s`, %v", path, err)
+						continue
+					}
+					log.Printf("Copied block: `%s` from `%s` to `%s`", path, "chunks", localCachePath)
 				}
-
-				log.Printf("Copied block: `%s` from `%s` to `%s`", path, "chunks", localCachePath)
 				wg.Done()
-			}(i)
+			}(start, end)
 		}
 		wg.Wait()
 
@@ -568,16 +589,16 @@ func downSyncVersion(
 
 func main() {
 	targetChunkSize := uint32(32758)
-	targetBlockSize := uint32(32758 * 12)
+	targetBlockSize := uint32(32758 * 16)
 	maxChunksPerBlock := uint32(1024)
 
 	l := longtail.SetLogger(logger, &loggerData{})
 	defer longtail.ClearLogger(l)
 	longtail.SetLogLevel(0)
 
-	var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d", "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-	//	var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"} //, "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-	//	var versions = [...]string{"b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
+	//var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d", "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
+	var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"} //, "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
+	// var versions = [...]string{"b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
 
 	for _, version := range versions {
 		sourceFolderPath := "C:/Temp/longtail/local/WinEditor/git" + version + "_Win64_Editor"
@@ -587,7 +608,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-
 	for _, version := range versions {
 		targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
 		sourceFilePath := "index/" + version + ".lvi"
@@ -596,13 +616,14 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-
-	for _, version := range versions {
-		targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
-		sourceFilePath := "index/" + version + ".lvi"
-		err := downSyncVersion("gs://test_block_storage", sourceFilePath, targetFolderPath, path.Join(os.TempDir(), "longtail_download_store"), targetChunkSize, targetBlockSize, maxChunksPerBlock)
-		if err != nil {
-			log.Fatal(err)
+	/*
+		for _, version := range versions {
+			targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
+			sourceFilePath := "index/" + version + ".lvi"
+			err := downSyncVersion("gs://test_block_storage", sourceFilePath, targetFolderPath, path.Join(os.TempDir(), "longtail_download_store"), targetChunkSize, targetBlockSize, maxChunksPerBlock)
+			if err != nil {
+				log.Fatal(err)
+			}
 		}
-	}
+	*/
 }

@@ -1,51 +1,49 @@
-package golongtail
+package longtail
 
 // #cgo CFLAGS: -g -std=gnu99
-// #cgo LDFLAGS: -L. -l:longtail_lib.a
+// #cgo LDFLAGS: -L. -l:import/longtail_lib.a
 // #define _GNU_SOURCE
-// #include "longtail/src/longtail.h"
-// #include "longtail/lib/longtail_lib.h"
+// #include "import/src/longtail.h"
+// #include "import/lib/longtail_lib.h"
 // #include <stdlib.h>
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 // void logProxy(void* context, int level, char* str);
-// static Longtail_StorageAPI_HOpenFile Storage_OpenWriteFile(struct Longtail_StorageAPI* api, const char* path, uint64_t initial_size)
+// static int Storage_Write(struct Longtail_StorageAPI* api, const char* path, uint64_t length, const void* input)
 // {
-//   Longtail_StorageAPI_HOpenFile f;
-//   int err = api->OpenWriteFile(api, path, initial_size, &f);
-//   if (err) {
-//     return 0;
-//   }
-//   return f;
+//    Longtail_StorageAPI_HOpenFile f;
+//    int err = api->OpenWriteFile(api, path, length, &f);
+//    if (err)
+//    {
+//        return err;
+//    }
+//    err = api->Write(api, f, 0, length, input);
+//    api->CloseFile(api, f);
+//    return err;
 // }
-// static int Storage_Write(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, const void* input)
+// static uint64_t Storage_GetSize(struct Longtail_StorageAPI* api, const char* path)
 // {
-//   return api->Write(api, f, offset, length, input);
+//    Longtail_StorageAPI_HOpenFile f;
+//    int err = api->OpenReadFile(api, path, &f);
+//    if (err)
+//    {
+//        return err;
+//    }
+//    uint64_t s;
+//    err = api->GetSize(api, f, &s);
+//    api->CloseFile(api, f);
+//    return err ? 0 : s;
 // }
-// static Longtail_StorageAPI_HOpenFile Storage_OpenReadFile(struct Longtail_StorageAPI* api, const char* path)
+// static int Storage_Read(struct Longtail_StorageAPI* api, const char* path, uint64_t offset, uint64_t length, void* output)
 // {
-//   Longtail_StorageAPI_HOpenFile f;
-//   int err = api->OpenReadFile(api, path, &f);
-//   if (err) {
-//     return 0;
-//   }
-//   return f;
-// }
-// static int Storage_Read(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, void* output)
-// {
-//   return api->Read(api, f, offset, length, output);
-// }
-// static void Storage_CloseFile(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f)
-// {
-//   return api->CloseFile(api, f);
-// }
-// static uint64_t Storage_GetSize(struct Longtail_StorageAPI* api, Longtail_StorageAPI_HOpenFile f)
-// {
-//   uint64_t s;
-//   int err = api->GetSize(api, f, &s);
-//   if (err) {
-//     return 0;
-//   }
-//   return s;
+//    Longtail_StorageAPI_HOpenFile f;
+//    int err = api->OpenReadFile(api, path, &f);
+//    if (err)
+//    {
+//        return err;
+//    }
+//    err = api->Read(api, f, offset, length, output);
+//    api->CloseFile(api, f);
+//    return err;
 // }
 // static char* Storage_ConcatPath(struct Longtail_StorageAPI* api, const char* root_path, const char* sub_path)
 // {
@@ -54,42 +52,6 @@ package golongtail
 // static const char* GetPath(const uint32_t* name_offsets, const char* name_data, uint32_t index)
 // {
 //   return &name_data[name_offsets[index]];
-// }
-// static void* ReadFromStorage(struct Longtail_StorageAPI* api, const char* rootPath, const char* blockPath)
-// {
-//    char* full_path = api->ConcatPath(api, rootPath, blockPath);
-//    Longtail_StorageAPI_HOpenFile block_file;
-//    int err = api->OpenReadFile(api, full_path, &block_file);
-//    if (err) {
-//      Longtail_Free(full_path);
-//      return 0;
-//    }
-//    uint64_t blockSize;
-//    err = api->GetSize(api, block_file, &blockSize);
-//    if (err) {
-//      api->CloseFile(api, block_file);
-//      Longtail_Free(full_path);
-//      return 0;
-//    }
-//    void* buffer = Longtail_Alloc((size_t)blockSize);
-//    api->Read(api, block_file, 0, blockSize, buffer);
-//    api->CloseFile(api, block_file);
-//    Longtail_Free(full_path);
-//    return buffer;
-// }
-// static int WriteToStorage(struct Longtail_StorageAPI* api, const char* rootPath, const char* blockPath, uint64_t blockSize, void* blockData)
-// {
-//    char* full_path = api->ConcatPath(api, rootPath, blockPath);
-//    Longtail_StorageAPI_HOpenFile block_file;
-//    int err = api->OpenWriteFile(api, full_path, blockSize, &block_file);
-//    if (err) {
-//      Longtail_Free(full_path);
-//      return 0;
-//    }
-//    api->Write(api, block_file, 0, blockSize, blockData);
-//    api->CloseFile(api, block_file);
-//    Longtail_Free(full_path);
-//    return 1;
 // }
 import "C"
 import (
@@ -147,16 +109,17 @@ func ReadFromStorage(storageAPI Longtail_StorageAPI, rootPath string, path strin
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
-	defer C.free(unsafe.Pointer(cFullPath))
+	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
-	f := C.Storage_OpenReadFile(storageAPI.cStorageAPI, cFullPath)
-	if f == nil {
-		return nil, nil
+	blockSize := C.Storage_GetSize(storageAPI.cStorageAPI, cFullPath)
+	blockData := make([]byte, int(blockSize))
+	errno := C.int(0)
+	if blockSize > 0 {
+		errno = C.Storage_Read(storageAPI.cStorageAPI, cFullPath, 0, blockSize, unsafe.Pointer(&blockData[0]))
 	}
-	defer C.Storage_CloseFile(storageAPI.cStorageAPI, f)
-	blockSize := C.Storage_GetSize(storageAPI.cStorageAPI, f)
-	blockData := make([]uint8, int(blockSize))
-	C.Storage_Read(storageAPI.cStorageAPI, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
+	if errno != 0 {
+		return nil, fmt.Errorf("ReadFromStorage: Storage_Read(%s) failed with error %d", path, errno)
+	}
 	return blockData, nil
 }
 
@@ -167,19 +130,17 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
-	defer C.free(unsafe.Pointer(cFullPath))
+	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteToStorage: EnsureParentPathExists(%s) failed with error %d", path, errno)
+		return fmt.Errorf("WriteToStorage: Storage_Write(%s) failed with create parent path for %d", path, errno)
 	}
 
 	blockSize := C.uint64_t(len(blockData))
-
-	f := C.Storage_OpenWriteFile(storageAPI.cStorageAPI, cFullPath, blockSize)
-	defer C.Storage_CloseFile(storageAPI.cStorageAPI, f)
-	if blockSize > 0 {
-		C.Storage_Write(storageAPI.cStorageAPI, f, 0, blockSize, unsafe.Pointer(&blockData[0]))
+	errno = C.Storage_Write(storageAPI.cStorageAPI, cFullPath, blockSize, unsafe.Pointer(&blockData[0]))
+	if errno != 0 {
+		return fmt.Errorf("WriteToStorage: Storage_Write(%s) failed with error %d", path, errno)
 	}
 	return nil
 }

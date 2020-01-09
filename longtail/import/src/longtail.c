@@ -25,6 +25,19 @@ void Longtail_NukeFree(void* p);
 #endif // defined(LONGTAIL_ASSERTS)
 */
 
+#if defined(_WIN32)
+    #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+    #define QSORT(base, count, size, func, context) qsort_s(base, count, size, func, context)
+#elif defined(__clang__) || defined(__GNUC__)
+    #if defined(__APPLE__)
+        #define SORTFUNC(name) int name(void* context, const void* a_ptr, const void* b_ptr)
+        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, context, func)
+    #else
+        #define SORTFUNC(name) int name(const void* a_ptr, const void* b_ptr, void* context)
+        #define QSORT(base, count, size, func, context) qsort_r(base, count, size, func, context)
+    #endif
+#endif
+
 #if defined(LONGTAIL_ASSERTS)
 
 static Longtail_Assert Longtail_Assert_private = 0;
@@ -130,10 +143,6 @@ void Longtail_CallLogger(int level, const char* fmt, ...)
     va_end(argptr);
     Longtail_Log_private(Longtail_LogContext, level, buffer);
 }
-
-#if defined(__clang__)
-    #define qsort_s qsort_r
-#endif
 
 char* Longtail_Strdup(const char* path)
 {
@@ -329,6 +338,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                     err = entry_processor(context, asset_folder, dir_name, 1, 0);
                     if (err)
                     {
+                        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process dir `%s` in `%s` failed with %d", dir_name, asset_folder, err)
                         break;
                     }
                     if ((size_t)arrlen(folder_paths) == arrcap(folder_paths))
@@ -352,6 +362,7 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
                         err = entry_processor(context, asset_folder, file_name, 0, size);
                         if (err)
                         {
+                            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: Process file `%s` in `%s` failed with %d", file_name, asset_folder, err)
                             break;
                         }
                     }
@@ -364,8 +375,18 @@ static int RecurseTree(struct Longtail_StorageAPI* storage_api, const char* root
         {
             err = 0;
         }
+        else if (err != 0)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_WARNING, "RecurseTree: StartFind on `%s` failed with %d", asset_folder, err)
+            break;
+        }
         Longtail_Free((void*)asset_folder);
         asset_folder = 0;
+    }
+    while (folder_index < (uint32_t)arrlen(folder_paths))
+    {
+        const char* asset_folder = folder_paths[folder_index++];
+        Longtail_Free((void*)asset_folder);
     }
     arrfree(folder_paths);
     folder_paths = 0;
@@ -452,7 +473,7 @@ static int AppendPath(struct Longtail_Paths** paths, const char* path, uint32_t*
         memmove(new_paths->m_Offsets, (*paths)->m_Offsets, sizeof(uint32_t) * *(*paths)->m_PathCount);
         memmove(new_paths->m_Data, (*paths)->m_Data, (*paths)->m_DataSize);
 
-        Longtail_Free(paths);
+        Longtail_Free(*paths);
         *paths = new_paths;
     }
 
@@ -1187,6 +1208,7 @@ int Longtail_CreateVersionIndex(
     LONGTAIL_FATAL_ASSERT_PRIVATE(root_path != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(paths != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(max_chunk_size != 0, return EINVAL)
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex: From `%s` with %u assets", root_path, (uint32_t)*paths->m_PathCount)
 
     uint32_t path_count = *paths->m_PathCount;
     TLongtail_Hash* path_hashes = (TLongtail_Hash*)Longtail_Alloc(sizeof(TLongtail_Hash) * path_count);
@@ -1891,10 +1913,10 @@ struct WriteBlockJob
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-    sprintf(out_name, "0x%016" PRIx64, block_hash);
-//    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
-//    memmove(out_name, &out_name[5], 4);
-//    out_name[4] = '/';
+//    sprintf(out_name, "0x%016" PRIx64, block_hash);
+    sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
+    memmove(out_name, &out_name[5], 4);
+    out_name[4] = '/';
 }
 
 static int ReadBlockData(
@@ -3062,11 +3084,7 @@ struct BlockJobCompareContext
     struct ContentLookup* cl;
 };
 
-#if defined(__clang__)
-static int BlockJobCompare(const void* a_ptr, const void* b_ptr, void* context)
-#elif defined(_MSC_VER) || defined(__GNUC__)
-static int BlockJobCompare(void* context, const void* a_ptr, const void* b_ptr)
-#endif
+static SORTFUNC(BlockJobCompare)
 {
     struct BlockJobCompareContext* c = (struct BlockJobCompareContext*)context;
     struct HashToIndexItem* chunk_hash_to_block_index = c->cl->m_ChunkHashToBlockIndex;
@@ -3196,7 +3214,7 @@ static int BuildAssetWriteList(
             chunk_hashes,   // chunk_hashes
             cl  // cl
         };
-    qsort_s(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
+    QSORT(awl->m_BlockJobAssetIndexes, (size_t)awl->m_BlockJobCount, sizeof(uint32_t), BlockJobCompare, &block_job_compare_context);
     *out_asset_write_list = awl;
     return 0;
 }
@@ -3964,6 +3982,8 @@ int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_RetargetContent: From %u pick %u chunks", (uint32_t)*reference_content_index->m_ChunkCount, (uint32_t)*content_index->m_ChunkCount)
+
     struct HashToIndexItem* chunk_to_remote_block_index_lookup = 0;
     for (uint64_t i = 0; i < *reference_content_index->m_ChunkCount; ++i)
     {
@@ -4067,6 +4087,8 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex* remote_content_index,
     struct Longtail_ContentIndex** out_content_index)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_MergeContentIndex: Merge %u with %u chunks", (uint32_t)*local_content_index->m_ChunkCount, (uint32_t)*remote_content_index->m_ChunkCount)
+
     LONGTAIL_FATAL_ASSERT_PRIVATE(local_content_index != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(remote_content_index != 0, return EINVAL)
 
@@ -4136,11 +4158,7 @@ static int CompareIndexs(const void* a_ptr, const void* b_ptr)
 }
 */
 
-#if defined(__clang__)
-static int SortPathShortToLong(const void* a_ptr, const void* b_ptr, void* context)
-#elif defined(_MSC_VER) || defined(__GNUC__)
-static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_ptr)
-#endif
+static SORTFUNC(SortPathShortToLong)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0)
     LONGTAIL_FATAL_ASSERT_PRIVATE(a_ptr != 0, return 0)
@@ -4156,11 +4174,7 @@ static int SortPathShortToLong(void* context, const void* a_ptr, const void* b_p
     return (a_len > b_len) ? 1 : (a_len < b_len) ? -1 : 0;
 }
 
-#if defined(__clang__)
-static int SortPathLongToShort(const void* a_ptr, const void* b_ptr, void* context)
-#elif defined(_MSC_VER) || defined(__GNUC__)
-static int SortPathLongToShort(void* context, const void* a_ptr, const void* b_ptr)
-#endif
+static SORTFUNC(SortPathLongToShort)
 {
     LONGTAIL_FATAL_ASSERT_PRIVATE(context != 0, return 0)
     LONGTAIL_FATAL_ASSERT_PRIVATE(a_ptr != 0, return 0)
@@ -4232,6 +4246,8 @@ int Longtail_CreateVersionDiff(
     const struct Longtail_VersionIndex* target_version,
     struct Longtail_VersionDiff** out_version_diff)
 {
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionDiff: Diff %u with %u assets", (uint32_t)*source_version->m_AssetCount, (uint32_t)*target_version->m_AssetCount)
+
     LONGTAIL_FATAL_ASSERT_PRIVATE(source_version != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT_PRIVATE(target_version != 0, return EINVAL)
 
@@ -4369,8 +4385,8 @@ int Longtail_CreateVersionDiff(
     memmove(version_diff->m_SourceModifiedAssetIndexes, modified_source_indexes, sizeof(uint32_t) * modified_count);
     memmove(version_diff->m_TargetModifiedAssetIndexes, modified_target_indexes, sizeof(uint32_t) * modified_count);
 
-    qsort_s(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
-    qsort_s(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
+    QSORT(version_diff->m_SourceRemovedAssetIndexes, source_removed_count, sizeof(uint32_t), SortPathLongToShort, (void*)source_version);
+    QSORT(version_diff->m_TargetAddedAssetIndexes, target_added_count, sizeof(uint32_t), SortPathShortToLong, (void*)target_version);
 
     Longtail_Free(removed_source_asset_indexes);
     removed_source_asset_indexes = 0;

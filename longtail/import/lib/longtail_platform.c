@@ -204,7 +204,7 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
     semaphore->m_Handle = CreateSemaphore(NULL, initial_count, 0x7fffffff, NULL);
     if (semaphore->m_Handle == INVALID_HANDLE_VALUE)
     {
-        return Win32ErrorToErrno(GetLastError());;
+        return Win32ErrorToErrno(GetLastError());
     }
     *out_sema = semaphore;
     return 0;
@@ -357,6 +357,7 @@ struct Longtail_FSIterator_private
 {
     WIN32_FIND_DATAA m_FindData;
     HANDLE m_Handle;
+    char* m_Path;
 };
 
 size_t Longtail_GetFSIteratorSize()
@@ -403,9 +404,11 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     char scan_pattern[MAX_PATH];
     strcpy(scan_pattern, path);
     strncat(scan_pattern, "\\*.*", MAX_PATH - strlen(scan_pattern));
+    fs_iterator->m_Path = strdup(path);
     fs_iterator->m_Handle = FindFirstFileA(scan_pattern, &fs_iterator->m_FindData);
     if (fs_iterator->m_Handle == INVALID_HANDLE_VALUE)
     {
+        free(fs_iterator->m_Path);
         return Win32ErrorToErrno(GetLastError());
     }
     return Skip(fs_iterator);
@@ -422,6 +425,7 @@ int Longtail_FindNext(HLongtail_FSIterator fs_iterator)
 
 void Longtail_CloseFind(HLongtail_FSIterator fs_iterator)
 {
+    free(fs_iterator->m_Path);
     FindClose(fs_iterator->m_Handle);
     fs_iterator->m_Handle = INVALID_HANDLE_VALUE;
 }
@@ -439,6 +443,14 @@ const char* Longtail_GetDirectoryName(HLongtail_FSIterator fs_iterator)
 {
     if (fs_iterator->m_FindData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
     {
+        const char* validatePath = Longtail_ConcatPath(fs_iterator->m_Path, fs_iterator->m_FindData.cFileName);
+        DWORD attr = GetFileAttributes(validatePath);
+        Longtail_Free((char*)validatePath);
+        if (attr == INVALID_FILE_ATTRIBUTES)
+        {
+            // Silly, silly windows - if we try to scan a folder to fast after it has contents deleted we see if when scanning but it is not really there...
+            return 0;
+        }
         return fs_iterator->m_FindData.cFileName;
     }
     return 0;
@@ -755,6 +767,15 @@ void Longtail_DeleteThread(HLongtail_Thread thread)
 }
 
 #ifdef __APPLE__
+# include <os/lock.h>
+# include <dispatch/dispatch.h>
+# include <mach/mach_init.h>
+# include <mach/mach_error.h>
+# include <mach/semaphore.h>
+# include <mach/task.h>
+
+#define off64_t off_t
+#define ftruncate64 ftruncate
 
 struct Longtail_Sema
 {
@@ -782,25 +803,23 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
     return 0;
 }
 
-bool Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
+int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
     while (count--)
     {
-        if (KERN_SUCCESS != semaphore_signal(semaphore->m_Semaphore))
+        kern_return_t ret = semaphore_signal(semaphore->m_Semaphore);
+        if (ret != KERN_SUCCESS)
         {
-            return false;
+            return (int)ret;
         }
     }
-    return true;
+    return 0;
 }
 
-bool Longtail_WaitSema(HLongtail_Sema semaphore)
+int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    if (KERN_SUCCESS != semaphore_wait(semaphore->m_Semaphore))
-    {
-        return false;
-    }
-    return true;
+    kern_return_t ret = semaphore_wait(semaphore->m_Semaphore);
+    return (int)ret;
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -858,7 +877,7 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
     HLongtail_Sema semaphore = (HLongtail_Sema)mem;
     int err = sem_init(&semaphore->m_Semaphore, 0, (unsigned int)initial_count);
     if (err != 0){
-        return 0;
+        return err;
     }
     *out_sema = semaphore;
     return 0;
@@ -868,21 +887,18 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
     while (count--)
     {
-        if (0 != sem_post(&semaphore->m_Semaphore))
+        int err = sem_post(&semaphore->m_Semaphore);
+        if (err != 0)
         {
-            return 0;
+            return err;
         }
     }
-    return 1;
+    return 0;
 }
 
 int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    if (0 != sem_wait(&semaphore->m_Semaphore))
-    {
-        return 0;
-    }
-    return 1;
+    return sem_wait(&semaphore->m_Semaphore);
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -905,7 +921,7 @@ int Longtail_CreateSpinLock(void* mem, HLongtail_SpinLock* out_spin_lock)
     HLongtail_SpinLock spin_lock = (HLongtail_SpinLock)mem;
     int err = pthread_spin_init(&spin_lock->m_Lock, 0);
     if (err != 0) {
-        return 0;
+        return err;
     }
     *out_spin_lock = spin_lock;
     return 0;

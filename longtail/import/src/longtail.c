@@ -10,7 +10,6 @@
 #include <inttypes.h>
 #include <stdarg.h>
 #include <errno.h>
-#include <stdlib.h>
 
 //#define SLOW_VALIDATION
 
@@ -1918,7 +1917,6 @@ struct WriteBlockJob
 
 static void GetBlockName(TLongtail_Hash block_hash, char* out_name)
 {
-//    sprintf(out_name, "0x%016" PRIx64, block_hash);
     sprintf(&out_name[5], "0x%016" PRIx64, block_hash);
     memmove(out_name, &out_name[5], 4);
     out_name[4] = '/';

@@ -250,9 +250,9 @@ func (versionDiff *Longtail_VersionDiff) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionDiff.cVersionDiff))
 }
 
-// CreateMeowHashAPI ...
-func CreateMeowHashAPI() Longtail_HashAPI {
-	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateMeowHashAPI()}
+// CreateXXHashAPI ...
+func CreateXXHashAPI() Longtail_HashAPI {
+	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateXXHashAPI()}
 }
 
 // Longtail_HashAPI.Dispose() ...

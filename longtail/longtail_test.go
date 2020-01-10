@@ -208,9 +208,9 @@ func TestInit(t *testing.T) {
 		t.Errorf("CreateInMemStorageAPI() storageAPI.cStorageAPI == nil")
 	}
 	defer storageAPI.Dispose()
-	hashAPI := CreateMeowHashAPI()
+	hashAPI := CreateXXHashAPI()
 	if hashAPI.cHashAPI == nil {
-		t.Errorf("CreateMeowHashAPI() hashAPI.cHashAPI == nil")
+		t.Errorf("CreateXXHashAPI() hashAPI.cHashAPI == nil")
 	}
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -227,7 +227,7 @@ func TestCreateVersionIndex(t *testing.T) {
 
 	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
-	hashAPI := CreateMeowHashAPI()
+	hashAPI := CreateXXHashAPI()
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
@@ -270,7 +270,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 
 	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
-	hashAPI := CreateMeowHashAPI()
+	hashAPI := CreateXXHashAPI()
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
@@ -339,7 +339,7 @@ func TestUpSyncVersion(t *testing.T) {
 
 	upsyncStorageAPI := CreateInMemStorageAPI()
 	defer upsyncStorageAPI.Dispose()
-	hashAPI := CreateMeowHashAPI()
+	hashAPI := CreateXXHashAPI()
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()

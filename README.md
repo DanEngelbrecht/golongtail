@@ -1,3 +1,7 @@
+|Branch      | OSX / Linux / Windows |
+|------------|-----------------------|
+|master      | [![Build Status](https://travis-ci.org/DanEngelbrecht/go_longtail.svg?branch=master)](https://travis-ci.org/DanEngelbrecht/go_longtail?branch=master) |
+
 # go_longtail
 
 A Go wrapper for [longtail][https://github.com/DanEngelbrecht/longtail], both module that hides the C interface and a module that provides a simple command line interface for up/down loading content.

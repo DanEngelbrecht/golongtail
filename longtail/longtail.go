@@ -4,7 +4,12 @@ package longtail
 // #cgo LDFLAGS: -L. -l:import/longtail_lib.a
 // #define _GNU_SOURCE
 // #include "import/src/longtail.h"
-// #include "import/lib/longtail_lib.h"
+// #include "import/lib/bikeshed/longtail_bikeshed.h"
+// #include "import/lib/blake2/longtail_blake2hash.h"
+// #include "import/lib/filestorage/longtail_filestorage.h"
+// #include "import/lib/lizard/longtail_lizard.h"
+// #include "import/lib/memstorage/longtail_memstorage.h"
+// #include "import/lib/xxhash/longtail_xxhash.h"
 // #include <stdlib.h>
 // void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 // void logProxy(void* context, int level, char* str);
@@ -53,6 +58,31 @@ package longtail
 // {
 //   return &name_data[name_offsets[index]];
 // }
+// static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault()
+// {
+//     struct Longtail_CompressionAPI* lizard_compression = Longtail_CreateLizardCompressionAPI();
+//     if (lizard_compression == 0)
+//     {
+//         return 0;
+//     }
+//     Longtail_CompressionAPI_HSettings lizard_settings = lizard_compression->GetDefaultSettings(lizard_compression);
+// 
+//     uint32_t compression_types[1] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE};
+//     struct Longtail_CompressionAPI* compression_apis[1] = {lizard_compression};
+//     Longtail_CompressionAPI_HSettings compression_settings[1] = {lizard_settings};
+// 
+//     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
+//         1,
+//         (const uint32_t*)compression_types,
+//         (const struct Longtail_CompressionAPI **)compression_apis,
+//         (const Longtail_CompressionAPI_HSettings*)compression_settings);
+//     if (registry == 0)
+//     {
+//         SAFE_DISPOSE_API(lizard_compression);
+//         return 0;
+//     }
+//     return registry;
+//  }
 import "C"
 import (
 	"fmt"
@@ -86,8 +116,8 @@ type Longtail_JobAPI struct {
 	cJobAPI *C.struct_Longtail_JobAPI
 }
 
-type Longtail_CompressionRegistry struct {
-	cCompressionRegistry *C.struct_Longtail_CompressionRegistry
+type Longtail_CompressionRegistryAPI struct {
+	cCompressionRegistryAPI *C.struct_Longtail_CompressionRegistryAPI
 }
 
 type Longtail_CompressionAPI struct {
@@ -257,7 +287,7 @@ func CreateXXHashAPI() Longtail_HashAPI {
 
 // Longtail_HashAPI.Dispose() ...
 func (hashAPI *Longtail_HashAPI) Dispose() {
-	C.Longtail_DestroyHashAPI(hashAPI.cHashAPI)
+	C.Longtail_DisposeAPI(&hashAPI.cHashAPI.m_API)
 }
 
 // CreateFSStorageAPI ...
@@ -272,7 +302,7 @@ func CreateInMemStorageAPI() Longtail_StorageAPI {
 
 // Longtail_StorageAPI.Dispose() ...
 func (storageAPI *Longtail_StorageAPI) Dispose() {
-	C.Longtail_DestroyStorageAPI(storageAPI.cStorageAPI)
+	C.Longtail_DisposeAPI(&storageAPI.cStorageAPI.m_API)
 }
 
 // CreateLizardCompressionAPI ...
@@ -282,7 +312,7 @@ func CreateLizardCompressionAPI() Longtail_CompressionAPI {
 
 // Longtail_CompressionAPI.Dispose() ...
 func (compressionAPI *Longtail_CompressionAPI) Dispose() {
-	C.Longtail_DestroyCompressionAPI(compressionAPI.cCompressionAPI)
+	C.Longtail_DisposeAPI(&compressionAPI.cCompressionAPI.m_API)
 }
 
 // CreateBikeshedJobAPI ...
@@ -292,17 +322,17 @@ func CreateBikeshedJobAPI(workerCount uint32) Longtail_JobAPI {
 
 // Longtail_JobAPI.Dispose() ...
 func (jobAPI *Longtail_JobAPI) Dispose() {
-	C.Longtail_DestroyJobAPI(jobAPI.cJobAPI)
+	C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
 }
 
 // Longtail_CreateDefaultCompressionRegistry ...
-func CreateDefaultCompressionRegistry() Longtail_CompressionRegistry {
-	return Longtail_CompressionRegistry{cCompressionRegistry: C.Longtail_CreateDefaultCompressionRegistry()}
+func CreateDefaultCompressionRegistry() Longtail_CompressionRegistryAPI {
+	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.CompressionRegistry_CreateDefault()}
 }
 
-// Longtail_CompressionRegistry.Close() ...
-func (compressionRegistry *Longtail_CompressionRegistry) Dispose() {
-	C.Longtail_DestroyCompressionRegistry(compressionRegistry.cCompressionRegistry)
+// Longtail_CompressionRegistryAPI ...
+func (compressionRegistry *Longtail_CompressionRegistryAPI) Dispose() {
+	C.Longtail_DisposeAPI(&compressionRegistry.cCompressionRegistryAPI.m_API)
 }
 
 // GetNoCompressionType ...
@@ -500,7 +530,7 @@ func ReadContentIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Con
 func WriteContent(
 	sourceStorageAPI Longtail_StorageAPI,
 	targetStorageAPI Longtail_StorageAPI,
-	compressionRegistry Longtail_CompressionRegistry,
+	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
 	progressFunc progressFunc,
 	progressContext interface{},
@@ -522,7 +552,7 @@ func WriteContent(
 	errno := C.Longtail_WriteContent(
 		sourceStorageAPI.cStorageAPI,
 		targetStorageAPI.cStorageAPI,
-		compressionRegistry.cCompressionRegistry,
+		compressionRegistryAPI.cCompressionRegistryAPI,
 		jobAPI.cJobAPI,
 		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
 		cProgressProxyData,
@@ -627,7 +657,7 @@ func MergeContentIndex(
 func WriteVersion(
 	contentStorageAPI Longtail_StorageAPI,
 	versionStorageAPI Longtail_StorageAPI,
-	compressionRegistry Longtail_CompressionRegistry,
+	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
 	progressFunc progressFunc,
 	progressContext interface{},
@@ -649,7 +679,7 @@ func WriteVersion(
 	errno := C.Longtail_WriteVersion(
 		contentStorageAPI.cStorageAPI,
 		versionStorageAPI.cStorageAPI,
-		compressionRegistry.cCompressionRegistry,
+		compressionRegistryAPI.cCompressionRegistryAPI,
 		jobAPI.cJobAPI,
 		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
 		cProgressProxyData,
@@ -683,7 +713,7 @@ func ChangeVersion(
 	jobAPI Longtail_JobAPI,
 	progressFunc progressFunc,
 	progressContext interface{},
-	compressionRegistry Longtail_CompressionRegistry,
+	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	contentIndex Longtail_ContentIndex,
 	sourceVersionIndex Longtail_VersionIndex,
 	targetVersionIndex Longtail_VersionIndex,
@@ -708,7 +738,7 @@ func ChangeVersion(
 		jobAPI.cJobAPI,
 		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
 		cProgressProxyData,
-		compressionRegistry.cCompressionRegistry,
+		compressionRegistryAPI.cCompressionRegistryAPI,
 		contentIndex.cContentIndex,
 		sourceVersionIndex.cVersionIndex,
 		targetVersionIndex.cVersionIndex,

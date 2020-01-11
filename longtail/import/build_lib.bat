@@ -1,5 +1,4 @@
 set THIRDPARTY_DIR=..\third-party
-echo %THIRDPARTY_DIR%
 pushd obj
 set BIKESHED_SRC=..\lib\bikeshed\*.c
 set BLAKE2_SRC=..\lib\blake2\*.c ..\lib\blake2\ext\*.c

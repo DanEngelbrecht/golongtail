@@ -1,7 +1,6 @@
 #!/bin/bash
 
 THIRDPARTY_DIR=../third-party
-echo $THIRDPARTY_DIR
 pushd obj
 BIKESHED_SRC="../lib/bikeshed/*.c"
 BLAKE2_SRC="../lib/blake2/*.c ../lib/blake2/ext/*.c"

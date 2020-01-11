@@ -1,4 +1,4 @@
-#include "longtail_blake2hash.h"
+#include "longtail_blake2.h"
 
 #include "../../src/longtail.h"
 #include "ext/blake2.h"
@@ -65,5 +65,3 @@ struct Longtail_HashAPI* Longtail_CreateBlake2HashAPI()
     Blake2Hash_Init(blake2_hash);
     return &blake2_hash->m_Blake2HashAPI;
 }
-
-#include "ext/blake2s.c"

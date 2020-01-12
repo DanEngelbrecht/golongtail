@@ -20,7 +20,7 @@ Navigate to `cmd` and run `go build .` and you should get an `cmd.exe` executabl
 
 ### Linux
 Navigate to `longtail/import` and run the `build_lib.sh` script to create a library of the C code.
-Navigate to `cmd` and run `go build .` and you should get an `cmd.exe` executable.
+Navigate to `cmd` and run `go build .` and you should get an `cmd` executable.
 
 ## Usage
 Build the command line and run it for a breif description of commands/options.

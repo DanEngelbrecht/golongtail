@@ -4,7 +4,7 @@
 
 # go_longtail
 
-A Go wrapper for [longtail][https://github.com/DanEngelbrecht/longtail], both module that hides the C interface and a module that provides a simple command line interface for up/down loading content.
+A Go wrapper for [longtail](https://github.com/DanEngelbrecht/longtail), both module that hides the C interface and a module that provides a simple command line interface for up/down loading content.
 
 The command line tool can upload and download to a GCS bucket but requires that you are already logged in to gcloud, no authentication code is in place yet. It can also upload/download to a regular folder path.
 

@@ -24,4 +24,5 @@ Navigate to `com` and run `go build .` and you should get an `cmd.exe` executabl
 
 ## Usage
 `cmd.exe upsync --source-path "my_folder" --target-path "index/my_folder.lvi" --storage-uri "gs://test_block_storage"`
+
 `cmd.exe downsync --source-path "index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "gs://test_block_storage"`

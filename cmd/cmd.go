@@ -13,9 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
-	"github.com/pkg/errors"
-
 	"github.com/DanEngelbrecht/golongtail/longtail"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -64,92 +61,11 @@ func progress(context interface{}, total int, current int) {
 	}
 }
 
-// GCSStoreBase is the base object for all chunk and index stores with GCS backing
-type GCSStoreBase struct {
-	Location string
-	client   *storage.Client
-	bucket   *storage.BucketHandle
-}
-
-func (s GCSStoreBase) String() string {
-	return s.Location
-}
-
-// NewGCSStoreBase initializes a base object used for chunk or index stores backed by GCS.
-func NewGCSStoreBase(u *url.URL) (GCSStoreBase, error) {
-	var err error
-	s := GCSStoreBase{Location: u.String()}
-	if u.Scheme != "gs" {
-		return s, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
-	}
-
-	ctx := context.Background()
-	s.client, err = storage.NewClient(ctx)
-	if err != nil {
-		return s, errors.Wrap(err, u.String())
-	}
-
-	bucketName := u.Host
-	s.bucket = s.client.Bucket(bucketName)
-
-	return s, nil
-}
-
-// Close the GCS base store. NOP opertation but needed to implement the store interface.
-func (s GCSStoreBase) Close() error { return nil }
-
-func (s GCSStoreBase) hasObjectBlob(ctx context.Context, key string) bool {
-	objHandle := s.bucket.Object(key)
-	_, err := objHandle.Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
-		return false
-	}
-	return true
-}
-
-func (s GCSStoreBase) putObjectBlob(ctx context.Context, key string, contentType string, blob []byte) error {
-	objHandle := s.bucket.Object(key)
-	objWriter := objHandle.NewWriter(ctx)
-
-	_, err := objWriter.Write(blob)
-	if err != nil {
-		objWriter.Close()
-		return errors.Wrap(err, s.String())
-	}
-
-	err = objWriter.Close()
-	if err != nil {
-		return errors.Wrap(err, s.String())
-	}
-
-	_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: contentType})
-	if err != nil {
-		return errors.Wrap(err, s.String())
-	}
-
-	return nil
-}
-
-func (s GCSStoreBase) getObjectBlob(ctx context.Context, key string) ([]byte, error) {
-	objHandle := s.bucket.Object(key)
-	obj, err := objHandle.NewReader(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, s.String())
-	}
-	defer obj.Close()
-
-	b, err := ioutil.ReadAll(obj)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
-}
 
 // TODO: Would be nicer if the longtail api provided a way to read/write indexes directly from a memory chunk...
-func (s GCSStoreBase) storeTempObjectBlob(ctx context.Context, key string, fs longtail.Longtail_StorageAPI) (tempPath string, err error) {
-	remoteBlob, err := s.getObjectBlob(context.Background(), key)
+
+func storeTempBlob(s BlobStore, ctx context.Context, key string, fs longtail.Longtail_StorageAPI) (tempPath string, err error) {
+	remoteBlob, err := s.GetBlob(context.Background(), key)
 	if err != nil {
 		return "", err
 	}
@@ -186,8 +102,28 @@ func getCompressionAlgorithm(compressionAlgorithm *string) uint32 {
 	return 0;
 }
 
+func CreateBlobStoreForURI(uri string) (BlobStore, error) {
+	blobStoreURL, err := url.Parse(*storageURI)
+	if err == nil {
+		switch (blobStoreURL.Scheme) {
+		case "gs":
+			return NewGCSBlobStore(blobStoreURL)
+		case "s3":
+			fmt.Printf("Using AWS storage\n")
+			return nil, fmt.Errorf("AWS storage not yet implemented")
+		case "abfs":
+			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
+		case "abfss":
+			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
+		case "file":
+			return NewFSBlobStore(blobStoreURL.Path[1:])
+		}
+	}
+	return NewFSBlobStore(uri)
+}
+
 func upSyncVersion(
-	gcsBucket string,
+	blobStoreURI string,
 	sourceFolderPath string,
 	targetFilePath string,
 	localCachePath string,
@@ -205,13 +141,8 @@ func upSyncVersion(
 	creg := longtail.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	loc, err := url.Parse(gcsBucket)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Connecting to `%s`\n", gcsBucket)
-	indexStore, err := NewGCSStoreBase(loc)
+	fmt.Printf("Connecting to `%s`\n", blobStoreURI)
+	indexStore, err := CreateBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
@@ -257,7 +188,7 @@ func upSyncVersion(
 	}
 
 	var remoteContentIndex longtail.Longtail_ContentIndex
-	remoteContentIndexTmpPath, err := indexStore.storeTempObjectBlob(context.Background(), "store.lci", fs)
+	remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
 	if err == nil {
 		defer os.Remove(remoteContentIndexTmpPath)
 		remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
@@ -310,7 +241,7 @@ func upSyncVersion(
 		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
-		fmt.Printf("Storing %d blocks to `%s`\n", int(blockCount), gcsBucket)
+		fmt.Printf("Storing %d blocks to `%s`\n", int(blockCount), blobStoreURI)
 		workerCount := uint32(runtime.NumCPU())
 		if workerCount > blockCount {
 			workerCount = blockCount
@@ -323,9 +254,10 @@ func upSyncVersion(
 			end := ((blockCount * (i + 1)) / workerCount)
 			//			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
 			go func(start uint32, end uint32) {
-				workerIndexStore, err := NewGCSStoreBase(loc)
+
+				workerIndexStore, err := CreateBlobStoreForURI(blobStoreURI)
 				if err != nil {
-					log.Printf("Failed to connect to: `%s`, %v", gcsBucket, err)
+					log.Printf("Failed to connect to: `%s`, %v", blobStoreURI, err)
 					wg.Done()
 					return
 				}
@@ -334,7 +266,7 @@ func upSyncVersion(
 				for p := start; p < end; p++ {
 					path := longtail.GetPath(missingPaths, p)
 
-					if indexStore.hasObjectBlob(context.Background(), "chunks/"+path) {
+					if indexStore.HasBlob(context.Background(), "chunks/"+path) {
 						continue
 					}
 
@@ -344,7 +276,7 @@ func upSyncVersion(
 						continue
 					}
 
-					err = indexStore.putObjectBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
+					err = indexStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
 					if err != nil {
 						log.Printf("Failed to write block: `%s`, %v", path, err)
 						continue
@@ -374,7 +306,7 @@ func upSyncVersion(
 			return err
 		}
 
-		err = indexStore.putObjectBlob(context.Background(), "store.lci", "application/octet-stream", newContentIndexData)
+		err = indexStore.PutBlob(context.Background(), "store.lci", "application/octet-stream", newContentIndexData)
 		if err != nil {
 			return err
 		}
@@ -385,7 +317,7 @@ func upSyncVersion(
 		return err
 	}
 
-	err = indexStore.putObjectBlob(context.Background(), targetFilePath, "application/octet-stream", vindexFileData)
+	err = indexStore.PutBlob(context.Background(), targetFilePath, "application/octet-stream", vindexFileData)
 	if err != nil {
 		return err
 	}
@@ -394,7 +326,7 @@ func upSyncVersion(
 }
 
 func downSyncVersion(
-	gcsBucket string,
+	blobStoreURI string,
 	sourceFilePath string,
 	targetFolderPath string,
 	localCachePath string,
@@ -411,13 +343,9 @@ func downSyncVersion(
 	creg := longtail.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	loc, err := url.Parse(gcsBucket)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Connecting to `%s`\n", gcsBucket)
-	indexStore, err := NewGCSStoreBase(loc)
+	fmt.Printf("Connecting to `%v`\n", blobStoreURI)
+	var indexStore BlobStore
+	indexStore, err := CreateBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
@@ -425,7 +353,7 @@ func downSyncVersion(
 
 	var remoteVersionIndex longtail.Longtail_VersionIndex
 
-	remoteVersionTmpPath, err := indexStore.storeTempObjectBlob(context.Background(), sourceFilePath, fs)
+	remoteVersionTmpPath, err := storeTempBlob(indexStore, context.Background(), sourceFilePath, fs)
 	if err != nil {
 		return err
 	}
@@ -492,7 +420,7 @@ func downSyncVersion(
 
 	if missingContentIndex.GetBlockCount() > 0 {
 		var remoteContentIndex longtail.Longtail_ContentIndex
-		remoteContentIndexTmpPath, err := indexStore.storeTempObjectBlob(context.Background(), "store.lci", fs)
+		remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
 		if err == nil {
 			defer os.Remove(remoteContentIndexTmpPath)
 			remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
@@ -527,7 +455,7 @@ func downSyncVersion(
 		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
-		fmt.Printf("Fetching %d blocks from `%s`\n", int(blockCount), gcsBucket)
+		fmt.Printf("Fetching %d blocks from `%s`\n", int(blockCount), blobStoreURI)
 		workerCount := uint32(runtime.NumCPU())
 		if workerCount > blockCount {
 			workerCount = blockCount
@@ -540,9 +468,9 @@ func downSyncVersion(
 			end := ((blockCount * (i + 1)) / workerCount)
 			//			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
 			go func(start uint32, end uint32) {
-				workerIndexStore, err := NewGCSStoreBase(loc)
+				workerIndexStore, err := CreateBlobStoreForURI(blobStoreURI)
 				if err != nil {
-					log.Printf("Failed to connect to: `%s`, %v", gcsBucket, err)
+					log.Printf("Failed to connect to: `%s`, %v", blobStoreURI, err)
 					wg.Done()
 					return
 				}
@@ -551,7 +479,7 @@ func downSyncVersion(
 				for p := start; p < end; p++ {
 					path := longtail.GetPath(missingPaths, p)
 
-					blockData, err := indexStore.getObjectBlob(context.Background(), "chunks/"+path)
+					blockData, err := indexStore.GetBlob(context.Background(), "chunks/"+path)
 					if err != nil {
 						log.Printf("Failed to read block: `%s`, %v", path, err)
 						continue
@@ -669,40 +597,4 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-
-	/*
-		// var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d", "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-		// var versions = [...]string{"75a99408249875e875f8fba52b75ea0f5f12a00e", "916600e1ecb9da13f75835cd1b2d2e6a67f1a92d"} //, "b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-		// var versions = [...]string{"b1d3adb4adce93d0f0aa27665a52be0ab0ee8b59"}
-
-		var versions = [...]string{
-			"2f7f84a05fc290c717c8b5c0e59f8121481151e6",
-			"916600e1ecb9da13f75835cd1b2d2e6a67f1a92d",
-			"fdeb1390885c2f426700ca653433730d1ca78dab",
-			"81cccf054b23a0b5a941612ef0a2a836b6e02fd6",
-			"558af6b2a10d9ab5a267b219af4f795a17cc032f",
-			"c2ae7edeab85d5b8b21c8c3a29c9361c9f957f0c"}
-
-		if true {
-			for _, version := range versions {
-				sourceFolderPath := "C:/Temp/longtail/local/WinEditor/git" + version + "_Win64_Editor"
-				targetFilePath := "index/" + version + ".lvi"
-				err := upSyncVersion(*storageURI, *sourceFolderPath, *targetFilePath, *upSyncContentPath, targetChunkSize, targetBlockSize, maxChunksPerBlock)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
-
-		if true {
-			for _, version := range versions {
-				targetFolderPath := "C:/Temp/longtail/local/WinEditor/current"
-				sourceFilePath := "index/" + version + ".lvi"
-				err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, targetChunkSize, targetBlockSize, maxChunksPerBlock)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-		}
-	*/
 }

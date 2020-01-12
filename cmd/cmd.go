@@ -89,27 +89,13 @@ func un(s string, startTime time.Time) {
 	log.Printf("trace end: %s, elapsed %f secs\n", s, elapsed.Seconds())
 }
 
-func getCompressionAlgorithm(compressionAlgorithm *string) uint32 {
-	if compressionAlgorithm == nil {
-		return longtail.GetLizardDefaultCompressionType()
-	} else if *compressionAlgorithm == "Lizard" {
-		return longtail.GetLizardDefaultCompressionType()
-	} else if *compressionAlgorithm == "Brotli" {
-		return longtail.GetBrotliDefaultCompressionType()
-	} else if *compressionAlgorithm == "None" {
-		return 0
-	}
-	return 0;
-}
-
-func CreateBlobStoreForURI(uri string) (BlobStore, error) {
+func createBlobStoreForURI(uri string) (BlobStore, error) {
 	blobStoreURL, err := url.Parse(*storageURI)
 	if err == nil {
 		switch (blobStoreURL.Scheme) {
 		case "gs":
 			return NewGCSBlobStore(blobStoreURL)
 		case "s3":
-			fmt.Printf("Using AWS storage\n")
 			return nil, fmt.Errorf("AWS storage not yet implemented")
 		case "abfs":
 			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
@@ -120,6 +106,49 @@ func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 		}
 	}
 	return NewFSBlobStore(uri)
+}
+
+const noCompressionType = uint32(0)
+const dynamicCompressionType = uint32(0xffffffff)
+
+func getCompressionType(compressionAlgorithm *string) (uint32, error) {
+	if compressionAlgorithm == nil || *compressionAlgorithm == "" {
+		return longtail.GetLizardDefaultCompressionType(), nil
+	}
+	switch(*compressionAlgorithm) {
+	case "Lizard":
+		return longtail.GetLizardDefaultCompressionType(), nil
+	case "Brotli":
+		return longtail.GetLizardDefaultCompressionType(), nil
+	case "None":
+		return noCompressionType, nil
+	case "Auto":
+		return dynamicCompressionType, nil
+	}
+	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
+}
+
+func getCompressionTypesForFiles(fileInfos longtail.Longtail_FileInfos, compressionType uint32) ([]uint32) {
+	pathCount := fileInfos.GetFileCount()
+	compressionTypes := make([]uint32, pathCount)
+	if compressionType != dynamicCompressionType {
+		for i := uint32(0); i < pathCount; i++ {
+			compressionTypes[i] = compressionType
+		}
+		return compressionTypes
+	}
+	paths := fileInfos.GetPaths()
+	for i := uint32(0); i < pathCount; i++ {
+		filePath := longtail.GetPath(paths, i)
+		extension := strings.ToLower(path.Ext(filePath))
+		switch extension {
+		case ".dll", ".exe", ".so":
+			compressionTypes[i] = longtail.GetBrotliDefaultCompressionType()
+		default:
+			compressionTypes[i] = longtail.GetLizardDefaultCompressionType()
+		}
+	}
+	return compressionTypes
 }
 
 func upSyncVersion(
@@ -141,14 +170,14 @@ func upSyncVersion(
 	creg := longtail.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	fmt.Printf("Connecting to `%s`\n", blobStoreURI)
-	indexStore, err := CreateBlobStoreForURI(blobStoreURI)
+	log.Printf("Connecting to `%s`\n", blobStoreURI)
+	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
 	defer indexStore.Close()
 
-	fmt.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
+	log.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
 	fileInfos, err := longtail.GetFilesRecursively(fs, sourceFolderPath)
 	if err != nil {
 		return err
@@ -156,15 +185,15 @@ func upSyncVersion(
 	defer fileInfos.Dispose()
 
 	pathCount := fileInfos.GetFileCount()
-	fmt.Printf("Found %d assets\n", int(pathCount))
+	log.Printf("Found %d assets\n", int(pathCount))
 
-	compressionType := getCompressionAlgorithm(compressionAlgorithm)
-	compressionTypes := make([]uint32, pathCount)
-	for i := uint32(0); i < pathCount; i++ {
-		compressionTypes[i] = compressionType
+	compressionType, err := getCompressionType(compressionAlgorithm)
+	if err != nil {
+		return err
 	}
+	compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
-	fmt.Printf("Indexing `%s`\n", sourceFolderPath)
+	log.Printf("Indexing `%s`\n", sourceFolderPath)
 	vindex, err := longtail.CreateVersionIndex(
 		fs,
 		hash,
@@ -241,7 +270,7 @@ func upSyncVersion(
 		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
-		fmt.Printf("Storing %d blocks to `%s`\n", int(blockCount), blobStoreURI)
+		log.Printf("Storing %d blocks to `%s`\n", int(blockCount), blobStoreURI)
 		workerCount := uint32(runtime.NumCPU())
 		if workerCount > blockCount {
 			workerCount = blockCount
@@ -252,10 +281,9 @@ func upSyncVersion(
 		for i := uint32(0); i < workerCount; i++ {
 			start := (blockCount * i) / workerCount
 			end := ((blockCount * (i + 1)) / workerCount)
-			//			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
 			go func(start uint32, end uint32) {
 
-				workerIndexStore, err := CreateBlobStoreForURI(blobStoreURI)
+				workerIndexStore, err := createBlobStoreForURI(blobStoreURI)
 				if err != nil {
 					log.Printf("Failed to connect to: `%s`, %v", blobStoreURI, err)
 					wg.Done()
@@ -343,9 +371,9 @@ func downSyncVersion(
 	creg := longtail.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	fmt.Printf("Connecting to `%v`\n", blobStoreURI)
+	log.Printf("Connecting to `%v`\n", blobStoreURI)
 	var indexStore BlobStore
-	indexStore, err := CreateBlobStoreForURI(blobStoreURI)
+	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
@@ -363,7 +391,7 @@ func downSyncVersion(
 		return err
 	}
 
-	fmt.Printf("Indexing files and folders in `%s`\n", targetFolderPath)
+	log.Printf("Indexing files and folders in `%s`\n", targetFolderPath)
 	fileInfos, err := longtail.GetFilesRecursively(fs, targetFolderPath)
 	if err != nil {
 		return err
@@ -371,13 +399,9 @@ func downSyncVersion(
 	defer fileInfos.Dispose()
 
 	pathCount := fileInfos.GetFileCount()
-	fmt.Printf("Found %d assets\n", int(pathCount))
+	log.Printf("Found %d assets\n", int(pathCount))
 
-	compressionType := longtail.GetLizardDefaultCompressionType()
-	compressionTypes := make([]uint32, pathCount)
-	for i := uint32(0); i < pathCount; i++ {
-		compressionTypes[i] = compressionType
-	}
+	compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
 	localVersionIndex, err := longtail.CreateVersionIndex(
 		fs,
@@ -455,7 +479,7 @@ func downSyncVersion(
 		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
-		fmt.Printf("Fetching %d blocks from `%s`\n", int(blockCount), blobStoreURI)
+		log.Printf("Fetching %d blocks from `%s`\n", int(blockCount), blobStoreURI)
 		workerCount := uint32(runtime.NumCPU())
 		if workerCount > blockCount {
 			workerCount = blockCount
@@ -466,9 +490,8 @@ func downSyncVersion(
 		for i := uint32(0); i < workerCount; i++ {
 			start := (blockCount * i) / workerCount
 			end := ((blockCount * (i + 1)) / workerCount)
-			//			fmt.Printf("Launching worker %d, to copy range %d to %d\n", i, start, end-1)
 			go func(start uint32, end uint32) {
-				workerIndexStore, err := CreateBlobStoreForURI(blobStoreURI)
+				workerIndexStore, err := createBlobStoreForURI(blobStoreURI)
 				if err != nil {
 					log.Printf("Failed to connect to: `%s`, %v", blobStoreURI, err)
 					wg.Done()
@@ -559,7 +582,7 @@ var (
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
 	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Force compression algorithm, default is automatic selection based on content (currently Lizard for everything)").Enum("Lizard", "Brotli", "None")
+	compression       = commandUpSync.Flag("compression-algorithm", "Force compression algorithm, default is `Lizard`)").Enum("Lizard", "Brotli", "Dynamic", "None")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
@@ -575,10 +598,6 @@ func main() {
 	logLevel, err := parseLevel(*logLevel)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if compression != nil {
-		fmt.Println("Compression: %s\n", *compression)
 	}
 
 	l := longtail.SetLogger(logger, &loggerData{})

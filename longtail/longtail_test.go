@@ -337,10 +337,21 @@ func TestReadWriteVersionIndex(t *testing.T) {
 	}
 }
 
+type assertData struct {
+	t *testing.T
+}
+
+func testAssertFunc(context interface{}, expression string, file string, line int) {
+	fmt.Printf("ASSERT: %s %s:%d", expression, file, line)
+}
+
 func TestUpSyncVersion(t *testing.T) {
 	l := SetLogger(logger, &loggerData{t: t})
 	defer ClearLogger(l)
 	SetLogLevel(0)
+
+	SetAssert(testAssertFunc, &assertData{t: t})
+	defer ClearAssert()
 
 	upsyncStorageAPI := CreateInMemStorageAPI()
 	defer upsyncStorageAPI.Dispose()

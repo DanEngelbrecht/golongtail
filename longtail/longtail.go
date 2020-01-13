@@ -120,6 +120,16 @@ func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
 	return logProxyData{logFunc, context}
 }
 
+type assertFunc func(context interface{}, expression string, file string, line int)
+type assertProxyData struct {
+	assertFunc assertFunc
+	Context interface{}
+}
+
+func makeAssertProxy(assertFunc assertFunc, context interface{}) assertProxyData {
+	return assertProxyData{assertFunc, context}
+}
+
 /*
 // WriteToStorage ...
 func WriteToStorage(storageAPI Longtail_StorageAPI, path string, data []byte) error {
@@ -737,4 +747,28 @@ func ClearLogger(logger unsafe.Pointer) {
 //SetLogLevel ...
 func SetLogLevel(level int) {
 	C.Longtail_SetLogLevel(C.int(level))
+}
+
+var activeAssertFunc assertFunc
+var activeAssertContext interface{}
+
+//SetAssert ...
+func SetAssert(assertFunc assertFunc, assertContext interface{}) {
+	activeAssertFunc = assertFunc
+	activeAssertContext = assertContext
+	C.Longtail_SetAssert(C.Longtail_Assert(C.assertProxy))
+}
+
+//ClearAssert ...
+func ClearAssert() {
+	C.Longtail_SetAssert(C.Longtail_Assert(nil))
+	activeAssertFunc = nil
+	activeAssertContext = nil
+}
+
+//export assertProxy
+func assertProxy(expression *C.char, file *C.char, line C.int) {
+	if activeAssertFunc != nil {
+		activeAssertFunc(activeAssertContext, C.GoString(expression), C.GoString(file), int(line))
+	}
 }

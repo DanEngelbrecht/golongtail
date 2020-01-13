@@ -13,6 +13,8 @@ void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 
 void logProxy(void* context, int level, char* str);
 
+void assertProxy(char* expression, char* file, int line);
+
 static int Storage_Write(struct Longtail_StorageAPI* api, const char* path, uint64_t length, const void* input)
 {
     Longtail_StorageAPI_HOpenFile f;

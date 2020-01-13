@@ -157,11 +157,11 @@ func createHashAPIFromIdentifier(hashIdentifier uint32) (longtail.Longtail_HashA
 	if hashIdentifier == longtail.GetBlake2HashIdentifier() {
 		return longtail.CreateBlake2HashAPI(), nil
 	}
-	return longtail.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash identifier: `%d`", hashIdentifier)
+	return longtail.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
 }
 
 func createHashAPI(hashAlgorithm *string) (longtail.Longtail_HashAPI, error) {
-	if hashAlgorithm == nil {
+	if (hashAlgorithm == nil) || (*hashAlgorithm == "") {
 		return longtail.CreateMeowHashAPI(), nil
 	}
 	switch *hashAlgorithm {
@@ -213,6 +213,10 @@ func upSyncVersion(
 			return err
 		}
 	} else {
+		hash, err = createHashAPI(hashAlgorithm)
+		if err != nil {
+			return err
+		}
 		remoteContentIndex, err = longtail.CreateContentIndex(
 			hash,
 			0,
@@ -221,10 +225,6 @@ func upSyncVersion(
 			nil,
 			0,
 			0)
-		if err != nil {
-			return err
-		}
-		hash, err = createHashAPI(hashAlgorithm)
 		if err != nil {
 			return err
 		}
@@ -634,6 +634,10 @@ var (
 	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").String()
 )
 
+func cmdAssertFunc(context interface{}, expression string, file string, line int) {
+	log.Fatalf("ASSERT: %s %s:%d", expression, file, line)
+}
+
 func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.CommandLine.DefaultEnvars()
@@ -647,6 +651,9 @@ func main() {
 	l := longtail.SetLogger(logger, &loggerData{})
 	defer longtail.ClearLogger(l)
 	longtail.SetLogLevel(logLevel)
+
+	longtail.SetAssert(cmdAssertFunc, nil)
+	defer longtail.ClearAssert()
 
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():

@@ -121,7 +121,7 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 		return longtail.GetLizardDefaultCompressionType(), nil
 	case "None":
 		return noCompressionType, nil
-	case "Auto":
+	case "Dynamic":
 		return dynamicCompressionType, nil
 	}
 	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
@@ -303,7 +303,7 @@ func upSyncVersion(
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
 		log.Printf("Storing %d blocks to `%s`\n", int(blockCount), blobStoreURI)
-		workerCount := uint32(runtime.NumCPU())
+		workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
 		if workerCount > blockCount {
 			workerCount = blockCount
 		}
@@ -523,7 +523,7 @@ func downSyncVersion(
 		// to GCS for each worker as You cant write to two objects to the same connection apparently
 		blockCount := missingPaths.GetPathCount()
 		log.Printf("Fetching %d blocks from `%s`\n", int(blockCount), blobStoreURI)
-		workerCount := uint32(runtime.NumCPU())
+		workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
 		if workerCount > blockCount {
 			workerCount = blockCount
 		}
@@ -617,7 +617,7 @@ func parseLevel(lvl string) (int, error) {
 var (
 	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
+	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("1048576").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
 	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm to use if it can't be determined from remote store, default is `Meow`").Enum("Meow", "Blake2")

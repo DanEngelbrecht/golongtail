@@ -208,11 +208,16 @@ func TestInit(t *testing.T) {
 		t.Errorf("CreateInMemStorageAPI() storageAPI.cStorageAPI == nil")
 	}
 	defer storageAPI.Dispose()
-	hashAPI := CreateBlake2HashAPI()
-	if hashAPI.cHashAPI == nil {
+	blake2API := CreateBlake2HashAPI()
+	if blake2API.cHashAPI == nil {
 		t.Errorf("CreateBlake2HashAPI() hashAPI.cHashAPI == nil")
 	}
-	defer hashAPI.Dispose()
+	defer blake2API.Dispose()
+	meowAPI := CreateMeowHashAPI()
+	if meowAPI.cHashAPI == nil {
+		t.Errorf("CreateMeowHashAPI() hashAPI.cHashAPI == nil")
+	}
+	defer meowAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	if jobAPI.cJobAPI == nil {
 		t.Errorf("CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
@@ -339,7 +344,7 @@ func TestUpSyncVersion(t *testing.T) {
 
 	upsyncStorageAPI := CreateInMemStorageAPI()
 	defer upsyncStorageAPI.Dispose()
-	hashAPI := CreateBlake2HashAPI()
+	hashAPI := CreateMeowHashAPI()
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()

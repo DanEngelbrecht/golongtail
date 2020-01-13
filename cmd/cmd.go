@@ -61,7 +61,6 @@ func progress(context interface{}, total int, current int) {
 	}
 }
 
-
 // TODO: Would be nicer if the longtail api provided a way to read/write indexes directly from a memory chunk...
 
 func storeTempBlob(s BlobStore, ctx context.Context, key string, fs longtail.Longtail_StorageAPI) (tempPath string, err error) {
@@ -92,7 +91,7 @@ func un(s string, startTime time.Time) {
 func createBlobStoreForURI(uri string) (BlobStore, error) {
 	blobStoreURL, err := url.Parse(*storageURI)
 	if err == nil {
-		switch (blobStoreURL.Scheme) {
+		switch blobStoreURL.Scheme {
 		case "gs":
 			return NewGCSBlobStore(blobStoreURL)
 		case "s3":
@@ -115,7 +114,7 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	if compressionAlgorithm == nil || *compressionAlgorithm == "" {
 		return longtail.GetLizardDefaultCompressionType(), nil
 	}
-	switch(*compressionAlgorithm) {
+	switch *compressionAlgorithm {
 	case "Lizard":
 		return longtail.GetLizardDefaultCompressionType(), nil
 	case "Brotli":
@@ -128,7 +127,7 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
 }
 
-func getCompressionTypesForFiles(fileInfos longtail.Longtail_FileInfos, compressionType uint32) ([]uint32) {
+func getCompressionTypesForFiles(fileInfos longtail.Longtail_FileInfos, compressionType uint32) []uint32 {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)
 	if compressionType != dynamicCompressionType {
@@ -151,6 +150,29 @@ func getCompressionTypesForFiles(fileInfos longtail.Longtail_FileInfos, compress
 	return compressionTypes
 }
 
+func createHashAPIFromIdentifier(hashIdentifier uint32) (longtail.Longtail_HashAPI, error) {
+	if hashIdentifier == longtail.GetMeowHashIdentifier() {
+		return longtail.CreateMeowHashAPI(), nil
+	}
+	if hashIdentifier == longtail.GetBlake2HashIdentifier() {
+		return longtail.CreateBlake2HashAPI(), nil
+	}
+	return longtail.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash identifier: `%d`", hashIdentifier)
+}
+
+func createHashAPI(hashAlgorithm *string) (longtail.Longtail_HashAPI, error) {
+	if hashAlgorithm == nil {
+		return longtail.CreateMeowHashAPI(), nil
+	}
+	switch *hashAlgorithm {
+	case "meow":
+		return createHashAPIFromIdentifier(longtail.GetMeowHashIdentifier())
+	case "blake2":
+		return createHashAPIFromIdentifier(longtail.GetBlake2HashIdentifier())
+	}
+	return longtail.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+}
+
 func upSyncVersion(
 	blobStoreURI string,
 	sourceFolderPath string,
@@ -159,12 +181,11 @@ func upSyncVersion(
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
-	compressionAlgorithm *string) error {
+	compressionAlgorithm *string,
+	hashAlgorithm *string) error {
 	defer un(trace("upSyncVersion " + targetFilePath))
 	fs := longtail.CreateFSStorageAPI()
 	defer fs.Dispose()
-	hash := longtail.CreateBlake2HashAPI()
-	defer hash.Dispose()
 	jobs := longtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
 	creg := longtail.CreateDefaultCompressionRegistry()
@@ -176,6 +197,39 @@ func upSyncVersion(
 		return err
 	}
 	defer indexStore.Close()
+
+	var hash longtail.Longtail_HashAPI
+	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
+	var remoteContentIndex longtail.Longtail_ContentIndex
+	remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
+	if err == nil {
+		defer os.Remove(remoteContentIndexTmpPath)
+		remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
+		if err != nil {
+			return err
+		}
+		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+		if err != nil {
+			return err
+		}
+	} else {
+		remoteContentIndex, err = longtail.CreateContentIndex(
+			hash,
+			0,
+			nil,
+			nil,
+			nil,
+			0,
+			0)
+		if err != nil {
+			return err
+		}
+		hash, err = createHashAPI(hashAlgorithm)
+		if err != nil {
+			return err
+		}
+	}
+	defer hash.Dispose()
 
 	log.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
 	fileInfos, err := longtail.GetFilesRecursively(fs, sourceFolderPath)
@@ -214,28 +268,6 @@ func upSyncVersion(
 	err = longtail.WriteVersionIndex(fs, vindex, versionTempPath)
 	if err != nil {
 		return err
-	}
-
-	var remoteContentIndex longtail.Longtail_ContentIndex
-	remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
-	if err == nil {
-		defer os.Remove(remoteContentIndexTmpPath)
-		remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
-		if err != nil {
-			return err
-		}
-	} else {
-		remoteContentIndex, err = longtail.CreateContentIndex(
-			hash,
-			0,
-			nil,
-			nil,
-			nil,
-			0,
-			0)
-		if err != nil {
-			return err
-		}
 	}
 
 	missingContentIndex, err := longtail.CreateMissingContent(
@@ -360,12 +392,11 @@ func downSyncVersion(
 	localCachePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
-	maxChunksPerBlock uint32) error {
+	maxChunksPerBlock uint32,
+	hashAlgorithm *string) error {
 	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtail.CreateFSStorageAPI()
 	defer fs.Dispose()
-	hash := longtail.CreateBlake2HashAPI()
-	defer hash.Dispose()
 	jobs := longtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
 	creg := longtail.CreateDefaultCompressionRegistry()
@@ -379,8 +410,42 @@ func downSyncVersion(
 	}
 	defer indexStore.Close()
 
+	var hash longtail.Longtail_HashAPI
+	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
+	var remoteContentIndex longtail.Longtail_ContentIndex
+	remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
+	if err == nil {
+		defer os.Remove(remoteContentIndexTmpPath)
+		remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
+		if err != nil {
+			return err
+		}
+		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+		if err != nil {
+			return err
+		}
+	} else {
+		remoteContentIndex, err = longtail.CreateContentIndex(
+			hash,
+			0,
+			nil,
+			nil,
+			nil,
+			0,
+			0)
+		if err != nil {
+			return err
+		}
+		hash, err = createHashAPI(hashAlgorithm)
+		if err != nil {
+			return err
+		}
+	}
+	defer hash.Dispose()
+
 	var remoteVersionIndex longtail.Longtail_VersionIndex
 
+	log.Printf("Fetching remote version index from `%s`\n", sourceFilePath)
 	remoteVersionTmpPath, err := storeTempBlob(indexStore, context.Background(), sourceFilePath, fs)
 	if err != nil {
 		return err
@@ -443,28 +508,6 @@ func downSyncVersion(
 	defer missingContentIndex.Dispose()
 
 	if missingContentIndex.GetBlockCount() > 0 {
-		var remoteContentIndex longtail.Longtail_ContentIndex
-		remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
-		if err == nil {
-			defer os.Remove(remoteContentIndexTmpPath)
-			remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
-			if err != nil {
-				return err
-			}
-		} else {
-			remoteContentIndex, err = longtail.CreateContentIndex(
-				hash,
-				0,
-				nil,
-				nil,
-				nil,
-				0,
-				0)
-			if err != nil {
-				return err
-			}
-		}
-
 		neededContentIndex, err := longtail.RetargetContent(remoteContentIndex, missingContentIndex)
 		if err != nil {
 			return err
@@ -577,6 +620,7 @@ var (
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
+	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm to use if it can't be determined from remote store, default is `Meow`").Enum("Meow", "Blake2")
 
 	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
@@ -606,12 +650,12 @@ func main() {
 
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():
-		err := upSyncVersion(*storageURI, *sourceFolderPath, *targetFilePath, *upSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, compression)
+		err := upSyncVersion(*storageURI, *sourceFolderPath, *targetFilePath, *upSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, compression, hashing)
 		if err != nil {
 			log.Fatal(err)
 		}
 	case commandDownSync.FullCommand():
-		err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock)
+		err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, hashing)
 		if err != nil {
 			log.Fatal(err)
 		}

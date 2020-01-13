@@ -180,12 +180,28 @@ func (contentIndex *Longtail_ContentIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(contentIndex.cContentIndex))
 }
 
+func (contentIndex *Longtail_ContentIndex) GetVersion() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_Version)
+}
+
+func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_HashAPI)
+}
+
 func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {
 	return uint64(*contentIndex.cContentIndex.m_BlockCount)
 }
 
 func (versionIndex *Longtail_VersionIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))
+}
+
+func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_Version)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetHashAPI() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_HashAPI)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetCount() uint32 {
@@ -205,9 +221,24 @@ func CreateBlake2HashAPI() Longtail_HashAPI {
 	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateBlake2HashAPI()}
 }
 
+// CreateMeowHashAPI ...
+func CreateMeowHashAPI() Longtail_HashAPI {
+	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateMeowHashAPI()}
+}
+
 // Longtail_HashAPI.Dispose() ...
 func (hashAPI *Longtail_HashAPI) Dispose() {
 	C.Longtail_DisposeAPI(&hashAPI.cHashAPI.m_API)
+}
+
+// GetBlake2HashIdentifier() ...
+func GetBlake2HashIdentifier() uint32 {
+	return uint32(C.GetBlake2HashIdentifier())
+}
+
+// GetMeowHashIdentifier() ...
+func GetMeowHashIdentifier() uint32 {
+	return uint32(C.GetMeowHashIdentifier())
 }
 
 // CreateFSStorageAPI ...

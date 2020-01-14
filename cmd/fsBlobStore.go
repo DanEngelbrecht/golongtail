@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+
+	"github.com/DanEngelbrecht/golongtail/longtail"
 )
 
 // FSBloblStore is the base object for all chunk and index stores with FS backing
@@ -54,4 +56,14 @@ func (s FSBloblStore) PutBlob(ctx context.Context, key string, contentType strin
 func (s FSBloblStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	blobPath := path.Join(s.root, key)
 	return ioutil.ReadFile(blobPath)
+}
+
+// AddContent ...
+func (s FSBloblStore) PutContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) error {
+	return nil
+}
+
+// GetContent ...
+func (s FSBloblStore) GetContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) (error) {
+	return nil
 }

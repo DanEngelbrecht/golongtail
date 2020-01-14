@@ -10,7 +10,6 @@ import (
 	"path"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtail"
@@ -59,24 +58,6 @@ func progress(context interface{}, total int, current int) {
 		}
 		fmt.Printf(" Done\n")
 	}
-}
-
-// TODO: Would be nicer if the longtail api provided a way to read/write indexes directly from a memory chunk...
-
-func storeTempBlob(s BlobStore, ctx context.Context, key string, fs longtail.Longtail_StorageAPI) (tempPath string, err error) {
-	remoteBlob, err := s.GetBlob(context.Background(), key)
-	if err != nil {
-		return "", err
-	}
-	tmpName := strings.Replace(key, "/", "_", -1)
-	tmpName = strings.Replace(tmpName, "\\", "_", -1)
-	tmpName = strings.Replace(tmpName, ":", "_", -1)
-	storeTempPath := path.Join(os.TempDir(), "longtail_"+tmpName+".tmp")
-	err = ioutil.WriteFile(storeTempPath, remoteBlob, 0644)
-	if err != nil {
-		return "", err
-	}
-	return storeTempPath, nil
 }
 
 func trace(s string) (string, time.Time) {
@@ -201,10 +182,9 @@ func upSyncVersion(
 	var hash longtail.Longtail_HashAPI
 	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
 	var remoteContentIndex longtail.Longtail_ContentIndex
-	remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
+	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
-		defer os.Remove(remoteContentIndexTmpPath)
-		remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
+		remoteContentIndex, err = longtail.ReadContentIndexFromBuffer(remoteContentIndexBlob)
 		if err != nil {
 			return err
 		}
@@ -264,8 +244,7 @@ func upSyncVersion(
 	}
 	defer vindex.Dispose()
 
-	versionTempPath := path.Join(os.TempDir(), "version.lvi")
-	err = longtail.WriteVersionIndex(fs, vindex, versionTempPath)
+	versionBlob, err := longtail.WriteVersionIndexToBuffer(vindex)
 	if err != nil {
 		return err
 	}
@@ -293,91 +272,16 @@ func upSyncVersion(
 			vindex,
 			sourceFolderPath,
 			localCachePath)
-
-		missingPaths, err := longtail.GetPathsForContentBlocks(missingContentIndex)
 		if err != nil {
 			return err
 		}
-
-		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
-		// to GCS for each worker as You cant write to two objects to the same connection apparently
-		blockCount := missingPaths.GetPathCount()
-		log.Printf("Storing %d blocks to `%s`\n", int(blockCount), blobStoreURI)
-		workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
-		if workerCount > blockCount {
-			workerCount = blockCount
-		}
-		// TODO: Refactor using channels and add proper progress
-		var wg sync.WaitGroup
-		wg.Add(int(workerCount))
-		for i := uint32(0); i < workerCount; i++ {
-			start := (blockCount * i) / workerCount
-			end := ((blockCount * (i + 1)) / workerCount)
-			go func(start uint32, end uint32) {
-
-				workerIndexStore, err := createBlobStoreForURI(blobStoreURI)
-				if err != nil {
-					log.Printf("Failed to connect to: `%s`, %v", blobStoreURI, err)
-					wg.Done()
-					return
-				}
-				defer workerIndexStore.Close()
-
-				for p := start; p < end; p++ {
-					path := longtail.GetPath(missingPaths, p)
-
-					if indexStore.HasBlob(context.Background(), "chunks/"+path) {
-						continue
-					}
-
-					block, err := longtail.ReadFromStorage(fs, localCachePath, path)
-					if err != nil {
-						log.Printf("Failed to read block: `%s`, %v", path, err)
-						continue
-					}
-
-					err = indexStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
-					if err != nil {
-						log.Printf("Failed to write block: `%s`, %v", path, err)
-						continue
-					}
-					//					log.Printf("Copied block: `%s` from `%s` to `%s`", path, localCachePath, "chunks")
-				}
-				wg.Done()
-			}(start, end)
-		}
-		wg.Wait()
-
-		newContentIndex, err := longtail.MergeContentIndex(missingContentIndex, remoteContentIndex)
-		if err != nil {
-			return err
-		}
-		defer newContentIndex.Dispose()
-
-		// TODO: Would be nicer if the longtail api provided a way to read/write indexes directly from a memory chunk...
-		storeTempPath := path.Join(os.TempDir(), "store.lci")
-		err = longtail.WriteContentIndex(fs, newContentIndex, storeTempPath)
-		if err != nil {
-			return err
-		}
-
-		newContentIndexData, err := ioutil.ReadFile(storeTempPath)
-		if err != nil {
-			return err
-		}
-
-		err = indexStore.PutBlob(context.Background(), "store.lci", "application/octet-stream", newContentIndexData)
+		err = indexStore.PutContent(context.Background(), missingContentIndex, fs, localCachePath)
 		if err != nil {
 			return err
 		}
 	}
 
-	vindexFileData, err := ioutil.ReadFile(versionTempPath)
-	if err != nil {
-		return err
-	}
-
-	err = indexStore.PutBlob(context.Background(), targetFilePath, "application/octet-stream", vindexFileData)
+	err = indexStore.PutBlob(context.Background(), targetFilePath, "application/octet-stream", versionBlob)
 	if err != nil {
 		return err
 	}
@@ -413,10 +317,9 @@ func downSyncVersion(
 	var hash longtail.Longtail_HashAPI
 	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
 	var remoteContentIndex longtail.Longtail_ContentIndex
-	remoteContentIndexTmpPath, err := storeTempBlob(indexStore, context.Background(), "store.lci", fs)
+	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
-		defer os.Remove(remoteContentIndexTmpPath)
-		remoteContentIndex, err = longtail.ReadContentIndex(fs, remoteContentIndexTmpPath)
+		remoteContentIndex, err = longtail.ReadContentIndexFromBuffer(remoteContentIndexBlob)
 		if err != nil {
 			return err
 		}
@@ -446,12 +349,11 @@ func downSyncVersion(
 	var remoteVersionIndex longtail.Longtail_VersionIndex
 
 	log.Printf("Fetching remote version index from `%s`\n", sourceFilePath)
-	remoteVersionTmpPath, err := storeTempBlob(indexStore, context.Background(), sourceFilePath, fs)
+	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(remoteVersionTmpPath)
-	remoteVersionIndex, err = longtail.ReadVersionIndex(fs, remoteVersionTmpPath)
+	remoteVersionIndex, err = longtail.ReadVersionIndexFromBuffer(remoteVersionBlob)
 	if err != nil {
 		return err
 	}
@@ -514,54 +416,10 @@ func downSyncVersion(
 		}
 		defer neededContentIndex.Dispose()
 
-		missingPaths, err := longtail.GetPathsForContentBlocks(neededContentIndex)
+		err = indexStore.GetContent(context.Background(), neededContentIndex, fs, localCachePath)
 		if err != nil {
 			return err
 		}
-
-		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
-		// to GCS for each worker as You cant write to two objects to the same connection apparently
-		blockCount := missingPaths.GetPathCount()
-		log.Printf("Fetching %d blocks from `%s`\n", int(blockCount), blobStoreURI)
-		workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
-		if workerCount > blockCount {
-			workerCount = blockCount
-		}
-		// TODO: Refactor using channels and add proper progress
-		var wg sync.WaitGroup
-		wg.Add(int(workerCount))
-		for i := uint32(0); i < workerCount; i++ {
-			start := (blockCount * i) / workerCount
-			end := ((blockCount * (i + 1)) / workerCount)
-			go func(start uint32, end uint32) {
-				workerIndexStore, err := createBlobStoreForURI(blobStoreURI)
-				if err != nil {
-					log.Printf("Failed to connect to: `%s`, %v", blobStoreURI, err)
-					wg.Done()
-					return
-				}
-				defer workerIndexStore.Close()
-
-				for p := start; p < end; p++ {
-					path := longtail.GetPath(missingPaths, p)
-
-					blockData, err := indexStore.GetBlob(context.Background(), "chunks/"+path)
-					if err != nil {
-						log.Printf("Failed to read block: `%s`, %v", path, err)
-						continue
-					}
-
-					err = longtail.WriteToStorage(fs, localCachePath, path, blockData)
-					if err != nil {
-						log.Printf("Failed to store block: `%s`, %v", path, err)
-						continue
-					}
-					//					log.Printf("Copied block: `%s` from `%s` to `%s`", path, "chunks", localCachePath)
-				}
-				wg.Done()
-			}(start, end)
-		}
-		wg.Wait()
 
 		mergedContentIndex, err := longtail.MergeContentIndex(localContentIndex, neededContentIndex)
 		if err != nil {

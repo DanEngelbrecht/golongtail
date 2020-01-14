@@ -6,7 +6,7 @@ BIKESHED_SRC="../lib/bikeshed/*.c"
 BLAKE2_SRC="../lib/blake2/*.c ../lib/blake2/ext/*.c"
 FILESTORAGE_SRC="../lib/filestorage/*.c"
 MEMSTORAGE_SRC="../lib/memstorage/*.c"
-MEOWHASH_SRC=""../lib/meowhash/*.c"
+MEOWHASH_SRC="../lib/meowhash/*.c"
 LIZARD_SRC="../lib/lizard/*.c ../lib/lizard/ext/*.c ../lib/lizard/ext/entropy/*.c ../lib/lizard/ext/xxhash/*.c"
 BROTLI_SRC="../lib/brotli/*.c ../lib/brotli/ext/common/*.c ../lib/brotli/ext/dec/*.c ../lib/brotli/ext/enc/*.c ../lib/brotli/ext/fuzz/*.c"
 rm *

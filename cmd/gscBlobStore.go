@@ -5,18 +5,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"runtime"
 	"net/url"
+	"runtime"
 	"sync"
+	"sync/atomic"
+	"time"
 
-	"github.com/DanEngelbrecht/golongtail/longtail"
 	"cloud.google.com/go/storage"
+	"github.com/DanEngelbrecht/golongtail/longtail"
 	"github.com/pkg/errors"
 )
 
 // GCSBlobStore is the base object for all chunk and index stores with GCS backing
 type GCSBlobStore struct {
-	url *url.URL
+	url      *url.URL
 	Location string
 	client   *storage.Client
 	bucket   *storage.BucketHandle
@@ -101,6 +103,32 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
+func dirtyProgress(task string, blockCount uint32, blocksCopied *uint32) {
+	oldPercent := uint32(0)
+	inited := false
+	current := *blocksCopied
+	for current < blockCount {
+		total := blockCount
+		percentDone := (100 * current) / total
+		if (percentDone - oldPercent) >= 5 {
+			if !inited {
+				fmt.Printf("%s: ", task)
+				inited = true
+			}
+			fmt.Printf("%d%% ", percentDone)
+			oldPercent = percentDone
+		}
+		current = *blocksCopied
+		time.Sleep(100 * time.Millisecond)
+	}
+	if inited {
+		if oldPercent != 100 {
+			fmt.Printf("100%%")
+		}
+		fmt.Printf(" Done\n")
+	}
+}
+
 // PutContent ...
 func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) error {
 	paths, err := longtail.GetPathsForContentBlocks(contentIndex)
@@ -116,13 +144,22 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 	if workerCount > blockCount {
 		workerCount = blockCount
 	}
-	// TODO: Refactor using channels and add proper progress
+
+	var blocksCopied uint32
+
 	var wg sync.WaitGroup
 	wg.Add(int(workerCount))
+	var pg sync.WaitGroup
+	pg.Add(int(1))
+	go func() {
+		dirtyProgress("Uploading blocks", blockCount, &blocksCopied)
+		pg.Done()
+	}()
+
 	for i := uint32(0); i < workerCount; i++ {
 		start := (blockCount * i) / workerCount
 		end := ((blockCount * (i + 1)) / workerCount)
-		go func(start uint32, end uint32) {
+		go func(start uint32, end uint32, blocksCopied *uint32) {
 
 			workerStore, err := NewGCSBlobStore(s.url)
 			if err != nil {
@@ -136,25 +173,35 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 				path := longtail.GetPath(paths, p)
 
 				if workerStore.HasBlob(context.Background(), "chunks/"+path) {
+					atomic.AddUint32(blocksCopied, 1)
 					continue
 				}
 
 				block, err := longtail.ReadFromStorage(fs, contentPath, path)
 				if err != nil {
 					log.Printf("Failed to read block: `%s`, %v", path, err)
-					continue
+					break
 				}
 
 				err = workerStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
 				if err != nil {
 					log.Printf("Failed to write block: `%s`, %v", path, err)
-					continue
+					break
 				}
+				atomic.AddUint32(blocksCopied, 1)
 			}
 			wg.Done()
-		}(start, end)
+		}(start, end, &blocksCopied)
 	}
+
 	wg.Wait()
+	missingCount := blockCount - blocksCopied
+	atomic.AddUint32(&blocksCopied, missingCount)
+
+	pg.Wait()
+	if missingCount > 0 {
+		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
+	}
 
 	hash, err := createHashAPIFromIdentifier(contentIndex.GetHashAPI())
 	if err != nil {
@@ -166,11 +213,11 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 	if err != nil {
 		return errors.Wrap(err, s.String())
 	}
-	objHandle := s.bucket.Object("index/store.lci")
+	objHandle := s.bucket.Object("store.lci")
 	for {
 		writeCondition := storage.Conditions{DoesNotExist: true}
-		objAttrs, err := objHandle.Attrs(ctx)
-		if err == nil {
+		objAttrs, _ := objHandle.Attrs(ctx)
+		if objAttrs != nil {
 			writeCondition = storage.Conditions{GenerationMatch: objAttrs.Generation}
 			reader, err := objHandle.If(writeCondition).NewReader(ctx)
 			if err != nil {
@@ -179,8 +226,8 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 			if reader == nil {
 				continue
 			}
-			defer reader.Close()
 			blob, err := ioutil.ReadAll(reader)
+			reader.Close()
 			if err != nil {
 				return errors.Wrap(err, s.String())
 			}
@@ -200,14 +247,18 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 			if err != nil {
 				return errors.Wrap(err, s.String())
 			}
-		} else if err != storage.ErrObjectNotExist {
-			return errors.Wrap(err, s.String())
 		}
 		writer := objHandle.If(writeCondition).NewWriter(ctx)
 		if writer == nil {
 			continue
 		}
 		_, err = writer.Write(storeBlob)
+		if err != nil {
+			writer.CloseWithError(err)
+			return errors.Wrap(err, s.String())
+		}
+		writer.Close()
+		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 		if err != nil {
 			return errors.Wrap(err, s.String())
 		}
@@ -217,7 +268,7 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 }
 
 // GetContent ...
-func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) (error) {
+func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) error {
 	missingPaths, err := longtail.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
@@ -231,13 +282,22 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex longtail.Long
 	if workerCount > blockCount {
 		workerCount = blockCount
 	}
-	// TODO: Refactor using channels and add proper progress
+
+	var blocksCopied uint32
+
 	var wg sync.WaitGroup
 	wg.Add(int(workerCount))
+	var pg sync.WaitGroup
+	pg.Add(int(1))
+	go func() {
+		dirtyProgress("Downloading blocks", blockCount, &blocksCopied)
+		pg.Done()
+	}()
+
 	for i := uint32(0); i < workerCount; i++ {
 		start := (blockCount * i) / workerCount
 		end := ((blockCount * (i + 1)) / workerCount)
-		go func(start uint32, end uint32) {
+		go func(start uint32, end uint32, blocksCopied *uint32) {
 			workerStore, err := NewGCSBlobStore(s.url)
 			if err != nil {
 				log.Printf("Failed to connect to: `%s`, %v", s.url, err)
@@ -252,20 +312,28 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex longtail.Long
 				blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
 				if err != nil {
 					log.Printf("Failed to read block: `%s`, %v", path, err)
-					continue
+					break
 				}
 
 				err = longtail.WriteToStorage(fs, contentPath, path, blockData)
 				if err != nil {
 					log.Printf("Failed to store block: `%s`, %v", path, err)
-					continue
+					break
 				}
-				//					log.Printf("Copied block: `%s` from `%s` to `%s`", path, "chunks", contentPath)
+				atomic.AddUint32(blocksCopied, 1)
 			}
 			wg.Done()
-		}(start, end)
+		}(start, end, &blocksCopied)
 	}
+
 	wg.Wait()
+	missingCount := blockCount - blocksCopied
+	atomic.AddUint32(&blocksCopied, missingCount)
+
+	pg.Wait()
+	if missingCount > 0 {
+		return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
+	}
 
 	return nil
 }

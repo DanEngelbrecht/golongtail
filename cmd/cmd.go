@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
@@ -328,6 +327,10 @@ func downSyncVersion(
 			return err
 		}
 	} else {
+		hash, err = createHashAPI(hashAlgorithm)
+		if err != nil {
+			return err
+		}
 		remoteContentIndex, err = longtail.CreateContentIndex(
 			hash,
 			0,
@@ -336,10 +339,6 @@ func downSyncVersion(
 			nil,
 			0,
 			0)
-		if err != nil {
-			return err
-		}
-		hash, err = createHashAPI(hashAlgorithm)
 		if err != nil {
 			return err
 		}

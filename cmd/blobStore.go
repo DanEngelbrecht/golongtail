@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"strings"
-	"path"
 
 	"github.com/DanEngelbrecht/golongtail/longtail"
 )

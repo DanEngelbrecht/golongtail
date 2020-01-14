@@ -103,7 +103,7 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
-func dirtyProgress(task string, blockCount uint32, blocksCopied *uint32) {
+func dirtyGCSProgress(task string, blockCount uint32, blocksCopied *uint32) {
 	oldPercent := uint32(0)
 	inited := false
 	current := *blocksCopied
@@ -152,7 +152,7 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex longtail.Long
 	var pg sync.WaitGroup
 	pg.Add(int(1))
 	go func() {
-		dirtyProgress("Uploading blocks", blockCount, &blocksCopied)
+		dirtyGCSProgress("Uploading blocks", blockCount, &blocksCopied)
 		pg.Done()
 	}()
 
@@ -290,7 +290,7 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex longtail.Long
 	var pg sync.WaitGroup
 	pg.Add(int(1))
 	go func() {
-		dirtyProgress("Downloading blocks", blockCount, &blocksCopied)
+		dirtyGCSProgress("Downloading blocks", blockCount, &blocksCopied)
 		pg.Done()
 	}()
 

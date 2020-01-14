@@ -395,6 +395,19 @@ func CreateVersionIndex(
 	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
 }
 
+// WriteVersionIndexToBuffer ...
+func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteVersionIndexToBuffer(index.cVersionIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, fmt.Errorf("WriteVersionIndexToBuffer: failed with error %d", errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, nil
+}
+
 // WriteVersionIndex ...
 func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) error {
 	cPath := C.CString(path)
@@ -404,6 +417,18 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 		return fmt.Errorf("WriteVersionIndex: write index to `%s` failed with error %d", path, errno)
 	}
 	return nil
+}
+
+// ReadVersionIndexFromBuffer ...
+func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, error) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var vindex *C.struct_Longtail_VersionIndex
+	errno := C.Longtail_ReadVersionIndexFromBuffer(cBuffer, cSize, &vindex)
+	if errno != 0 {
+		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndexFromBuffer: failed with error %d", errno)
+	}
+	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
 }
 
 // ReadVersionIndex ...
@@ -469,6 +494,19 @@ func CreateContentIndex(
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
 
+// WriteContentIndexToBuffer ...
+func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, error) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteContentIndexToBuffer(index.cContentIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, fmt.Errorf("WriteContentIndexToBuffer: failed with error %d", errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, nil
+}
+
 // WriteContentIndex ...
 func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentIndex, path string) error {
 	cPath := C.CString(path)
@@ -478,6 +516,18 @@ func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentInd
 		return fmt.Errorf("WriteContentIndex: write index to `%s` failed with error %d", path, errno)
 	}
 	return nil
+}
+
+// ReadContentIndexFromBuffer ...
+func ReadContentIndexFromBuffer(buffer []byte) (Longtail_ContentIndex, error) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_ReadContentIndexFromBuffer(cBuffer, cSize, &cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndexFromBuffer: failed with error %d", errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
 
 // ReadContentIndex ...

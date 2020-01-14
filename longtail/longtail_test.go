@@ -1,7 +1,7 @@
 package longtail
 
 import (
-	//	"fmt"
+	"fmt"
 	"runtime"
 	"testing"
 )
@@ -335,6 +335,16 @@ func TestReadWriteVersionIndex(t *testing.T) {
 			t.Errorf("ReadVersionIndex() path %d = %s, want %s", int(i), ret, expected)
 		}
 	}
+
+	buf, err := WriteVersionIndexToBuffer(vi)
+	if err != nil {
+		t.Errorf("WriteVersionIndexToBuffer() %q != %q", err, expected)
+	}
+	viCopy, err := ReadVersionIndexFromBuffer(buf)
+	if err != nil {
+		t.Errorf("WriteVersionIndexToBuffer() %q != %q", err, expected)
+	}
+	defer viCopy.Dispose()
 }
 
 type assertData struct {
@@ -403,6 +413,17 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("GetMissingContent() err = %q, want %q", err, error(nil))
 	}
 	defer missingContentIndex.Dispose()
+
+	expected := error(nil)
+	buf, err := WriteContentIndexToBuffer(missingContentIndex)
+	if err != nil {
+		t.Errorf("WriteContentIndexToBuffer() %q != %q", err, expected)
+	}
+	ciCopy, err := ReadContentIndexFromBuffer(buf)
+	if err != nil {
+		t.Errorf("ReadContentIndexFromBuffer() %q != %q", err, expected)
+	}
+	defer ciCopy.Dispose()
 
 	var expectedBlockCount uint64 = 1
 	if missingContentIndex.GetBlockCount() != expectedBlockCount {

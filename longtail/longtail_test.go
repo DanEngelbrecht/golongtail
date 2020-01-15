@@ -1,7 +1,7 @@
 package longtail
 
 import (
-	//	"fmt"
+	"fmt"
 	"runtime"
 	"testing"
 )
@@ -208,11 +208,16 @@ func TestInit(t *testing.T) {
 		t.Errorf("CreateInMemStorageAPI() storageAPI.cStorageAPI == nil")
 	}
 	defer storageAPI.Dispose()
-	hashAPI := CreateBlake2HashAPI()
-	if hashAPI.cHashAPI == nil {
+	blake2API := CreateBlake2HashAPI()
+	if blake2API.cHashAPI == nil {
 		t.Errorf("CreateBlake2HashAPI() hashAPI.cHashAPI == nil")
 	}
-	defer hashAPI.Dispose()
+	defer blake2API.Dispose()
+	meowAPI := CreateMeowHashAPI()
+	if meowAPI.cHashAPI == nil {
+		t.Errorf("CreateMeowHashAPI() hashAPI.cHashAPI == nil")
+	}
+	defer meowAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	if jobAPI.cJobAPI == nil {
 		t.Errorf("CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
@@ -330,6 +335,24 @@ func TestReadWriteVersionIndex(t *testing.T) {
 			t.Errorf("ReadVersionIndex() path %d = %s, want %s", int(i), ret, expected)
 		}
 	}
+
+	buf, err := WriteVersionIndexToBuffer(vi)
+	if err != nil {
+		t.Errorf("WriteVersionIndexToBuffer() %q != %q", err, expected)
+	}
+	viCopy, err := ReadVersionIndexFromBuffer(buf)
+	if err != nil {
+		t.Errorf("WriteVersionIndexToBuffer() %q != %q", err, expected)
+	}
+	defer viCopy.Dispose()
+}
+
+type assertData struct {
+	t *testing.T
+}
+
+func testAssertFunc(context interface{}, expression string, file string, line int) {
+	fmt.Printf("ASSERT: %s %s:%d", expression, file, line)
 }
 
 func TestUpSyncVersion(t *testing.T) {
@@ -337,9 +360,12 @@ func TestUpSyncVersion(t *testing.T) {
 	defer ClearLogger(l)
 	SetLogLevel(0)
 
+	SetAssert(testAssertFunc, &assertData{t: t})
+	defer ClearAssert()
+
 	upsyncStorageAPI := CreateInMemStorageAPI()
 	defer upsyncStorageAPI.Dispose()
-	hashAPI := CreateBlake2HashAPI()
+	hashAPI := CreateMeowHashAPI()
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
@@ -387,6 +413,17 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("GetMissingContent() err = %q, want %q", err, error(nil))
 	}
 	defer missingContentIndex.Dispose()
+
+	expected := error(nil)
+	buf, err := WriteContentIndexToBuffer(missingContentIndex)
+	if err != nil {
+		t.Errorf("WriteContentIndexToBuffer() %q != %q", err, expected)
+	}
+	ciCopy, err := ReadContentIndexFromBuffer(buf)
+	if err != nil {
+		t.Errorf("ReadContentIndexFromBuffer() %q != %q", err, expected)
+	}
+	defer ciCopy.Dispose()
 
 	var expectedBlockCount uint64 = 1
 	if missingContentIndex.GetBlockCount() != expectedBlockCount {

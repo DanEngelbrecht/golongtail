@@ -120,6 +120,16 @@ func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
 	return logProxyData{logFunc, context}
 }
 
+type assertFunc func(context interface{}, expression string, file string, line int)
+type assertProxyData struct {
+	assertFunc assertFunc
+	Context interface{}
+}
+
+func makeAssertProxy(assertFunc assertFunc, context interface{}) assertProxyData {
+	return assertProxyData{assertFunc, context}
+}
+
 /*
 // WriteToStorage ...
 func WriteToStorage(storageAPI Longtail_StorageAPI, path string, data []byte) error {
@@ -180,12 +190,28 @@ func (contentIndex *Longtail_ContentIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(contentIndex.cContentIndex))
 }
 
+func (contentIndex *Longtail_ContentIndex) GetVersion() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_Version)
+}
+
+func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_HashAPI)
+}
+
 func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {
 	return uint64(*contentIndex.cContentIndex.m_BlockCount)
 }
 
 func (versionIndex *Longtail_VersionIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))
+}
+
+func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_Version)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetHashAPI() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_HashAPI)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetCount() uint32 {
@@ -205,9 +231,24 @@ func CreateBlake2HashAPI() Longtail_HashAPI {
 	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateBlake2HashAPI()}
 }
 
+// CreateMeowHashAPI ...
+func CreateMeowHashAPI() Longtail_HashAPI {
+	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateMeowHashAPI()}
+}
+
 // Longtail_HashAPI.Dispose() ...
 func (hashAPI *Longtail_HashAPI) Dispose() {
 	C.Longtail_DisposeAPI(&hashAPI.cHashAPI.m_API)
+}
+
+// GetBlake2HashIdentifier() ...
+func GetBlake2HashIdentifier() uint32 {
+	return uint32(C.GetBlake2HashIdentifier())
+}
+
+// GetMeowHashIdentifier() ...
+func GetMeowHashIdentifier() uint32 {
+	return uint32(C.GetMeowHashIdentifier())
 }
 
 // CreateFSStorageAPI ...
@@ -354,6 +395,19 @@ func CreateVersionIndex(
 	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
 }
 
+// WriteVersionIndexToBuffer ...
+func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteVersionIndexToBuffer(index.cVersionIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, fmt.Errorf("WriteVersionIndexToBuffer: failed with error %d", errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, nil
+}
+
 // WriteVersionIndex ...
 func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) error {
 	cPath := C.CString(path)
@@ -363,6 +417,18 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 		return fmt.Errorf("WriteVersionIndex: write index to `%s` failed with error %d", path, errno)
 	}
 	return nil
+}
+
+// ReadVersionIndexFromBuffer ...
+func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, error) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var vindex *C.struct_Longtail_VersionIndex
+	errno := C.Longtail_ReadVersionIndexFromBuffer(cBuffer, cSize, &vindex)
+	if errno != 0 {
+		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndexFromBuffer: failed with error %d", errno)
+	}
+	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
 }
 
 // ReadVersionIndex ...
@@ -428,6 +494,19 @@ func CreateContentIndex(
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
 
+// WriteContentIndexToBuffer ...
+func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, error) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteContentIndexToBuffer(index.cContentIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, fmt.Errorf("WriteContentIndexToBuffer: failed with error %d", errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, nil
+}
+
 // WriteContentIndex ...
 func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentIndex, path string) error {
 	cPath := C.CString(path)
@@ -437,6 +516,18 @@ func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentInd
 		return fmt.Errorf("WriteContentIndex: write index to `%s` failed with error %d", path, errno)
 	}
 	return nil
+}
+
+// ReadContentIndexFromBuffer ...
+func ReadContentIndexFromBuffer(buffer []byte) (Longtail_ContentIndex, error) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_ReadContentIndexFromBuffer(cBuffer, cSize, &cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndexFromBuffer: failed with error %d", errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
 
 // ReadContentIndex ...
@@ -706,4 +797,28 @@ func ClearLogger(logger unsafe.Pointer) {
 //SetLogLevel ...
 func SetLogLevel(level int) {
 	C.Longtail_SetLogLevel(C.int(level))
+}
+
+var activeAssertFunc assertFunc
+var activeAssertContext interface{}
+
+//SetAssert ...
+func SetAssert(assertFunc assertFunc, assertContext interface{}) {
+	activeAssertFunc = assertFunc
+	activeAssertContext = assertContext
+	C.Longtail_SetAssert(C.Longtail_Assert(C.assertProxy))
+}
+
+//ClearAssert ...
+func ClearAssert() {
+	C.Longtail_SetAssert(C.Longtail_Assert(nil))
+	activeAssertFunc = nil
+	activeAssertContext = nil
+}
+
+//export assertProxy
+func assertProxy(expression *C.char, file *C.char, line C.int) {
+	if activeAssertFunc != nil {
+		activeAssertFunc(activeAssertContext, C.GoString(expression), C.GoString(file), int(line))
+	}
 }

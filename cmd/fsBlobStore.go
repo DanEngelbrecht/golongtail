@@ -2,9 +2,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/DanEngelbrecht/golongtail/longtail"
+	"github.com/pkg/errors"
 )
 
 // FSBloblStore is the base object for all chunk and index stores with FS backing
@@ -26,7 +35,7 @@ func NewFSBlobStore(rootPath string) (*FSBloblStore, error) {
 // Close the FS base store. NOP opertation but needed to implement the store interface.
 func (s FSBloblStore) Close() error { return nil }
 
-// HasObjectBlob ...
+// HasBlob ...
 func (s FSBloblStore) HasBlob(ctx context.Context, key string) bool {
 	blobPath := path.Join(s.root, key)
 	if _, err := os.Stat(blobPath); os.IsNotExist(err) {
@@ -35,7 +44,7 @@ func (s FSBloblStore) HasBlob(ctx context.Context, key string) bool {
 	return true
 }
 
-// PutObjectBlob ...
+// PutBlob ...
 func (s FSBloblStore) PutBlob(ctx context.Context, key string, contentType string, blob []byte) error {
 	blobPath := path.Join(s.root, key)
 	blobParent, _ := path.Split(blobPath)
@@ -50,8 +59,214 @@ func (s FSBloblStore) PutBlob(ctx context.Context, key string, contentType strin
 	return nil
 }
 
-// GetObjectBlob ...
+// GetBlob ...
 func (s FSBloblStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	blobPath := path.Join(s.root, key)
 	return ioutil.ReadFile(blobPath)
+}
+
+func dirtyFSProgress(task string, blockCount uint32, blocksCopied *uint32) {
+	oldPercent := uint32(0)
+	inited := false
+	current := *blocksCopied
+	for current < blockCount {
+		total := blockCount
+		percentDone := (100 * current) / total
+		if (percentDone - oldPercent) >= 5 {
+			if !inited {
+				fmt.Printf("%s: ", task)
+				inited = true
+			}
+			fmt.Printf("%d%% ", percentDone)
+			oldPercent = percentDone
+		}
+		current = *blocksCopied
+		time.Sleep(100 * time.Millisecond)
+	}
+	if inited {
+		if oldPercent != 100 {
+			fmt.Printf("100%%")
+		}
+		fmt.Printf(" Done\n")
+	}
+}
+
+// PutContent ...
+func (s FSBloblStore) PutContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) error {
+	paths, err := longtail.GetPathsForContentBlocks(contentIndex)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
+	// to GCS for each worker as You cant write to two objects to the same connection apparently
+	blockCount := paths.GetPathCount()
+	log.Printf("Storing %d blocks to `%s`\n", int(blockCount), s)
+	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
+	if workerCount > blockCount {
+		workerCount = blockCount
+	}
+
+	var blocksCopied uint32
+
+	var wg sync.WaitGroup
+	wg.Add(int(workerCount))
+	var pg sync.WaitGroup
+	pg.Add(int(1))
+	go func() {
+		dirtyFSProgress("Uploading blocks", blockCount, &blocksCopied)
+		pg.Done()
+	}()
+	for i := uint32(0); i < workerCount; i++ {
+		start := (blockCount * i) / workerCount
+		end := ((blockCount * (i + 1)) / workerCount)
+		go func(start uint32, end uint32, blocksCopied *uint32) {
+
+			for p := start; p < end; p++ {
+				blockBath := longtail.GetPath(paths, p)
+
+				if s.HasBlob(context.Background(), "chunks/"+blockBath) {
+					atomic.AddUint32(blocksCopied, 1)
+					continue
+				}
+
+				block, err := longtail.ReadFromStorage(fs, contentPath, blockBath)
+				if err != nil {
+					log.Printf("Failed to read block: `%s`, %v", blockBath, err)
+					break
+				}
+
+				err = s.PutBlob(context.Background(), "chunks/"+blockBath, "application/octet-stream", block[:])
+				if err != nil {
+					log.Printf("Failed to write block: `%s`, %v", blockBath, err)
+					break
+				}
+				atomic.AddUint32(blocksCopied, 1)
+			}
+
+			wg.Done()
+		}(start, end, &blocksCopied)
+	}
+
+	wg.Wait()
+	missingCount := blockCount - blocksCopied
+	atomic.AddUint32(&blocksCopied, missingCount)
+
+	pg.Wait()
+	if missingCount > 0 {
+		return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
+	}
+
+	hash, err := createHashAPIFromIdentifier(contentIndex.GetHashAPI())
+	if err != nil {
+		return errors.Wrap(err, s.String())
+	}
+	defer hash.Dispose()
+
+	var storeBlob []byte
+
+	remoteContentPath := path.Join(s.root, "store.lci")
+	if _, err := os.Stat(remoteContentPath); os.IsNotExist(err) {
+		storeBlob, err = longtail.WriteContentIndexToBuffer(contentIndex)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
+	} else {
+		blob, err := ioutil.ReadFile(remoteContentPath)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
+		remoteContentIndex, err := longtail.ReadContentIndexFromBuffer(blob)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
+		defer remoteContentIndex.Dispose()
+
+		mergedContentIndex, err := longtail.MergeContentIndex(remoteContentIndex, contentIndex)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
+		defer mergedContentIndex.Dispose()
+
+		storeBlob, err = longtail.WriteContentIndexToBuffer(mergedContentIndex)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
+	}
+
+	err = os.MkdirAll(remoteContentPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(remoteContentPath, storeBlob, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetContent ...
+func (s FSBloblStore) GetContent(ctx context.Context, contentIndex longtail.Longtail_ContentIndex, fs longtail.Longtail_StorageAPI, contentPath string) error {
+	paths, err := longtail.GetPathsForContentBlocks(contentIndex)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
+	// to GCS for each worker as You cant write to two objects to the same connection apparently
+	blockCount := paths.GetPathCount()
+	log.Printf("Fetching %d blocks to `%s`\n", int(blockCount), s)
+	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
+	if workerCount > blockCount {
+		workerCount = blockCount
+	}
+
+	var blocksCopied uint32
+
+	var wg sync.WaitGroup
+	wg.Add(int(workerCount))
+	var pg sync.WaitGroup
+	pg.Add(int(1))
+	go func() {
+		dirtyFSProgress("Downloading blocks", blockCount, &blocksCopied)
+		pg.Done()
+	}()
+	for i := uint32(0); i < workerCount; i++ {
+		start := (blockCount * i) / workerCount
+		end := ((blockCount * (i + 1)) / workerCount)
+		go func(start uint32, end uint32, blocksCopied *uint32) {
+
+			for p := start; p < end; p++ {
+				blockPath := longtail.GetPath(paths, p)
+
+				localBlockPath := path.Join(s.root, "chunks/"+blockPath)
+				if _, err := os.Stat(localBlockPath); os.IsNotExist(err) {
+					block, err := s.GetBlob(context.Background(), "chunks/"+blockPath)
+					if err != nil {
+						log.Printf("Failed to read block: `%s`, %v", blockPath, err)
+						break
+					}
+					err = longtail.WriteToStorage(fs, contentPath, blockPath, block)
+					if err != nil {
+						log.Printf("Failed to write block: `%s`, %v", blockPath, err)
+						break
+					}
+
+				}
+				atomic.AddUint32(blocksCopied, 1)
+			}
+
+			wg.Done()
+		}(start, end, &blocksCopied)
+	}
+
+	wg.Wait()
+	missingCount := blockCount - blocksCopied
+	atomic.AddUint32(&blocksCopied, missingCount)
+
+	pg.Wait()
+	if missingCount > 0 {
+		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
+	}
+	return nil
 }

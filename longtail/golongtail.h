@@ -6,11 +6,14 @@
 #include "import/lib/filestorage/longtail_filestorage.h"
 #include "import/lib/lizard/longtail_lizard.h"
 #include "import/lib/memstorage/longtail_memstorage.h"
+#include "import/lib/meowhash/longtail_meowhash.h"
 #include <stdlib.h>
 
 void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 
 void logProxy(void* context, int level, char* str);
+
+void assertProxy(char* expression, char* file, int line);
 
 static int Storage_Write(struct Longtail_StorageAPI* api, const char* path, uint64_t length, const void* input)
 {
@@ -93,4 +96,14 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         return 0;
     }
     return registry;
+}
+
+static uint32_t GetBlake2HashIdentifier()
+{
+    return LONGTAIL_BLAKE2_HASH_TYPE;
+}
+
+static uint32_t GetMeowHashIdentifier()
+{
+    return LONGTAIL_MEOW_HASH_TYPE;
 }

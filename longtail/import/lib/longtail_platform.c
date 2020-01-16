@@ -1103,23 +1103,33 @@ int Longtail_StartFind(HLongtail_FSIterator fs_iterator, const char* path)
     fs_iterator->m_DirStream = opendir(path);
     if (0 == fs_iterator->m_DirStream)
     {
+        int e = errno;
         Longtail_Free(fs_iterator->m_DirPath);
-        return EINVAL;
+        if (e == 0)
+        {
+            return ENOENT;
+        }
+        return e;
     }
 
     fs_iterator->m_DirEntry = readdir(fs_iterator->m_DirStream);
     if (fs_iterator->m_DirEntry == 0)
     {
+        int e = errno;
         closedir(fs_iterator->m_DirStream);
         Longtail_Free(fs_iterator->m_DirPath);
-        return ENOENT;
+        if (e == 0)
+        {
+            return ENOENT;
+        }
+        return e;
     }
     int err = Skip(fs_iterator);
     if (err)
     {
         closedir(fs_iterator->m_DirStream);
         Longtail_Free(fs_iterator->m_DirPath);
-        return ENOENT;
+        return err;
     }
     return 0;
 }

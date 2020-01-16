@@ -68,7 +68,7 @@ func ReadFromStorage(storageAPI Longtail_StorageAPI, rootPath string, path strin
 		errno = C.Storage_Read(storageAPI.cStorageAPI, cFullPath, 0, blockSize, unsafe.Pointer(&blockData[0]))
 	}
 	if errno != 0 {
-		return nil, fmt.Errorf("ReadFromStorage: Storage_Read(%s) failed with error %d", path, errno)
+		return nil, fmt.Errorf("ReadFromStorage: Storage_Read(%s/%s) failed with error %d", rootPath, path, errno)
 	}
 	return blockData, nil
 }
@@ -84,7 +84,7 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 
 	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteToStorage: Storage_Write(%s) failed with create parent path for %d", path, errno)
+		return fmt.Errorf("WriteToStorage: C.EnsureParentPathExists(`%s/%s`) failed with error %d", rootPath, path, errno)
 	}
 
 	blockSize := C.uint64_t(len(blockData))
@@ -94,7 +94,7 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 	}
 	errno = C.Storage_Write(storageAPI.cStorageAPI, cFullPath, blockSize, data)
 	if errno != 0 {
-		return fmt.Errorf("WriteToStorage: Storage_Write(%s) failed with error %d", path, errno)
+		return fmt.Errorf("WriteToStorage: C.Storage_Write(`%s/%s`) failed with error %d", rootPath, path, errno)
 	}
 	return nil
 }
@@ -129,28 +129,6 @@ type assertProxyData struct {
 func makeAssertProxy(assertFunc assertFunc, context interface{}) assertProxyData {
 	return assertProxyData{assertFunc, context}
 }
-
-/*
-// WriteToStorage ...
-func WriteToStorage(storageAPI Longtail_StorageAPI, path string, data []byte) error {
-  cPath := C.CString(path)
-  defer C.free(unsafe.Pointer(cPath))
-  if C.EnsureParentPathExists(storageAPI, cPath) == 0 {
-    return fmt.Errorf("WriteToStorage: failed to create parent path for `%s`", path)
-  }
-  f := C.Storage_OpenWriteFile(storageAPI, cPath, 0)
-  if f == nil {
-    return fmt.Errorf("WriteToStorage: failed to create file at `%s`", path)
-  }
-  defer C.Storage_CloseWrite(storageAPI, f)
-  if len(data) > 0 {
-    if C.Storage_Write(storageAPI, f, 0, (C.uint64_t)(len(data)), (unsafe.Pointer(&data[0]))) == 0 {
-      return fmt.Errorf("WriteToStorage: failed to write %d bytes to file `%s`", len(data), path)
-    }
-  }
-  return nil
-}
-*/
 
 func (paths *Longtail_Paths) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(paths.cPaths))
@@ -328,7 +306,7 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, rootPath string) (Longt
 	var fileInfos *C.struct_Longtail_FileInfos
 	errno := C.Longtail_GetFilesRecursively(storageAPI.cStorageAPI, cFolderPath, &fileInfos)
 	if errno != 0 {
-		return Longtail_FileInfos{cFileInfos: nil}, fmt.Errorf("GetFilesRecursively: failed with error %d", errno)
+		return Longtail_FileInfos{cFileInfos: nil}, fmt.Errorf("GetFilesRecursively: C.Longtail_GetFilesRecursively(`%s`) failed with error %d", rootPath, errno)
 	}
 	return Longtail_FileInfos{cFileInfos: fileInfos}, nil
 }
@@ -389,7 +367,7 @@ func CreateVersionIndex(
 		&vindex)
 
 	if errno != 0 {
-		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("CreateVersionIndex: failed with error %d", errno)
+		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("CreateVersionIndex: C.Longtail_CreateVersionIndex(`%s`): failed with error %d", rootPath, errno)
 	}
 
 	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
@@ -401,7 +379,7 @@ func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
 	size := C.size_t(0)
 	errno := C.Longtail_WriteVersionIndexToBuffer(index.cVersionIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, fmt.Errorf("WriteVersionIndexToBuffer: failed with error %d", errno)
+		return nil, fmt.Errorf("WriteVersionIndexToBuffer: C.Longtail_WriteVersionIndexToBuffer() failed with error %d", errno)
 	}
 	defer C.Longtail_Free(buffer)
 	bytes := C.GoBytes(buffer, C.int(size))
@@ -414,7 +392,7 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 	defer C.free(unsafe.Pointer(cPath))
 	errno := C.Longtail_WriteVersionIndex(storageAPI.cStorageAPI, index.cVersionIndex, cPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteVersionIndex: write index to `%s` failed with error %d", path, errno)
+		return fmt.Errorf("WriteVersionIndex: C.Longtail_WriteVersionIndex(`%s`) failed with error %d", path, errno)
 	}
 	return nil
 }
@@ -426,7 +404,7 @@ func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, error) {
 	var vindex *C.struct_Longtail_VersionIndex
 	errno := C.Longtail_ReadVersionIndexFromBuffer(cBuffer, cSize, &vindex)
 	if errno != 0 {
-		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndexFromBuffer: failed with error %d", errno)
+		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndexFromBuffer: C.Longtail_ReadVersionIndexFromBuffer() failed with error %d", errno)
 	}
 	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
 }
@@ -438,7 +416,7 @@ func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Ver
 	var vindex *C.struct_Longtail_VersionIndex
 	errno := C.Longtail_ReadVersionIndex(storageAPI.cStorageAPI, cPath, &vindex)
 	if errno != 0 {
-		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndex: read index from `%s` failed with error %d", path, errno)
+		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndex: C.Longtail_ReadVersionIndex(`%s`) failed with error %d", path, errno)
 	}
 	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
 }
@@ -465,7 +443,7 @@ func CreateContentIndex(
 			C.uint32_t(maxChunksPerBlock),
 			&cindex)
 		if errno != 0 {
-			return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: create empty content index failed with error %d", errno)
+			return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: C.Longtail_CreateContentIndex(%d) failed with error %d", chunkCount, errno)
 		}
 	}
 	var cChunkHashes *C.TLongtail_Hash
@@ -488,7 +466,7 @@ func CreateContentIndex(
 		&cindex)
 
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: create content index failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: C.Longtail_CreateContentIndex(%d) create content index failed with error %d", chunkCount, errno)
 	}
 
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
@@ -500,7 +478,7 @@ func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, error) {
 	size := C.size_t(0)
 	errno := C.Longtail_WriteContentIndexToBuffer(index.cContentIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, fmt.Errorf("WriteContentIndexToBuffer: failed with error %d", errno)
+		return nil, fmt.Errorf("WriteContentIndexToBuffer: C.Longtail_WriteContentIndexToBuffer() failed with error %d", errno)
 	}
 	defer C.Longtail_Free(buffer)
 	bytes := C.GoBytes(buffer, C.int(size))
@@ -513,7 +491,7 @@ func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentInd
 	defer C.free(unsafe.Pointer(cPath))
 	errno := C.Longtail_WriteContentIndex(storageAPI.cStorageAPI, index.cContentIndex, cPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteContentIndex: write index to `%s` failed with error %d", path, errno)
+		return fmt.Errorf("WriteContentIndex: C.Longtail_WriteContentIndex`%s`) failed with error %d", path, errno)
 	}
 	return nil
 }
@@ -525,7 +503,7 @@ func ReadContentIndexFromBuffer(buffer []byte) (Longtail_ContentIndex, error) {
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_ReadContentIndexFromBuffer(cBuffer, cSize, &cindex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndexFromBuffer: failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndexFromBuffer: C.Longtail_ReadContentIndexFromBuffer() failed with error %d", errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
@@ -537,7 +515,7 @@ func ReadContentIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Con
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_ReadContentIndex(storageAPI.cStorageAPI, cPath, &cindex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndex: read index from `%s` failed with error %d", path, errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndex: C.Longtail_ReadContentIndex(`%s`) failed with error %d", path, errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
@@ -577,7 +555,7 @@ func WriteContent(
 		cVersionFolderPath,
 		cContentFolderPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteContent: write content to `%s` failed with error %d", contentFolderPath, errno)
+		return fmt.Errorf("WriteContent: C.Longtail_WriteContent(`%s`, `%s` failed with error %d", versionFolderPath, contentFolderPath, errno)
 	}
 	return nil
 }
@@ -608,7 +586,7 @@ func ReadContent(
 		cContentFolderPath,
 		&contentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContent: read content from `%s` failed with error %d", contentFolderPath, errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContent: C.Longtail_ReadContent(`%s`) failed with error %d", contentFolderPath, errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: contentIndex}, nil
 }
@@ -630,7 +608,7 @@ func CreateMissingContent(
 		C.uint32_t(maxChunksPerBlock),
 		&missingContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateMissingContent: make missing content failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateMissingContent: C.Longtail_CreateMissingContent() failed with error %d", errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: missingContentIndex}, nil
 }
@@ -640,7 +618,7 @@ func GetPathsForContentBlocks(contentIndex Longtail_ContentIndex) (Longtail_Path
 	var paths *C.struct_Longtail_Paths
 	errno := C.Longtail_GetPathsForContentBlocks(contentIndex.cContentIndex, &paths)
 	if errno != 0 {
-		return Longtail_Paths{cPaths: nil}, fmt.Errorf("GetPathsForContentBlocks: get paths failed with error %d", errno)
+		return Longtail_Paths{cPaths: nil}, fmt.Errorf("GetPathsForContentBlocks: C.Longtail_GetPathsForContentBlocks() failed with error %d", errno)
 	}
 	return Longtail_Paths{cPaths: paths}, nil
 }
@@ -652,7 +630,7 @@ func RetargetContent(
 	var retargetedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_RetargetContent(referenceContentIndex.cContentIndex, contentIndex.cContentIndex, &retargetedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("RetargetContent: retarget content failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("RetargetContent: C.Longtail_RetargetContent() failed with error %d", errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: retargetedContentIndex}, nil
 }
@@ -664,7 +642,7 @@ func MergeContentIndex(
 	var mergedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_MergeContentIndex(localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("MergeContentIndex: merge content indexes failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("MergeContentIndex: C.Longtail_MergeContentIndex() failed with error %d", errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, nil
 }
@@ -704,7 +682,7 @@ func WriteVersion(
 		cContentFolderPath,
 		cVersionFolderPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteVersion: write version to `%s` from `%s` failed with error %d", versionFolderPath, contentFolderPath, errno)
+		return fmt.Errorf("WriteVersion: C.Longtail_WriteVersion(`%s`, `%s) failed with error %d", versionFolderPath, contentFolderPath, errno)
 	}
 	return nil
 }
@@ -716,7 +694,7 @@ func CreateVersionDiff(
 	var versionDiff *C.struct_Longtail_VersionDiff
 	errno := C.Longtail_CreateVersionDiff(sourceVersionIndex.cVersionIndex, targetVersionIndex.cVersionIndex, &versionDiff)
 	if errno != 0 {
-		return Longtail_VersionDiff{cVersionDiff: nil}, fmt.Errorf("CreateVersionDiff: diff versions failed with error %d", errno)
+		return Longtail_VersionDiff{cVersionDiff: nil}, fmt.Errorf("CreateVersionDiff: C.Longtail_CreateVersionDiff() failed with error %d", errno)
 	}
 	return Longtail_VersionDiff{cVersionDiff: versionDiff}, nil
 }
@@ -762,7 +740,7 @@ func ChangeVersion(
 		cContentFolderPath,
 		cVersionFolderPath)
 	if errno != 0 {
-		return fmt.Errorf("ChangeVersion: update version `%s` from `%s` failed with error %d", versionFolderPath, contentFolderPath, errno)
+		return fmt.Errorf("ChangeVersion: C.Longtail_ChangeVersio(`%s`, `%s`) failed with error %d", versionFolderPath, contentFolderPath, errno)
 	}
 	return nil
 }

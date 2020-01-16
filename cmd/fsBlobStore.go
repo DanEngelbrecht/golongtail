@@ -166,12 +166,7 @@ func (s FSBloblStore) PutContent(ctx context.Context, contentIndex longtail.Long
 	var storeBlob []byte
 
 	remoteContentPath := path.Join(s.root, "store.lci")
-	if _, err := os.Stat(remoteContentPath); os.IsNotExist(err) {
-		storeBlob, err = longtail.WriteContentIndexToBuffer(contentIndex)
-		if err != nil {
-			return errors.Wrap(err, s.String())
-		}
-	} else {
+	if _, err := os.Stat(remoteContentPath); os.IsExist(err) {
 		blob, err := ioutil.ReadFile(remoteContentPath)
 		if err != nil {
 			return errors.Wrap(err, s.String())
@@ -192,9 +187,15 @@ func (s FSBloblStore) PutContent(ctx context.Context, contentIndex longtail.Long
 		if err != nil {
 			return errors.Wrap(err, s.String())
 		}
+	} else {
+		storeBlob, err = longtail.WriteContentIndexToBuffer(contentIndex)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
 	}
 
-	err = os.MkdirAll(remoteContentPath, os.ModePerm)
+	indexParent, _ := path.Split(remoteContentPath)
+	err = os.MkdirAll(indexParent, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -239,7 +240,7 @@ func (s FSBloblStore) GetContent(ctx context.Context, contentIndex longtail.Long
 			for p := start; p < end; p++ {
 				blockPath := longtail.GetPath(paths, p)
 
-				localBlockPath := path.Join(s.root, "chunks/"+blockPath)
+				localBlockPath := path.Join(contentPath, blockPath)
 				if _, err := os.Stat(localBlockPath); os.IsNotExist(err) {
 					block, err := s.GetBlob(context.Background(), "chunks/"+blockPath)
 					if err != nil {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtail"
+	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -65,7 +66,7 @@ func trace(s string) (string, time.Time) {
 
 func un(s string, startTime time.Time) {
 	elapsed := time.Since(startTime)
-	log.Printf("trace end: %s, elapsed %f secs\n", s, elapsed.Seconds())
+	log.Printf("%s: elapsed %f secs\n", s, elapsed.Seconds())
 }
 
 func createBlobStoreForURI(uri string) (BlobStore, error) {
@@ -163,7 +164,7 @@ func upSyncVersion(
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
 	hashAlgorithm *string) error {
-	defer un(trace("upSyncVersion " + targetFilePath))
+	//	defer un(trace("upSyncVersion " + targetFilePath))
 	fs := longtail.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := longtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -171,7 +172,7 @@ func upSyncVersion(
 	creg := longtail.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	log.Printf("Connecting to `%s`\n", blobStoreURI)
+	//	log.Printf("Connecting to `%s`\n", blobStoreURI)
 	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
@@ -179,13 +180,13 @@ func upSyncVersion(
 	defer indexStore.Close()
 
 	var hash longtail.Longtail_HashAPI
-	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
+	//	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
 	var remoteContentIndex longtail.Longtail_ContentIndex
 	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
 		remoteContentIndex, err = longtail.ReadContentIndexFromBuffer(remoteContentIndexBlob)
 		if err != nil {
-			return err
+			return errors.Wrap(err, blobStoreURI+"/store.lci")
 		}
 		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
 		if err != nil {
@@ -210,15 +211,15 @@ func upSyncVersion(
 	}
 	defer hash.Dispose()
 
-	log.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
+	//	log.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
 	fileInfos, err := longtail.GetFilesRecursively(fs, sourceFolderPath)
 	if err != nil {
 		return err
 	}
 	defer fileInfos.Dispose()
 
-	pathCount := fileInfos.GetFileCount()
-	log.Printf("Found %d assets\n", int(pathCount))
+	//pathCount := fileInfos.GetFileCount()
+	//	log.Printf("Found %d assets\n", int(pathCount))
 
 	compressionType, err := getCompressionType(compressionAlgorithm)
 	if err != nil {
@@ -226,7 +227,7 @@ func upSyncVersion(
 	}
 	compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
-	log.Printf("Indexing `%s`\n", sourceFolderPath)
+	//	log.Printf("Indexing `%s`\n", sourceFolderPath)
 	vindex, err := longtail.CreateVersionIndex(
 		fs,
 		hash,
@@ -297,7 +298,7 @@ func downSyncVersion(
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	hashAlgorithm *string) error {
-	defer un(trace("downSyncVersion " + sourceFilePath))
+	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtail.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := longtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -305,7 +306,7 @@ func downSyncVersion(
 	creg := longtail.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	log.Printf("Connecting to `%v`\n", blobStoreURI)
+	//	log.Printf("Connecting to `%v`\n", blobStoreURI)
 	var indexStore BlobStore
 	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
@@ -314,13 +315,13 @@ func downSyncVersion(
 	defer indexStore.Close()
 
 	var hash longtail.Longtail_HashAPI
-	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
+	//log.Printf("Fetching remote store index from `%s`\n", "store.lci")
 	var remoteContentIndex longtail.Longtail_ContentIndex
 	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
 		remoteContentIndex, err = longtail.ReadContentIndexFromBuffer(remoteContentIndexBlob)
 		if err != nil {
-			return err
+			errors.Wrap(err, blobStoreURI+"/store.lci")
 		}
 		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
 		if err != nil {
@@ -347,7 +348,7 @@ func downSyncVersion(
 
 	var remoteVersionIndex longtail.Longtail_VersionIndex
 
-	log.Printf("Fetching remote version index from `%s`\n", sourceFilePath)
+	//	log.Printf("Fetching remote version index from `%s`\n", sourceFilePath)
 	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
 	if err != nil {
 		return err
@@ -357,15 +358,15 @@ func downSyncVersion(
 		return err
 	}
 
-	log.Printf("Indexing files and folders in `%s`\n", targetFolderPath)
+	//	log.Printf("Indexing files and folders in `%s`\n", targetFolderPath)
 	fileInfos, err := longtail.GetFilesRecursively(fs, targetFolderPath)
 	if err != nil {
 		return err
 	}
 	defer fileInfos.Dispose()
 
-	pathCount := fileInfos.GetFileCount()
-	log.Printf("Found %d assets\n", int(pathCount))
+	//pathCount := fileInfos.GetFileCount()
+	//	log.Printf("Found %d assets\n", int(pathCount))
 
 	compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
@@ -500,14 +501,14 @@ func main() {
 	kingpin.CommandLine.DefaultEnvars()
 	kingpin.Parse()
 
-	logLevel, err := parseLevel(*logLevel)
+	longtailLogLevel, err := parseLevel(*logLevel)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	l := longtail.SetLogger(logger, &loggerData{})
 	defer longtail.ClearLogger(l)
-	longtail.SetLogLevel(logLevel)
+	longtail.SetLogLevel(longtailLogLevel)
 
 	longtail.SetAssert(cmdAssertFunc, nil)
 	defer longtail.ClearAssert()

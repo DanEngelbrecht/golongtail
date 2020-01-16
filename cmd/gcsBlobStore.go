@@ -69,17 +69,17 @@ func (s GCSBlobStore) PutBlob(ctx context.Context, key string, contentType strin
 	_, err := objWriter.Write(blob)
 	if err != nil {
 		objWriter.Close()
-		return errors.Wrap(err, s.String())
+		return errors.Wrap(err, s.String()+"/"+key)
 	}
 
 	err = objWriter.Close()
 	if err != nil {
-		return errors.Wrap(err, s.String())
+		return errors.Wrap(err, s.String()+"/"+key)
 	}
 
 	_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: contentType})
 	if err != nil {
-		return errors.Wrap(err, s.String())
+		return errors.Wrap(err, s.String()+"/"+key)
 	}
 
 	return nil
@@ -90,7 +90,7 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	objHandle := s.bucket.Object(key)
 	obj, err := objHandle.NewReader(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, s.String())
+		return nil, errors.Wrap(err, s.String()+"/"+key)
 	}
 	defer obj.Close()
 
@@ -277,7 +277,7 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex longtail.Long
 	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 	// to GCS for each worker as You cant write to two objects to the same connection apparently
 	blockCount := missingPaths.GetPathCount()
-	log.Printf("Fetching %d blocks from `%s`\n", int(blockCount), s)
+	//log.Printf("Fetching %d blocks from `%s`\n", int(blockCount), s)
 	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
 	if workerCount > blockCount {
 		workerCount = blockCount

@@ -123,7 +123,7 @@ func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
 type assertFunc func(context interface{}, expression string, file string, line int)
 type assertProxyData struct {
 	assertFunc assertFunc
-	Context interface{}
+	Context    interface{}
 }
 
 func makeAssertProxy(assertFunc assertFunc, context interface{}) assertProxyData {
@@ -249,6 +249,16 @@ func CreateLizardCompressionAPI() Longtail_CompressionAPI {
 	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLizardCompressionAPI()}
 }
 
+// CreateBrotliCompressionAPI ...
+func CreateBrotliCompressionAPI() Longtail_CompressionAPI {
+	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateBrotliCompressionAPI()}
+}
+
+// CreateZStdCompressionAPI ...
+func CreateZStdCompressionAPI() Longtail_CompressionAPI {
+	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateZStdCompressionAPI()}
+}
+
 // Longtail_CompressionAPI.Dispose() ...
 func (compressionAPI *Longtail_CompressionAPI) Dispose() {
 	C.Longtail_DisposeAPI(&compressionAPI.cCompressionAPI.m_API)
@@ -287,6 +297,11 @@ func GetLizardDefaultCompressionType() uint32 {
 // GetBrotliDefaultCompressionType ...
 func GetBrotliDefaultCompressionType() uint32 {
 	return uint32(C.LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE)
+}
+
+// GetZStdDefaultCompressionType ...
+func GetZStdDefaultCompressionType() uint32 {
+	return uint32(C.LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE)
 }
 
 // LongtailAlloc ...

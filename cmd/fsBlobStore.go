@@ -101,7 +101,6 @@ func (s FSBloblStore) PutContent(ctx context.Context, contentIndex longtail.Long
 	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 	// to GCS for each worker as You cant write to two objects to the same connection apparently
 	blockCount := paths.GetPathCount()
-	log.Printf("Storing %d blocks to `%s`\n", int(blockCount), s)
 	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
 	if workerCount > blockCount {
 		workerCount = blockCount
@@ -216,7 +215,6 @@ func (s FSBloblStore) GetContent(ctx context.Context, contentIndex longtail.Long
 	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
 	// to GCS for each worker as You cant write to two objects to the same connection apparently
 	blockCount := paths.GetPathCount()
-	log.Printf("Fetching %d blocks to `%s`\n", int(blockCount), s)
 	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
 	if workerCount > blockCount {
 		workerCount = blockCount

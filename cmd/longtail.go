@@ -93,18 +93,18 @@ const dynamicCompressionType = uint32(0xffffffff)
 
 func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	if compressionAlgorithm == nil || *compressionAlgorithm == "" {
-		return longtail.GetLizardDefaultCompressionType(), nil
+		return longtail.GetZStdDefaultCompressionType(), nil
 	}
 	switch *compressionAlgorithm {
-	case "Lizard":
+	case "lizard":
 		return longtail.GetLizardDefaultCompressionType(), nil
-	case "Brotli":
+	case "brotli":
 		return longtail.GetLizardDefaultCompressionType(), nil
-	case "ZStd":
+	case "zstd":
 		return longtail.GetZStdDefaultCompressionType(), nil
-	case "None":
+	case "none":
 		return noCompressionType, nil
-	case "Dynamic":
+	case "dynamic":
 		return dynamicCompressionType, nil
 	}
 	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
@@ -486,7 +486,7 @@ var (
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
 	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Force compression algorithm, default is `Lizard`)").Enum("Lizard", "Brotli", "ZStd", "Dynamic", "None")
+	compression       = commandUpSync.Flag("compression-algorithm", "Force compression algorithm: none, lizard, brotli, zstd*, dynamic. * = default").Enum("lizard", "brotli", "zstd", "dynamic", "none")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()

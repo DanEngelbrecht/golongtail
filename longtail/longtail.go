@@ -209,6 +209,11 @@ func CreateBlake2HashAPI() Longtail_HashAPI {
 	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateBlake2HashAPI()}
 }
 
+// CreateBlake3HashAPI ...
+func CreateBlake3HashAPI() Longtail_HashAPI {
+	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateBlake3HashAPI()}
+}
+
 // CreateMeowHashAPI ...
 func CreateMeowHashAPI() Longtail_HashAPI {
 	return Longtail_HashAPI{cHashAPI: C.Longtail_CreateMeowHashAPI()}
@@ -222,6 +227,11 @@ func (hashAPI *Longtail_HashAPI) Dispose() {
 // GetBlake2HashIdentifier() ...
 func GetBlake2HashIdentifier() uint32 {
 	return uint32(C.GetBlake2HashIdentifier())
+}
+
+// GetBlake3HashIdentifier() ...
+func GetBlake3HashIdentifier() uint32 {
+	return uint32(C.GetBlake3HashIdentifier())
 }
 
 // GetMeowHashIdentifier() ...

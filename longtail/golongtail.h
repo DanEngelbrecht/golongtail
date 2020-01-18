@@ -2,6 +2,7 @@
 #include "import/src/longtail.h"
 #include "import/lib/bikeshed/longtail_bikeshed.h"
 #include "import/lib/blake2/longtail_blake2.h"
+#include "import/lib/blake3/longtail_blake3.h"
 #include "import/lib/brotli/longtail_brotli.h"
 #include "import/lib/filestorage/longtail_filestorage.h"
 #include "import/lib/lizard/longtail_lizard.h"
@@ -118,6 +119,11 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
 static uint32_t GetBlake2HashIdentifier()
 {
     return LONGTAIL_BLAKE2_HASH_TYPE;
+}
+
+static uint32_t GetBlake3HashIdentifier()
+{
+    return LONGTAIL_BLAKE3_HASH_TYPE;
 }
 
 static uint32_t GetMeowHashIdentifier()

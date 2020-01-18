@@ -213,6 +213,11 @@ func TestInit(t *testing.T) {
 		t.Errorf("CreateBlake2HashAPI() hashAPI.cHashAPI == nil")
 	}
 	defer blake2API.Dispose()
+	blake3API := CreateBlake3HashAPI()
+	if blake3API.cHashAPI == nil {
+		t.Errorf("CreateBlake3HashAPI() hashAPI.cHashAPI == nil")
+	}
+	defer blake3API.Dispose()
 	meowAPI := CreateMeowHashAPI()
 	if meowAPI.cHashAPI == nil {
 		t.Errorf("CreateMeowHashAPI() hashAPI.cHashAPI == nil")
@@ -275,7 +280,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 
 	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
-	hashAPI := CreateBlake2HashAPI()
+	hashAPI := CreateBlake3HashAPI()
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()

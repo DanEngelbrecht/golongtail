@@ -140,18 +140,23 @@ func createHashAPIFromIdentifier(hashIdentifier uint32) (longtail.Longtail_HashA
 	if hashIdentifier == longtail.GetBlake2HashIdentifier() {
 		return longtail.CreateBlake2HashAPI(), nil
 	}
+	if hashIdentifier == longtail.GetBlake3HashIdentifier() {
+		return longtail.CreateBlake3HashAPI(), nil
+	}
 	return longtail.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
 }
 
 func createHashAPI(hashAlgorithm *string) (longtail.Longtail_HashAPI, error) {
 	if (hashAlgorithm == nil) || (*hashAlgorithm == "") {
-		return longtail.CreateMeowHashAPI(), nil
+		return longtail.CreateBlake3HashAPI(), nil
 	}
 	switch *hashAlgorithm {
 	case "meow":
 		return createHashAPIFromIdentifier(longtail.GetMeowHashIdentifier())
 	case "blake2":
 		return createHashAPIFromIdentifier(longtail.GetBlake2HashIdentifier())
+	case "blake3":
+		return createHashAPIFromIdentifier(longtail.GetBlake3HashIdentifier())
 	}
 	return longtail.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
 }
@@ -480,13 +485,13 @@ var (
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
-	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm to use if it can't be determined from remote store, default is `Meow`").Enum("Meow", "Blake2")
+	hashing           = kingpin.Flag("hash-algorithm", "Preferred hashing algorithm: blake2, blake3*, meow. *default").Enum("meow", "blake2", "blake3")
 
 	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
 	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Force compression algorithm: none, lizard, brotli, zstd*, dynamic. * = default").Enum("lizard", "brotli", "zstd", "dynamic", "none")
+	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, lizard, brotli, zstd*, dynamic. *default").Enum("lizard", "brotli", "zstd", "dynamic", "none")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()

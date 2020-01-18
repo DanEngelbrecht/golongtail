@@ -7,6 +7,7 @@
 #include "import/lib/lizard/longtail_lizard.h"
 #include "import/lib/memstorage/longtail_memstorage.h"
 #include "import/lib/meowhash/longtail_meowhash.h"
+#include "import/lib/zstd/longtail_zstd.h"
 #include <stdlib.h>
 
 void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
@@ -81,12 +82,28 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
     }
     Longtail_CompressionAPI_HSettings brotli_settings = brotli_compression->GetDefaultSettings(brotli_compression);
 
-    uint32_t compression_types[2] = {LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE, LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[2] = {lizard_compression, brotli_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[2] = {lizard_settings, brotli_settings};
+    struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
+    if (zstd_compression == 0)
+    {
+        return 0;
+    }
+    Longtail_CompressionAPI_HSettings zstd_settings = zstd_compression->GetDefaultSettings(zstd_compression);
+
+    uint32_t compression_types[3] = {
+        LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
+        LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE,
+        LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE};
+    struct Longtail_CompressionAPI* compression_apis[3] = {
+        lizard_compression,
+        brotli_compression,
+        zstd_compression};
+    Longtail_CompressionAPI_HSettings compression_settings[3] = {
+        lizard_settings,
+        brotli_settings,
+        zstd_settings};
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        2,
+        3,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);

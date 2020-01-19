@@ -7,9 +7,8 @@ import "C"
 import (
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"unsafe"
-
-	"github.com/mattn/go-pointer"
 )
 
 type Longtail_Paths struct {
@@ -50,6 +49,45 @@ type Longtail_StorageAPI struct {
 
 type Longtail_HashAPI struct {
 	cHashAPI *C.struct_Longtail_HashAPI
+}
+
+var pointerIndex uint32
+var pointerStore [512]interface{}
+var pointerIndexer = (*[1<<30]C.uint32_t)(C.malloc(4 * 512))
+
+func SavePointer(v interface{}) unsafe.Pointer {
+	if v == nil {
+		return nil
+	}
+
+	newPointerIndex := (atomic.AddUint32(&pointerIndex, 1)) % 512
+	for pointerStore[newPointerIndex] != nil {
+		newPointerIndex = (atomic.AddUint32(&pointerIndex, 1)) % 512
+	}
+	pointerIndexer[newPointerIndex] = C.uint32_t(newPointerIndex)
+	pointerStore[newPointerIndex] = v
+	return unsafe.Pointer(&pointerIndexer[newPointerIndex])
+}
+
+func RestorePointer(ptr unsafe.Pointer) (v interface{}) {
+	if ptr == nil {
+		return nil
+	}
+
+	p := (*C.uint32_t)(ptr)
+	index := uint32(*p)
+
+	return pointerStore[index]
+}
+
+func UnrefPointer(ptr unsafe.Pointer) {
+	if ptr == nil {
+		return
+	}
+
+	p := (*C.uint32_t)(ptr)
+	index := uint32(*p)
+	pointerStore[index] = nil
 }
 
 // ReadFromStorage ...
@@ -406,8 +444,8 @@ func CreateVersionIndex(
 	assetCompressionTypes []uint32,
 	maxChunkSize uint32) (Longtail_VersionIndex, error) {
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := pointer.Save(&progressProxyData)
-	defer pointer.Unref(cProgressProxyData)
+	cProgressProxyData := SavePointer(&progressProxyData)
+	defer UnrefPointer(cProgressProxyData)
 
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
@@ -604,8 +642,8 @@ func WriteContent(
 	contentFolderPath string) error {
 
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := pointer.Save(&progressProxyData)
-	defer pointer.Unref(cProgressProxyData)
+	cProgressProxyData := SavePointer(&progressProxyData)
+	defer UnrefPointer(cProgressProxyData)
 
 	cVersionFolderPath := C.CString(versionFolderPath)
 	defer C.free(unsafe.Pointer(cVersionFolderPath))
@@ -640,8 +678,8 @@ func ReadContent(
 	contentFolderPath string) (Longtail_ContentIndex, error) {
 
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := pointer.Save(&progressProxyData)
-	defer pointer.Unref(cProgressProxyData)
+	cProgressProxyData := SavePointer(&progressProxyData)
+	defer UnrefPointer(cProgressProxyData)
 
 	cContentFolderPath := C.CString(contentFolderPath)
 	defer C.free(unsafe.Pointer(cContentFolderPath))
@@ -731,8 +769,8 @@ func WriteVersion(
 	versionFolderPath string) error {
 
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := pointer.Save(&progressProxyData)
-	defer pointer.Unref(cProgressProxyData)
+	cProgressProxyData := SavePointer(&progressProxyData)
+	defer UnrefPointer(cProgressProxyData)
 
 	cContentFolderPath := C.CString(contentFolderPath)
 	defer C.free(unsafe.Pointer(cContentFolderPath))
@@ -786,8 +824,8 @@ func ChangeVersion(
 	versionFolderPath string) error {
 
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := pointer.Save(&progressProxyData)
-	defer pointer.Unref(cProgressProxyData)
+	cProgressProxyData := SavePointer(&progressProxyData)
+	defer UnrefPointer(cProgressProxyData)
 
 	cContentFolderPath := C.CString(contentFolderPath)
 	defer C.free(unsafe.Pointer(cContentFolderPath))
@@ -817,20 +855,20 @@ func ChangeVersion(
 
 //export progressProxy
 func progressProxy(progress unsafe.Pointer, total C.uint32_t, done C.uint32_t) {
-	progressProxyData := pointer.Restore(progress).(*progressProxyData)
+	progressProxyData := RestorePointer(progress).(*progressProxyData)
 	progressProxyData.progressFunc(progressProxyData.Context, int(total), int(done))
 }
 
 //export logProxy
 func logProxy(context unsafe.Pointer, level C.int, log *C.char) {
-	logProxyData := pointer.Restore(context).(*logProxyData)
+	logProxyData := RestorePointer(context).(*logProxyData)
 	logProxyData.logFunc(logProxyData.Context, int(level), C.GoString(log))
 }
 
 //SetLogger ...
 func SetLogger(logFunc logFunc, logContext interface{}) unsafe.Pointer {
 	logProxyData := makeLogProxy(logFunc, logContext)
-	cLogProxyData := pointer.Save(&logProxyData)
+	cLogProxyData := SavePointer(&logProxyData)
 
 	C.Longtail_SetLog(C.Longtail_Log(C.logProxy), cLogProxyData)
 	return cLogProxyData
@@ -839,7 +877,7 @@ func SetLogger(logFunc logFunc, logContext interface{}) unsafe.Pointer {
 //ClearLogger ...
 func ClearLogger(logger unsafe.Pointer) {
 	C.Longtail_SetLog(nil, nil)
-	pointer.Unref(logger)
+	UnrefPointer(logger)
 }
 
 //SetLogLevel ...

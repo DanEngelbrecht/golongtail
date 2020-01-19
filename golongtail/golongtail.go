@@ -1,4 +1,4 @@
-package longtail
+package golongtail
 
 // #cgo CFLAGS: -g -std=gnu99
 // #cgo LDFLAGS: -L. -l:import/longtail_lib.a -lm

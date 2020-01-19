@@ -491,19 +491,19 @@ var (
 	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lizard[_min|_max], ztd[_min|_max]").
 				Default("zstd").
 				Enum(
-			"none",
-			"brotli",
-			"brotli_min",
-			"brotli_max",
-			"brotli_text",
-			"brotli_text_min",
-			"brotli_text_max",
-			"lizard",
-			"lizard_min",
-			"lizard_max",
-			"zstd",
-			"zstd_min",
-			"zstd_max")
+					"none",
+					"brotli",
+					"brotli_min",
+					"brotli_max",
+					"brotli_text",
+					"brotli_text_min",
+					"brotli_text_max",
+					"lizard",
+					"lizard_min",
+					"lizard_max",
+					"zstd",
+					"zstd_min",
+					"zstd_max")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()

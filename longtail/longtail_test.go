@@ -254,7 +254,7 @@ func TestCreateVersionIndex(t *testing.T) {
 		progress,
 		&progressData{task: "Indexing", t: t},
 		"",
-		GetBrotliDefaultCompressionType(),
+		GetBrotliGenericDefaultCompressionType(),
 		32768)
 
 	expected := error(nil)

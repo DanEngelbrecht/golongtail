@@ -89,23 +89,35 @@ func createBlobStoreForURI(uri string) (BlobStore, error) {
 }
 
 const noCompressionType = uint32(0)
-const dynamicCompressionType = uint32(0xffffffff)
 
 func getCompressionType(compressionAlgorithm *string) (uint32, error) {
-	if compressionAlgorithm == nil || *compressionAlgorithm == "" {
-		return longtail.GetZStdDefaultCompressionType(), nil
-	}
 	switch *compressionAlgorithm {
-	case "lizard":
-		return longtail.GetLizardDefaultCompressionType(), nil
-	case "brotli":
-		return longtail.GetLizardDefaultCompressionType(), nil
-	case "zstd":
-		return longtail.GetZStdDefaultCompressionType(), nil
 	case "none":
 		return noCompressionType, nil
-	case "dynamic":
-		return dynamicCompressionType, nil
+	case "brotli":
+		return longtail.GetBrotliGenericDefaultCompressionType(), nil
+	case "brotli_min":
+		return longtail.GetBrotliGenericMinCompressionType(), nil
+	case "brotli_max":
+		return longtail.GetBrotliGenericMaxCompressionType(), nil
+	case "brotli_text":
+		return longtail.GetBrotliTextDefaultCompressionType(), nil
+	case "brotli_text_min":
+		return longtail.GetBrotliTextMinCompressionType(), nil
+	case "brotli_text_max":
+		return longtail.GetBrotliTextMaxCompressionType(), nil
+	case "lizard":
+		return longtail.GetLizardDefaultCompressionType(), nil
+	case "lizard_min":
+		return longtail.GetLizardMinCompressionType(), nil
+	case "lizard_max":
+		return longtail.GetLizardDefaultCompressionType(), nil
+	case "zstd":
+		return longtail.GetZStdMaxCompressionType(), nil
+	case "zstd_min":
+		return longtail.GetZStdMinCompressionType(), nil
+	case "zstd_max":
+		return longtail.GetZStdMaxCompressionType(), nil
 	}
 	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
 }
@@ -113,22 +125,8 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 func getCompressionTypesForFiles(fileInfos longtail.Longtail_FileInfos, compressionType uint32) []uint32 {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)
-	if compressionType != dynamicCompressionType {
-		for i := uint32(0); i < pathCount; i++ {
-			compressionTypes[i] = compressionType
-		}
-		return compressionTypes
-	}
-	paths := fileInfos.GetPaths()
 	for i := uint32(0); i < pathCount; i++ {
-		filePath := longtail.GetPath(paths, i)
-		extension := strings.ToLower(path.Ext(filePath))
-		switch extension {
-		case ".dll", ".exe", ".so":
-			compressionTypes[i] = longtail.GetBrotliDefaultCompressionType()
-		default:
-			compressionTypes[i] = longtail.GetLizardDefaultCompressionType()
-		}
+		compressionTypes[i] = compressionType
 	}
 	return compressionTypes
 }
@@ -147,9 +145,6 @@ func createHashAPIFromIdentifier(hashIdentifier uint32) (longtail.Longtail_HashA
 }
 
 func createHashAPI(hashAlgorithm *string) (longtail.Longtail_HashAPI, error) {
-	if (hashAlgorithm == nil) || (*hashAlgorithm == "") {
-		return longtail.CreateBlake3HashAPI(), nil
-	}
 	switch *hashAlgorithm {
 	case "meow":
 		return createHashAPIFromIdentifier(longtail.GetMeowHashIdentifier())
@@ -485,13 +480,30 @@ var (
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
-	hashing           = kingpin.Flag("hash-algorithm", "Preferred hashing algorithm: blake2, blake3*, meow. *default").Enum("meow", "blake2", "blake3")
+	hashing           = kingpin.Flag("hash-algorithm", "Preferred hashing algorithm: blake2, blake3, meow").
+		Default("blake3").
+		Enum("meow", "blake2", "blake3")
 
 	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
 	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, lizard, brotli, zstd*, dynamic. *default").Enum("lizard", "brotli", "zstd", "dynamic", "none")
+	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lizard[_min|_max], ztd[_min|_max]").
+		Default("zstd").
+		Enum(
+			"none",
+			"brotli",
+			"brotli_min",
+			"brotli_max",
+			"brotli_text",
+			"brotli_text_min",
+			"brotli_text_max",
+			"lizard",
+			"lizard_min",
+			"lizard_max",
+			"zstd",
+			"zstd_min",
+			"zstd_max")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()

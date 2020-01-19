@@ -299,19 +299,64 @@ func GetNoCompressionType() uint32 {
 	return uint32(C.LONGTAIL_NO_COMPRESSION_TYPE)
 }
 
+// GetBrotliGenericMinCompressionType ...
+func GetBrotliGenericMinCompressionType() uint32 {
+	return uint32(C.LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE)
+}
+
+// GetBrotliGenericDefaultCompressionType ...
+func GetBrotliGenericDefaultCompressionType() uint32 {
+	return uint32(C.LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE)
+}
+
+// GetBrotliGenericMaxCompressionType ...
+func GetBrotliGenericMaxCompressionType() uint32 {
+	return uint32(C.LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE)
+}
+
+// GetBrotliTextMinCompressionType ...
+func GetBrotliTextMinCompressionType() uint32 {
+	return uint32(C.LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE)
+}
+
+// GetBrotliTextDefaultCompressionType ...
+func GetBrotliTextDefaultCompressionType() uint32 {
+	return uint32(C.LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE)
+}
+
+// GetBrotliTextMaxCompressionType ...
+func GetBrotliTextMaxCompressionType() uint32 {
+	return uint32(C.LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE)
+}
+
+// GetLizardMinCompressionType ...
+func GetLizardMinCompressionType() uint32 {
+	return uint32(C.LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE)
+}
+
 // GetLizardDefaultCompressionType ...
 func GetLizardDefaultCompressionType() uint32 {
 	return uint32(C.LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE)
 }
 
-// GetBrotliDefaultCompressionType ...
-func GetBrotliDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_DEFAULT_COMPRESSION_TYPE)
+// GetLizardMaxCompressionType ...
+func GetLizardMaxCompressionType() uint32 {
+	return uint32(C.LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE)
+}
+
+// GetZStdMinCompressionType ...
+func GetZStdMinCompressionType() uint32 {
+	return uint32(C.LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE)
 }
 
 // GetZStdDefaultCompressionType ...
 func GetZStdDefaultCompressionType() uint32 {
 	return uint32(C.LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE)
+}
+
+// GetZStdMaxCompressionType ...
+func GetZStdMaxCompressionType() uint32 {
+	return uint32(C.LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE)
 }
 
 // LongtailAlloc ...

@@ -53,7 +53,7 @@ type Longtail_HashAPI struct {
 
 var pointerIndex uint32
 var pointerStore [512]interface{}
-var pointerIndexer = (*[1<<30]C.uint32_t)(C.malloc(4 * 512))
+var pointerIndexer = (*[1 << 30]C.uint32_t)(C.malloc(4 * 512))
 
 func SavePointer(v interface{}) unsafe.Pointer {
 	if v == nil {
@@ -137,14 +137,14 @@ func WriteToStorage(storageAPI Longtail_StorageAPI, rootPath string, path string
 	return nil
 }
 
-type progressFunc func(context interface{}, total int, current int)
+type ProgressFunc func(context interface{}, total int, current int)
 
 type progressProxyData struct {
-	progressFunc progressFunc
+	progressFunc ProgressFunc
 	Context      interface{}
 }
 
-func makeProgressProxy(progressFunc progressFunc, context interface{}) progressProxyData {
+func makeProgressProxy(progressFunc ProgressFunc, context interface{}) progressProxyData {
 	return progressProxyData{progressFunc, context}
 }
 
@@ -436,7 +436,7 @@ func CreateVersionIndex(
 	storageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc progressFunc,
+	progressFunc ProgressFunc,
 	progressContext interface{},
 	rootPath string,
 	paths Longtail_Paths,
@@ -634,7 +634,7 @@ func WriteContent(
 	targetStorageAPI Longtail_StorageAPI,
 	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc progressFunc,
+	progressFunc ProgressFunc,
 	progressContext interface{},
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
@@ -673,7 +673,7 @@ func ReadContent(
 	sourceStorageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc progressFunc,
+	progressFunc ProgressFunc,
 	progressContext interface{},
 	contentFolderPath string) (Longtail_ContentIndex, error) {
 
@@ -761,7 +761,7 @@ func WriteVersion(
 	versionStorageAPI Longtail_StorageAPI,
 	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc progressFunc,
+	progressFunc ProgressFunc,
 	progressContext interface{},
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
@@ -813,7 +813,7 @@ func ChangeVersion(
 	versionStorageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc progressFunc,
+	progressFunc ProgressFunc,
 	progressContext interface{},
 	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	contentIndex Longtail_ContentIndex,

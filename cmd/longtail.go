@@ -42,21 +42,21 @@ func progress(context interface{}, total int, current int) {
 	p := context.(*progressData)
 	if current < total {
 		if !p.inited {
-			fmt.Printf("%s: ", p.task)
+			fmt.Fprintf(os.Stderr, "%s: ", p.task)
 			p.inited = true
 		}
 		percentDone := (100 * current) / total
 		if (percentDone - p.oldPercent) >= 5 {
-			fmt.Printf("%d%% ", percentDone)
+			fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
 			p.oldPercent = percentDone
 		}
 		return
 	}
 	if p.inited {
 		if p.oldPercent != 100 {
-			fmt.Printf("100%%")
+			fmt.Fprintf(os.Stderr, "100%%")
 		}
-		fmt.Printf(" Done\n")
+		fmt.Fprintf(os.Stderr, " Done\n")
 	}
 }
 
@@ -277,13 +277,23 @@ func upSyncVersion(
 		if err != nil {
 			return err
 		}
-		err = indexStore.PutContent(context.Background(), missingContentIndex, fs, localCachePath)
+		err = indexStore.PutContent(
+			context.Background(),
+			progress,
+			&progressData{task: "Uploading"},
+			missingContentIndex,
+			fs,
+			localCachePath)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = indexStore.PutBlob(context.Background(), targetFilePath, "application/octet-stream", versionBlob)
+	err = indexStore.PutBlob(
+		context.Background(),
+		targetFilePath,
+		"application/octet-stream",
+		versionBlob)
 	if err != nil {
 		return err
 	}
@@ -418,7 +428,13 @@ func downSyncVersion(
 		}
 		defer neededContentIndex.Dispose()
 
-		err = indexStore.GetContent(context.Background(), neededContentIndex, fs, localCachePath)
+		err = indexStore.GetContent(
+			context.Background(),
+			progress,
+			&progressData{task: "Downloading"},
+			neededContentIndex,
+			fs,
+			localCachePath)
 		if err != nil {
 			return err
 		}
@@ -476,7 +492,7 @@ func parseLevel(lvl string) (int, error) {
 
 var (
 	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("16384").Uint32()
+	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()

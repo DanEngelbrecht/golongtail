@@ -4,6 +4,12 @@
 *.dll
 *.so
 *.dylib
+*.a
+*.obj
+*.o
+
+cmd/longtail.exe
+cmd/longtail
 
 # Test binary, built with `go test -c`
 *.test

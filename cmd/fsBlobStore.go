@@ -65,34 +65,31 @@ func (s FSBloblStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return ioutil.ReadFile(blobPath)
 }
 
-func dirtyFSProgress(task string, blockCount uint32, blocksCopied *uint32) {
-	oldPercent := uint32(0)
-	inited := false
+func fsProgressProxy(progressFunc golongtail.ProgressFunc,
+	progressContext interface{},
+	blockCount uint32,
+	blocksCopied *uint32) {
+
 	current := *blocksCopied
 	for current < blockCount {
-		total := blockCount
-		percentDone := (100 * current) / total
-		if (percentDone - oldPercent) >= 5 {
-			if !inited {
-				fmt.Printf("%s: ", task)
-				inited = true
-			}
-			fmt.Printf("%d%% ", percentDone)
-			oldPercent = percentDone
+		newCount := *blocksCopied
+		if newCount != current {
+			progressFunc(progressContext, int(blockCount), int(newCount))
+			current = newCount
+		} else {
+			time.Sleep(100 * time.Millisecond)
 		}
-		current = *blocksCopied
-		time.Sleep(100 * time.Millisecond)
-	}
-	if inited {
-		if oldPercent != 100 {
-			fmt.Printf("100%%")
-		}
-		fmt.Printf(" Done\n")
 	}
 }
 
 // PutContent ...
-func (s FSBloblStore) PutContent(ctx context.Context, contentIndex golongtail.Longtail_ContentIndex, fs golongtail.Longtail_StorageAPI, contentPath string) error {
+func (s FSBloblStore) PutContent(
+	ctx context.Context,
+	progressFunc golongtail.ProgressFunc,
+	progressContext interface{},
+	contentIndex golongtail.Longtail_ContentIndex,
+	fs golongtail.Longtail_StorageAPI,
+	contentPath string) error {
 	paths, err := golongtail.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
@@ -108,14 +105,17 @@ func (s FSBloblStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 
 	var blocksCopied uint32
 
+	var pg sync.WaitGroup
+	if progressFunc != nil {
+		pg.Add(int(1))
+		go func() {
+			fsProgressProxy(progressFunc, progressContext, blockCount, &blocksCopied)
+			pg.Done()
+		}()
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(int(workerCount))
-	var pg sync.WaitGroup
-	pg.Add(int(1))
-	go func() {
-		dirtyFSProgress("Uploading blocks", blockCount, &blocksCopied)
-		pg.Done()
-	}()
 	for i := uint32(0); i < workerCount; i++ {
 		start := (blockCount * i) / workerCount
 		end := ((blockCount * (i + 1)) / workerCount)
@@ -149,9 +149,11 @@ func (s FSBloblStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 
 	wg.Wait()
 	missingCount := blockCount - blocksCopied
-	atomic.AddUint32(&blocksCopied, missingCount)
 
-	pg.Wait()
+	if progressFunc != nil {
+		atomic.AddUint32(&blocksCopied, missingCount)
+		pg.Wait()
+	}
 	if missingCount > 0 {
 		return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
 	}
@@ -206,7 +208,13 @@ func (s FSBloblStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 }
 
 // GetContent ...
-func (s FSBloblStore) GetContent(ctx context.Context, contentIndex golongtail.Longtail_ContentIndex, fs golongtail.Longtail_StorageAPI, contentPath string) error {
+func (s FSBloblStore) GetContent(
+	ctx context.Context,
+	progressFunc golongtail.ProgressFunc,
+	progressContext interface{},
+	contentIndex golongtail.Longtail_ContentIndex,
+	fs golongtail.Longtail_StorageAPI,
+	contentPath string) error {
 	paths, err := golongtail.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
@@ -222,14 +230,17 @@ func (s FSBloblStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 
 	var blocksCopied uint32
 
+	var pg sync.WaitGroup
+	if progressFunc != nil {
+		pg.Add(int(1))
+		go func() {
+			fsProgressProxy(progressFunc, progressContext, blockCount, &blocksCopied)
+			pg.Done()
+		}()
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(int(workerCount))
-	var pg sync.WaitGroup
-	pg.Add(int(1))
-	go func() {
-		dirtyFSProgress("Downloading blocks", blockCount, &blocksCopied)
-		pg.Done()
-	}()
 	for i := uint32(0); i < workerCount; i++ {
 		start := (blockCount * i) / workerCount
 		end := ((blockCount * (i + 1)) / workerCount)
@@ -261,9 +272,12 @@ func (s FSBloblStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 
 	wg.Wait()
 	missingCount := blockCount - blocksCopied
-	atomic.AddUint32(&blocksCopied, missingCount)
 
-	pg.Wait()
+	if progressFunc != nil {
+		atomic.AddUint32(&blocksCopied, missingCount)
+		pg.Wait()
+	}
+
 	if missingCount > 0 {
 		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
 	}

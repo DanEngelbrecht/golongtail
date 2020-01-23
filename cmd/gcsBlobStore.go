@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/url"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -103,34 +103,32 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
-func dirtyGCSProgress(task string, blockCount uint32, blocksCopied *uint32) {
-	oldPercent := uint32(0)
-	inited := false
+func gcsProgressProxy(progressFunc golongtail.ProgressFunc,
+	progressContext interface{},
+	blockCount uint32,
+	blocksCopied *uint32) {
+
 	current := *blocksCopied
 	for current < blockCount {
-		total := blockCount
-		percentDone := (100 * current) / total
-		if (percentDone - oldPercent) >= 5 {
-			if !inited {
-				fmt.Printf("%s: ", task)
-				inited = true
-			}
-			fmt.Printf("%d%% ", percentDone)
-			oldPercent = percentDone
+		newCount := *blocksCopied
+		if newCount != current {
+			progressFunc(progressContext, int(blockCount), int(newCount))
+			current = newCount
+		} else {
+			time.Sleep(100 * time.Millisecond)
 		}
-		current = *blocksCopied
-		time.Sleep(100 * time.Millisecond)
-	}
-	if inited {
-		if oldPercent != 100 {
-			fmt.Printf("100%%")
-		}
-		fmt.Printf(" Done\n")
+
 	}
 }
 
 // PutContent ...
-func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Longtail_ContentIndex, fs golongtail.Longtail_StorageAPI, contentPath string) error {
+func (s GCSBlobStore) PutContent(
+	ctx context.Context,
+	progressFunc golongtail.ProgressFunc,
+	progressContext interface{},
+	contentIndex golongtail.Longtail_ContentIndex,
+	fs golongtail.Longtail_StorageAPI,
+	contentPath string) error {
 	paths, err := golongtail.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
@@ -145,20 +143,22 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 	}
 
 	incompleteCount := blockCount
+	var blocksCopied uint32
 	var missingCount uint32
+
+	var pg sync.WaitGroup
+	if progressFunc != nil {
+		pg.Add(int(1))
+		go func() {
+			gcsProgressProxy(progressFunc, progressContext, blockCount, &blocksCopied)
+			pg.Done()
+		}()
+	}
 
 	for retryCount := 0; retryCount < 5; retryCount++ {
 
-		var blocksCopied uint32
-
 		var wg sync.WaitGroup
 		wg.Add(int(workerCount))
-		var pg sync.WaitGroup
-		pg.Add(int(1))
-		go func() {
-			dirtyGCSProgress("Uploading blocks", blockCount, &blocksCopied)
-			pg.Done()
-		}()
 
 		for i := uint32(0); i < workerCount; i++ {
 			start := (blockCount * i) / workerCount
@@ -167,7 +167,7 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 
 				workerStore, err := NewGCSBlobStore(s.url)
 				if err != nil {
-					log.Printf("Failed to connect to: `%s`, %v", s.url, err)
+					fmt.Fprintf(os.Stderr, "Failed to connect to: `%s`, %v", s.url, err)
 					wg.Done()
 					return
 				}
@@ -183,13 +183,13 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 
 					block, err := golongtail.ReadFromStorage(fs, contentPath, path)
 					if err != nil {
-						log.Printf("Failed to read block: `%s`, %v", path, err)
+						fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
 						break
 					}
 
 					err = workerStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
 					if err != nil {
-						log.Printf("Failed to write block: `%s`, %v", path, err)
+						fmt.Fprintf(os.Stderr, "Failed to write block: `%s`, %v", path, err)
 						continue
 					}
 					atomic.AddUint32(blocksCopied, 1)
@@ -200,16 +200,18 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 
 		wg.Wait()
 		missingCount = blockCount - blocksCopied
-		atomic.AddUint32(&blocksCopied, missingCount)
-
-		pg.Wait()
 
 		if missingCount == 0 {
 			break
 		}
 		incompleteCount = missingCount
-		log.Printf("Retrying to copy %d blocks to `%s`", incompleteCount, s.url)
+		fmt.Fprintf(os.Stderr, "Retrying to copy %d blocks to `%s`", incompleteCount, s.url)
 	}
+	if progressFunc != nil {
+		atomic.AddUint32(&blocksCopied, missingCount)
+		pg.Wait()
+	}
+
 	if missingCount > 0 {
 		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
 	}
@@ -279,7 +281,13 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 }
 
 // GetContent ...
-func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex golongtail.Longtail_ContentIndex, fs golongtail.Longtail_StorageAPI, contentPath string) error {
+func (s GCSBlobStore) GetContent(
+	ctx context.Context,
+	progressFunc golongtail.ProgressFunc,
+	progressContext interface{},
+	contentIndex golongtail.Longtail_ContentIndex,
+	fs golongtail.Longtail_StorageAPI,
+	contentPath string) error {
 	missingPaths, err := golongtail.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
@@ -295,19 +303,21 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 
 	incompleteCount := blockCount
 	var missingCount uint32
+	var blocksCopied uint32
+
+	var pg sync.WaitGroup
+	if progressFunc != nil {
+		pg.Add(int(1))
+		go func() {
+			gcsProgressProxy(progressFunc, progressContext, blockCount, &blocksCopied)
+			pg.Done()
+		}()
+	}
 
 	for retryCount := 0; retryCount < 5; retryCount++ {
 
-		var blocksCopied uint32
-
 		var wg sync.WaitGroup
 		wg.Add(int(workerCount))
-		var pg sync.WaitGroup
-		pg.Add(int(1))
-		go func() {
-			dirtyGCSProgress("Downloading blocks", blockCount, &blocksCopied)
-			pg.Done()
-		}()
 
 		for i := uint32(0); i < workerCount; i++ {
 			start := (blockCount * i) / workerCount
@@ -315,7 +325,7 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 			go func(start uint32, end uint32, blocksCopied *uint32) {
 				workerStore, err := NewGCSBlobStore(s.url)
 				if err != nil {
-					log.Printf("Failed to connect to: `%s`, %v", s.url, err)
+					fmt.Fprintf(os.Stderr, "Failed to connect to: `%s`, %v", s.url, err)
 					wg.Done()
 					return
 				}
@@ -326,13 +336,13 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 
 					blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
 					if err != nil {
-						log.Printf("Failed to read block: `%s`, %v", path, err)
+						fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
 						continue
 					}
 
 					err = golongtail.WriteToStorage(fs, contentPath, path, blockData)
 					if err != nil {
-						log.Printf("Failed to store block: `%s`, %v", path, err)
+						fmt.Fprintf(os.Stderr, "Failed to store block: `%s`, %v", path, err)
 						break
 					}
 					atomic.AddUint32(blocksCopied, 1)
@@ -343,15 +353,19 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 
 		wg.Wait()
 		missingCount := blockCount - blocksCopied
-		atomic.AddUint32(&blocksCopied, missingCount)
 
-		pg.Wait()
 		if missingCount == 0 {
 			break
 		}
 		incompleteCount = missingCount
-		log.Printf("Retrying to copy %d blocks from `%s`", incompleteCount, s.url)
+		fmt.Fprintf(os.Stderr, "Retrying to copy %d blocks from `%s`", incompleteCount, s.url)
 	}
+
+	if progressFunc != nil {
+		atomic.AddUint32(&blocksCopied, missingCount)
+		pg.Wait()
+	}
+
 	if missingCount > 0 {
 		return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
 	}

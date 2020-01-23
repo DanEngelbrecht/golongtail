@@ -476,7 +476,7 @@ func parseLevel(lvl string) (int, error) {
 
 var (
 	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("16384").Uint32()
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
@@ -491,19 +491,19 @@ var (
 	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lizard[_min|_max], ztd[_min|_max]").
 				Default("zstd").
 				Enum(
-					"none",
-					"brotli",
-					"brotli_min",
-					"brotli_max",
-					"brotli_text",
-					"brotli_text_min",
-					"brotli_text_max",
-					"lizard",
-					"lizard_min",
-					"lizard_max",
-					"zstd",
-					"zstd_min",
-					"zstd_max")
+			"none",
+			"brotli",
+			"brotli_min",
+			"brotli_max",
+			"brotli_text",
+			"brotli_text_min",
+			"brotli_text_max",
+			"lizard",
+			"lizard_min",
+			"lizard_max",
+			"zstd",
+			"zstd_min",
+			"zstd_max")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()

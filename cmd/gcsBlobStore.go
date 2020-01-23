@@ -144,60 +144,72 @@ func (s GCSBlobStore) PutContent(ctx context.Context, contentIndex golongtail.Lo
 		workerCount = blockCount
 	}
 
-	var blocksCopied uint32
+	incompleteCount := blockCount
+	var missingCount uint32
 
-	var wg sync.WaitGroup
-	wg.Add(int(workerCount))
-	var pg sync.WaitGroup
-	pg.Add(int(1))
-	go func() {
-		dirtyGCSProgress("Uploading blocks", blockCount, &blocksCopied)
-		pg.Done()
-	}()
+	for retryCount := 0; retryCount < 5; retryCount++ {
 
-	for i := uint32(0); i < workerCount; i++ {
-		start := (blockCount * i) / workerCount
-		end := ((blockCount * (i + 1)) / workerCount)
-		go func(start uint32, end uint32, blocksCopied *uint32) {
+		var blocksCopied uint32
 
-			workerStore, err := NewGCSBlobStore(s.url)
-			if err != nil {
-				log.Printf("Failed to connect to: `%s`, %v", s.url, err)
-				wg.Done()
-				return
-			}
-			defer workerStore.Close()
+		var wg sync.WaitGroup
+		wg.Add(int(workerCount))
+		var pg sync.WaitGroup
+		pg.Add(int(1))
+		go func() {
+			dirtyGCSProgress("Uploading blocks", blockCount, &blocksCopied)
+			pg.Done()
+		}()
 
-			for p := start; p < end; p++ {
-				path := golongtail.GetPath(paths, p)
+		for i := uint32(0); i < workerCount; i++ {
+			start := (blockCount * i) / workerCount
+			end := ((blockCount * (i + 1)) / workerCount)
+			go func(start uint32, end uint32, blocksCopied *uint32) {
 
-				if workerStore.HasBlob(context.Background(), "chunks/"+path) {
+				workerStore, err := NewGCSBlobStore(s.url)
+				if err != nil {
+					log.Printf("Failed to connect to: `%s`, %v", s.url, err)
+					wg.Done()
+					return
+				}
+				defer workerStore.Close()
+
+				for p := start; p < end; p++ {
+					path := golongtail.GetPath(paths, p)
+
+					if workerStore.HasBlob(context.Background(), "chunks/"+path) {
+						atomic.AddUint32(blocksCopied, 1)
+						continue
+					}
+
+					block, err := golongtail.ReadFromStorage(fs, contentPath, path)
+					if err != nil {
+						log.Printf("Failed to read block: `%s`, %v", path, err)
+						break
+					}
+
+					err = workerStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
+					if err != nil {
+						log.Printf("Failed to write block: `%s`, %v", path, err)
+						continue
+					}
 					atomic.AddUint32(blocksCopied, 1)
-					continue
 				}
+				wg.Done()
+			}(start, end, &blocksCopied)
+		}
 
-				block, err := golongtail.ReadFromStorage(fs, contentPath, path)
-				if err != nil {
-					log.Printf("Failed to read block: `%s`, %v", path, err)
-					break
-				}
+		wg.Wait()
+		missingCount = blockCount - blocksCopied
+		atomic.AddUint32(&blocksCopied, missingCount)
 
-				err = workerStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
-				if err != nil {
-					log.Printf("Failed to write block: `%s`, %v", path, err)
-					break
-				}
-				atomic.AddUint32(blocksCopied, 1)
-			}
-			wg.Done()
-		}(start, end, &blocksCopied)
+		pg.Wait()
+
+		if missingCount == 0 {
+			break
+		}
+		incompleteCount = missingCount
+		log.Printf("Retrying to copy %d blocks to `%s`", incompleteCount, s.url)
 	}
-
-	wg.Wait()
-	missingCount := blockCount - blocksCopied
-	atomic.AddUint32(&blocksCopied, missingCount)
-
-	pg.Wait()
 	if missingCount > 0 {
 		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
 	}
@@ -281,54 +293,65 @@ func (s GCSBlobStore) GetContent(ctx context.Context, contentIndex golongtail.Lo
 		workerCount = blockCount
 	}
 
-	var blocksCopied uint32
+	incompleteCount := blockCount
+	var missingCount uint32
 
-	var wg sync.WaitGroup
-	wg.Add(int(workerCount))
-	var pg sync.WaitGroup
-	pg.Add(int(1))
-	go func() {
-		dirtyGCSProgress("Downloading blocks", blockCount, &blocksCopied)
-		pg.Done()
-	}()
+	for retryCount := 0; retryCount < 5; retryCount++ {
 
-	for i := uint32(0); i < workerCount; i++ {
-		start := (blockCount * i) / workerCount
-		end := ((blockCount * (i + 1)) / workerCount)
-		go func(start uint32, end uint32, blocksCopied *uint32) {
-			workerStore, err := NewGCSBlobStore(s.url)
-			if err != nil {
-				log.Printf("Failed to connect to: `%s`, %v", s.url, err)
+		var blocksCopied uint32
+
+		var wg sync.WaitGroup
+		wg.Add(int(workerCount))
+		var pg sync.WaitGroup
+		pg.Add(int(1))
+		go func() {
+			dirtyGCSProgress("Downloading blocks", blockCount, &blocksCopied)
+			pg.Done()
+		}()
+
+		for i := uint32(0); i < workerCount; i++ {
+			start := (blockCount * i) / workerCount
+			end := ((blockCount * (i + 1)) / workerCount)
+			go func(start uint32, end uint32, blocksCopied *uint32) {
+				workerStore, err := NewGCSBlobStore(s.url)
+				if err != nil {
+					log.Printf("Failed to connect to: `%s`, %v", s.url, err)
+					wg.Done()
+					return
+				}
+				defer workerStore.Close()
+
+				for p := start; p < end; p++ {
+					path := golongtail.GetPath(missingPaths, p)
+
+					blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
+					if err != nil {
+						log.Printf("Failed to read block: `%s`, %v", path, err)
+						continue
+					}
+
+					err = golongtail.WriteToStorage(fs, contentPath, path, blockData)
+					if err != nil {
+						log.Printf("Failed to store block: `%s`, %v", path, err)
+						break
+					}
+					atomic.AddUint32(blocksCopied, 1)
+				}
 				wg.Done()
-				return
-			}
-			defer workerStore.Close()
+			}(start, end, &blocksCopied)
+		}
 
-			for p := start; p < end; p++ {
-				path := golongtail.GetPath(missingPaths, p)
+		wg.Wait()
+		missingCount := blockCount - blocksCopied
+		atomic.AddUint32(&blocksCopied, missingCount)
 
-				blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
-				if err != nil {
-					log.Printf("Failed to read block: `%s`, %v", path, err)
-					break
-				}
-
-				err = golongtail.WriteToStorage(fs, contentPath, path, blockData)
-				if err != nil {
-					log.Printf("Failed to store block: `%s`, %v", path, err)
-					break
-				}
-				atomic.AddUint32(blocksCopied, 1)
-			}
-			wg.Done()
-		}(start, end, &blocksCopied)
+		pg.Wait()
+		if missingCount == 0 {
+			break
+		}
+		incompleteCount = missingCount
+		log.Printf("Retrying to copy %d blocks from `%s`", incompleteCount, s.url)
 	}
-
-	wg.Wait()
-	missingCount := blockCount - blocksCopied
-	atomic.AddUint32(&blocksCopied, missingCount)
-
-	pg.Wait()
 	if missingCount > 0 {
 		return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
 	}

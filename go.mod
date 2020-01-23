@@ -1,7 +1,5 @@
 module github.com/DanEngelbrecht/golongtail
 
-go 1.13
-
 require (
 	cloud.google.com/go/storage v1.5.0 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
@@ -9,3 +7,5 @@ require (
 	github.com/pkg/errors v0.8.1 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 )
+
+go 1.13

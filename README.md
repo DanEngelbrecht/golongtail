@@ -16,23 +16,23 @@ You need Go and gcc installed.
 
 ### Windows
 Navigate to `longtail\import` and run the `build_lib.bat` script to create a library of the C code.
-Navigate to `cmd` and run `go build .` and you should get an `cmd.exe` executable.
+Navigate to `cmd` and run `go build .` and you should get an `longtail.exe` executable.
 
 ### Linux
 Navigate to `longtail/import` and run the `build_lib.sh` script to create a library of the C code.
-Navigate to `cmd` and run `go build .` and you should get an `cmd` executable.
+Navigate to `cmd` and run `go build .` and you should get an `longtail` executable.
 
 ## Usage
 Build the command line and run it for a breif description of commands/options.
 
 ### Upload to GCS
-`cmd.exe upsync --source-path "my_folder" --target-path "index/my_folder.lvi" --storage-uri "gs://test_block_storage"`
+`longtail.exe upsync --source-path "my_folder" --target-path "index/my_folder.lvi" --storage-uri "gs://test_block_storage"`
 
 ### Upload to a local folder
-`cmd.exe upsync --source-path "my_folder" --target-path "index/my_folder.lvi" --storage-uri "c:\test_block_storage"`
+`longtail.exe upsync --source-path "my_folder" --target-path "index/my_folder.lvi" --storage-uri "c:\test_block_storage"`
 
 ### Download from GCS
-`cmd.exe downsync --source-path "index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "gs://test_block_storage"`
+`longtail.exe downsync --source-path "index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "gs://test_block_storage"`
 
 ### Download from a local folder
-`cmd.exe downsync --source-path "index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "c:\test_block_storage"`
+`longtail.exe downsync --source-path "index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "c:\test_block_storage"`

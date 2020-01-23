@@ -15,12 +15,12 @@ git clone https://github.com/DanEngelbrecht/go_longtail.git
 You need Go and gcc installed.
 
 ### Windows
-Navigate to `longtail\import` and run the `build_lib.bat` script to create a library of the C code.
-Navigate to `cmd` and run `go build .` and you should get an `longtail.exe` executable.
+Navigate to `cmd` and run the `build.bat` script.
+You should get an `longtail.exe` executable in the cmd folder.
 
 ### Linux
-Navigate to `longtail/import` and run the `build_lib.sh` script to create a library of the C code.
-Navigate to `cmd` and run `go build .` and you should get an `longtail` executable.
+Navigate to `cmd` and run the `build.sh` script.
+You should get an `longtail` executable in the cmd folder.
 
 ## Usage
 Build the command line and run it for a breif description of commands/options.

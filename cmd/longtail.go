@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DanEngelbrecht/golongtail/golongtail"
+	"github.com/DanEngelbrecht/golongtail/lib"
+	"github.com/DanEngelbrecht/golongtail/store"
 	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -69,12 +70,12 @@ func un(s string, startTime time.Time) {
 	log.Printf("%s: elapsed %f secs\n", s, elapsed.Seconds())
 }
 
-func createBlobStoreForURI(uri string) (BlobStore, error) {
+func createBlobStoreForURI(uri string) (store.BlobStore, error) {
 	blobStoreURL, err := url.Parse(*storageURI)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			return NewGCSBlobStore(blobStoreURL)
+			return store.NewGCSBlobStore(blobStoreURL)
 		case "s3":
 			return nil, fmt.Errorf("AWS storage not yet implemented")
 		case "abfs":
@@ -82,10 +83,10 @@ func createBlobStoreForURI(uri string) (BlobStore, error) {
 		case "abfss":
 			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			return NewFSBlobStore(blobStoreURL.Path[1:])
+			return store.NewFSBlobStore(blobStoreURL.Path[1:])
 		}
 	}
-	return NewFSBlobStore(uri)
+	return store.NewFSBlobStore(uri)
 }
 
 const noCompressionType = uint32(0)
@@ -95,34 +96,34 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	case "none":
 		return noCompressionType, nil
 	case "brotli":
-		return golongtail.GetBrotliGenericDefaultCompressionType(), nil
+		return lib.GetBrotliGenericDefaultCompressionType(), nil
 	case "brotli_min":
-		return golongtail.GetBrotliGenericMinCompressionType(), nil
+		return lib.GetBrotliGenericMinCompressionType(), nil
 	case "brotli_max":
-		return golongtail.GetBrotliGenericMaxCompressionType(), nil
+		return lib.GetBrotliGenericMaxCompressionType(), nil
 	case "brotli_text":
-		return golongtail.GetBrotliTextDefaultCompressionType(), nil
+		return lib.GetBrotliTextDefaultCompressionType(), nil
 	case "brotli_text_min":
-		return golongtail.GetBrotliTextMinCompressionType(), nil
+		return lib.GetBrotliTextMinCompressionType(), nil
 	case "brotli_text_max":
-		return golongtail.GetBrotliTextMaxCompressionType(), nil
+		return lib.GetBrotliTextMaxCompressionType(), nil
 	case "lizard":
-		return golongtail.GetLizardDefaultCompressionType(), nil
+		return lib.GetLizardDefaultCompressionType(), nil
 	case "lizard_min":
-		return golongtail.GetLizardMinCompressionType(), nil
+		return lib.GetLizardMinCompressionType(), nil
 	case "lizard_max":
-		return golongtail.GetLizardDefaultCompressionType(), nil
+		return lib.GetLizardDefaultCompressionType(), nil
 	case "zstd":
-		return golongtail.GetZStdMaxCompressionType(), nil
+		return lib.GetZStdMaxCompressionType(), nil
 	case "zstd_min":
-		return golongtail.GetZStdMinCompressionType(), nil
+		return lib.GetZStdMinCompressionType(), nil
 	case "zstd_max":
-		return golongtail.GetZStdMaxCompressionType(), nil
+		return lib.GetZStdMaxCompressionType(), nil
 	}
 	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
 }
 
-func getCompressionTypesForFiles(fileInfos golongtail.Longtail_FileInfos, compressionType uint32) []uint32 {
+func getCompressionTypesForFiles(fileInfos lib.Longtail_FileInfos, compressionType uint32) []uint32 {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)
 	for i := uint32(0); i < pathCount; i++ {
@@ -131,29 +132,29 @@ func getCompressionTypesForFiles(fileInfos golongtail.Longtail_FileInfos, compre
 	return compressionTypes
 }
 
-func createHashAPIFromIdentifier(hashIdentifier uint32) (golongtail.Longtail_HashAPI, error) {
-	if hashIdentifier == golongtail.GetMeowHashIdentifier() {
-		return golongtail.CreateMeowHashAPI(), nil
+func createHashAPIFromIdentifier(hashIdentifier uint32) (lib.Longtail_HashAPI, error) {
+	if hashIdentifier == lib.GetMeowHashIdentifier() {
+		return lib.CreateMeowHashAPI(), nil
 	}
-	if hashIdentifier == golongtail.GetBlake2HashIdentifier() {
-		return golongtail.CreateBlake2HashAPI(), nil
+	if hashIdentifier == lib.GetBlake2HashIdentifier() {
+		return lib.CreateBlake2HashAPI(), nil
 	}
-	if hashIdentifier == golongtail.GetBlake3HashIdentifier() {
-		return golongtail.CreateBlake3HashAPI(), nil
+	if hashIdentifier == lib.GetBlake3HashIdentifier() {
+		return lib.CreateBlake3HashAPI(), nil
 	}
-	return golongtail.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
+	return lib.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
 }
 
-func createHashAPI(hashAlgorithm *string) (golongtail.Longtail_HashAPI, error) {
+func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
 	switch *hashAlgorithm {
 	case "meow":
-		return createHashAPIFromIdentifier(golongtail.GetMeowHashIdentifier())
+		return createHashAPIFromIdentifier(lib.GetMeowHashIdentifier())
 	case "blake2":
-		return createHashAPIFromIdentifier(golongtail.GetBlake2HashIdentifier())
+		return createHashAPIFromIdentifier(lib.GetBlake2HashIdentifier())
 	case "blake3":
-		return createHashAPIFromIdentifier(golongtail.GetBlake3HashIdentifier())
+		return createHashAPIFromIdentifier(lib.GetBlake3HashIdentifier())
 	}
-	return golongtail.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+	return lib.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
 }
 
 func upSyncVersion(
@@ -167,11 +168,11 @@ func upSyncVersion(
 	compressionAlgorithm *string,
 	hashAlgorithm *string) error {
 	//	defer un(trace("upSyncVersion " + targetFilePath))
-	fs := golongtail.CreateFSStorageAPI()
+	fs := lib.CreateFSStorageAPI()
 	defer fs.Dispose()
-	jobs := golongtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := golongtail.CreateDefaultCompressionRegistry()
+	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
 	//	log.Printf("Connecting to `%s`\n", blobStoreURI)
@@ -181,12 +182,12 @@ func upSyncVersion(
 	}
 	defer indexStore.Close()
 
-	var hash golongtail.Longtail_HashAPI
+	var hash lib.Longtail_HashAPI
 	//	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
-	var remoteContentIndex golongtail.Longtail_ContentIndex
+	var remoteContentIndex lib.Longtail_ContentIndex
 	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
-		remoteContentIndex, err = golongtail.ReadContentIndexFromBuffer(remoteContentIndexBlob)
+		remoteContentIndex, err = lib.ReadContentIndexFromBuffer(remoteContentIndexBlob)
 		if err != nil {
 			return errors.Wrap(err, blobStoreURI+"/store.lci")
 		}
@@ -199,7 +200,7 @@ func upSyncVersion(
 		if err != nil {
 			return err
 		}
-		remoteContentIndex, err = golongtail.CreateContentIndex(
+		remoteContentIndex, err = lib.CreateContentIndex(
 			hash,
 			0,
 			nil,
@@ -214,7 +215,7 @@ func upSyncVersion(
 	defer hash.Dispose()
 
 	//	log.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
-	fileInfos, err := golongtail.GetFilesRecursively(fs, sourceFolderPath)
+	fileInfos, err := lib.GetFilesRecursively(fs, sourceFolderPath)
 	if err != nil {
 		return err
 	}
@@ -230,7 +231,7 @@ func upSyncVersion(
 	compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
 	//	log.Printf("Indexing `%s`\n", sourceFolderPath)
-	vindex, err := golongtail.CreateVersionIndex(
+	vindex, err := lib.CreateVersionIndex(
 		fs,
 		hash,
 		jobs,
@@ -246,12 +247,12 @@ func upSyncVersion(
 	}
 	defer vindex.Dispose()
 
-	versionBlob, err := golongtail.WriteVersionIndexToBuffer(vindex)
+	versionBlob, err := lib.WriteVersionIndexToBuffer(vindex)
 	if err != nil {
 		return err
 	}
 
-	missingContentIndex, err := golongtail.CreateMissingContent(
+	missingContentIndex, err := lib.CreateMissingContent(
 		hash,
 		remoteContentIndex,
 		vindex,
@@ -263,7 +264,7 @@ func upSyncVersion(
 	defer missingContentIndex.Dispose()
 
 	if missingContentIndex.GetBlockCount() > 0 {
-		err = golongtail.WriteContent(
+		err = lib.WriteContent(
 			fs,
 			fs,
 			creg,
@@ -311,27 +312,27 @@ func downSyncVersion(
 	maxChunksPerBlock uint32,
 	hashAlgorithm *string) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
-	fs := golongtail.CreateFSStorageAPI()
+	fs := lib.CreateFSStorageAPI()
 	defer fs.Dispose()
-	jobs := golongtail.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := golongtail.CreateDefaultCompressionRegistry()
+	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
 	//	log.Printf("Connecting to `%v`\n", blobStoreURI)
-	var indexStore BlobStore
+	var indexStore store.BlobStore
 	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
 	defer indexStore.Close()
 
-	var hash golongtail.Longtail_HashAPI
+	var hash lib.Longtail_HashAPI
 	//log.Printf("Fetching remote store index from `%s`\n", "store.lci")
-	var remoteContentIndex golongtail.Longtail_ContentIndex
+	var remoteContentIndex lib.Longtail_ContentIndex
 	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
-		remoteContentIndex, err = golongtail.ReadContentIndexFromBuffer(remoteContentIndexBlob)
+		remoteContentIndex, err = lib.ReadContentIndexFromBuffer(remoteContentIndexBlob)
 		if err != nil {
 			errors.Wrap(err, blobStoreURI+"/store.lci")
 		}
@@ -344,7 +345,7 @@ func downSyncVersion(
 		if err != nil {
 			return err
 		}
-		remoteContentIndex, err = golongtail.CreateContentIndex(
+		remoteContentIndex, err = lib.CreateContentIndex(
 			hash,
 			0,
 			nil,
@@ -358,20 +359,20 @@ func downSyncVersion(
 	}
 	defer hash.Dispose()
 
-	var remoteVersionIndex golongtail.Longtail_VersionIndex
+	var remoteVersionIndex lib.Longtail_VersionIndex
 
 	//	log.Printf("Fetching remote version index from `%s`\n", sourceFilePath)
 	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
 	if err != nil {
 		return err
 	}
-	remoteVersionIndex, err = golongtail.ReadVersionIndexFromBuffer(remoteVersionBlob)
+	remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(remoteVersionBlob)
 	if err != nil {
 		return err
 	}
 
 	//	log.Printf("Indexing files and folders in `%s`\n", targetFolderPath)
-	fileInfos, err := golongtail.GetFilesRecursively(fs, targetFolderPath)
+	fileInfos, err := lib.GetFilesRecursively(fs, targetFolderPath)
 	if err != nil {
 		return err
 	}
@@ -382,7 +383,7 @@ func downSyncVersion(
 
 	compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
-	localVersionIndex, err := golongtail.CreateVersionIndex(
+	localVersionIndex, err := lib.CreateVersionIndex(
 		fs,
 		hash,
 		jobs,
@@ -398,7 +399,7 @@ func downSyncVersion(
 	}
 	defer localVersionIndex.Dispose()
 
-	localContentIndex, err := golongtail.ReadContent(
+	localContentIndex, err := lib.ReadContent(
 		fs,
 		hash,
 		jobs,
@@ -410,7 +411,7 @@ func downSyncVersion(
 	}
 	defer localContentIndex.Dispose()
 
-	missingContentIndex, err := golongtail.CreateMissingContent(
+	missingContentIndex, err := lib.CreateMissingContent(
 		hash,
 		localContentIndex,
 		remoteVersionIndex,
@@ -422,7 +423,7 @@ func downSyncVersion(
 	defer missingContentIndex.Dispose()
 
 	if missingContentIndex.GetBlockCount() > 0 {
-		neededContentIndex, err := golongtail.RetargetContent(remoteContentIndex, missingContentIndex)
+		neededContentIndex, err := lib.RetargetContent(remoteContentIndex, missingContentIndex)
 		if err != nil {
 			return err
 		}
@@ -439,7 +440,7 @@ func downSyncVersion(
 			return err
 		}
 
-		mergedContentIndex, err := golongtail.MergeContentIndex(localContentIndex, neededContentIndex)
+		mergedContentIndex, err := lib.MergeContentIndex(localContentIndex, neededContentIndex)
 		if err != nil {
 			return err
 		}
@@ -447,13 +448,13 @@ func downSyncVersion(
 		localContentIndex = mergedContentIndex
 	}
 
-	versionDiff, err := golongtail.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
+	versionDiff, err := lib.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
 	if err != nil {
 		return err
 	}
 	defer versionDiff.Dispose()
 
-	err = golongtail.ChangeVersion(
+	err = lib.ChangeVersion(
 		fs,
 		fs,
 		hash,
@@ -541,12 +542,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	l := golongtail.SetLogger(logger, &loggerData{})
-	defer golongtail.ClearLogger(l)
-	golongtail.SetLogLevel(longtailLogLevel)
+	l := lib.SetLogger(logger, &loggerData{})
+	defer lib.ClearLogger(l)
+	lib.SetLogLevel(longtailLogLevel)
 
-	golongtail.SetAssert(cmdAssertFunc, nil)
-	defer golongtail.ClearAssert()
+	lib.SetAssert(cmdAssertFunc, nil)
+	defer lib.ClearAssert()
 
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():

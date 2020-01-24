@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/DanEngelbrecht/golongtail/golongtail"
+	"github.com/DanEngelbrecht/golongtail/lib"
 	"github.com/pkg/errors"
 )
 
@@ -103,7 +103,7 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
-func gcsProgressProxy(progressFunc golongtail.ProgressFunc,
+func gcsProgressProxy(progressFunc lib.ProgressFunc,
 	progressContext interface{},
 	blockCount uint32,
 	blocksCopied *uint32) {
@@ -124,12 +124,12 @@ func gcsProgressProxy(progressFunc golongtail.ProgressFunc,
 // PutContent ...
 func (s GCSBlobStore) PutContent(
 	ctx context.Context,
-	progressFunc golongtail.ProgressFunc,
+	progressFunc lib.ProgressFunc,
 	progressContext interface{},
-	contentIndex golongtail.Longtail_ContentIndex,
-	fs golongtail.Longtail_StorageAPI,
+	contentIndex lib.Longtail_ContentIndex,
+	fs lib.Longtail_StorageAPI,
 	contentPath string) error {
-	paths, err := golongtail.GetPathsForContentBlocks(contentIndex)
+	paths, err := lib.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
 	}
@@ -174,14 +174,14 @@ func (s GCSBlobStore) PutContent(
 				defer workerStore.Close()
 
 				for p := start; p < end; p++ {
-					path := golongtail.GetPath(paths, p)
+					path := lib.GetPath(paths, p)
 
 					if workerStore.HasBlob(context.Background(), "chunks/"+path) {
 						atomic.AddUint32(blocksCopied, 1)
 						continue
 					}
 
-					block, err := golongtail.ReadFromStorage(fs, contentPath, path)
+					block, err := lib.ReadFromStorage(fs, contentPath, path)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
 						break
@@ -216,13 +216,7 @@ func (s GCSBlobStore) PutContent(
 		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
 	}
 
-	hash, err := createHashAPIFromIdentifier(contentIndex.GetHashAPI())
-	if err != nil {
-		return errors.Wrap(err, s.String())
-	}
-	defer hash.Dispose()
-
-	storeBlob, err := golongtail.WriteContentIndexToBuffer(contentIndex)
+	storeBlob, err := lib.WriteContentIndexToBuffer(contentIndex)
 	if err != nil {
 		return errors.Wrap(err, s.String())
 	}
@@ -245,18 +239,18 @@ func (s GCSBlobStore) PutContent(
 				return errors.Wrap(err, s.String())
 			}
 
-			remoteContentIndex, err := golongtail.ReadContentIndexFromBuffer(blob)
+			remoteContentIndex, err := lib.ReadContentIndexFromBuffer(blob)
 			if err != nil {
 				return errors.Wrap(err, s.String())
 			}
 			defer remoteContentIndex.Dispose()
-			mergedContentIndex, err := golongtail.MergeContentIndex(remoteContentIndex, contentIndex)
+			mergedContentIndex, err := lib.MergeContentIndex(remoteContentIndex, contentIndex)
 			if err != nil {
 				return errors.Wrap(err, s.String())
 			}
 			defer mergedContentIndex.Dispose()
 
-			storeBlob, err = golongtail.WriteContentIndexToBuffer(mergedContentIndex)
+			storeBlob, err = lib.WriteContentIndexToBuffer(mergedContentIndex)
 			if err != nil {
 				return errors.Wrap(err, s.String())
 			}
@@ -283,12 +277,12 @@ func (s GCSBlobStore) PutContent(
 // GetContent ...
 func (s GCSBlobStore) GetContent(
 	ctx context.Context,
-	progressFunc golongtail.ProgressFunc,
+	progressFunc lib.ProgressFunc,
 	progressContext interface{},
-	contentIndex golongtail.Longtail_ContentIndex,
-	fs golongtail.Longtail_StorageAPI,
+	contentIndex lib.Longtail_ContentIndex,
+	fs lib.Longtail_StorageAPI,
 	contentPath string) error {
-	missingPaths, err := golongtail.GetPathsForContentBlocks(contentIndex)
+	missingPaths, err := lib.GetPathsForContentBlocks(contentIndex)
 	if err != nil {
 		return err
 	}
@@ -332,7 +326,7 @@ func (s GCSBlobStore) GetContent(
 				defer workerStore.Close()
 
 				for p := start; p < end; p++ {
-					path := golongtail.GetPath(missingPaths, p)
+					path := lib.GetPath(missingPaths, p)
 
 					blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
 					if err != nil {
@@ -340,7 +334,7 @@ func (s GCSBlobStore) GetContent(
 						continue
 					}
 
-					err = golongtail.WriteToStorage(fs, contentPath, path, blockData)
+					err = lib.WriteToStorage(fs, contentPath, path, blockData)
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "Failed to store block: `%s`, %v", path, err)
 						break

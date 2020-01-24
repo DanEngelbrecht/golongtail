@@ -18,13 +18,13 @@ elif [[ "$OSTYPE" == "win32" ]]; then
 	OS_NAME=windows
 fi
 
-LIB_TARGET_FOLDER=../golongtail/import/${OS_NAME}_${ARCH_NAME}
+LIB_TARGET_FOLDER=../lib/import/${OS_NAME}_${ARCH_NAME}
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
 
 if [ ! -e $LIB_TARGET ]
 then
 	echo Building longtail library, this takes a couple of minutes, hold on...
-	pushd ../golongtail/import >>/dev/null
+	pushd ../lib/import >>/dev/null
 	./build_lib.sh
 	popd
 fi

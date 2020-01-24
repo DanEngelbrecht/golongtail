@@ -1,4 +1,4 @@
-package golongtail
+package lib
 
 import (
 	"fmt"

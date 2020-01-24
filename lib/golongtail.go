@@ -1,4 +1,4 @@
-package golongtail
+package lib
 
 // #cgo CFLAGS: -g -std=gnu99
 // #include "golongtail.h"

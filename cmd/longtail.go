@@ -240,6 +240,7 @@ func upSyncVersion(
 		sourceFolderPath,
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
 		compressionTypes,
 		targetChunkSize)
 	if err != nil {
@@ -310,7 +311,8 @@ func downSyncVersion(
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
-	hashAlgorithm *string) error {
+	hashAlgorithm *string,
+	retainPermissions bool) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := lib.CreateFSStorageAPI()
 	defer fs.Dispose()
@@ -392,6 +394,7 @@ func downSyncVersion(
 		targetFolderPath,
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
 		compressionTypes,
 		targetChunkSize)
 	if err != nil {
@@ -467,7 +470,8 @@ func downSyncVersion(
 		remoteVersionIndex,
 		versionDiff,
 		localCachePath,
-		targetFolderPath)
+		targetFolderPath,
+		retainPermissions)
 	if err != nil {
 		return err
 	}
@@ -526,6 +530,7 @@ var (
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").String()
 	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").String()
+	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 )
 
 func cmdAssertFunc(context interface{}, expression string, file string, line int) {
@@ -556,7 +561,7 @@ func main() {
 			log.Fatal(err)
 		}
 	case commandDownSync.FullCommand():
-		err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, hashing)
+		err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, hashing, !(*noRetainPermissions))
 		if err != nil {
 			log.Fatal(err)
 		}

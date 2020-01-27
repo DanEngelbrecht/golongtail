@@ -179,8 +179,17 @@ func (fileInfos *Longtail_FileInfos) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
 }
 
-func carray2slice(array *C.uint64_t, len int) []uint64 {
+func carray2slice64(array *C.uint64_t, len int) []uint64 {
 	var list []uint64
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	sliceHeader.Cap = len
+	sliceHeader.Len = len
+	sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	return list
+}
+
+func carray2slice32(array *C.uint32_t, len int) []uint32 {
+	var list []uint32
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
 	sliceHeader.Cap = len
 	sliceHeader.Len = len
@@ -194,7 +203,12 @@ func (fileInfos *Longtail_FileInfos) GetFileCount() uint32 {
 
 func (fileInfos *Longtail_FileInfos) GetFileSizes() []uint64 {
 	size := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
-	return carray2slice(fileInfos.cFileInfos.m_FileSizes, size)
+	return carray2slice64(fileInfos.cFileInfos.m_FileSizes, size)
+}
+
+func (fileInfos *Longtail_FileInfos) GetFilePermissions() []uint32 {
+	size := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
+	return carray2slice32(fileInfos.cFileInfos.m_Permissions, size)
 }
 
 func (fileInfos *Longtail_FileInfos) GetPaths() Longtail_Paths {
@@ -440,6 +454,7 @@ func CreateVersionIndex(
 	rootPath string,
 	paths Longtail_Paths,
 	assetSizes []uint64,
+	assetPermissions []uint32,
 	assetCompressionTypes []uint32,
 	maxChunkSize uint32) (Longtail_VersionIndex, error) {
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
@@ -452,6 +467,11 @@ func CreateVersionIndex(
 	cAssetSizes := unsafe.Pointer(nil)
 	if len(assetSizes) > 0 {
 		cAssetSizes = unsafe.Pointer(&assetSizes[0])
+	}
+
+	cAssetPermissions := unsafe.Pointer(nil)
+	if len(assetPermissions) > 0 {
+		cAssetPermissions = unsafe.Pointer(&assetPermissions[0])
 	}
 
 	cCompressionTypes := unsafe.Pointer(nil)
@@ -469,6 +489,7 @@ func CreateVersionIndex(
 		cRootPath,
 		paths.cPaths,
 		(*C.uint64_t)(cAssetSizes),
+		(*C.uint32_t)(cAssetPermissions),
 		(*C.uint32_t)(cCompressionTypes),
 		C.uint32_t(maxChunkSize),
 		&vindex)
@@ -765,7 +786,8 @@ func WriteVersion(
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	contentFolderPath string,
-	versionFolderPath string) error {
+	versionFolderPath string,
+	retainPermissions bool) error {
 
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := SavePointer(&progressProxyData)
@@ -777,6 +799,11 @@ func WriteVersion(
 	cVersionFolderPath := C.CString(versionFolderPath)
 	defer C.free(unsafe.Pointer(cVersionFolderPath))
 
+	cRetainPermissions := C.int(0)
+	if retainPermissions {
+		cRetainPermissions = C.int(1)
+	}
+
 	errno := C.Longtail_WriteVersion(
 		contentStorageAPI.cStorageAPI,
 		versionStorageAPI.cStorageAPI,
@@ -787,7 +814,8 @@ func WriteVersion(
 		contentIndex.cContentIndex,
 		versionIndex.cVersionIndex,
 		cContentFolderPath,
-		cVersionFolderPath)
+		cVersionFolderPath,
+		cRetainPermissions)
 	if errno != 0 {
 		return fmt.Errorf("WriteVersion: C.Longtail_WriteVersion(`%s`, `%s) failed with error %d", versionFolderPath, contentFolderPath, errno)
 	}
@@ -820,7 +848,8 @@ func ChangeVersion(
 	targetVersionIndex Longtail_VersionIndex,
 	versionDiff Longtail_VersionDiff,
 	contentFolderPath string,
-	versionFolderPath string) error {
+	versionFolderPath string,
+	retainPermissions bool) error {
 
 	progressProxyData := makeProgressProxy(progressFunc, progressContext)
 	cProgressProxyData := SavePointer(&progressProxyData)
@@ -831,6 +860,11 @@ func ChangeVersion(
 
 	cVersionFolderPath := C.CString(versionFolderPath)
 	defer C.free(unsafe.Pointer(cVersionFolderPath))
+
+	cRetainPermissions := C.int(0)
+	if retainPermissions {
+		cRetainPermissions = C.int(1)
+	}
 
 	errno := C.Longtail_ChangeVersion(
 		contentStorageAPI.cStorageAPI,
@@ -845,7 +879,8 @@ func ChangeVersion(
 		targetVersionIndex.cVersionIndex,
 		versionDiff.cVersionDiff,
 		cContentFolderPath,
-		cVersionFolderPath)
+		cVersionFolderPath,
+		cRetainPermissions)
 	if errno != 0 {
 		return fmt.Errorf("ChangeVersion: C.Longtail_ChangeVersio(`%s`, `%s`) failed with error %d", versionFolderPath, contentFolderPath, errno)
 	}

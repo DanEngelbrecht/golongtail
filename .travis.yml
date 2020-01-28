@@ -1,9 +1,11 @@
-language: go
+language:
+  - go
+  - c
 sudo: true
 go:
   - 1.13
 compiler:
-  - clang
+  - gcc-7
 
 os:
   - linux

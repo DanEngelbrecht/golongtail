@@ -3,8 +3,8 @@
 set -e
 
 cd lib
-test.bat
+./test.bat
 cd ..
 cd cmd
-build.bat
+./build.bat
 cd ..

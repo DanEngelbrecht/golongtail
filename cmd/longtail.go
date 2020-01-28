@@ -162,6 +162,7 @@ func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
 func upSyncVersion(
 	blobStoreURI string,
 	sourceFolderPath string,
+	sourceIndexPath *string,
 	targetFilePath string,
 	localCachePath string,
 	targetChunkSize uint32,
@@ -169,7 +170,6 @@ func upSyncVersion(
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
 	hashAlgorithm *string) error {
-	//	defer un(trace("upSyncVersion " + targetFilePath))
 	fs := lib.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -177,7 +177,6 @@ func upSyncVersion(
 	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	//	log.Printf("Connecting to `%s`\n", blobStoreURI)
 	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
@@ -185,7 +184,6 @@ func upSyncVersion(
 	defer indexStore.Close()
 
 	var hash lib.Longtail_HashAPI
-	//	log.Printf("Fetching remote store index from `%s`\n", "store.lci")
 	var remoteContentIndex lib.Longtail_ContentIndex
 	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
@@ -216,37 +214,40 @@ func upSyncVersion(
 	}
 	defer hash.Dispose()
 
-	//	log.Printf("Indexing files and folders in `%s`\n", sourceFolderPath)
-	fileInfos, err := lib.GetFilesRecursively(fs, sourceFolderPath)
-	if err != nil {
-		return err
-	}
-	defer fileInfos.Dispose()
+	var vindex lib.Longtail_VersionIndex
+	if sourceIndexPath == nil {
+		fileInfos, err := lib.GetFilesRecursively(fs, sourceFolderPath)
+		if err != nil {
+			return err
+		}
+		defer fileInfos.Dispose()
 
-	//pathCount := fileInfos.GetFileCount()
-	//	log.Printf("Found %d assets\n", int(pathCount))
+		compressionType, err := getCompressionType(compressionAlgorithm)
+		if err != nil {
+			return err
+		}
+		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
-	compressionType, err := getCompressionType(compressionAlgorithm)
-	if err != nil {
-		return err
-	}
-	compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
-
-	//	log.Printf("Indexing `%s`\n", sourceFolderPath)
-	vindex, err := lib.CreateVersionIndex(
-		fs,
-		hash,
-		jobs,
-		progress,
-		&progressData{task: "Indexing version"},
-		sourceFolderPath,
-		fileInfos.GetPaths(),
-		fileInfos.GetFileSizes(),
-		fileInfos.GetFilePermissions(),
-		compressionTypes,
-		targetChunkSize)
-	if err != nil {
-		return err
+		vindex, err = lib.CreateVersionIndex(
+			fs,
+			hash,
+			jobs,
+			progress,
+			&progressData{task: "Indexing version"},
+			sourceFolderPath,
+			fileInfos.GetPaths(),
+			fileInfos.GetFileSizes(),
+			fileInfos.GetFilePermissions(),
+			compressionTypes,
+			targetChunkSize)
+		if err != nil {
+			return err
+		}
+	} else {
+		vindex, err = lib.ReadVersionIndex(fs, *sourceIndexPath)
+		if err != nil {
+			return err
+		}
 	}
 	defer vindex.Dispose()
 
@@ -309,6 +310,7 @@ func downSyncVersion(
 	blobStoreURI string,
 	sourceFilePath string,
 	targetFolderPath string,
+	targetIndexPath *string,
 	localCachePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
@@ -323,7 +325,6 @@ func downSyncVersion(
 	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	//	log.Printf("Connecting to `%v`\n", blobStoreURI)
 	var indexStore store.BlobStore
 	indexStore, err := createBlobStoreForURI(blobStoreURI)
 	if err != nil {
@@ -332,7 +333,6 @@ func downSyncVersion(
 	defer indexStore.Close()
 
 	var hash lib.Longtail_HashAPI
-	//log.Printf("Fetching remote store index from `%s`\n", "store.lci")
 	var remoteContentIndex lib.Longtail_ContentIndex
 	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
 	if err == nil {
@@ -365,7 +365,6 @@ func downSyncVersion(
 
 	var remoteVersionIndex lib.Longtail_VersionIndex
 
-	//	log.Printf("Fetching remote version index from `%s`\n", sourceFilePath)
 	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
 	if err != nil {
 		return err
@@ -375,32 +374,36 @@ func downSyncVersion(
 		return err
 	}
 
-	//	log.Printf("Indexing files and folders in `%s`\n", targetFolderPath)
-	fileInfos, err := lib.GetFilesRecursively(fs, targetFolderPath)
-	if err != nil {
-		return err
-	}
-	defer fileInfos.Dispose()
+	var localVersionIndex lib.Longtail_VersionIndex
+	if targetIndexPath == nil {
+		fileInfos, err := lib.GetFilesRecursively(fs, targetFolderPath)
+		if err != nil {
+			return err
+		}
+		defer fileInfos.Dispose()
 
-	//pathCount := fileInfos.GetFileCount()
-	//	log.Printf("Found %d assets\n", int(pathCount))
+		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
-	compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
-
-	localVersionIndex, err := lib.CreateVersionIndex(
-		fs,
-		hash,
-		jobs,
-		progress,
-		&progressData{task: "Indexing version"},
-		targetFolderPath,
-		fileInfos.GetPaths(),
-		fileInfos.GetFileSizes(),
-		fileInfos.GetFilePermissions(),
-		compressionTypes,
-		targetChunkSize)
-	if err != nil {
-		return err
+		localVersionIndex, err = lib.CreateVersionIndex(
+			fs,
+			hash,
+			jobs,
+			progress,
+			&progressData{task: "Indexing version"},
+			targetFolderPath,
+			fileInfos.GetPaths(),
+			fileInfos.GetFileSizes(),
+			fileInfos.GetFilePermissions(),
+			compressionTypes,
+			targetChunkSize)
+		if err != nil {
+			return err
+		}
+	} else {
+		localVersionIndex, err = lib.ReadVersionIndex(fs, *targetIndexPath)
+		if err != nil {
+			return err
+		}
 	}
 	defer localVersionIndex.Dispose()
 
@@ -510,6 +513,7 @@ var (
 	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
+	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
 	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
 	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lizard[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
@@ -532,6 +536,7 @@ var (
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").String()
+	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").String()
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 )
@@ -559,12 +564,31 @@ func main() {
 
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():
-		err := upSyncVersion(*storageURI, *sourceFolderPath, *targetFilePath, *upSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, compression, hashing)
+		err := upSyncVersion(
+			*storageURI,
+			*sourceFolderPath,
+			sourceIndexPath,
+			*targetFilePath,
+			*upSyncContentPath,
+			*targetChunkSize,
+			*targetBlockSize,
+			*maxChunksPerBlock,
+			compression, hashing)
 		if err != nil {
 			log.Fatal(err)
 		}
 	case commandDownSync.FullCommand():
-		err := downSyncVersion(*storageURI, *sourceFilePath, *targetFolderPath, *downSyncContentPath, *targetChunkSize, *targetBlockSize, *maxChunksPerBlock, hashing, !(*noRetainPermissions))
+		err := downSyncVersion(
+			*storageURI,
+			*sourceFilePath,
+			*targetFolderPath,
+			targetIndexPath,
+			*downSyncContentPath,
+			*targetChunkSize,
+			*targetBlockSize,
+			*maxChunksPerBlock,
+			hashing,
+			!(*noRetainPermissions))
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -77,6 +77,7 @@ func CreateVersionIndexUtil(
 		versionPath,
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
 		compressionTypes,
 		targetChunkSize)
 
@@ -312,6 +313,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 		"",
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
 		compressionTypes,
 		32768)
 
@@ -590,7 +592,8 @@ func TestUpSyncVersion(t *testing.T) {
 		targetVersionIndex,
 		versionDiff,
 		"cache",
-		"current")
+		"current",
+		true)
 	if err != nil {
 		t.Errorf("UpSyncVersion() ChangeVersion(%s, %s) = %q, want %q", "cache", "current", err, error(nil))
 	}

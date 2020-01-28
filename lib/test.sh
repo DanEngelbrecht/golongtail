@@ -22,6 +22,8 @@ fi
 LIB_TARGET_FOLDER=import/${OS_NAME}_${ARCH_NAME}
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
 
+echo "LIB_TARGET $LIB_TARGET"
+
 if [ ! -e $LIB_TARGET ]
 then
 	echo Building longtail library, this takes a couple of minutes, hold on...

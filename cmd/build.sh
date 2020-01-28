@@ -19,8 +19,10 @@ elif [[ "$OSTYPE" == "win32" ]]; then
 	OS_NAME=windows
 fi
 
-LIB_TARGET_FOLDER=../lib/import/${OS_NAME}_${ARCH_NAME}
+LIB_TARGET_FOLDER=import/${OS_NAME}_${ARCH_NAME}
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
+
+echo "LIB_TARGET $LIB_TARGET"
 
 if [ ! -e $LIB_TARGET ]
 then

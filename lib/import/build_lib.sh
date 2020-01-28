@@ -1,6 +1,6 @@
 #!/bin/bash
 
-arch=$(uname -i)
+arch=$(uname -p)
 if [[ $arch == x86_64* ]]; then
 	ARCH_NAME=amd64
 elif [[ $arch == i*86 ]]; then
@@ -11,8 +11,11 @@ fi
 
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
 	OS_NAME=linux
+	GCC_EXTRA=-D_GNU_SOURCE
 elif [[ "$OSTYPE" == "darwin"* ]]; then
 	OS_NAME=darwin
+	ARCH_NAME=amd64
+	GCC_EXTRA=-D_GNU_SOURCE
 elif [[ "$OSTYPE" == "win32" ]]; then
 	OS_NAME=windows
 fi
@@ -20,7 +23,7 @@ fi
 LIB_TARGET_FOLDER=${OS_NAME}_${ARCH_NAME}
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
 
-echo Building $LIB_TARGET_FOLDER
+echo Building $LIB_TARGET
 
 mkdir -p obj
 mkdir -p $LIB_TARGET_FOLDER
@@ -35,6 +38,6 @@ LIZARD_SRC="../lib/lizard/*.c ../lib/lizard/ext/*.c ../lib/lizard/ext/entropy/*.
 BROTLI_SRC="../lib/brotli/*.c ../lib/brotli/ext/common/*.c ../lib/brotli/ext/dec/*.c ../lib/brotli/ext/enc/*.c ../lib/brotli/ext/fuzz/*.c"
 ZLIB_SRC="../lib/zstd/*.c ../lib/zstd/ext/common/*.c ../lib/zstd/ext/compress/*.c ../lib/zstd/ext/decompress/*.c"
 rm *.o
-gcc -c -std=gnu99 -m64 -O3 -pthread -msse4.1 -maes -Isrc ../src/*.c ../src/ext/*.c ../lib/*.c $BIKESHED_SRC $BLAKE2_SRC $BLAKE3_SRC $FILESTORAGE_SRC $MEMSTORAGE_SRC $MEOWHASH_SRC $LIZARD_SRC $BROTLI_SRC $ZLIB_SRC
+gcc -c $GCC_EXTRA -std=gnu99 -m64 -O3 -pthread -msse4.1 -maes ../src/*.c ../src/ext/*.c ../lib/*.c $BIKESHED_SRC $BLAKE2_SRC $BLAKE3_SRC $FILESTORAGE_SRC $MEMSTORAGE_SRC $MEOWHASH_SRC $LIZARD_SRC $BROTLI_SRC $ZLIB_SRC
 popd
-ar rc $LIB_TARGET obj/*.o
+ar cr -v $LIB_TARGET obj/*.o

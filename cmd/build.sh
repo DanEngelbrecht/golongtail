@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-arch=$(uname -i)
+arch=$(uname -p)
 if [[ $arch == x86_64* ]]; then
 	ARCH_NAME=amd64
 elif [[ $arch == i*86 ]]; then
@@ -14,12 +14,15 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 	OS_NAME=linux
 elif [[ "$OSTYPE" == "darwin"* ]]; then
 	OS_NAME=darwin
+	ARCH_NAME=amd64
 elif [[ "$OSTYPE" == "win32" ]]; then
 	OS_NAME=windows
 fi
 
-LIB_TARGET_FOLDER=../lib/import/${OS_NAME}_${ARCH_NAME}
+LIB_TARGET_FOLDER=import/${OS_NAME}_${ARCH_NAME}
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
+
+echo "LIB_TARGET $LIB_TARGET"
 
 if [ ! -e $LIB_TARGET ]
 then

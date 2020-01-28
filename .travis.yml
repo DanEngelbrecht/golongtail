@@ -1,5 +1,7 @@
-language: cpp
+language: go
 sudo: true
+go:
+  - 1.13
 compiler:
   - clang
 

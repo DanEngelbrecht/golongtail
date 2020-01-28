@@ -13,6 +13,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 	OS_NAME=linux
 elif [[ "$OSTYPE" == "darwin"* ]]; then
 	OS_NAME=darwin
+	ARCH_NAME=amd64
 elif [[ "$OSTYPE" == "win32" ]]; then
 	OS_NAME=windows
 fi

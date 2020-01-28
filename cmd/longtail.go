@@ -113,6 +113,8 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 		return lib.GetLizardMinCompressionType(), nil
 	case "lizard_max":
 		return lib.GetLizardDefaultCompressionType(), nil
+	case "lz4":
+		return lib.GetLZ4DefaultCompressionType(), nil
 	case "zstd":
 		return lib.GetZStdMaxCompressionType(), nil
 	case "zstd_min":
@@ -509,7 +511,7 @@ var (
 	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
 	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lizard[_min|_max], ztd[_min|_max]").
+	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lizard[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -522,6 +524,7 @@ var (
 			"lizard",
 			"lizard_min",
 			"lizard_max",
+			"lz4",
 			"zstd",
 			"zstd_min",
 			"zstd_max")

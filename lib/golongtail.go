@@ -310,6 +310,11 @@ func CreateLizardCompressionAPI() Longtail_CompressionAPI {
 	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLizardCompressionAPI()}
 }
 
+// CreateLZ4CompressionAPI ...
+func CreateLZ4CompressionAPI() Longtail_CompressionAPI {
+	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLZ4CompressionAPI()}
+}
+
 // CreateBrotliCompressionAPI ...
 func CreateBrotliCompressionAPI() Longtail_CompressionAPI {
 	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateBrotliCompressionAPI()}
@@ -393,6 +398,11 @@ func GetLizardDefaultCompressionType() uint32 {
 // GetLizardMaxCompressionType ...
 func GetLizardMaxCompressionType() uint32 {
 	return uint32(C.LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE)
+}
+
+// GetLZ4DefaultCompressionType ...
+func GetLZ4DefaultCompressionType() uint32 {
+	return uint32(C.LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE)
 }
 
 // GetZStdMinCompressionType ...

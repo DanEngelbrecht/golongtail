@@ -6,6 +6,7 @@
 #include "import/lib/brotli/longtail_brotli.h"
 #include "import/lib/filestorage/longtail_filestorage.h"
 #include "import/lib/lizard/longtail_lizard.h"
+#include "import/lib/lz4/longtail_lz4.h"
 #include "import/lib/memstorage/longtail_memstorage.h"
 #include "import/lib/meowhash/longtail_meowhash.h"
 #include "import/lib/zstd/longtail_zstd.h"
@@ -78,6 +79,8 @@ static const char* GetPath(const uint32_t* name_offsets, const char* name_data, 
 #define  LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE  ((((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
 #define  LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE      ((((uint32_t)'1') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
 
+#define  LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE      ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
+
 #define  LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE        ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
 #define  LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE    ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
 #define  LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE        ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
@@ -90,22 +93,31 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         return 0;
     }
 
+    struct Longtail_CompressionAPI* lz4_compression = Longtail_CreateLZ4CompressionAPI();
+    if (lz4_compression == 0)
+    {
+        SAFE_DISPOSE_API(lizard_compression);
+        return 0;
+    }
+
     struct Longtail_CompressionAPI* brotli_compression = Longtail_CreateBrotliCompressionAPI();
     if (brotli_compression == 0)
     {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
+        SAFE_DISPOSE_API(lizard_compression);
+        SAFE_DISPOSE_API(lz4_compression);
         return 0;
     }
 
     struct Longtail_CompressionAPI* zstd_compression = Longtail_CreateZStdCompressionAPI();
     if (zstd_compression == 0)
     {
-        Longtail_DisposeAPI(&lizard_compression->m_API);
-        Longtail_DisposeAPI(&brotli_compression->m_API);
+        SAFE_DISPOSE_API(lizard_compression);
+        SAFE_DISPOSE_API(lz4_compression);
+        SAFE_DISPOSE_API(brotli_compression);
         return 0;
     }
 
-    uint32_t compression_types[12] = {
+    uint32_t compression_types[13] = {
         LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE,
         LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE,
         LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE,
@@ -117,10 +129,12 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE,
         LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE,
 
+        LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE,
+
         LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE,
         LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE,
         LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE};
-    struct Longtail_CompressionAPI* compression_apis[12] = {
+    struct Longtail_CompressionAPI* compression_apis[13] = {
         brotli_compression,
         brotli_compression,
         brotli_compression,
@@ -130,10 +144,11 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         lizard_compression,
         lizard_compression,
         lizard_compression,
+        lz4_compression,
         zstd_compression,
         zstd_compression,
         zstd_compression};
-    Longtail_CompressionAPI_HSettings compression_settings[12] = {
+    Longtail_CompressionAPI_HSettings compression_settings[13] = {
         LONGTAIL_BROTLI_GENERIC_MIN_QUALITY,
         LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY,
         LONGTAIL_BROTLI_GENERIC_MAX_QUALITY,
@@ -143,19 +158,23 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         LONGTAIL_LIZARD_MIN_COMPRESSION,
         LONGTAIL_LIZARD_DEFAULT_COMPRESSION,
         LONGTAIL_LIZARD_MAX_COMPRESSION,
+        LONGTAIL_LZ4_DEFAULT_COMPRESSION,
         LONGTAIL_ZSTD_MIN_COMPRESSION,
         LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
         LONGTAIL_ZSTD_MAX_COMPRESSION};
 
 
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        12,
+        13,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);
     if (registry == 0)
     {
         SAFE_DISPOSE_API(lizard_compression);
+        SAFE_DISPOSE_API(lz4_compression);
+        SAFE_DISPOSE_API(brotli_compression);
+        SAFE_DISPOSE_API(zstd_compression);
         return 0;
     }
     return registry;

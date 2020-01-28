@@ -11,6 +11,7 @@ fi
 
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
 	OS_NAME=linux
+	GCC_EXTRA=-D_GNU_SOURCE
 elif [[ "$OSTYPE" == "darwin"* ]]; then
 	OS_NAME=darwin
 	ARCH_NAME=amd64

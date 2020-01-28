@@ -1,7 +1,7 @@
 #include "longtail.h"
 
-#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE)
-#define __USE_GNU
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
 #endif
 
 #include "ext/stb_ds.h"

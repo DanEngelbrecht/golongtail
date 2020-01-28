@@ -14,6 +14,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 elif [[ "$OSTYPE" == "darwin"* ]]; then
 	OS_NAME=darwin
 	ARCH_NAME=amd64
+	GCC_EXTRA=-D_GNU_SOURCE
 elif [[ "$OSTYPE" == "win32" ]]; then
 	OS_NAME=windows
 fi
@@ -36,6 +37,6 @@ LIZARD_SRC="../lib/lizard/*.c ../lib/lizard/ext/*.c ../lib/lizard/ext/entropy/*.
 BROTLI_SRC="../lib/brotli/*.c ../lib/brotli/ext/common/*.c ../lib/brotli/ext/dec/*.c ../lib/brotli/ext/enc/*.c ../lib/brotli/ext/fuzz/*.c"
 ZLIB_SRC="../lib/zstd/*.c ../lib/zstd/ext/common/*.c ../lib/zstd/ext/compress/*.c ../lib/zstd/ext/decompress/*.c"
 rm *.o
-gcc -c -D_GNU_SOURCE -std=gnu99 -m64 -O3 -pthread -msse4.1 -maes ../src/*.c ../src/ext/*.c ../lib/*.c $BIKESHED_SRC $BLAKE2_SRC $BLAKE3_SRC $FILESTORAGE_SRC $MEMSTORAGE_SRC $MEOWHASH_SRC $LIZARD_SRC $BROTLI_SRC $ZLIB_SRC
+gcc -c $GCC_EXTRA -std=gnu99 -m64 -O3 -pthread -msse4.1 -maes ../src/*.c ../src/ext/*.c ../lib/*.c $BIKESHED_SRC $BLAKE2_SRC $BLAKE3_SRC $FILESTORAGE_SRC $MEMSTORAGE_SRC $MEOWHASH_SRC $LIZARD_SRC $BROTLI_SRC $ZLIB_SRC
 popd
 ar cr -v $LIB_TARGET obj/*.o

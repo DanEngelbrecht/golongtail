@@ -1,6 +1,6 @@
 #!/bin/bash
 
-arch=$(uname -i)
+arch=$(uname -p)
 if [[ $arch == x86_64* ]]; then
 	ARCH_NAME=amd64
 elif [[ $arch == i*86 ]]; then

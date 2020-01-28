@@ -3,8 +3,8 @@
 set -e
 
 cd lib
-./test.sh
+bash ./test.sh
 cd ..
 cd cmd
-./build.sh
+bash ./build.sh
 cd ..

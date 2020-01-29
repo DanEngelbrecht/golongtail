@@ -18,7 +18,6 @@ go_library(
               "//lib/import/lib/blake3:longtail_blake3",
               "//lib/import/lib/brotli:longtail_brotli",
               "//lib/import/lib/filestorage:longtail_filestorage",
-              "//lib/import/lib/lizard:longtail_lizard",
               "//lib/import/lib/lz4:longtail_lz4",
               "//lib/import/lib/memstorage:longtail_memstorage",
               "//lib/import/lib/meowhash:longtail_meowhash",

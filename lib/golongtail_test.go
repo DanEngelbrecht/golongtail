@@ -301,7 +301,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)
 	for i := uint32(0); i < pathCount; i++ {
-		compressionTypes[i] = GetLizardDefaultCompressionType()
+		compressionTypes[i] = GetLZ4DefaultCompressionType()
 	}
 
 	vi, err := CreateVersionIndex(
@@ -412,7 +412,7 @@ func TestUpSyncVersion(t *testing.T) {
 		"cache",
 		"cache.lci",
 		"cache",
-		GetLizardDefaultCompressionType(),
+		GetZStdDefaultCompressionType(),
 		4096,
 		32768,
 		32758*12)
@@ -565,7 +565,7 @@ func TestUpSyncVersion(t *testing.T) {
 		progress,
 		&progressData{task: "Indexing version", t: t},
 		"current",
-		GetLizardDefaultCompressionType(),
+		GetBrotliDefaultCompressionType(),
 		32768)
 	if err != nil {
 		t.Errorf("UpSyncVersion() CreateVersionIndex(%s) = %q, want %q", "current", err, error(nil))

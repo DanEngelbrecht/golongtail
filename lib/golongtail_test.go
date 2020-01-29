@@ -565,7 +565,7 @@ func TestUpSyncVersion(t *testing.T) {
 		progress,
 		&progressData{task: "Indexing version", t: t},
 		"current",
-		GetBrotliDefaultCompressionType(),
+		GetBrotliGenericDefaultCompressionType(),
 		32768)
 	if err != nil {
 		t.Errorf("UpSyncVersion() CreateVersionIndex(%s) = %q, want %q", "current", err, error(nil))

@@ -18,3 +18,9 @@ cmd/longtail
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Bazel generated files
+bazel-bin
+bazel-golongtail
+bazel-out
+bazel-testlogs

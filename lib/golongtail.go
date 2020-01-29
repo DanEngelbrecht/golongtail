@@ -305,11 +305,6 @@ func (storageAPI *Longtail_StorageAPI) Dispose() {
 	C.Longtail_DisposeAPI(&storageAPI.cStorageAPI.m_API)
 }
 
-// CreateLizardCompressionAPI ...
-func CreateLizardCompressionAPI() Longtail_CompressionAPI {
-	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLizardCompressionAPI()}
-}
-
 // CreateLZ4CompressionAPI ...
 func CreateLZ4CompressionAPI() Longtail_CompressionAPI {
 	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLZ4CompressionAPI()}
@@ -383,21 +378,6 @@ func GetBrotliTextDefaultCompressionType() uint32 {
 // GetBrotliTextMaxCompressionType ...
 func GetBrotliTextMaxCompressionType() uint32 {
 	return uint32(C.LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE)
-}
-
-// GetLizardMinCompressionType ...
-func GetLizardMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_LIZARD_MIN_COMPRESSION_TYPE)
-}
-
-// GetLizardDefaultCompressionType ...
-func GetLizardDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_LIZARD_DEFAULT_COMPRESSION_TYPE)
-}
-
-// GetLizardMaxCompressionType ...
-func GetLizardMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_LIZARD_MAX_COMPRESSION_TYPE)
 }
 
 // GetLZ4DefaultCompressionType ...

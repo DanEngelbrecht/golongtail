@@ -1,0 +1,12 @@
+cc_library(
+    name = "longtail_meowhash",
+    srcs = [ "longtail_meowhash.c",
+             "longtail_meowhash.h",
+             "ext/meow_hash_x64_aesni.h",
+    ],
+    copts = [ "-msse4.1 -maes" ],
+    hdrs = [ "longtail_meowhash.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)

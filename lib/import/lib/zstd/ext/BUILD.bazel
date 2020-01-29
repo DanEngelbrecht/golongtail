@@ -1,0 +1,8 @@
+cc_library(
+    name = "zstd",
+    srcs = glob([ "**/*.c",
+                  "**/*.h",
+                  "**/*.inl",
+    ]),
+    visibility = [ "//lib/import/lib/zstd:__subpackages__" ],
+)

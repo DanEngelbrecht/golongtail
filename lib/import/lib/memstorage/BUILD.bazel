@@ -1,0 +1,10 @@
+cc_library(
+    name = "longtail_memstorage",
+    srcs = [ "longtail_memstorage.c",
+             "longtail_memstorage.h",
+    ],
+    hdrs = [ "longtail_memstorage.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)

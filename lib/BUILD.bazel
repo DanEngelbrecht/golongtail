@@ -1,0 +1,34 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "golongtail.go",
+        "golongtail.h",
+        "lib_darwin_amd64.go",
+        "lib_linux_amd64.go",
+        "lib_windows_amd64.go",
+    ],
+    cgo = True,
+    copts = ["-std=gnu99"],
+    clinkopts = [ "-lm -pthread" ],
+    cdeps = [ "//lib/import:longtail",
+              "//lib/import/lib/bikeshed:bikeshed",
+              "//lib/import/lib/blake2:longtail_blake2",
+              "//lib/import/lib/blake3:longtail_blake3",
+              "//lib/import/lib/brotli:longtail_brotli",
+              "//lib/import/lib/filestorage:longtail_filestorage",
+              "//lib/import/lib/lz4:longtail_lz4",
+              "//lib/import/lib/memstorage:longtail_memstorage",
+              "//lib/import/lib/meowhash:longtail_meowhash",
+              "//lib/import/lib/zstd:longtail_zstd",
+    ],
+    importpath = "github.com/DanEngelbrecht/golongtail/lib",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["golongtail_test.go"],
+    embed = [":go_default_library"],
+)

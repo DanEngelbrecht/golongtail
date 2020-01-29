@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 arch=$(uname -p)
 if [[ $arch == x86_64* ]]; then

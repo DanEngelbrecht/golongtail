@@ -1,0 +1,11 @@
+cc_library(
+    name = "bikeshed",
+    srcs = [ "longtail_bikeshed.c",
+             "longtail_bikeshed.h",
+             "ext/bikeshed.h",
+    ],
+    hdrs = [ "longtail_bikeshed.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)

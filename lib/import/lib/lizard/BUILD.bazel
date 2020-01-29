@@ -1,0 +1,12 @@
+cc_library(
+    name = "longtail_lizard",
+    srcs = [ "longtail_lizard.c",
+             "longtail_lizard.h",
+    ],
+    hdrs = [ "longtail_lizard.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail",
+             "//lib/import/lib/lizard/ext:lizard",
+    ],
+    visibility = [ "//lib:__subpackages__" ],
+)

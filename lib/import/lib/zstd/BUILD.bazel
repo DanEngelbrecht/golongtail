@@ -1,0 +1,12 @@
+cc_library(
+    name = "longtail_zstd",
+    srcs = [ "longtail_zstd.c",
+             "longtail_zstd.h",
+    ],
+    hdrs = [ "longtail_zstd.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail",
+             "//lib/import/lib/zstd/ext:zstd",
+    ],
+    visibility = [ "//lib:__subpackages__" ],
+)

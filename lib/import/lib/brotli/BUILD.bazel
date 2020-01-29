@@ -1,0 +1,13 @@
+cc_library(
+    name = "longtail_brotli",
+    srcs = glob([ "longtail_brotli.c",
+                  "longtail_brotli.h",
+                  "ext/**/*.c",
+                  "ext/**/*.h",
+    ]),
+    hdrs = [ "longtail_brotli.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)
+ 

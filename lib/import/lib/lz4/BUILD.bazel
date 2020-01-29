@@ -1,0 +1,12 @@
+cc_library(
+    name = "longtail_lz4",
+    srcs = [ "longtail_lz4.c",
+             "longtail_lz4.h",
+    ],
+    hdrs = [ "longtail_lz4.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail",
+             "//lib/import/lib/lz4/ext:lz4",
+    ],
+    visibility = [ "//lib:__subpackages__" ],
+)

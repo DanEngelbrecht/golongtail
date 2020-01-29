@@ -1,0 +1,8 @@
+cc_library(
+    name = "lz4",
+    srcs = glob([ "*.c",
+                  "*.h",
+    ]),
+    hdrs = [ "lz4.h" ],
+    visibility = [ "//lib/import/lib/lz4:__subpackages__" ],
+)

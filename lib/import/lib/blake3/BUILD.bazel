@@ -1,0 +1,13 @@
+cc_library(
+    name = "longtail_blake3",
+    srcs = [ "longtail_blake3.c",
+             "longtail_blake3.h",
+    ],
+    copts = [ "-msse4.1" ],
+    hdrs = [ "longtail_blake3.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail",
+             "//lib/import/lib/blake3/ext:blake3",
+    ],
+    visibility = [ "//lib:__subpackages__" ],
+)

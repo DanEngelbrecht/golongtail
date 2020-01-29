@@ -1,0 +1,17 @@
+cc_library(
+    name = "longtail_blake2",
+    srcs = [ "longtail_blake2.c",
+             "longtail_blake2.h",
+             "ext/blake2-config.h",
+             "ext/blake2.h",
+             "ext/blake2-impl.h",
+             "ext/blake2s.c",
+             "ext/blake2s-load-sse2.h",
+             "ext/blake2s-load-sse41.h",
+             "ext/blake2s-round.h",
+    ],
+    hdrs = [ "longtail_blake2.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)

@@ -1,0 +1,10 @@
+cc_library(
+    name = "longtail_filestorage",
+    srcs = [ "longtail_filestorage.c",
+             "longtail_filestorage.h",
+    ],
+    hdrs = [ "longtail_filestorage.h" ],
+    deps = [ "//lib/import/lib:longtail_platform",
+             "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)

@@ -1,0 +1,9 @@
+cc_library(
+    name = "longtail_platform",
+    srcs = [ "longtail_platform.c",
+             "longtail_platform.h",
+    ],
+    hdrs = [ "longtail_platform.h" ],
+    deps = [ "//lib/import:longtail" ],
+    visibility = [ "//lib:__subpackages__" ],
+)

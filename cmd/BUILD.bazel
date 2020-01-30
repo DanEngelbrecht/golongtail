@@ -6,7 +6,7 @@ go_library(
     importpath = "github.com/DanEngelbrecht/golongtail/cmd",
     visibility = ["//visibility:private"],
     deps = [
-        "//lib:go_default_library",
+        "@golongtail_lib//:go_default_library",
         "//store:go_default_library",
         "@com_github_pkg_errors//:go_default_library",
         "@in_gopkg_alecthomas_kingpin_v2//:go_default_library",

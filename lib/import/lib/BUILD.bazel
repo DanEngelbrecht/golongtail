@@ -4,6 +4,6 @@ cc_library(
              "longtail_platform.h",
     ],
     hdrs = [ "longtail_platform.h" ],
-    deps = [ "//lib/import:longtail" ],
-    visibility = [ "//lib:__subpackages__" ],
+    deps = [ "//import:longtail" ],
+    visibility = [ "//:__subpackages__" ],
 )

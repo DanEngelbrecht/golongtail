@@ -5,9 +5,9 @@ cc_library(
     ],
     copts = [ "-msse4.1" ],
     hdrs = [ "longtail_blake3.h" ],
-    deps = [ "//lib/import/lib:longtail_platform",
-             "//lib/import:longtail",
-             "//lib/import/lib/blake3/ext:blake3",
+    deps = [ "//import/lib:longtail_platform",
+             "//import:longtail",
+             "//import/lib/blake3/ext:blake3",
     ],
-    visibility = [ "//lib:__subpackages__" ],
+    visibility = [ "//:__subpackages__" ],
 )

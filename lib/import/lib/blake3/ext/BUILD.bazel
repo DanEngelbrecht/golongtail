@@ -13,5 +13,5 @@ cc_library(
     ],
     copts = [ "-msse4.1 -O3" ],
     hdrs = [ "blake3.h" ],
-    visibility = [ "//lib/import/lib/blake3:__subpackages__" ],
+    visibility = [ "//import/lib/blake3:__subpackages__" ],
 )

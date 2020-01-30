@@ -5,7 +5,7 @@ cc_library(
              "ext/bikeshed.h",
     ],
     hdrs = [ "longtail_bikeshed.h" ],
-    deps = [ "//lib/import/lib:longtail_platform",
-             "//lib/import:longtail" ],
-    visibility = [ "//lib:__subpackages__" ],
+    deps = [ "//import/lib:longtail_platform",
+             "//import:longtail" ],
+    visibility = [ "//:__subpackages__" ],
 )

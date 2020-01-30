@@ -4,9 +4,9 @@ cc_library(
              "longtail_lizard.h",
     ],
     hdrs = [ "longtail_lizard.h" ],
-    deps = [ "//lib/import/lib:longtail_platform",
-             "//lib/import:longtail",
-             "//lib/import/lib/lizard/ext:lizard",
+    deps = [ "//import/lib:longtail_platform",
+             "//import:longtail",
+             "//import/lib/lizard/ext:lizard",
     ],
-    visibility = [ "//lib:__subpackages__" ],
+    visibility = [ "//:__subpackages__" ],
 )

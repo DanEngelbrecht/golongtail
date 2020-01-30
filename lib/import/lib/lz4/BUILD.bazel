@@ -4,9 +4,9 @@ cc_library(
              "longtail_lz4.h",
     ],
     hdrs = [ "longtail_lz4.h" ],
-    deps = [ "//lib/import/lib:longtail_platform",
-             "//lib/import:longtail",
-             "//lib/import/lib/lz4/ext:lz4",
+    deps = [ "//import/lib:longtail_platform",
+             "//import:longtail",
+             "//import/lib/lz4/ext:lz4",
     ],
-    visibility = [ "//lib:__subpackages__" ],
+    visibility = [ "//:__subpackages__" ],
 )

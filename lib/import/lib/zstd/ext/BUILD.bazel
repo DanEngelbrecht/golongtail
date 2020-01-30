@@ -4,5 +4,5 @@ cc_library(
                   "**/*.h",
                   "**/*.inl",
     ]),
-    visibility = [ "//lib/import/lib/zstd:__subpackages__" ],
+    visibility = [ "//import/lib/zstd:__subpackages__" ],
 )

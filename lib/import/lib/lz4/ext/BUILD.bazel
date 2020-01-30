@@ -5,5 +5,5 @@ cc_library(
                   "*.inl",
     ]),
     hdrs = [ "lz4.h", "lz4.c" ],
-    visibility = [ "//lib/import/lib/lz4:__subpackages__" ],
+    visibility = [ "//import/lib/lz4:__subpackages__" ],
 )

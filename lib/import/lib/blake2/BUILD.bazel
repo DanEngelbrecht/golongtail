@@ -11,7 +11,7 @@ cc_library(
              "ext/blake2s-round.h",
     ],
     hdrs = [ "longtail_blake2.h" ],
-    deps = [ "//lib/import/lib:longtail_platform",
-             "//lib/import:longtail" ],
-    visibility = [ "//lib:__subpackages__" ],
+    deps = [ "//import/lib:longtail_platform",
+             "//import:longtail" ],
+    visibility = [ "//:__subpackages__" ],
 )

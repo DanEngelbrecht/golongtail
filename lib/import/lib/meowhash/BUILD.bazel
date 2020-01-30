@@ -6,7 +6,7 @@ cc_library(
     ],
     copts = [ "-msse4.1 -maes" ],
     hdrs = [ "longtail_meowhash.h" ],
-    deps = [ "//lib/import/lib:longtail_platform",
-             "//lib/import:longtail" ],
-    visibility = [ "//lib:__subpackages__" ],
+    deps = [ "//import/lib:longtail_platform",
+             "//import:longtail" ],
+    visibility = [ "//:__subpackages__" ],
 )

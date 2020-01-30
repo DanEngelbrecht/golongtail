@@ -5,5 +5,5 @@ cc_library(
     hdrs = [ "src/longtail.h" ],
     copts = [ "-D_GNU_SOURCE -std=gnu99 -m64 -O3 -msse4.1" ],
     linkopts = [ "-lm -pthread" ],
-    visibility = [ "//lib:__subpackages__" ],
+    visibility = [ "//:__subpackages__" ],
 )

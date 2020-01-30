@@ -4,5 +4,5 @@ cc_library(
                   "**/*.h",
                   "**/*.inl",
     ]),
-    visibility = [ "//lib/import/lib/lizard:__subpackages__" ],
+    visibility = [ "//import/lib/lizard:__subpackages__" ],
 )

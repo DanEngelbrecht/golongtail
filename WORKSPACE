@@ -52,6 +52,11 @@ load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
 
 gazelle_dependencies()
 
+local_repository(
+    name = "golongtail_lib",
+    path = "lib",
+)
+
 ###########################################################
 # Protobuf
 

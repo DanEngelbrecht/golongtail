@@ -4,6 +4,7 @@ cc_library(
              "longtail_bikeshed.h",
              "ext/bikeshed.h",
     ],
+    copts = [ "-O3 -maes -std=gnu99 -msse4.1" ],
     hdrs = [ "longtail_bikeshed.h" ],
     deps = [ "//import/lib:longtail_platform",
              "//import:longtail" ],

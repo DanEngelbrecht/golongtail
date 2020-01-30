@@ -4,7 +4,7 @@ cc_library(
              "longtail_meowhash.h",
              "ext/meow_hash_x64_aesni.h",
     ],
-    copts = [ "-msse4.1 -maes" ],
+    copts = [ "-O3 -maes -std=gnu99 -msse4.1" ],
     hdrs = [ "longtail_meowhash.h" ],
     deps = [ "//import/lib:longtail_platform",
              "//import:longtail" ],

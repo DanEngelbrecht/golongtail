@@ -3,6 +3,7 @@ cc_library(
     srcs = [ "longtail_lz4.c",
              "longtail_lz4.h",
     ],
+    copts = [ "-O3 -maes -std=gnu99 -msse4.1" ],
     hdrs = [ "longtail_lz4.h" ],
     deps = [ "//import/lib:longtail_platform",
              "//import:longtail",

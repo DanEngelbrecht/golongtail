@@ -3,6 +3,7 @@ cc_library(
     srcs = [ "longtail_platform.c",
              "longtail_platform.h",
     ],
+    copts = [ "-O3 -maes -std=gnu99 -msse4.1" ],
     hdrs = [ "longtail_platform.h" ],
     deps = [ "//import:longtail" ],
     visibility = [ "//:__subpackages__" ],

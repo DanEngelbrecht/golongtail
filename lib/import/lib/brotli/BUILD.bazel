@@ -5,6 +5,7 @@ cc_library(
                   "ext/**/*.c",
                   "ext/**/*.h",
     ]),
+    copts = [ "-O3 -maes -std=gnu99 -msse4.1" ],
     hdrs = [ "longtail_brotli.h" ],
     deps = [ "//import/lib:longtail_platform",
              "//import:longtail" ],

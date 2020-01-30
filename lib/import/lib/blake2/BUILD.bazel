@@ -10,6 +10,7 @@ cc_library(
              "ext/blake2s-load-sse41.h",
              "ext/blake2s-round.h",
     ],
+    copts = [ "-O3 -maes -std=gnu99 -msse4.1" ],
     hdrs = [ "longtail_blake2.h" ],
     deps = [ "//import/lib:longtail_platform",
              "//import:longtail" ],

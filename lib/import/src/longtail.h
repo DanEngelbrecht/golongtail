@@ -15,6 +15,16 @@ struct Longtail_API
 void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
+typedef uint64_t TLongtail_Hash;
+struct Longtail_Paths;
+struct Longtail_FileInfos;
+struct Longtail_VersionIndex;
+struct Longtail_StoredBlock;
+struct Longtail_ContentIndex;
+struct PathLookup;
+struct ChunkHashToAssetPart;
+struct Longtail_VersionDiff;
+
 typedef struct Longtail_HashAPI_Context* Longtail_HashAPI_HContext;
 struct Longtail_HashAPI
 {
@@ -107,7 +117,15 @@ struct Longtail_JobAPI
     int (*CreateJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs);
     int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
     int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
-    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc process_func);
+    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc progress_func);
+};
+
+struct Longtail_BlockStoreAPI
+{
+    struct Longtail_API m_API;
+    int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
+    int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
+    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index);
 };
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
@@ -151,15 +169,6 @@ void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free
 void* Longtail_Alloc(size_t s);
 void Longtail_Free(void* p);
 
-typedef uint64_t TLongtail_Hash;
-struct Longtail_Paths;
-struct Longtail_FileInfos;
-struct Longtail_VersionIndex;
-struct Longtail_ContentIndex;
-struct PathLookup;
-struct ChunkHashToAssetPart;
-struct Longtail_VersionDiff;
-
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path);
 char* Longtail_Strdup(const char* path);
 
@@ -202,6 +211,14 @@ int Longtail_ReadVersionIndex(
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
 
+size_t Longtail_GetContentIndexSize(
+    uint64_t block_count,
+    uint64_t chunk_count);
+
+int Longtail_InitContentIndex(
+    struct Longtail_ContentIndex* content_index,
+    uint64_t content_index_size);
+
 int Longtail_CreateContentIndex(
     struct Longtail_HashAPI* hash_api,
     uint64_t chunk_count,
@@ -234,24 +251,14 @@ int Longtail_ReadContentIndex(
 
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
-    struct Longtail_StorageAPI* target_storage_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry,
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     Longtail_JobAPI_ProgressFunc job_progress_func,
     void* job_progress_context,
     struct Longtail_ContentIndex* content_index,
     struct Longtail_VersionIndex* version_index,
-    const char* assets_folder,
-    const char* content_folder);
-
-int Longtail_ReadContent(
-    struct Longtail_StorageAPI* storage_api,
-    struct Longtail_HashAPI* hash_api,
-    struct Longtail_JobAPI* job_api,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
-    const char* content_path,
-    struct Longtail_ContentIndex** out_content_index);
+    const char* assets_folder);
 
 int Longtail_CreateMissingContent(
     struct Longtail_HashAPI* hash_api,
@@ -276,7 +283,7 @@ int Longtail_MergeContentIndex(
     struct Longtail_ContentIndex** out_content_index);
 
 int Longtail_WriteVersion(
-    struct Longtail_StorageAPI* content_storage_api,
+    struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
@@ -284,7 +291,6 @@ int Longtail_WriteVersion(
     void* job_progress_context,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
-    const char* content_path,
     const char* version_path,
     int retain_permissions);
 
@@ -294,7 +300,7 @@ int Longtail_CreateVersionDiff(
     struct Longtail_VersionDiff** out_version_diff);
 
 int Longtail_ChangeVersion(
-    struct Longtail_StorageAPI* content_storage_api,
+    struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
@@ -305,9 +311,29 @@ int Longtail_ChangeVersion(
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
     const struct Longtail_VersionDiff* version_diff,
-    const char* content_path,
     const char* version_path,
     int retain_permissions);
+
+struct Longtail_BlockIndex
+{
+    TLongtail_Hash* m_BlockHash;
+    uint32_t* m_ChunkCount;
+    uint32_t* m_ChunkCompressionType;
+    TLongtail_Hash* m_ChunkHashes; //[]
+    uint32_t* m_ChunkSizes; // []
+};
+
+size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
+size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count);
+struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
+
+struct Longtail_StoredBlock
+{
+    int (*Dispose)(struct Longtail_StoredBlock* stored_block);
+    struct Longtail_BlockIndex* m_BlockIndex;
+    void* m_BlockData;
+    uint32_t m_BlockDataSize;
+};
 
 struct Longtail_Paths
 {
@@ -323,6 +349,8 @@ struct Longtail_FileInfos
     uint64_t* m_FileSizes;
     uint32_t* m_Permissions;
 };
+
+extern uint32_t Longtail_CurrentContentIndexVersion;
 
 struct Longtail_ContentIndex
 {

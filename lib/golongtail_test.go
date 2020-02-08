@@ -45,6 +45,144 @@ func logger(context interface{}, level int, log string) {
 	//	fmt.Printf("%d: %s\n", level, log)
 }
 
+type assertData struct {
+	t *testing.T
+}
+
+func testAssertFunc(context interface{}, expression string, file string, line int) {
+	fmt.Printf("ASSERT: %s %s:%d", expression, file, line)
+}
+
+func TestDebugging(t *testing.T) {
+	l := SetLogger(logger, &loggerData{t: t})
+	defer ClearLogger(l)
+	SetAssert(testAssertFunc, &assertData{t: t})
+	defer ClearAssert()
+	SetLogLevel(3)
+}
+
+func TestInMemStorage(t *testing.T) {
+	storageAPI := CreateInMemStorageAPI()
+	defer storageAPI.Dispose()
+	myString := "my string"
+	err := storageAPI.WriteToStorage("folder", "file", []byte(myString))
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("WriteToStorage() %q != %q", err, expected)
+	}
+
+	rbytes, err := storageAPI.ReadFromStorage("folder", "file")
+	testString := string(rbytes)
+	if myString != myString {
+		t.Errorf("ReadFromStorage() %s != %s", rbytes, testString)
+	}
+}
+
+func TestAPICreate(t *testing.T) {
+	blake2 := CreateBlake2HashAPI()
+	defer blake2.Dispose()
+
+	blake3 := CreateBlake3HashAPI()
+	defer blake3.Dispose()
+
+	meow := CreateMeowHashAPI()
+	defer meow.Dispose()
+
+	lz4 := CreateLZ4CompressionAPI()
+	defer lz4.Dispose()
+
+	brotli := CreateBrotliCompressionAPI()
+	defer brotli.Dispose()
+
+	zstd := CreateZStdCompressionAPI()
+	defer zstd.Dispose()
+
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer jobAPI.Dispose()
+
+	compressionRegistry := CreateDefaultCompressionRegistry()
+	defer compressionRegistry.Dispose()
+}
+
+func TestStoredblock(t *testing.T) {
+	blockHash := uint64(0xdeadbeef500177aa)
+	chunkHashes := []uint64{0x10, 0x20}
+	chunkSizes := []uint32{10, 20}
+	blockData := [30]uint8{}
+	for index, _ := range blockData {
+		blockData[index] = uint8(index + 1)
+	}
+
+	storedBlock, err := CreateStoredBlock(
+		blockHash,
+		0,
+		chunkHashes,
+		chunkSizes,
+		blockData[:])
+	defer storedBlock.Dispose()
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("CreateStoredBlock() %q != %q", err, expected)
+	}
+	if storedBlock.GetBlockHash() != blockHash {
+		t.Errorf("CreateStoredBlock() GetBlockHash() %d != %d", blockHash, storedBlock.GetBlockHash())
+	}
+	if storedBlock.GetChunkCount() != uint32(len(chunkHashes)) {
+		t.Errorf("CreateStoredBlock() GetChunkCount() %d != %d", uint32(len(chunkHashes)), storedBlock.GetChunkCount())
+	}
+	if storedBlock.GetCompressionType() != 0 {
+		t.Errorf("CreateStoredBlock() GetChunkCount() %d != %d", 0, storedBlock.GetCompressionType())
+	}
+	verfyChunkHashes := storedBlock.GetChunkHashes()
+	if len(chunkHashes) != len(verfyChunkHashes) {
+		t.Errorf("CreateStoredBlock() len(chunkHashes) %d != %d", len(verfyChunkHashes), len(chunkHashes))
+	}
+	if verfyChunkHashes[0] != chunkHashes[0] {
+		t.Errorf("CreateStoredBlock() chunkHashes %d != %d", verfyChunkHashes[0], chunkHashes[0])
+	}
+	if verfyChunkHashes[1] != chunkHashes[1] {
+		t.Errorf("CreateStoredBlock() chunkHashes %d != %d", verfyChunkHashes[1], chunkHashes[1])
+	}
+	verifyChunkSizes := storedBlock.GetChunkSizes()
+	if len(chunkSizes) != len(verifyChunkSizes) {
+		t.Errorf("CreateStoredBlock() len(chunkSizes) %d != %d", len(verifyChunkSizes), len(chunkSizes))
+	}
+	if verifyChunkSizes[0] != chunkSizes[0] {
+		t.Errorf("CreateStoredBlock() chunkSizes %d != %d", verifyChunkSizes[0], chunkSizes[0])
+	}
+	if verifyChunkSizes[1] != chunkSizes[1] {
+		t.Errorf("CreateStoredBlock() chunkSizes %d != %d", verifyChunkSizes[1], chunkSizes[1])
+	}
+	verifyBlockData := storedBlock.GetBlockData()
+	if len(blockData) != len(verifyBlockData) {
+		t.Errorf("CreateStoredBlock() len(blockData) %d != %d", len(verifyBlockData), len(blockData))
+	}
+	for index, _ := range blockData {
+		if blockData[index] != verifyBlockData[index] {
+			t.Errorf("CreateStoredBlock() blockData[%d] %d != %d", index, verifyBlockData[index], blockData[index])
+		}
+	}
+}
+
+func TestFSBlockStore(t *testing.T) {
+	storageAPI := CreateFSStorageAPI()
+	defer storageAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer jobAPI.Dispose()
+	blockStoreAPI := CreateFSBlockStore(storageAPI, jobAPI, "content")
+	defer blockStoreAPI.Dispose()
+	blake3 := CreateBlake3HashAPI()
+	defer blake3.Dispose()
+
+	contentIndex, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
+	defer contentIndex.Dispose()
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("WriteToStorage() %q != %q", err, expected)
+	}
+}
+
+/*
 // CreateVersionIndexUtil ...
 func CreateVersionIndexUtil(
 	storageAPI Longtail_StorageAPI,
@@ -86,7 +224,8 @@ func CreateVersionIndexUtil(
 
 //GetMissingContentUtil ... this is handy, but not what we should expose other than for tests!
 func GetMissingContentUtil(
-	contentStorageAPI Longtail_StorageAPI,
+	contentBlockStoreAPI Longtail_BlockStoreAPI,
+	missingContentBlockStoreAPI Longtail_BlockStoreAPI,
 	versionStorageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
@@ -94,9 +233,8 @@ func GetMissingContentUtil(
 	progressContext interface{},
 	versionPath string,
 	versionIndexPath string,
-	contentPath string,
+	contentIndexStorageAPI Longtail_StorageAPI,
 	contentIndexPath string,
-	missingContentPath string,
 	compressionType uint32,
 	maxChunksPerBlock uint32,
 	targetBlockSize uint32,
@@ -128,16 +266,14 @@ func GetMissingContentUtil(
 	var cindex Longtail_ContentIndex
 
 	if len(contentIndexPath) > 0 {
-		cindex, err = ReadContentIndex(contentStorageAPI, contentIndexPath)
+		cindex, err = ReadContentIndex(contentIndexStorageAPI, contentIndexPath)
 	}
 	if err != nil {
-		cindex, err = ReadContent(
-			contentStorageAPI,
-			hashAPI,
+		cindex, err = contentBlockStoreAPI.GetIndex(
 			jobAPI,
+			hashAPI.GetIdentifier(),
 			progressFunc,
-			progressContext,
-			contentPath)
+			progressContext)
 		if err != nil {
 			return Longtail_ContentIndex{cContentIndex: nil}, err
 		}
@@ -160,15 +296,14 @@ func GetMissingContentUtil(
 
 	err = WriteContent(
 		versionStorageAPI,
-		contentStorageAPI,
+		missingContentBlockStoreAPI,
 		compressionRegistry,
 		jobAPI,
 		progressFunc,
 		progressContext,
 		missingContentIndex,
 		vindex,
-		versionPath,
-		missingContentPath)
+		versionPath)
 
 	if err != nil {
 		missingContentIndex.Dispose()
@@ -177,7 +312,7 @@ func GetMissingContentUtil(
 
 	if len(versionIndexPath) > 0 {
 		err = WriteVersionIndex(
-			contentStorageAPI,
+			contentIndexStorageAPI,
 			vindex,
 			versionIndexPath)
 		if err != nil {
@@ -188,7 +323,7 @@ func GetMissingContentUtil(
 
 	if len(contentIndexPath) > 0 {
 		err = WriteContentIndex(
-			contentStorageAPI,
+			contentIndexStorageAPI,
 			cindex,
 			contentIndexPath)
 		if err != nil {
@@ -399,9 +534,13 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("WriteContentIndex() err = %q, want %q", err, error(nil))
 	}
 
+	blockStore := CreateFSBlockStore(upsyncStorageAPI, jobAPI, "cache")
+	defer blockStore.Dispose()
+
 	t.Logf("Get missing content for `current` / `cache`")
 	missingContentIndex, err := GetMissingContentUtil(
-		upsyncStorageAPI,
+		blockStore,
+		blockStore,
 		upsyncStorageAPI,
 		hashAPI,
 		jobAPI,
@@ -409,9 +548,8 @@ func TestUpSyncVersion(t *testing.T) {
 		&progressData{task: "Indexing", t: t},
 		"current",
 		"current.lvi",
-		"cache",
+		upsyncStorageAPI,
 		"cache.lci",
-		"cache",
 		GetZStdDefaultCompressionType(),
 		4096,
 		32768,
@@ -438,12 +576,12 @@ func TestUpSyncVersion(t *testing.T) {
 	}
 
 	t.Logf("Copying blocks from `cache` / `store`")
-	missingPaths, err := GetPathsForContentBlocks(missingContentIndex)
-	if err != nil {
-		t.Errorf("UpSyncVersion() GetPathsForContentBlocks(%s, %s) = %q, want %q", "", "local.lci", err, error(nil))
-	}
-	for i := uint32(0); i < missingPaths.GetPathCount(); i++ {
-		path := GetPath(missingPaths, uint32(i))
+	for i := uint64(0); i < missingContentIndex.GetBlockCount(); i++ {
+		blockHash := missingContentIndex.GetBlockHash(i)
+		path, err := blockStore.GetStoredBlockPath(blockHash)
+		if err != nil {
+			t.Errorf("UpSyncVersion() ReadFromStorage(%d, %s) = %q, want %q", "cache", blockHash, err, error(nil))
+		}
 		block, err := ReadFromStorage(upsyncStorageAPI, "cache", path)
 		if err != nil {
 			t.Errorf("UpSyncVersion() ReadFromStorage(%s, %s) = %q, want %q", "cache", path, err, error(nil))
@@ -598,3 +736,4 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("UpSyncVersion() ChangeVersion(%s, %s) = %q, want %q", "cache", "current", err, error(nil))
 	}
 }
+*/

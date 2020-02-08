@@ -16,6 +16,7 @@ void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
 typedef uint64_t TLongtail_Hash;
+struct Longtail_BlockIndex;
 struct Longtail_Paths;
 struct Longtail_FileInfos;
 struct Longtail_VersionIndex;
@@ -117,7 +118,7 @@ struct Longtail_JobAPI
     int (*CreateJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_JobFunc job_funcs[], void* job_contexts[], Longtail_JobAPI_Jobs* out_jobs);
     int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
     int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
-    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, void* context, Longtail_JobAPI_ProgressFunc progress_func);
+    int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context);
 };
 
 struct Longtail_BlockStoreAPI
@@ -125,7 +126,8 @@ struct Longtail_BlockStoreAPI
     struct Longtail_API m_API;
     int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
     int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
-    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, void* context, Longtail_JobAPI_ProgressFunc progress_func, struct Longtail_ContentIndex** out_content_index);
+    int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
+    int (*GetStoredBlockPath)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
 };
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
@@ -191,6 +193,20 @@ int Longtail_CreateVersionIndex(
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
+int Longtail_CreateVersionIndexFromBlocks(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_HashAPI* hash_api,
+    struct Longtail_JobAPI* job_api,
+    Longtail_JobAPI_ProgressFunc job_progress_func,
+    void* job_progress_context,
+    const char* root_path,
+    const struct Longtail_Paths* paths,
+    const uint64_t* asset_sizes,
+    const uint32_t* asset_permissions,
+    const uint32_t* asset_compression_types,
+    uint32_t max_chunk_size,
+    struct Longtail_VersionIndex** out_version_index);
+
 int Longtail_WriteVersionIndexToBuffer(
     const struct Longtail_VersionIndex* version_index,
     void** out_buffer,
@@ -211,13 +227,32 @@ int Longtail_ReadVersionIndex(
     const char* path,
     struct Longtail_VersionIndex** out_version_index);
 
+size_t Longtail_GetContentIndexDataSize(
+    uint64_t block_count,
+    uint64_t chunk_count);
+
 size_t Longtail_GetContentIndexSize(
     uint64_t block_count,
     uint64_t chunk_count);
 
-int Longtail_InitContentIndex(
+int Longtail_InitContentIndexFromData(
     struct Longtail_ContentIndex* content_index,
-    uint64_t content_index_size);
+    void* data,
+    uint64_t data_size);
+
+int Longtail_InitiContentIndex(
+    struct Longtail_ContentIndex* content_index,
+    void* data,
+    uint64_t data_size,
+    uint32_t hash_api,
+    uint64_t block_count,
+    uint64_t chunk_count);
+
+int Longtail_CreateContentIndexFromBlocks(
+    uint32_t hash_identifier,
+    uint64_t block_count,
+    struct Longtail_BlockIndex** block_indexes,
+    struct Longtail_ContentIndex** out_content_index);
 
 int Longtail_CreateContentIndex(
     struct Longtail_HashAPI* hash_api,
@@ -268,11 +303,7 @@ int Longtail_CreateMissingContent(
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
 
-int Longtail_GetPathsForContentBlocks(
-    struct Longtail_ContentIndex* content_index,
-    struct Longtail_Paths** out_paths);
-
- int Longtail_RetargetContent(
+int Longtail_RetargetContent(
     const struct Longtail_ContentIndex* reference_content_index,
     const struct Longtail_ContentIndex* content_index,
     struct Longtail_ContentIndex** out_content_index);
@@ -314,6 +345,53 @@ int Longtail_ChangeVersion(
     const char* version_path,
     int retain_permissions);
 
+size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
+size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count);
+struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
+
+int Longtail_InitBlockIndexFromData(
+    struct Longtail_BlockIndex* block_index,
+    void* data,
+    uint64_t data_size);
+
+int Longtail_CreateBlockIndex(
+    struct Longtail_HashAPI* hash_api,
+    uint32_t chunk_compression_type,
+    uint32_t chunk_count,
+    const uint64_t* chunk_indexes,
+    const TLongtail_Hash* chunk_hashes,
+    const uint32_t* chunk_sizes,
+    struct Longtail_BlockIndex** out_block_index);
+
+int Longtail_WriteBlockIndexToBuffer(
+    const struct Longtail_BlockIndex* block_index,
+    void** out_buffer,
+    size_t* out_size);
+
+int Longtail_ReadBlockIndexFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_BlockIndex** out_block_index);
+
+int Longtail_WriteBlockIndex(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_BlockIndex* block_index,
+    const char* path);
+
+int Longtail_ReadBlockIndex(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    struct Longtail_BlockIndex** out_block_index);
+
+int Longtail_CreateStoredBlock(
+    TLongtail_Hash block_hash,
+    uint32_t chunk_count,
+    uint32_t compression_type,
+    TLongtail_Hash* chunk_hashes,
+    uint32_t* chunk_sizes,
+    uint32_t block_data_size,
+    struct Longtail_StoredBlock** out_stored_block);
+
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
@@ -322,10 +400,6 @@ struct Longtail_BlockIndex
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
 };
-
-size_t Longtail_GetBlockIndexSize(uint32_t chunk_count);
-size_t Longtail_GetBlockIndexDataSize(uint32_t chunk_count);
-struct Longtail_BlockIndex* Longtail_InitBlockIndex(void* mem, uint32_t chunk_count);
 
 struct Longtail_StoredBlock
 {
@@ -428,6 +502,12 @@ int Longtail_MakePaths(
     uint32_t path_count,
     const char* const* path_names,
     struct Longtail_Paths** out_paths);
+
+size_t Longtail_GetVersionIndexDataSize(
+    uint32_t asset_count,
+    uint32_t chunk_count,
+    uint32_t asset_chunk_index_count,
+    uint32_t path_data_size);
 
 size_t Longtail_GetVersionIndexSize(
     uint32_t asset_count,

@@ -4,12 +4,15 @@
 #include "import/lib/blake2/longtail_blake2.h"
 #include "import/lib/blake3/longtail_blake3.h"
 #include "import/lib/brotli/longtail_brotli.h"
+#include "import/lib/fsblockstore/longtail_fsblockstore.h"
 #include "import/lib/filestorage/longtail_filestorage.h"
 #include "import/lib/lz4/longtail_lz4.h"
 #include "import/lib/memstorage/longtail_memstorage.h"
 #include "import/lib/meowhash/longtail_meowhash.h"
 #include "import/lib/zstd/longtail_zstd.h"
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 
 void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 
@@ -67,6 +70,44 @@ static const char* GetPath(const uint32_t* name_offsets, const char* name_data, 
     return &name_data[name_offsets[index]];
 }
 
+static int BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
+{
+    return block_store_api->PutStoredBlock(block_store_api, stored_block);
+}
+
+static int BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+{
+    return block_store_api->GetStoredBlock(block_store_api, block_hash, out_stored_block);
+}
+
+static int BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+{
+    return block_store_api->GetIndex(block_store_api, default_hash_api_identifier, progress_func, progress_context, out_content_index);
+}
+
+static int BlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
+{
+    return block_store_api->GetStoredBlockPath(block_store_api, block_hash, out_path);
+}
+
+static uint32_t Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return hash_api->GetIdentifier(hash_api);
+}
+
+static uint64_t ContentIndex_GetBlockHash(struct Longtail_ContentIndex* content_index, uint64_t block_index)
+{
+    return content_index->m_BlockHashes[block_index];
+}
+
+static void DisposeStoredBlock(struct Longtail_StoredBlock* stored_block)
+{
+    if (stored_block && stored_block->Dispose)
+    {
+        stored_block->Dispose(stored_block);
+    }
+}
+
 #define  LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0'))
 #define  LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1'))
 #define  LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2'))
@@ -74,11 +115,11 @@ static const char* GetPath(const uint32_t* name_offsets, const char* name_data, 
 #define  LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b'))
 #define  LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c'))
 
-#define  LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE      ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
+#define  LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE        ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
 
-#define  LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE        ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
-#define  LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE    ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
-#define  LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE        ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
+#define  LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE           ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
+#define  LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE       ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
+#define  LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE           ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
 
 static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault()
 {

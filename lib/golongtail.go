@@ -352,7 +352,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
 		return false, nil
 	}
 	if errno == 0 {
-		return false, nil
+		return true, nil
 	}
 	return false, fmt.Errorf("HasStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
 }

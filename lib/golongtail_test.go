@@ -199,66 +199,82 @@ func TestFSBlockStore(t *testing.T) {
 	defer contentIndex.Dispose()
 	expected := error(nil)
 	if err != expected {
-		t.Errorf("WriteToStorage() GetIndex () %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
 	}
 
 	block1, err := createStoredBlock(1)
 	if err != expected {
-		t.Errorf("WriteToStorage() createStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() createStoredBlock() %q != %q", err, expected)
 	}
 	defer block1.Dispose()
 
 	block2, err := createStoredBlock(2)
 	if err != expected {
-		t.Errorf("WriteToStorage() createStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() createStoredBlock() %q != %q", err, expected)
 	}
 	defer block2.Dispose()
 
 	block3, err := createStoredBlock(3)
 	if err != expected {
-		t.Errorf("WriteToStorage() createStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() createStoredBlock() %q != %q", err, expected)
 	}
 	defer block3.Dispose()
 
 	storedBlock1, err := blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
 	if err == expected {
-		t.Errorf("WriteToStorage() GetStoredBlock() %q == %q", err, expected)
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %q == %q", err, expected)
 	}
 	if storedBlock1.cStoredBlock != nil {
-		t.Errorf("WriteToStorage() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
+	}
+
+	hashBlock2, err := blockStoreAPI.HasStoredBlock(block2.GetBlockHash())
+	if err != expected {
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %q != %q", err, expected)
+	}
+	if hashBlock2 != false {
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %t != %t", hashBlock2, false)
 	}
 
 	err = blockStoreAPI.PutStoredBlock(block1)
 	if err != nil {
-		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 	storedBlock1, err = blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
 	if err != expected {
-		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 	defer storedBlock1.Dispose()
 	validateStoredBlock(t, storedBlock1)
 
 	err = blockStoreAPI.PutStoredBlock(block2)
 	if err != expected {
-		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
+	}
+
+	hashBlock2, err = blockStoreAPI.HasStoredBlock(block2.GetBlockHash())
+	if err != expected {
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %q != %q", err, expected)
+	}
+	if hashBlock2 != true {
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %t != %t", hashBlock2, true)
 	}
 
 	err = blockStoreAPI.PutStoredBlock(block3)
 	if err != expected {
-		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 
 	storedBlock3, err := blockStoreAPI.GetStoredBlock(block3.GetBlockHash())
 	if err != expected {
-		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 	defer storedBlock3.Dispose()
 	validateStoredBlock(t, storedBlock3)
 
 	storedBlock2, err := blockStoreAPI.GetStoredBlock(block2.GetBlockHash())
 	if err != expected {
-		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
@@ -266,13 +282,13 @@ func TestFSBlockStore(t *testing.T) {
 	contentIndex2, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
 	defer contentIndex2.Dispose()
 	if err != expected {
-		t.Errorf("WriteToStorage() GetIndex () %q != %q", err, expected)
+		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
 	}
 	if contentIndex2.GetBlockCount() != uint64(3) {
-		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(3))
+		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(3))
 	}
 	if contentIndex2.GetChunkCount() != uint64(1+2+3) {
-		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(1+2+3))
+		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(1+2+3))
 	}
 }
 

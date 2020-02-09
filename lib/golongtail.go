@@ -10,6 +10,41 @@ import (
 	"unsafe"
 )
 
+const EPERM = 1    /* Not super-user */
+const ENOENT = 2   /* No such file or directory */
+const ESRCH = 3    /* No such process */
+const EINTR = 4    /* Interrupted system call */
+const EIO = 5      /* I/O error */
+const ENXIO = 6    /* No such device or address */
+const E2BIG = 7    /* Arg list too long */
+const ENOEXEC = 8  /* Exec format error */
+const EBADF = 9    /* Bad file number */
+const ECHILD = 10  /* No children */
+const EAGAIN = 11  /* No more processes */
+const ENOMEM = 12  /* Not enough core */
+const EACCES = 13  /* Permission denied */
+const EFAULT = 14  /* Bad address */
+const ENOTBLK = 15 /* Block device required */
+const EBUSY = 16   /* Mount device busy */
+const EEXIST = 17  /* File exists */
+const EXDEV = 18   /* Cross-device link */
+const ENODEV = 19  /* No such device */
+const ENOTDIR = 20 /* Not a directory */
+const EISDIR = 21  /* Is a directory */
+const EINVAL = 22  /* Invalid argument */
+const ENFILE = 23  /* Too many open files in system */
+const EMFILE = 24  /* Too many open files */
+const ENOTTY = 25  /* Not a typewriter */
+const ETXTBSY = 26 /* Text file busy */
+const EFBIG = 27   /* File too large */
+const ENOSPC = 28  /* No space left on device */
+const ESPIPE = 29  /* Illegal seek */
+const EROFS = 30   /* Read only file system */
+const EMLINK = 31  /* Too many links */
+const EPIPE = 32   /* Broken pipe */
+const EDOM = 33    /* Math arg out of domain of func */
+const ERANGE = 34  /* Math result not representable */
+
 type Longtail_Paths struct {
 	cPaths *C.struct_Longtail_Paths
 }
@@ -48,6 +83,10 @@ type Longtail_BlockStoreAPI struct {
 
 type Longtail_StoredBlock struct {
 	cStoredBlock *C.struct_Longtail_StoredBlock
+}
+
+type Longtail_BlockIndex struct {
+	cBlockIndex *C.struct_Longtail_BlockIndex
 }
 
 type Longtail_StorageAPI struct {
@@ -142,37 +181,6 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 		return fmt.Errorf("WriteToStorage: C.Storage_Write(`%s/%s`) failed with error %d", rootPath, path, errno)
 	}
 	return nil
-}
-
-type ProgressFunc func(context interface{}, total int, current int)
-
-type progressProxyData struct {
-	progressFunc ProgressFunc
-	Context      interface{}
-}
-
-func makeProgressProxy(progressFunc ProgressFunc, context interface{}) progressProxyData {
-	return progressProxyData{progressFunc, context}
-}
-
-type logFunc func(context interface{}, level int, log string)
-type logProxyData struct {
-	logFunc logFunc
-	Context interface{}
-}
-
-func makeLogProxy(logFunc logFunc, context interface{}) logProxyData {
-	return logProxyData{logFunc, context}
-}
-
-type assertFunc func(context interface{}, expression string, file string, line int)
-type assertProxyData struct {
-	assertFunc assertFunc
-	Context    interface{}
-}
-
-func makeAssertProxy(assertFunc assertFunc, context interface{}) assertProxyData {
-	return assertProxyData{assertFunc, context}
 }
 
 func (paths *Longtail_Paths) Dispose() {
@@ -343,10 +351,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
-	block_hash uint64) (bool, error) {
+	blockHash uint64) (bool, error) {
 	errno := C.BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
-		C.uint64_t(block_hash),
+		C.uint64_t(blockHash),
 		nil)
 	if errno == C.ENOENT {
 		return false, nil
@@ -358,12 +366,12 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
-	block_hash uint64) (Longtail_StoredBlock, error) {
+	blockHash uint64) (Longtail_StoredBlock, error) {
 
 	var cStoredBlock *C.struct_Longtail_StoredBlock
 	errno := C.BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
-		C.uint64_t(block_hash),
+		C.uint64_t(blockHash),
 		&cStoredBlock)
 	if errno != 0 {
 		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("GetStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
@@ -374,20 +382,18 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	jobAPI Longtail_JobAPI,
 	defaulHashAPIIdentifier uint32,
-	progressFunc ProgressFunc,
-	progressContext interface{}) (Longtail_ContentIndex, error) {
+	progress Progress) (Longtail_ContentIndex, error) {
 
-	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := SavePointer(&progressProxyData)
-	defer UnrefPointer(cProgressProxyData)
+	cProgressContext := SavePointer(progress)
+	defer UnrefPointer(cProgressContext)
 
 	var cContextIndex *C.struct_Longtail_ContentIndex
 
 	errno := C.BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint32_t(defaulHashAPIIdentifier),
-		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
-		cProgressProxyData,
+		getProgressFunc(progress),
+		cProgressContext,
 		&cContextIndex)
 	if errno != 0 {
 		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("GetIndex: C.BlockStore_GetIndex() failed with error %d", errno)
@@ -396,12 +402,12 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
-	block_hash uint64) (string, error) {
+	blockHash uint64) (string, error) {
 
 	var cPath *C.char
 	errno := C.BlockStore_GetStoredBlockPath(
 		blockStoreAPI.cBlockStoreAPI,
-		C.uint64_t(block_hash),
+		C.uint64_t(blockHash),
 		&cPath)
 	if errno != 0 {
 		return "", fmt.Errorf("GetStoredBlockPath: C.BlockStore_GetStoredBlockPath() failed with error %d", errno)
@@ -411,8 +417,31 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 	return path, nil
 }
 
+type Progress interface {
+	OnProgress(totalCount uint32, doneCount uint32)
+}
+
+type Assert interface {
+	OnAssert(expression string, file string, line int)
+}
+
+type Logger interface {
+	OnLog(level int, log string)
+}
+
+type BlockStoreAPI interface {
+	PutStoredBlock(storedBlock Longtail_StoredBlock) int
+	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
+	GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int)
+	GetStoredBlockPath(blockHash uint64) (string, int)
+}
+
 func (storedBlock *Longtail_StoredBlock) GetBlockHash() uint64 {
 	return uint64(*storedBlock.cStoredBlock.m_BlockIndex.m_BlockHash)
+}
+
+func (storedBlock *Longtail_StoredBlock) GetBlockIndex() Longtail_BlockIndex {
+	return Longtail_BlockIndex{cBlockIndex: storedBlock.cStoredBlock.m_BlockIndex}
 }
 
 func (storedBlock *Longtail_StoredBlock) GetChunkCount() uint32 {
@@ -442,6 +471,10 @@ func (storedBlock *Longtail_StoredBlock) Dispose() {
 	C.DisposeStoredBlock(storedBlock.cStoredBlock)
 }
 
+func (blockIndex *Longtail_BlockIndex) Dispose() {
+	C.Longtail_Free(unsafe.Pointer(blockIndex.cBlockIndex))
+}
+
 func CreateStoredBlock(
 	blockHash uint64,
 	compressionType uint32,
@@ -452,13 +485,13 @@ func CreateStoredBlock(
 	if chunkCount != len(chunkSizes) {
 		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("CreateStoredBlock: Chunk hash count and cunk size count does not match %d vs %d", chunkCount, len(chunkSizes))
 	}
-	cChunkHashes := unsafe.Pointer(nil)
+	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
 	if chunkCount > 0 {
-		cChunkHashes = unsafe.Pointer(&chunkHashes[0])
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
 	}
-	cChunkSizes := unsafe.Pointer(nil)
+	cChunkSizes := (*C.uint32_t)(unsafe.Pointer(nil))
 	if chunkCount > 0 {
-		cChunkSizes = unsafe.Pointer(&chunkSizes[0])
+		cChunkSizes = (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
 	}
 	blockByteCount := len(blockData)
 	var cStoredBlock *C.struct_Longtail_StoredBlock
@@ -466,8 +499,8 @@ func CreateStoredBlock(
 		C.TLongtail_Hash(blockHash),
 		C.uint32_t(chunkCount),
 		C.uint32_t(compressionType),
-		(*C.TLongtail_Hash)(cChunkHashes),
-		(*C.uint32_t)(cChunkSizes),
+		cChunkHashes,
+		cChunkSizes,
 		C.uint32_t(blockByteCount),
 		&cStoredBlock)
 	if errno != 0 {
@@ -630,17 +663,16 @@ func CreateVersionIndex(
 	storageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc ProgressFunc,
-	progressContext interface{},
+	progress Progress,
 	rootPath string,
 	paths Longtail_Paths,
 	assetSizes []uint64,
 	assetPermissions []uint32,
 	assetCompressionTypes []uint32,
 	maxChunkSize uint32) (Longtail_VersionIndex, error) {
-	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := SavePointer(&progressProxyData)
-	defer UnrefPointer(cProgressProxyData)
+
+	cProgressContext := SavePointer(progress)
+	defer UnrefPointer(cProgressContext)
 
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
@@ -665,8 +697,8 @@ func CreateVersionIndex(
 		storageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
-		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
-		cProgressProxyData,
+		getProgressFunc(progress),
+		cProgressContext,
 		cRootPath,
 		paths.cPaths,
 		(*C.uint64_t)(cAssetSizes),
@@ -781,6 +813,27 @@ func CreateContentIndex(
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
 
+func CreateContentIndexFromBlocks(
+	hashIdentifier uint32,
+	blockCount uint64,
+	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, error) {
+	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
+	for index, blockIndex := range blockIndexes {
+		rawBlockIndexes[index] = blockIndex.cBlockIndex
+	}
+	cBlockIndexes := unsafe.Pointer(&rawBlockIndexes[0])
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_CreateContentIndexFromBlocks(
+		C.uint32_t(hashIdentifier),
+		C.uint64_t(blockCount),
+		(**C.struct_Longtail_BlockIndex)(cBlockIndexes),
+		&cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndexFromBlocks: C.Longtail_CreateContentIndexFromBlocks(%d) create content index failed with error %d", blockCount, errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cindex}, nil
+}
+
 // WriteContentIndexToBuffer ...
 func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, error) {
 	var buffer unsafe.Pointer
@@ -829,21 +882,26 @@ func ReadContentIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Con
 	return Longtail_ContentIndex{cContentIndex: cindex}, nil
 }
 
+func getProgressFunc(progress Progress) C.Longtail_JobAPI_ProgressFunc {
+	if progress == nil {
+		return nil
+	}
+	return C.Longtail_JobAPI_ProgressFunc(C.progressProxy)
+}
+
 // WriteContent ...
 func WriteContent(
 	sourceStorageAPI Longtail_StorageAPI,
 	targetBlockStoreAPI Longtail_BlockStoreAPI,
 	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc ProgressFunc,
-	progressContext interface{},
+	progress Progress,
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string) error {
 
-	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := SavePointer(&progressProxyData)
-	defer UnrefPointer(cProgressProxyData)
+	cProgressContext := SavePointer(progress)
+	defer UnrefPointer(cProgressContext)
 
 	cVersionFolderPath := C.CString(versionFolderPath)
 	defer C.free(unsafe.Pointer(cVersionFolderPath))
@@ -853,8 +911,8 @@ func WriteContent(
 		targetBlockStoreAPI.cBlockStoreAPI,
 		compressionRegistryAPI.cCompressionRegistryAPI,
 		jobAPI.cJobAPI,
-		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
-		cProgressProxyData,
+		getProgressFunc(progress),
+		cProgressContext,
 		contentIndex.cContentIndex,
 		versionIndex.cVersionIndex,
 		cVersionFolderPath)
@@ -886,7 +944,7 @@ func ReadContent(
 		sourceStorageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
-		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
+		getProgressFunc(progress),
 		cProgressProxyData,
 		cContentFolderPath,
 		&contentIndex)
@@ -959,16 +1017,14 @@ func WriteVersion(
 	versionStorageAPI Longtail_StorageAPI,
 	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc ProgressFunc,
-	progressContext interface{},
+	progress Progress,
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string,
 	retainPermissions bool) error {
 
-	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := SavePointer(&progressProxyData)
-	defer UnrefPointer(cProgressProxyData)
+	cProgressContext := SavePointer(progress)
+	defer UnrefPointer(cProgressContext)
 
 	cVersionFolderPath := C.CString(versionFolderPath)
 	defer C.free(unsafe.Pointer(cVersionFolderPath))
@@ -983,8 +1039,8 @@ func WriteVersion(
 		versionStorageAPI.cStorageAPI,
 		compressionRegistryAPI.cCompressionRegistryAPI,
 		jobAPI.cJobAPI,
-		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
-		cProgressProxyData,
+		getProgressFunc(progress),
+		cProgressContext,
 		contentIndex.cContentIndex,
 		versionIndex.cVersionIndex,
 		cVersionFolderPath,
@@ -1013,8 +1069,7 @@ func ChangeVersion(
 	versionStorageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
-	progressFunc ProgressFunc,
-	progressContext interface{},
+	progress Progress,
 	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	contentIndex Longtail_ContentIndex,
 	sourceVersionIndex Longtail_VersionIndex,
@@ -1023,9 +1078,8 @@ func ChangeVersion(
 	versionFolderPath string,
 	retainPermissions bool) error {
 
-	progressProxyData := makeProgressProxy(progressFunc, progressContext)
-	cProgressProxyData := SavePointer(&progressProxyData)
-	defer UnrefPointer(cProgressProxyData)
+	cProgressContext := SavePointer(progress)
+	defer UnrefPointer(cProgressContext)
 
 	cVersionFolderPath := C.CString(versionFolderPath)
 	defer C.free(unsafe.Pointer(cVersionFolderPath))
@@ -1040,8 +1094,8 @@ func ChangeVersion(
 		versionStorageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
-		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
-		cProgressProxyData,
+		getProgressFunc(progress),
+		cProgressContext,
 		compressionRegistryAPI.cCompressionRegistryAPI,
 		contentIndex.cContentIndex,
 		sourceVersionIndex.cVersionIndex,
@@ -1056,32 +1110,84 @@ func ChangeVersion(
 }
 
 //export progressProxy
-func progressProxy(progress unsafe.Pointer, total C.uint32_t, done C.uint32_t) {
-	progressProxyData := RestorePointer(progress).(*progressProxyData)
-	if progressProxyData.progressFunc != nil {
-		progressProxyData.progressFunc(progressProxyData.Context, int(total), int(done))
+func progressProxy(context unsafe.Pointer, total C.uint32_t, done C.uint32_t) {
+	progress := RestorePointer(context).(Progress)
+	if progress != nil {
+		progress.OnProgress(uint32(total), uint32(done))
 	}
 }
 
 //export logProxy
 func logProxy(context unsafe.Pointer, level C.int, log *C.char) {
-	logProxyData := RestorePointer(context).(*logProxyData)
-	logProxyData.logFunc(logProxyData.Context, int(level), C.GoString(log))
+	logger := RestorePointer(context).(Logger)
+	logger.OnLog(int(level), C.GoString(log))
+}
+
+//export Proxy_BlockStore_Dispose
+func Proxy_BlockStore_Dispose(context unsafe.Pointer) {
+	UnrefPointer(context)
+}
+
+//export Proxy_PutStoredBlock
+func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock) C.int {
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock})
+	return C.int(errno)
+}
+
+//export Proxy_GetStoredBlock
+func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlock **C.struct_Longtail_StoredBlock) C.int {
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	storedBlock, errno := blockStore.GetStoredBlock(uint64(blockHash))
+	if errno == 0 {
+		*outStoredBlock = storedBlock.cStoredBlock
+		storedBlock.cStoredBlock = nil
+	}
+	return C.int(errno)
+}
+
+//export Proxy_GetIndex
+func Proxy_GetIndex(context unsafe.Pointer, defaultHashApiIdentifier uint32, progressFunc C.Longtail_JobAPI_ProgressFunc, progressContext unsafe.Pointer, outContentIndex **C.struct_Longtail_ContentIndex) C.int {
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	contextIndex, errno := blockStore.GetIndex(
+		uint32(defaultHashApiIdentifier),
+		nil)
+	if errno == 0 {
+		*outContentIndex = contextIndex.cContentIndex
+		contextIndex.cContentIndex = nil
+	}
+	return C.int(errno)
+}
+
+//export Proxy_GetStoredBlockPath
+func Proxy_GetStoredBlockPath(context unsafe.Pointer, blockHash uint64, outPath **C.char) C.int {
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	path, errno := blockStore.GetStoredBlockPath(uint64(blockHash))
+	if errno == 0 {
+		cPath := C.CString(path)
+		defer C.free(unsafe.Pointer(cPath))
+		*outPath = C.Longtail_Strdup(cPath)
+	}
+	return C.int(errno)
+}
+
+func CreateBlockStoreAPI(blockStore interface{}) (Longtail_BlockStoreAPI, error) {
+	cContext := SavePointer(blockStore)
+	blockStoreAPIProxy := C.CreateBlockStoreProxyAPI(cContext)
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: blockStoreAPIProxy}, nil
+}
+
+func getLoggerFunc(logger Logger) C.Longtail_Log {
+	if logger == nil {
+		return nil
+	}
+	return C.Longtail_Log(C.logProxy)
 }
 
 //SetLogger ...
-func SetLogger(logFunc logFunc, logContext interface{}) unsafe.Pointer {
-	logProxyData := makeLogProxy(logFunc, logContext)
-	cLogProxyData := SavePointer(&logProxyData)
-
-	C.Longtail_SetLog(C.Longtail_Log(C.logProxy), cLogProxyData)
-	return cLogProxyData
-}
-
-//ClearLogger ...
-func ClearLogger(logger unsafe.Pointer) {
-	C.Longtail_SetLog(nil, nil)
-	UnrefPointer(logger)
+func SetLogger(logger Logger) {
+	cLoggerContext := SavePointer(logger)
+	C.Longtail_SetLog(getLoggerFunc(logger), cLoggerContext)
 }
 
 //SetLogLevel ...
@@ -1089,26 +1195,24 @@ func SetLogLevel(level int) {
 	C.Longtail_SetLogLevel(C.int(level))
 }
 
-var activeAssertFunc assertFunc
-var activeAssertContext interface{}
-
-//SetAssert ...
-func SetAssert(assertFunc assertFunc, assertContext interface{}) {
-	activeAssertFunc = assertFunc
-	activeAssertContext = assertContext
-	C.Longtail_SetAssert(C.Longtail_Assert(C.assertProxy))
+func getAssertFunc(assert Assert) C.Longtail_Assert {
+	if assert == nil {
+		return nil
+	}
+	return C.Longtail_Assert(C.assertProxy)
 }
 
-//ClearAssert ...
-func ClearAssert() {
-	C.Longtail_SetAssert(C.Longtail_Assert(nil))
-	activeAssertFunc = nil
-	activeAssertContext = nil
+var activeAssert Assert
+
+//SetAssert ...
+func SetAssert(assert Assert) {
+	C.Longtail_SetAssert(getAssertFunc(assert))
+	activeAssert = assert
 }
 
 //export assertProxy
 func assertProxy(expression *C.char, file *C.char, line C.int) {
-	if activeAssertFunc != nil {
-		activeAssertFunc(activeAssertContext, C.GoString(expression), C.GoString(file), int(line))
+	if activeAssert != nil {
+		activeAssert.OnAssert(C.GoString(expression), C.GoString(file), int(line))
 	}
 }

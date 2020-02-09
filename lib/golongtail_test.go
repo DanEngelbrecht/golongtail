@@ -13,8 +13,14 @@ type progressData struct {
 	t          *testing.T
 }
 
-func progress(context interface{}, total int, current int) {
-	p := context.(*progressData)
+type testProgress struct {
+	inited     bool
+	oldPercent int
+	task       string
+	t          *testing.T
+}
+
+func (p testProgress) progress(total int, current int) {
 	if current < total {
 		if !p.inited {
 			p.t.Logf("%s: ", p.task)
@@ -35,33 +41,37 @@ func progress(context interface{}, total int, current int) {
 	}
 }
 
-type loggerData struct {
+type testLogger struct {
 	t *testing.T
 }
 
-func logger(context interface{}, level int, log string) {
-	p := context.(*loggerData)
-	p.t.Logf("%d: %s", level, log)
-	//	fmt.Printf("%d: %s\n", level, log)
+func (l testLogger) OnLog(level int, log string) {
+	l.t.Logf("%d: %s", level, log)
 }
 
-type assertData struct {
+type testAssert struct {
 	t *testing.T
 }
 
-func testAssertFunc(context interface{}, expression string, file string, line int) {
+func (a testAssert) OnAssert(expression string, file string, line int) {
 	fmt.Printf("ASSERT: %s %s:%d", expression, file, line)
 }
 
 func TestDebugging(t *testing.T) {
-	l := SetLogger(logger, &loggerData{t: t})
-	defer ClearLogger(l)
-	SetAssert(testAssertFunc, &assertData{t: t})
-	defer ClearAssert()
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
 	SetLogLevel(3)
 }
 
 func TestInMemStorage(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
 	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
 	myString := "my string"
@@ -79,6 +89,12 @@ func TestInMemStorage(t *testing.T) {
 }
 
 func TestAPICreate(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
 	blake2 := CreateBlake2HashAPI()
 	defer blake2.Dispose()
 
@@ -110,8 +126,8 @@ func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, error) {
 	chunkSizes := make([]uint32, chunkCount)
 	blockOffset := uint32(0)
 	for index, _ := range chunkHashes {
-		chunkHashes[index] = uint64(index) * 4711
-		chunkSizes[index] = uint32(index) * 10
+		chunkHashes[index] = uint64(index+1) * 4711
+		chunkSizes[index] = uint32(index+1) * 10
 		blockOffset += uint32(chunkSizes[index])
 	}
 	blockData := make([]uint8, blockOffset)
@@ -153,10 +169,10 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
 	}
 	blockOffset := uint32(0)
 	for index, _ := range chunkHashes {
-		if chunkHashes[index] != uint64(index)*4711 {
+		if chunkHashes[index] != uint64(index+1)*4711 {
 			t.Errorf("validateStoredBlock() %q != %q", uint64(index)*4711, chunkHashes[index])
 		}
-		if chunkSizes[index] != uint32(index)*10 {
+		if chunkSizes[index] != uint32(index+1)*10 {
 			t.Errorf("validateStoredBlock() %q != %q", uint32(index)*10, chunkSizes[index])
 		}
 		blockOffset += uint32(chunkSizes[index])
@@ -177,6 +193,12 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
 }
 
 func TestStoredblock(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
 	storedBlock, err := createStoredBlock(2)
 	expected := error(nil)
 	if err != nil {
@@ -186,6 +208,12 @@ func TestStoredblock(t *testing.T) {
 }
 
 func TestFSBlockStore(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
 	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -195,7 +223,7 @@ func TestFSBlockStore(t *testing.T) {
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	contentIndex, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
+	contentIndex, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil)
 	defer contentIndex.Dispose()
 	expected := error(nil)
 	if err != expected {
@@ -279,7 +307,7 @@ func TestFSBlockStore(t *testing.T) {
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
 
-	contentIndex2, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
+	contentIndex2, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil)
 	defer contentIndex2.Dispose()
 	if err != expected {
 		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
@@ -290,6 +318,120 @@ func TestFSBlockStore(t *testing.T) {
 	if contentIndex2.GetChunkCount() != uint64(1+2+3) {
 		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(1+2+3))
 	}
+}
+
+type TestBlockStore struct {
+	blocks        map[uint64]Longtail_StoredBlock
+	blockStoreAPI Longtail_BlockStoreAPI
+}
+
+func (b TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
+	blockHash := storedBlock.GetBlockHash()
+	if _, ok := b.blocks[blockHash]; ok {
+		return 0
+	}
+	blockCopy, err := CreateStoredBlock(
+		blockHash,
+		storedBlock.GetCompressionType(),
+		storedBlock.GetChunkHashes(),
+		storedBlock.GetChunkSizes(),
+		storedBlock.GetBlockData())
+	if err != nil {
+		return ENOMEM
+	}
+	b.blocks[blockHash] = blockCopy
+	return 0
+}
+
+func (b TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int) {
+	if storedBlock, ok := b.blocks[blockHash]; ok {
+		blockCopy, err := CreateStoredBlock(
+			storedBlock.GetBlockHash(),
+			storedBlock.GetCompressionType(),
+			storedBlock.GetChunkHashes(),
+			storedBlock.GetChunkSizes(),
+			storedBlock.GetBlockData())
+		if err != nil {
+			return Longtail_StoredBlock{cStoredBlock: nil}, ENOMEM
+		}
+		return blockCopy, 0
+	}
+	return Longtail_StoredBlock{cStoredBlock: nil}, ENOENT
+}
+
+func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int) {
+	blockCount := len(b.blocks)
+	blockIndexes := make([]Longtail_BlockIndex, blockCount)
+	arrayIndex := 0
+	for _, value := range b.blocks {
+		blockIndexes[arrayIndex] = value.GetBlockIndex()
+		arrayIndex++
+	}
+	cIndex, err := CreateContentIndexFromBlocks(
+		defaultHashAPIIdentifier,
+		uint64(len(b.blocks)),
+		blockIndexes)
+	if err != nil {
+		return Longtail_ContentIndex{cContentIndex: nil}, ENOMEM
+	}
+	return cIndex, 0
+}
+
+func (b TestBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
+	return fmt.Sprintf("%v", blockHash), 0
+}
+
+func TestBlockStoreProxy(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
+	blockStoreProxy, err := CreateBlockStoreAPI(blockStore)
+	expected := error(nil)
+	if err != nil {
+		t.Errorf("TestBlockStoreProxy() CreateBlockStoreAPI() %q != %q", err, expected)
+	}
+	blockStore.blockStoreAPI = blockStoreProxy
+	defer blockStoreProxy.Dispose()
+
+	storedBlock, err := createStoredBlock(2)
+	if err != nil {
+		t.Errorf("TestBlockStoreProxy() createStoredBlock() %q != %q", err, expected)
+	}
+	defer storedBlock.Dispose()
+	err = blockStoreProxy.PutStoredBlock(storedBlock)
+	if err != nil {
+		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %q != %q", err, expected)
+	}
+	getBlock, err := blockStoreProxy.GetStoredBlock(storedBlock.GetBlockHash())
+	if err != nil {
+		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %q != %q", err, expected)
+	}
+	defer getBlock.Dispose()
+	validateStoredBlock(t, getBlock)
+	blockPath, err := blockStoreProxy.GetStoredBlockPath(getBlock.GetBlockHash())
+	if err != nil {
+		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %q != %q", err, expected)
+	}
+	if blockPath != fmt.Sprintf("%v", getBlock.GetBlockHash()) {
+		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %s != %s", blockPath, fmt.Sprintf("%v", getBlock.GetBlockHash()))
+	}
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	if jobAPI.cJobAPI == nil {
+		t.Errorf("TestBlockStoreProxy() CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
+	}
+	defer jobAPI.Dispose()
+	contentIndex, err := blockStoreProxy.GetIndex(
+		jobAPI,
+		GetBlake3HashIdentifier(),
+		nil)
+	if err != nil {
+		t.Errorf("TestBlockStoreProxy() GetIndex() %q != %q", err, error(nil))
+	}
+	defer contentIndex.Dispose()
 }
 
 /*

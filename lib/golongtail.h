@@ -16,6 +16,62 @@
 
 void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 
+void Proxy_BlockStore_Dispose(void* context);
+int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block);
+int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
+int Proxy_GetIndex(void* context, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
+int Proxy_GetStoredBlockPath(void* context, uint64_t block_hash, char** out_path);
+
+struct BlockStoreAPIProxy
+{
+    struct Longtail_BlockStoreAPI m_API;
+    void* m_Context;
+};
+
+static void BlockStoreAPIProxy_Dispose(struct Longtail_API* block_store_api)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    Longtail_Free(proxy);
+}
+
+static int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_PutStoredBlock(proxy->m_Context, stored_block);
+}
+
+static int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetStoredBlock(proxy->m_Context, block_hash, out_stored_block);
+}
+
+static int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetIndex(proxy->m_Context, default_hash_api_identifier, progress_func, progress_context, out_content_index);
+}
+
+static int BlockStoreAPIProxy_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetStoredBlockPath(proxy->m_Context, block_hash, out_path);
+}
+
+static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
+{
+    struct BlockStoreAPIProxy* api = (struct BlockStoreAPIProxy*)Longtail_Alloc(sizeof(struct BlockStoreAPIProxy));
+    api->m_API.m_API.Dispose        = BlockStoreAPIProxy_Dispose;
+    api->m_API.PutStoredBlock       = BlockStoreAPIProxy_PutStoredBlock;
+    api->m_API.GetStoredBlock       = BlockStoreAPIProxy_GetStoredBlock;
+    api->m_API.GetIndex             = BlockStoreAPIProxy_GetIndex;
+    api->m_API.GetStoredBlockPath   = BlockStoreAPIProxy_GetStoredBlockPath;
+    api->m_Context = context;
+    return &api->m_API;
+}
+
+
+
 void logProxy(void* context, int level, char* str);
 
 void assertProxy(char* expression, char* file, int line);

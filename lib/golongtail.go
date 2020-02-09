@@ -333,12 +333,42 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock) error {
+	errno := C.BlockStore_PutStoredBlock(
+		blockStoreAPI.cBlockStoreAPI,
+		storedBlock.cStoredBlock)
+	if errno != 0 {
+		return fmt.Errorf("PutStoredBlock: C.BlockStore_PutStoredBlock() failed with error %d", errno)
+	}
 	return nil
+}
+
+func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
+	block_hash uint64) (bool, error) {
+	errno := C.BlockStore_GetStoredBlock(
+		blockStoreAPI.cBlockStoreAPI,
+		C.uint64_t(block_hash),
+		nil)
+	if errno == C.ENOENT {
+		return false, nil
+	}
+	if errno == 0 {
+		return false, nil
+	}
+	return false, fmt.Errorf("HasStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	block_hash uint64) (Longtail_StoredBlock, error) {
-	return Longtail_StoredBlock{cStoredBlock: nil}, nil
+
+	var cStoredBlock *C.struct_Longtail_StoredBlock
+	errno := C.BlockStore_GetStoredBlock(
+		blockStoreAPI.cBlockStoreAPI,
+		C.uint64_t(block_hash),
+		&cStoredBlock)
+	if errno != 0 {
+		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("GetStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
+	}
+	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
@@ -346,12 +376,39 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	defaulHashAPIIdentifier uint32,
 	progressFunc ProgressFunc,
 	progressContext interface{}) (Longtail_ContentIndex, error) {
-	return Longtail_ContentIndex{cContentIndex: nil}, nil
+
+	progressProxyData := makeProgressProxy(progressFunc, progressContext)
+	cProgressProxyData := SavePointer(&progressProxyData)
+	defer UnrefPointer(cProgressProxyData)
+
+	var cContextIndex *C.struct_Longtail_ContentIndex
+
+	errno := C.BlockStore_GetIndex(
+		blockStoreAPI.cBlockStoreAPI,
+		C.uint32_t(defaulHashAPIIdentifier),
+		(C.Longtail_JobAPI_ProgressFunc)(C.progressProxy),
+		cProgressProxyData,
+		&cContextIndex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("GetIndex: C.BlockStore_GetIndex() failed with error %d", errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cContextIndex}, nil
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 	block_hash uint64) (string, error) {
-	return "", nil
+
+	var cPath *C.char
+	errno := C.BlockStore_GetStoredBlockPath(
+		blockStoreAPI.cBlockStoreAPI,
+		C.uint64_t(block_hash),
+		&cPath)
+	if errno != 0 {
+		return "", fmt.Errorf("GetStoredBlockPath: C.BlockStore_GetStoredBlockPath() failed with error %d", errno)
+	}
+	defer C.free(unsafe.Pointer(cPath))
+	path := C.GoString(cPath)
+	return path, nil
 }
 
 func (storedBlock *Longtail_StoredBlock) GetBlockHash() uint64 {
@@ -1001,7 +1058,9 @@ func ChangeVersion(
 //export progressProxy
 func progressProxy(progress unsafe.Pointer, total C.uint32_t, done C.uint32_t) {
 	progressProxyData := RestorePointer(progress).(*progressProxyData)
-	progressProxyData.progressFunc(progressProxyData.Context, int(total), int(done))
+	if progressProxyData.progressFunc != nil {
+		progressProxyData.progressFunc(progressProxyData.Context, int(total), int(done))
+	}
 }
 
 //export logProxy

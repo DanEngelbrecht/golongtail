@@ -186,7 +186,7 @@ func TestStoredblock(t *testing.T) {
 }
 
 func TestFSBlockStore(t *testing.T) {
-	storageAPI := CreateFSStorageAPI()
+	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
@@ -221,8 +221,8 @@ func TestFSBlockStore(t *testing.T) {
 	defer block3.Dispose()
 
 	storedBlock1, err := blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
-	if err != expected {
-		t.Errorf("WriteToStorage() GetStoredBlock() %q != %q", err, expected)
+	if err == expected {
+		t.Errorf("WriteToStorage() GetStoredBlock() %q == %q", err, expected)
 	}
 	if storedBlock1.cStoredBlock != nil {
 		t.Errorf("WriteToStorage() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
@@ -263,16 +263,16 @@ func TestFSBlockStore(t *testing.T) {
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
 
-	contentIndex, err = blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
-	defer contentIndex.Dispose()
+	contentIndex2, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
+	defer contentIndex2.Dispose()
 	if err != expected {
 		t.Errorf("WriteToStorage() GetIndex () %q != %q", err, expected)
 	}
-	if contentIndex.GetBlockCount() != uint64(3) {
-		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex.GetBlockCount(), uint64(3))
+	if contentIndex2.GetBlockCount() != uint64(3) {
+		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(3))
 	}
-	if contentIndex.GetChunkCount() != uint64(1+2+3) {
-		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex.GetBlockCount(), uint64(1+2+3))
+	if contentIndex2.GetChunkCount() != uint64(1+2+3) {
+		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(1+2+3))
 	}
 }
 

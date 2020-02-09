@@ -21,6 +21,7 @@ int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_bloc
 int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
 int Proxy_GetIndex(void* context, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
 int Proxy_GetStoredBlockPath(void* context, uint64_t block_hash, char** out_path);
+void Proxy_Close(void* context);
 
 struct BlockStoreAPIProxy
 {
@@ -31,6 +32,7 @@ struct BlockStoreAPIProxy
 static void BlockStoreAPIProxy_Dispose(struct Longtail_API* block_store_api)
 {
     struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    Proxy_Close(proxy->m_Context);
     Longtail_Free(proxy);
 }
 

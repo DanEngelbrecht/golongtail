@@ -62,6 +62,7 @@ type BlockStoreAPI interface {
 	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
 	GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int)
 	GetStoredBlockPath(blockHash uint64) (string, int)
+	Close()
 }
 
 type Longtail_Paths struct {
@@ -1183,6 +1184,12 @@ func Proxy_GetStoredBlockPath(context unsafe.Pointer, blockHash uint64, outPath 
 		*outPath = C.Longtail_Strdup(cPath)
 	}
 	return C.int(errno)
+}
+
+//export Proxy_Close
+func Proxy_Close(context unsafe.Pointer) {
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	blockStore.Close()
 }
 
 func CreateBlockStoreAPI(blockStore interface{}) (Longtail_BlockStoreAPI, error) {

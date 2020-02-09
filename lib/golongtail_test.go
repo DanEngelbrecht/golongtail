@@ -381,6 +381,9 @@ func (b TestBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
 	return fmt.Sprintf("%v", blockHash), 0
 }
 
+func (b TestBlockStore) Close() {
+}
+
 func TestBlockStoreProxy(t *testing.T) {
 	SetLogger(&testLogger{t: t})
 	defer SetLogger(nil)

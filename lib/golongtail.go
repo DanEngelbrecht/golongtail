@@ -369,6 +369,11 @@ func CreateFSBlockStore(storageAPI Longtail_StorageAPI, jobAPI Longtail_JobAPI, 
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, jobAPI.cJobAPI, cContentPath)}
 }
 
+// CreateCacheBlockStore() ...
+func CreateCacheBlockStore(cacheBlockStore Longtail_BlockStoreAPI, persistentBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCacheBlockStoreAPI(cacheBlockStore.cBlockStoreAPI, persistentBlockStore.cBlockStoreAPI)}
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)

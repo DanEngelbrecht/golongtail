@@ -434,6 +434,179 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer contentIndex.Dispose()
 }
 
+func createFilledStorage(rootPath string) Longtail_StorageAPI {
+	storageAPI := CreateInMemStorageAPI()
+	storageAPI.WriteToStorage(rootPath, "first_folder/my_file.txt", []byte("the content of my_file"))
+	storageAPI.WriteToStorage(rootPath, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	storageAPI.WriteToStorage(rootPath, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	storageAPI.WriteToStorage(rootPath, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	return storageAPI
+}
+
+func TestGetFileRecursively(t *testing.T) {
+	storageAPI := createFilledStorage("content")
+	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	if err != nil {
+		t.Errorf("TestGetFileRecursively() GetFilesRecursively() %q != %q", err, error(nil))
+	}
+	defer fileInfos.Dispose()
+	fileCount := fileInfos.GetFileCount()
+	if fileCount != 14 {
+		t.Errorf("TestGetFileRecursively() GetFileCount() %d != %d", fileCount, 14)
+	}
+	fileSizes := fileInfos.GetFileSizes()
+	if len(fileSizes) != int(fileCount) {
+		t.Errorf("TestGetFileRecursively() GetFileSizes() %d != %d", len(fileSizes), fileCount)
+	}
+	permissions := fileInfos.GetFilePermissions()
+	if len(permissions) != int(fileCount) {
+		t.Errorf("TestGetFileRecursively() GetFilePermissions() %d != %d", len(permissions), fileCount)
+	}
+	path := fileInfos.GetPaths().GetPath(0)
+	if path != "first_folder/" {
+		t.Errorf("TestGetFileRecursively() GetPaths().GetPath() %s != %s", path, "first_folder/")
+	}
+}
+
+func TestCreateVersionIndex(t *testing.T) {
+	storageAPI := createFilledStorage("content")
+	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	if err != nil {
+		t.Errorf("TestCreateVersionIndex() GetFilesRecursively() %q != %q", err, error(nil))
+	}
+	hashAPI := CreateBlake2HashAPI()
+	defer hashAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer jobAPI.Dispose()
+
+	compressionTypes := make([]uint32, fileInfos.GetFileCount())
+
+	versionIndex, err := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		nil,
+		"content",
+		fileInfos.GetPaths(),
+		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
+		compressionTypes,
+		32768)
+
+	if err != nil {
+		t.Errorf("TestCreateVersionIndex() CreateVersionIndex() %q != %q", err, error(nil))
+	}
+	defer versionIndex.Dispose()
+	if versionIndex.GetHashAPI() != hashAPI.GetIdentifier() {
+		t.Errorf("TestCreateVersionIndex() GetHashAPI() %d != %d", versionIndex.GetHashAPI(), hashAPI.GetIdentifier())
+	}
+	if versionIndex.GetAssetCount() != fileInfos.GetFileCount() {
+		t.Errorf("TestCreateVersionIndex() GetAssetCount() %d != %d", versionIndex.GetAssetCount(), fileInfos.GetFileCount())
+	}
+}
+
+func TestCreateContentIndex(t *testing.T) {
+	hashAPI := CreateBlake3HashAPI()
+	defer hashAPI.Dispose()
+	chunkHashes := make([]uint64, 2)
+	chunkHashes[0] = 4711
+	chunkHashes[1] = 1147
+	chunkSizes := make([]uint32, 2)
+	chunkSizes[0] = 889
+	chunkSizes[0] = 998
+	compressionTypes := make([]uint32, 2)
+	compressionTypes[0] = GetZStdDefaultCompressionType()
+	compressionTypes[1] = GetZStdDefaultCompressionType()
+	contentIndex, err := CreateContentIndex(
+		hashAPI,
+		chunkHashes,
+		chunkSizes,
+		compressionTypes,
+		65536,
+		4096)
+	if err != nil {
+		t.Errorf("TestCreateContentIndex() CreateContentIndex() %q != %q", err, error(nil))
+	}
+	defer contentIndex.Dispose()
+	if contentIndex.GetChunkCount() != uint64(len(chunkHashes)) {
+		t.Errorf("TestCreateContentIndex() GetChunkCount() %d != %d", contentIndex.GetChunkCount(), len(chunkHashes))
+	}
+	if contentIndex.GetBlockCount() != 1 {
+		t.Errorf("TestCreateContentIndex() GetChunkCount() %d != %d", contentIndex.GetBlockCount(), 1)
+	}
+}
+
+func TestWriteRewriteVersion(t *testing.T) {
+	storageAPI := createFilledStorage("content")
+	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	if err != nil {
+		t.Errorf("TestWriteRewriteVersion() GetFilesRecursively() %q != %q", err, error(nil))
+	}
+	hashAPI := CreateBlake2HashAPI()
+	defer hashAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer jobAPI.Dispose()
+
+	compressionTypes := make([]uint32, fileInfos.GetFileCount())
+
+	versionIndex, err := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		nil,
+		"content",
+		fileInfos.GetPaths(),
+		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
+		compressionTypes,
+		32768)
+	if err != nil {
+		t.Errorf("TestWriteRewriteVersion() CreateVersionIndex() %q != %q", err, error(nil))
+	}
+
+	contentIndex, err := CreateContentIndex(
+		hashAPI,
+		versionIndex.GetChunkHashes(),
+		versionIndex.GetChunkSizes(),
+		versionIndex.GetCompressionTypes(),
+		65536,
+		4096)
+	if err != nil {
+		t.Errorf("TestWriteRewriteVersion() CreateContentIndex() %q != %q", err, error(nil))
+	}
+	defer contentIndex.Dispose()
+	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, jobAPI, "block_store")
+	defer blockStorageAPI.Dispose()
+	compressionRegistry := CreateDefaultCompressionRegistry()
+	compressionRegistry.Dispose()
+	err = WriteContent(
+		storageAPI,
+		blockStorageAPI,
+		compressionRegistry,
+		jobAPI,
+		nil,
+		contentIndex,
+		versionIndex,
+		"content")
+	if err != nil {
+		t.Errorf("TestWriteRewriteVersion() WriteContent() %q != %q", err, error(nil))
+	}
+
+	err = WriteVersion(
+		blockStorageAPI,
+		storageAPI,
+		compressionRegistry,
+		jobAPI,
+		nil,
+		contentIndex,
+		versionIndex,
+		"content_copy",
+		true)
+	if err != nil {
+		t.Errorf("TestWriteRewriteVersion() WriteVersion() %q != %q", err, error(nil))
+	}
+}
+
 /*
 // CreateVersionIndexUtil ...
 func CreateVersionIndexUtil(

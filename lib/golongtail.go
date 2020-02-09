@@ -45,6 +45,25 @@ const EPIPE = 32   /* Broken pipe */
 const EDOM = 33    /* Math arg out of domain of func */
 const ERANGE = 34  /* Math result not representable */
 
+type Progress interface {
+	OnProgress(totalCount uint32, doneCount uint32)
+}
+
+type Assert interface {
+	OnAssert(expression string, file string, line int)
+}
+
+type Logger interface {
+	OnLog(level int, log string)
+}
+
+type BlockStoreAPI interface {
+	PutStoredBlock(storedBlock Longtail_StoredBlock) int
+	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
+	GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int)
+	GetStoredBlockPath(blockHash uint64) (string, int)
+}
+
 type Longtail_Paths struct {
 	cPaths *C.struct_Longtail_Paths
 }
@@ -288,6 +307,21 @@ func (versionIndex *Longtail_VersionIndex) GetChunkCount() uint32 {
 	return uint32(*versionIndex.cVersionIndex.m_ChunkCount)
 }
 
+func (versionIndex *Longtail_VersionIndex) GetChunkHashes() []uint64 {
+	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
+	return carray2slice64(versionIndex.cVersionIndex.m_ChunkHashes, size)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetChunkSizes() []uint32 {
+	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
+	return carray2slice32(versionIndex.cVersionIndex.m_ChunkSizes, size)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetCompressionTypes() []uint32 {
+	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
+	return carray2slice32(versionIndex.cVersionIndex.m_ChunkCompressionTypes, size)
+}
+
 func (versionDiff *Longtail_VersionDiff) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionDiff.cVersionDiff))
 }
@@ -415,25 +449,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 	defer C.free(unsafe.Pointer(cPath))
 	path := C.GoString(cPath)
 	return path, nil
-}
-
-type Progress interface {
-	OnProgress(totalCount uint32, doneCount uint32)
-}
-
-type Assert interface {
-	OnAssert(expression string, file string, line int)
-}
-
-type Logger interface {
-	OnLog(level int, log string)
-}
-
-type BlockStoreAPI interface {
-	PutStoredBlock(storedBlock Longtail_StoredBlock) int
-	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
-	GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int)
-	GetStoredBlockPath(blockHash uint64) (string, int)
 }
 
 func (storedBlock *Longtail_StoredBlock) GetBlockHash() uint64 {
@@ -647,7 +662,7 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, rootPath string) (Longt
 }
 
 // GetPath ...
-func GetPath(paths Longtail_Paths, index uint32) string {
+func (paths Longtail_Paths) GetPath(index uint32) string {
 	cPath := C.GetPath(paths.cPaths.m_Offsets, paths.cPaths.m_Data, C.uint32_t(index))
 	return C.GoString(cPath)
 }
@@ -658,7 +673,7 @@ func GetVersionIndexPath(vindex Longtail_VersionIndex, index uint32) string {
 	return C.GoString(cPath)
 }
 
-// CreateVersionIndexUtil ...
+// CreateVersionIndex ...
 func CreateVersionIndex(
 	storageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
@@ -765,13 +780,13 @@ func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Ver
 // CreateContentIndex ...
 func CreateContentIndex(
 	hashAPI Longtail_HashAPI,
-	chunkCount uint64,
 	chunkHashes []uint64,
 	chunkSizes []uint32,
 	compressionTypes []uint32,
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32) (Longtail_ContentIndex, error) {
 
+	chunkCount := uint64(len(chunkHashes))
 	var cindex *C.struct_Longtail_ContentIndex
 	if chunkCount == 0 {
 		errno := C.Longtail_CreateContentIndex(
@@ -1175,6 +1190,12 @@ func CreateBlockStoreAPI(blockStore interface{}) (Longtail_BlockStoreAPI, error)
 	cContext := SavePointer(blockStore)
 	blockStoreAPIProxy := C.CreateBlockStoreProxyAPI(cContext)
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: blockStoreAPIProxy}, nil
+}
+
+func CreateFSBlockStoreAPI(storageAPI Longtail_StorageAPI, jobAPI Longtail_JobAPI, contentPath string) Longtail_BlockStoreAPI {
+	cContentPath := C.CString(contentPath)
+	defer C.free(unsafe.Pointer(cContentPath))
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, jobAPI.cJobAPI, cContentPath)}
 }
 
 func getLoggerFunc(logger Logger) C.Longtail_Log {

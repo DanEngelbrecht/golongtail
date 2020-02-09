@@ -20,7 +20,7 @@ import (
 type loggerData struct {
 }
 
-func logger(context interface{}, level int, message string) {
+func (l loggerData) OnLog(level int, message string) {
 	switch level {
 	case 0:
 		log.Printf("DEBUG: %s", message)
@@ -35,18 +35,17 @@ func logger(context interface{}, level int, message string) {
 
 type progressData struct {
 	inited     bool
-	oldPercent int
+	oldPercent uint32
 	task       string
 }
 
-func progress(context interface{}, total int, current int) {
-	p := context.(*progressData)
-	if current < total {
+func (p progressData) OnProgress(totalCount uint32, doneCount uint32) {
+	if doneCount < totalCount {
 		if !p.inited {
 			fmt.Fprintf(os.Stderr, "%s: ", p.task)
 			p.inited = true
 		}
-		percentDone := (100 * current) / total
+		percentDone := (100 * doneCount) / totalCount
 		if (percentDone - p.oldPercent) >= 5 {
 			fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
 			p.oldPercent = percentDone
@@ -196,7 +195,6 @@ func upSyncVersion(
 		}
 		remoteContentIndex, err = lib.CreateContentIndex(
 			hash,
-			0,
 			nil,
 			nil,
 			nil,
@@ -226,7 +224,6 @@ func upSyncVersion(
 			fs,
 			hash,
 			jobs,
-			progress,
 			&progressData{task: "Indexing version"},
 			sourceFolderPath,
 			fileInfos.GetPaths(),
@@ -260,25 +257,23 @@ func upSyncVersion(
 		return err
 	}
 	defer missingContentIndex.Dispose()
-
+	bs := lib.CreateFSBlockStore(fs, jobs, localCachePath)
+	defer bs.Dispose()
 	if missingContentIndex.GetBlockCount() > 0 {
 		err = lib.WriteContent(
 			fs,
-			fs,
+			bs,
 			creg,
 			jobs,
-			progress,
 			&progressData{task: "Writing content blocks"},
 			missingContentIndex,
 			vindex,
-			sourceFolderPath,
-			localCachePath)
+			sourceFolderPath)
 		if err != nil {
 			return err
 		}
 		err = indexStore.PutContent(
 			context.Background(),
-			progress,
 			&progressData{task: "Uploading"},
 			missingContentIndex,
 			fs,
@@ -345,7 +340,6 @@ func downSyncVersion(
 		}
 		remoteContentIndex, err = lib.CreateContentIndex(
 			hash,
-			0,
 			nil,
 			nil,
 			nil,
@@ -382,7 +376,6 @@ func downSyncVersion(
 			fs,
 			hash,
 			jobs,
-			progress,
 			&progressData{task: "Indexing version"},
 			targetFolderPath,
 			fileInfos.GetPaths(),
@@ -401,13 +394,10 @@ func downSyncVersion(
 	}
 	defer localVersionIndex.Dispose()
 
-	localContentIndex, err := lib.ReadContent(
-		fs,
-		hash,
-		jobs,
-		progress,
-		&progressData{task: "Scanning local blocks"},
-		localCachePath)
+	bs := lib.CreateFSBlockStore(fs, jobs, localCachePath)
+	defer bs.Dispose()
+
+	localContentIndex, err := bs.GetIndex(hash.GetIdentifier(), &progressData{task: "Reading content index"})
 	if err != nil {
 		return err
 	}
@@ -433,7 +423,6 @@ func downSyncVersion(
 
 		err = indexStore.GetContent(
 			context.Background(),
-			progress,
 			&progressData{task: "Downloading"},
 			neededContentIndex,
 			fs,
@@ -457,18 +446,16 @@ func downSyncVersion(
 	defer versionDiff.Dispose()
 
 	err = lib.ChangeVersion(
-		fs,
+		bs,
 		fs,
 		hash,
 		jobs,
-		progress,
 		&progressData{task: "Updating version"},
 		creg,
 		localContentIndex,
 		localVersionIndex,
 		remoteVersionIndex,
 		versionDiff,
-		localCachePath,
 		targetFolderPath,
 		retainPermissions)
 	if err != nil {
@@ -532,7 +519,10 @@ var (
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 )
 
-func cmdAssertFunc(context interface{}, expression string, file string, line int) {
+type assertData struct {
+}
+
+func (a assertData) OnAssert(expression string, file string, line int) {
 	log.Fatalf("ASSERT: %s %s:%d", expression, file, line)
 }
 
@@ -546,12 +536,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	l := lib.SetLogger(logger, &loggerData{})
-	defer lib.ClearLogger(l)
+	lib.SetLogger(&loggerData{})
+	defer lib.SetLogger(nil)
 	lib.SetLogLevel(longtailLogLevel)
 
-	lib.SetAssert(cmdAssertFunc, nil)
-	defer lib.ClearAssert()
+	lib.SetAssert(&assertData{})
+	defer lib.SetAssert(nil)
 
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():

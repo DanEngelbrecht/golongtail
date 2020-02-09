@@ -414,7 +414,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 }
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
-	jobAPI Longtail_JobAPI,
 	defaulHashAPIIdentifier uint32,
 	progress Progress) (Longtail_ContentIndex, error) {
 

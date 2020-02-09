@@ -223,7 +223,7 @@ func TestFSBlockStore(t *testing.T) {
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	contentIndex, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil)
+	contentIndex, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), nil)
 	defer contentIndex.Dispose()
 	expected := error(nil)
 	if err != expected {
@@ -307,7 +307,7 @@ func TestFSBlockStore(t *testing.T) {
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
 
-	contentIndex2, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil)
+	contentIndex2, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), nil)
 	defer contentIndex2.Dispose()
 	if err != expected {
 		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
@@ -424,10 +424,7 @@ func TestBlockStoreProxy(t *testing.T) {
 		t.Errorf("TestBlockStoreProxy() CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
 	}
 	defer jobAPI.Dispose()
-	contentIndex, err := blockStoreProxy.GetIndex(
-		jobAPI,
-		GetBlake3HashIdentifier(),
-		nil)
+	contentIndex, err := blockStoreProxy.GetIndex(GetBlake3HashIdentifier(), nil)
 	if err != nil {
 		t.Errorf("TestBlockStoreProxy() GetIndex() %q != %q", err, error(nil))
 	}
@@ -536,11 +533,11 @@ func TestCreateContentIndex(t *testing.T) {
 	}
 }
 
-func TestWriteRewriteVersion(t *testing.T) {
+func TestRewriteVersion(t *testing.T) {
 	storageAPI := createFilledStorage("content")
 	fileInfos, err := GetFilesRecursively(storageAPI, "content")
 	if err != nil {
-		t.Errorf("TestWriteRewriteVersion() GetFilesRecursively() %q != %q", err, error(nil))
+		t.Errorf("TestRewriteVersion() GetFilesRecursively() %q != %q", err, error(nil))
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
@@ -561,7 +558,7 @@ func TestWriteRewriteVersion(t *testing.T) {
 		compressionTypes,
 		32768)
 	if err != nil {
-		t.Errorf("TestWriteRewriteVersion() CreateVersionIndex() %q != %q", err, error(nil))
+		t.Errorf("TestRewriteVersion() CreateVersionIndex() %q != %q", err, error(nil))
 	}
 
 	contentIndex, err := CreateContentIndex(
@@ -572,7 +569,7 @@ func TestWriteRewriteVersion(t *testing.T) {
 		65536,
 		4096)
 	if err != nil {
-		t.Errorf("TestWriteRewriteVersion() CreateContentIndex() %q != %q", err, error(nil))
+		t.Errorf("TestRewriteVersion() CreateContentIndex() %q != %q", err, error(nil))
 	}
 	defer contentIndex.Dispose()
 	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, jobAPI, "block_store")
@@ -589,7 +586,7 @@ func TestWriteRewriteVersion(t *testing.T) {
 		versionIndex,
 		"content")
 	if err != nil {
-		t.Errorf("TestWriteRewriteVersion() WriteContent() %q != %q", err, error(nil))
+		t.Errorf("TestRewriteVersion() WriteContent() %q != %q", err, error(nil))
 	}
 
 	err = WriteVersion(
@@ -603,7 +600,7 @@ func TestWriteRewriteVersion(t *testing.T) {
 		"content_copy",
 		true)
 	if err != nil {
-		t.Errorf("TestWriteRewriteVersion() WriteVersion() %q != %q", err, error(nil))
+		t.Errorf("TestRewriteVersion() WriteVersion() %q != %q", err, error(nil))
 	}
 }
 

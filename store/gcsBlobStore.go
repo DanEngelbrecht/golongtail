@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
-	"os"
-	"runtime"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -103,8 +99,7 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
-func gcsProgressProxy(progressFunc lib.ProgressFunc,
-	progressContext interface{},
+func gcsProgressProxy(progress lib.Progress,
 	blockCount uint32,
 	blocksCopied *uint32) {
 
@@ -112,7 +107,7 @@ func gcsProgressProxy(progressFunc lib.ProgressFunc,
 	for current < blockCount {
 		newCount := *blocksCopied
 		if newCount != current {
-			progressFunc(progressContext, int(blockCount), int(newCount))
+			progress.OnProgress(blockCount, newCount)
 			current = newCount
 		} else {
 			time.Sleep(100 * time.Millisecond)
@@ -124,245 +119,243 @@ func gcsProgressProxy(progressFunc lib.ProgressFunc,
 // PutContent ...
 func (s GCSBlobStore) PutContent(
 	ctx context.Context,
-	progressFunc lib.ProgressFunc,
-	progressContext interface{},
+	progress lib.Progress,
 	contentIndex lib.Longtail_ContentIndex,
 	fs lib.Longtail_StorageAPI,
 	contentPath string) error {
-	paths, err := lib.GetPathsForContentBlocks(contentIndex)
-	if err != nil {
-		return err
-	}
+	/*	paths, err := lib.GetPathsForContentBlocks(contentIndex)
+		if err != nil {
+			return err
+		}
 
-	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
-	// to GCS for each worker as You cant write to two objects to the same connection apparently
-	blockCount := paths.GetPathCount()
-	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
-	if workerCount > blockCount {
-		workerCount = blockCount
-	}
+		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
+		// to GCS for each worker as You cant write to two objects to the same connection apparently
+		blockCount := paths.GetPathCount()
+		workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
+		if workerCount > blockCount {
+			workerCount = blockCount
+		}
 
-	incompleteCount := blockCount
-	var blocksCopied uint32
-	var missingCount uint32
+		incompleteCount := blockCount
+		var blocksCopied uint32
+		var missingCount uint32
 
-	var pg sync.WaitGroup
-	if progressFunc != nil {
-		pg.Add(int(1))
-		go func() {
-			gcsProgressProxy(progressFunc, progressContext, blockCount, &blocksCopied)
-			pg.Done()
-		}()
-	}
+		var pg sync.WaitGroup
+		if progressFunc != nil {
+			pg.Add(int(1))
+			go func() {
+				gcsProgressProxy(progress, blockCount, &blocksCopied)
+				pg.Done()
+			}()
+		}
 
-	for retryCount := 0; retryCount < 5; retryCount++ {
+		for retryCount := 0; retryCount < 5; retryCount++ {
 
-		var wg sync.WaitGroup
-		wg.Add(int(workerCount))
+			var wg sync.WaitGroup
+			wg.Add(int(workerCount))
 
-		for i := uint32(0); i < workerCount; i++ {
-			start := (blockCount * i) / workerCount
-			end := ((blockCount * (i + 1)) / workerCount)
-			go func(start uint32, end uint32, blocksCopied *uint32) {
+			for i := uint32(0); i < workerCount; i++ {
+				start := (blockCount * i) / workerCount
+				end := ((blockCount * (i + 1)) / workerCount)
+				go func(start uint32, end uint32, blocksCopied *uint32) {
 
-				workerStore, err := NewGCSBlobStore(s.url)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to connect to: `%s`, %v", s.url, err)
-					wg.Done()
-					return
-				}
-				defer workerStore.Close()
+					workerStore, err := NewGCSBlobStore(s.url)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Failed to connect to: `%s`, %v", s.url, err)
+						wg.Done()
+						return
+					}
+					defer workerStore.Close()
 
-				for p := start; p < end; p++ {
-					path := lib.GetPath(paths, p)
+					for p := start; p < end; p++ {
+						path := lib.GetPath(paths, p)
 
-					if workerStore.HasBlob(context.Background(), "chunks/"+path) {
+						if workerStore.HasBlob(context.Background(), "chunks/"+path) {
+							atomic.AddUint32(blocksCopied, 1)
+							continue
+						}
+
+						block, err := lib.ReadFromStorage(fs, contentPath, path)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
+							break
+						}
+
+						err = workerStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Failed to write block: `%s`, %v", path, err)
+							continue
+						}
 						atomic.AddUint32(blocksCopied, 1)
-						continue
 					}
-
-					block, err := lib.ReadFromStorage(fs, contentPath, path)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
-						break
-					}
-
-					err = workerStore.PutBlob(context.Background(), "chunks/"+path, "application/octet-stream", block[:])
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to write block: `%s`, %v", path, err)
-						continue
-					}
-					atomic.AddUint32(blocksCopied, 1)
-				}
-				wg.Done()
-			}(start, end, &blocksCopied)
-		}
-
-		wg.Wait()
-		missingCount = blockCount - blocksCopied
-
-		if missingCount == 0 {
-			break
-		}
-		incompleteCount = missingCount
-		fmt.Fprintf(os.Stderr, "Retrying to copy %d blocks to `%s`", incompleteCount, s.url)
-	}
-	if progressFunc != nil {
-		atomic.AddUint32(&blocksCopied, missingCount)
-		pg.Wait()
-	}
-
-	if missingCount > 0 {
-		return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
-	}
-
-	storeBlob, err := lib.WriteContentIndexToBuffer(contentIndex)
-	if err != nil {
-		return errors.Wrap(err, s.String())
-	}
-	objHandle := s.bucket.Object("store.lci")
-	for {
-		writeCondition := storage.Conditions{DoesNotExist: true}
-		objAttrs, _ := objHandle.Attrs(ctx)
-		if objAttrs != nil {
-			writeCondition = storage.Conditions{GenerationMatch: objAttrs.Generation}
-			reader, err := objHandle.If(writeCondition).NewReader(ctx)
-			if err != nil {
-				return errors.Wrap(err, s.String())
+					wg.Done()
+				}(start, end, &blocksCopied)
 			}
-			if reader == nil {
+
+			wg.Wait()
+			missingCount = blockCount - blocksCopied
+
+			if missingCount == 0 {
+				break
+			}
+			incompleteCount = missingCount
+			fmt.Fprintf(os.Stderr, "Retrying to copy %d blocks to `%s`", incompleteCount, s.url)
+		}
+		if progressFunc != nil {
+			atomic.AddUint32(&blocksCopied, missingCount)
+			pg.Wait()
+		}
+
+		if missingCount > 0 {
+			return fmt.Errorf("Failed to copy %d blocks from `%s`", missingCount, s)
+		}
+
+		storeBlob, err := lib.WriteContentIndexToBuffer(contentIndex)
+		if err != nil {
+			return errors.Wrap(err, s.String())
+		}
+		objHandle := s.bucket.Object("store.lci")
+		for {
+			writeCondition := storage.Conditions{DoesNotExist: true}
+			objAttrs, _ := objHandle.Attrs(ctx)
+			if objAttrs != nil {
+				writeCondition = storage.Conditions{GenerationMatch: objAttrs.Generation}
+				reader, err := objHandle.If(writeCondition).NewReader(ctx)
+				if err != nil {
+					return errors.Wrap(err, s.String())
+				}
+				if reader == nil {
+					continue
+				}
+				blob, err := ioutil.ReadAll(reader)
+				reader.Close()
+				if err != nil {
+					return errors.Wrap(err, s.String())
+				}
+
+				remoteContentIndex, err := lib.ReadContentIndexFromBuffer(blob)
+				if err != nil {
+					return errors.Wrap(err, s.String())
+				}
+				defer remoteContentIndex.Dispose()
+				mergedContentIndex, err := lib.MergeContentIndex(remoteContentIndex, contentIndex)
+				if err != nil {
+					return errors.Wrap(err, s.String())
+				}
+				defer mergedContentIndex.Dispose()
+
+				storeBlob, err = lib.WriteContentIndexToBuffer(mergedContentIndex)
+				if err != nil {
+					return errors.Wrap(err, s.String())
+				}
+			}
+			writer := objHandle.If(writeCondition).NewWriter(ctx)
+			if writer == nil {
 				continue
 			}
-			blob, err := ioutil.ReadAll(reader)
-			reader.Close()
+			_, err = writer.Write(storeBlob)
+			if err != nil {
+				writer.CloseWithError(err)
+				return errors.Wrap(err, s.String())
+			}
+			writer.Close()
+			_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 			if err != nil {
 				return errors.Wrap(err, s.String())
 			}
-
-			remoteContentIndex, err := lib.ReadContentIndexFromBuffer(blob)
-			if err != nil {
-				return errors.Wrap(err, s.String())
-			}
-			defer remoteContentIndex.Dispose()
-			mergedContentIndex, err := lib.MergeContentIndex(remoteContentIndex, contentIndex)
-			if err != nil {
-				return errors.Wrap(err, s.String())
-			}
-			defer mergedContentIndex.Dispose()
-
-			storeBlob, err = lib.WriteContentIndexToBuffer(mergedContentIndex)
-			if err != nil {
-				return errors.Wrap(err, s.String())
-			}
-		}
-		writer := objHandle.If(writeCondition).NewWriter(ctx)
-		if writer == nil {
-			continue
-		}
-		_, err = writer.Write(storeBlob)
-		if err != nil {
-			writer.CloseWithError(err)
-			return errors.Wrap(err, s.String())
-		}
-		writer.Close()
-		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
-		if err != nil {
-			return errors.Wrap(err, s.String())
-		}
-		break
-	}
+			break
+		}*/
 	return nil
 }
 
 // GetContent ...
 func (s GCSBlobStore) GetContent(
 	ctx context.Context,
-	progressFunc lib.ProgressFunc,
-	progressContext interface{},
+	progress lib.Progress,
 	contentIndex lib.Longtail_ContentIndex,
 	fs lib.Longtail_StorageAPI,
 	contentPath string) error {
-	missingPaths, err := lib.GetPathsForContentBlocks(contentIndex)
-	if err != nil {
-		return err
-	}
+	/*	missingPaths, err := lib.GetPathsForContentBlocks(contentIndex)
+		if err != nil {
+			return err
+		}
 
-	// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
-	// to GCS for each worker as You cant write to two objects to the same connection apparently
-	blockCount := missingPaths.GetPathCount()
-	workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
-	if workerCount > blockCount {
-		workerCount = blockCount
-	}
+		// TODO: Not the best implementation, it should probably create about one worker per code and have separate connection
+		// to GCS for each worker as You cant write to two objects to the same connection apparently
+		blockCount := missingPaths.GetPathCount()
+		workerCount := uint32(runtime.NumCPU() * 4) // Twice as many as cores - lots of waiting time
+		if workerCount > blockCount {
+			workerCount = blockCount
+		}
 
-	incompleteCount := blockCount
-	var missingCount uint32
-	var blocksCopied uint32
+		incompleteCount := blockCount
+		var missingCount uint32
+		var blocksCopied uint32
 
-	var pg sync.WaitGroup
-	if progressFunc != nil {
-		pg.Add(int(1))
-		go func() {
-			gcsProgressProxy(progressFunc, progressContext, blockCount, &blocksCopied)
-			pg.Done()
-		}()
-	}
+		var pg sync.WaitGroup
+		if progressFunc != nil {
+			pg.Add(int(1))
+			go func() {
+				gcsProgressProxy(progress, blockCount, &blocksCopied)
+				pg.Done()
+			}()
+		}
 
-	for retryCount := 0; retryCount < 5; retryCount++ {
+		for retryCount := 0; retryCount < 5; retryCount++ {
 
-		var wg sync.WaitGroup
-		wg.Add(int(workerCount))
+			var wg sync.WaitGroup
+			wg.Add(int(workerCount))
 
-		for i := uint32(0); i < workerCount; i++ {
-			start := (blockCount * i) / workerCount
-			end := ((blockCount * (i + 1)) / workerCount)
-			go func(start uint32, end uint32, blocksCopied *uint32) {
-				workerStore, err := NewGCSBlobStore(s.url)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Failed to connect to: `%s`, %v", s.url, err)
+			for i := uint32(0); i < workerCount; i++ {
+				start := (blockCount * i) / workerCount
+				end := ((blockCount * (i + 1)) / workerCount)
+				go func(start uint32, end uint32, blocksCopied *uint32) {
+					workerStore, err := NewGCSBlobStore(s.url)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Failed to connect to: `%s`, %v", s.url, err)
+						wg.Done()
+						return
+					}
+					defer workerStore.Close()
+
+					for p := start; p < end; p++ {
+						path := lib.GetPath(missingPaths, p)
+
+						blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
+							continue
+						}
+
+						err = lib.WriteToStorage(fs, contentPath, path, blockData)
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Failed to store block: `%s`, %v", path, err)
+							break
+						}
+						atomic.AddUint32(blocksCopied, 1)
+					}
 					wg.Done()
-					return
-				}
-				defer workerStore.Close()
+				}(start, end, &blocksCopied)
+			}
 
-				for p := start; p < end; p++ {
-					path := lib.GetPath(missingPaths, p)
+			wg.Wait()
+			missingCount := blockCount - blocksCopied
 
-					blockData, err := s.GetBlob(context.Background(), "chunks/"+path)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to read block: `%s`, %v", path, err)
-						continue
-					}
-
-					err = lib.WriteToStorage(fs, contentPath, path, blockData)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "Failed to store block: `%s`, %v", path, err)
-						break
-					}
-					atomic.AddUint32(blocksCopied, 1)
-				}
-				wg.Done()
-			}(start, end, &blocksCopied)
+			if missingCount == 0 {
+				break
+			}
+			incompleteCount = missingCount
+			fmt.Fprintf(os.Stderr, "Retrying to copy %d blocks from `%s`", incompleteCount, s.url)
 		}
 
-		wg.Wait()
-		missingCount := blockCount - blocksCopied
-
-		if missingCount == 0 {
-			break
+		if progressFunc != nil {
+			atomic.AddUint32(&blocksCopied, missingCount)
+			pg.Wait()
 		}
-		incompleteCount = missingCount
-		fmt.Fprintf(os.Stderr, "Retrying to copy %d blocks from `%s`", incompleteCount, s.url)
-	}
 
-	if progressFunc != nil {
-		atomic.AddUint32(&blocksCopied, missingCount)
-		pg.Wait()
-	}
-
-	if missingCount > 0 {
-		return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
-	}
-
+		if missingCount > 0 {
+			return fmt.Errorf("Failed to copy %d blocks to `%s`", missingCount, s)
+		}
+	*/
 	return nil
 }

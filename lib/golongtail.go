@@ -252,6 +252,10 @@ func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {
 	return uint64(*contentIndex.cContentIndex.m_BlockCount)
 }
 
+func (contentIndex *Longtail_ContentIndex) GetChunkCount() uint64 {
+	return uint64(*contentIndex.cContentIndex.m_ChunkCount)
+}
+
 func (contentIndex *Longtail_ContentIndex) GetBlockHash(blockIndex uint64) uint64 {
 	return uint64(C.ContentIndex_GetBlockHash(contentIndex.cContentIndex, C.uint64_t(blockIndex)))
 }

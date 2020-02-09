@@ -104,64 +104,85 @@ func TestAPICreate(t *testing.T) {
 	defer compressionRegistry.Dispose()
 }
 
-func TestStoredblock(t *testing.T) {
-	blockHash := uint64(0xdeadbeef500177aa)
-	chunkHashes := []uint64{0x10, 0x20}
-	chunkSizes := []uint32{10, 20}
-	blockData := [30]uint8{}
-	for index, _ := range blockData {
-		blockData[index] = uint8(index + 1)
+func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, error) {
+	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
+	chunkHashes := make([]uint64, chunkCount)
+	chunkSizes := make([]uint32, chunkCount)
+	blockOffset := uint32(0)
+	for index, _ := range chunkHashes {
+		chunkHashes[index] = uint64(index) * 4711
+		chunkSizes[index] = uint32(index) * 10
+		blockOffset += uint32(chunkSizes[index])
+	}
+	blockData := make([]uint8, blockOffset)
+	blockOffset = 0
+	for chunkIndex, _ := range chunkHashes {
+		for index := uint32(0); index < blockOffset; index++ {
+			blockData[blockOffset+index] = uint8(chunkIndex + 1)
+		}
+		blockOffset += uint32(chunkSizes[chunkIndex])
 	}
 
-	storedBlock, err := CreateStoredBlock(
+	return CreateStoredBlock(
 		blockHash,
-		0,
+		chunkCount+uint32(10000),
 		chunkHashes,
 		chunkSizes,
-		blockData[:])
-	defer storedBlock.Dispose()
+		blockData)
+}
+
+func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
+	if storedBlock.cStoredBlock == nil {
+		t.Errorf("validateStoredBlock() %p == %p", storedBlock, Longtail_StoredBlock{cStoredBlock: nil})
+	}
+	chunkCount := storedBlock.GetChunkCount()
+	if storedBlock.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
+		t.Errorf("validateStoredBlock() %q != %q", uint64(0xdeadbeef500177aa)+uint64(chunkCount), storedBlock.GetBlockHash())
+	}
+	if storedBlock.GetCompressionType() != chunkCount+uint32(10000) {
+		t.Errorf("validateStoredBlock() %q != %q", chunkCount+uint32(10000), storedBlock.GetCompressionType())
+
+	}
+	chunkHashes := storedBlock.GetChunkHashes()
+	if uint32(len(chunkHashes)) != chunkCount {
+		t.Errorf("validateStoredBlock() %q != %q", chunkCount, uint32(len(chunkHashes)))
+	}
+	chunkSizes := storedBlock.GetChunkSizes()
+	if uint32(len(chunkSizes)) != chunkCount {
+		t.Errorf("validateStoredBlock() %q != %q", chunkCount, uint32(len(chunkSizes)))
+	}
+	blockOffset := uint32(0)
+	for index, _ := range chunkHashes {
+		if chunkHashes[index] != uint64(index)*4711 {
+			t.Errorf("validateStoredBlock() %q != %q", uint64(index)*4711, chunkHashes[index])
+		}
+		if chunkSizes[index] != uint32(index)*10 {
+			t.Errorf("validateStoredBlock() %q != %q", uint32(index)*10, chunkSizes[index])
+		}
+		blockOffset += uint32(chunkSizes[index])
+	}
+	blockData := storedBlock.GetBlockData()
+	if uint32(len(blockData)) != blockOffset {
+		t.Errorf("validateStoredBlock() %q != %q", uint32(len(blockData)), blockOffset)
+	}
+	blockOffset = 0
+	for chunkIndex, _ := range chunkHashes {
+		for index := uint32(0); index < blockOffset; index++ {
+			if blockData[blockOffset+index] != uint8(chunkIndex+1) {
+				t.Errorf("validateStoredBlock() %q != %q", uint8(chunkIndex+1), blockData[blockOffset+index])
+			}
+		}
+		blockOffset += uint32(chunkSizes[chunkIndex])
+	}
+}
+
+func TestStoredblock(t *testing.T) {
+	storedBlock, err := createStoredBlock(2)
 	expected := error(nil)
 	if err != nil {
 		t.Errorf("CreateStoredBlock() %q != %q", err, expected)
 	}
-	if storedBlock.GetBlockHash() != blockHash {
-		t.Errorf("CreateStoredBlock() GetBlockHash() %d != %d", blockHash, storedBlock.GetBlockHash())
-	}
-	if storedBlock.GetChunkCount() != uint32(len(chunkHashes)) {
-		t.Errorf("CreateStoredBlock() GetChunkCount() %d != %d", uint32(len(chunkHashes)), storedBlock.GetChunkCount())
-	}
-	if storedBlock.GetCompressionType() != 0 {
-		t.Errorf("CreateStoredBlock() GetChunkCount() %d != %d", 0, storedBlock.GetCompressionType())
-	}
-	verfyChunkHashes := storedBlock.GetChunkHashes()
-	if len(chunkHashes) != len(verfyChunkHashes) {
-		t.Errorf("CreateStoredBlock() len(chunkHashes) %d != %d", len(verfyChunkHashes), len(chunkHashes))
-	}
-	if verfyChunkHashes[0] != chunkHashes[0] {
-		t.Errorf("CreateStoredBlock() chunkHashes %d != %d", verfyChunkHashes[0], chunkHashes[0])
-	}
-	if verfyChunkHashes[1] != chunkHashes[1] {
-		t.Errorf("CreateStoredBlock() chunkHashes %d != %d", verfyChunkHashes[1], chunkHashes[1])
-	}
-	verifyChunkSizes := storedBlock.GetChunkSizes()
-	if len(chunkSizes) != len(verifyChunkSizes) {
-		t.Errorf("CreateStoredBlock() len(chunkSizes) %d != %d", len(verifyChunkSizes), len(chunkSizes))
-	}
-	if verifyChunkSizes[0] != chunkSizes[0] {
-		t.Errorf("CreateStoredBlock() chunkSizes %d != %d", verifyChunkSizes[0], chunkSizes[0])
-	}
-	if verifyChunkSizes[1] != chunkSizes[1] {
-		t.Errorf("CreateStoredBlock() chunkSizes %d != %d", verifyChunkSizes[1], chunkSizes[1])
-	}
-	verifyBlockData := storedBlock.GetBlockData()
-	if len(blockData) != len(verifyBlockData) {
-		t.Errorf("CreateStoredBlock() len(blockData) %d != %d", len(verifyBlockData), len(blockData))
-	}
-	for index, _ := range blockData {
-		if blockData[index] != verifyBlockData[index] {
-			t.Errorf("CreateStoredBlock() blockData[%d] %d != %d", index, verifyBlockData[index], blockData[index])
-		}
-	}
+	validateStoredBlock(t, storedBlock)
 }
 
 func TestFSBlockStore(t *testing.T) {
@@ -177,8 +198,81 @@ func TestFSBlockStore(t *testing.T) {
 	contentIndex, err := blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
 	defer contentIndex.Dispose()
 	expected := error(nil)
+	if err != expected {
+		t.Errorf("WriteToStorage() GetIndex () %q != %q", err, expected)
+	}
+
+	block1, err := createStoredBlock(1)
+	if err != expected {
+		t.Errorf("WriteToStorage() createStoredBlock() %q != %q", err, expected)
+	}
+	defer block1.Dispose()
+
+	block2, err := createStoredBlock(2)
+	if err != expected {
+		t.Errorf("WriteToStorage() createStoredBlock() %q != %q", err, expected)
+	}
+	defer block2.Dispose()
+
+	block3, err := createStoredBlock(3)
+	if err != expected {
+		t.Errorf("WriteToStorage() createStoredBlock() %q != %q", err, expected)
+	}
+	defer block3.Dispose()
+
+	storedBlock1, err := blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
+	if err != expected {
+		t.Errorf("WriteToStorage() GetStoredBlock() %q != %q", err, expected)
+	}
+	if storedBlock1.cStoredBlock != nil {
+		t.Errorf("WriteToStorage() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
+	}
+
+	err = blockStoreAPI.PutStoredBlock(block1)
 	if err != nil {
-		t.Errorf("WriteToStorage() %q != %q", err, expected)
+		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+	}
+	storedBlock1, err = blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
+	if err != expected {
+		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+	}
+	defer storedBlock1.Dispose()
+	validateStoredBlock(t, storedBlock1)
+
+	err = blockStoreAPI.PutStoredBlock(block2)
+	if err != expected {
+		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+	}
+
+	err = blockStoreAPI.PutStoredBlock(block3)
+	if err != expected {
+		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+	}
+
+	storedBlock3, err := blockStoreAPI.GetStoredBlock(block3.GetBlockHash())
+	if err != expected {
+		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+	}
+	defer storedBlock3.Dispose()
+	validateStoredBlock(t, storedBlock3)
+
+	storedBlock2, err := blockStoreAPI.GetStoredBlock(block2.GetBlockHash())
+	if err != expected {
+		t.Errorf("WriteToStorage() PutStoredBlock() %q != %q", err, expected)
+	}
+	defer storedBlock2.Dispose()
+	validateStoredBlock(t, storedBlock2)
+
+	contentIndex, err = blockStoreAPI.GetIndex(jobAPI, blake3.GetIdentifier(), nil, nil)
+	defer contentIndex.Dispose()
+	if err != expected {
+		t.Errorf("WriteToStorage() GetIndex () %q != %q", err, expected)
+	}
+	if contentIndex.GetBlockCount() != uint64(3) {
+		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex.GetBlockCount(), uint64(3))
+	}
+	if contentIndex.GetChunkCount() != uint64(1+2+3) {
+		t.Errorf("WriteToStorage() GetIndex () %q != %q", contentIndex.GetBlockCount(), uint64(1+2+3))
 	}
 }
 

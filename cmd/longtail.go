@@ -205,7 +205,7 @@ func upSyncVersion(
 		return err
 	}
 
-	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &progressData{task: "Get remote index"})
+	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, progressData{task: "Get remote index"})
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func upSyncVersion(
 			fs,
 			hash,
 			jobs,
-			&progressData{task: "Indexing version"},
+			progressData{task: "Indexing version"},
 			sourceFolderPath,
 			fileInfos.GetPaths(),
 			fileInfos.GetFileSizes(),
@@ -273,7 +273,7 @@ func upSyncVersion(
 			indexStore,
 			creg,
 			jobs,
-			&progressData{task: "Writing content blocks"},
+			progressData{task: "Writing content blocks"},
 			missingContentIndex,
 			vindex,
 			sourceFolderPath)
@@ -344,7 +344,7 @@ func downSyncVersion(
 		return err
 	}
 
-	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &progressData{task: "Get remote index"})
+	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, progressData{task: "Get remote index"})
 	if err != nil {
 		return err
 	}
@@ -381,7 +381,7 @@ func downSyncVersion(
 			fs,
 			hash,
 			jobs,
-			&progressData{task: "Indexing version"},
+			progressData{task: "Indexing version"},
 			targetFolderPath,
 			fileInfos.GetPaths(),
 			fileInfos.GetFileSizes(),
@@ -410,7 +410,7 @@ func downSyncVersion(
 		fs,
 		hash,
 		jobs,
-		&progressData{task: "Updating version"},
+		progressData{task: "Updating version"},
 		creg,
 		remoteContentIndex,
 		localVersionIndex,

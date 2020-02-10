@@ -24,6 +24,6 @@ set LZ4_SRC=..\lib\lz4\*.c ..\lib\lz4\ext\*.c
 set BROTLI_SRC=..\lib\brotli\*.c ..\lib\brotli\ext\common\*.c ..\lib\brotli\ext\dec\*.c ..\lib\brotli\ext\enc\*.c ..\lib\brotli\ext\fuzz\*.c
 set ZLIB_SRC=..\lib\zstd\*.c ..\lib\zstd\ext\common\*.c ..\lib\zstd\ext\compress\*.c ..\lib\zstd\ext\decompress\*.c
 del /Q *.o
-gcc -c -std=gnu99 -g -m64 -O3 -pthread -msse4.1 -maes -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 ..\src\*.c ..\src\ext\*.c ..\lib\*.c %BIKESHED_SRC% %BLAKE2_SRC% %BLAKE3_SRC% %CACHEBLOCKSTORE_SRC% %FILESTORAGE_SRC% %FSBLOCKSTORE_SRC% %MEMSTORAGE_SRC% %MEOWHASH_SRC% %LIZARD_SRC% %LZ4_SRC% %BROTLI_SRC% %ZLIB_SRC%
+gcc -c -std=gnu99 -g -m64 -O3 -pthread -msse4.1 -maes -DWINVER=0x0A00 -D_WIN32_WINNT=0x0A00 -DLONGTAIL_ASSERTS ..\src\*.c ..\src\ext\*.c ..\lib\*.c %BIKESHED_SRC% %BLAKE2_SRC% %BLAKE3_SRC% %CACHEBLOCKSTORE_SRC% %FILESTORAGE_SRC% %FSBLOCKSTORE_SRC% %MEMSTORAGE_SRC% %MEOWHASH_SRC% %LIZARD_SRC% %LZ4_SRC% %BROTLI_SRC% %ZLIB_SRC%
 popd
 ar rc %LIB_TARGET% obj/*.o

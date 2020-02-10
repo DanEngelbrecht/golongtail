@@ -6,21 +6,14 @@ import (
 	"testing"
 )
 
-type progressData struct {
-	inited     bool
-	oldPercent int
-	task       string
-	t          *testing.T
-}
-
 type testProgress struct {
 	inited     bool
-	oldPercent int
+	oldPercent uint32
 	task       string
 	t          *testing.T
 }
 
-func (p testProgress) progress(total int, current int) {
+func (p testProgress) OnProgress(total uint32, current uint32) {
 	if current < total {
 		if !p.inited {
 			p.t.Logf("%s: ", p.task)
@@ -553,7 +546,7 @@ func TestRewriteVersion(t *testing.T) {
 		storageAPI,
 		hashAPI,
 		jobAPI,
-		nil,
+		testProgress{task: "CreateVersionIndex", t: t},
 		"content",
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
@@ -584,7 +577,7 @@ func TestRewriteVersion(t *testing.T) {
 		blockStorageAPI,
 		compressionRegistry,
 		jobAPI,
-		nil,
+		testProgress{task: "WriteContent", t: t},
 		contentIndex,
 		versionIndex,
 		"content")
@@ -597,7 +590,7 @@ func TestRewriteVersion(t *testing.T) {
 		storageAPI,
 		compressionRegistry,
 		jobAPI,
-		nil,
+		testProgress{task: "WriteVersion", t: t},
 		contentIndex,
 		versionIndex,
 		"content_copy",

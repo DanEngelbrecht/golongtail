@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/lib"
 	"github.com/DanEngelbrecht/golongtail/store"
-	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -88,6 +86,25 @@ func createBlobStoreForURI(uri string) (store.BlobStore, error) {
 	return store.NewFSBlobStore(uri)
 }
 
+func createBlockStoreForURI(uri string) (lib.Longtail_BlockStoreAPI, error) {
+	blobStoreURL, err := url.Parse(*storageURI)
+	if err == nil {
+		switch blobStoreURL.Scheme {
+		case "gs":
+			return store.NewGCSBlockStore(blobStoreURL)
+		case "s3":
+			return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("AWS storage not yet implemented")
+		case "abfs":
+			return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen1 storage not yet implemented")
+		case "abfss":
+			return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+		case "file":
+			return lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
+		}
+	}
+	return lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
+}
+
 const noCompressionType = uint32(0)
 
 func getCompressionType(compressionAlgorithm *string) (uint32, error) {
@@ -140,16 +157,24 @@ func createHashAPIFromIdentifier(hashIdentifier uint32) (lib.Longtail_HashAPI, e
 	return lib.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
 }
 
-func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
+func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	switch *hashAlgorithm {
 	case "meow":
-		return createHashAPIFromIdentifier(lib.GetMeowHashIdentifier())
+		return lib.GetMeowHashIdentifier(), nil
 	case "blake2":
-		return createHashAPIFromIdentifier(lib.GetBlake2HashIdentifier())
+		return lib.GetBlake2HashIdentifier(), nil
 	case "blake3":
-		return createHashAPIFromIdentifier(lib.GetBlake3HashIdentifier())
+		return lib.GetBlake3HashIdentifier(), nil
 	}
-	return lib.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+	return 0, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+}
+
+func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
+	if err != nil {
+		return lib.Longtail_HashAPI{}, err
+	}
+	return createHashAPIFromIdentifier(hashIdentifier)
 }
 
 func upSyncVersion(
@@ -170,44 +195,30 @@ func upSyncVersion(
 	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	indexStore, err := createBlobStoreForURI(blobStoreURI)
+	indexStore, err := createBlockStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
-	defer indexStore.Close()
+	defer indexStore.Dispose()
 
-	var hash lib.Longtail_HashAPI
-	var remoteContentIndex lib.Longtail_ContentIndex
-	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
-	if err == nil {
-		remoteContentIndex, err = lib.ReadContentIndexFromBuffer(remoteContentIndexBlob)
-		if err != nil {
-			return errors.Wrap(err, blobStoreURI+"/store.lci")
-		}
-		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
-		if err != nil {
-			return err
-		}
-	} else {
-		hash, err = createHashAPI(hashAlgorithm)
-		if err != nil {
-			return err
-		}
-		remoteContentIndex, err = lib.CreateContentIndex(
-			hash,
-			nil,
-			nil,
-			nil,
-			0,
-			0)
-		if err != nil {
-			return err
-		}
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
+	if err != nil {
+		return err
+	}
+
+	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &progressData{task: "Get remote index"})
+	if err != nil {
+		return err
+	}
+
+	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+	if err != nil {
+		return err
 	}
 	defer hash.Dispose()
 
 	var vindex lib.Longtail_VersionIndex
-	if sourceIndexPath == nil {
+	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
 		fileInfos, err := lib.GetFilesRecursively(fs, sourceFolderPath)
 		if err != nil {
 			return err
@@ -242,10 +253,10 @@ func upSyncVersion(
 	}
 	defer vindex.Dispose()
 
-	versionBlob, err := lib.WriteVersionIndexToBuffer(vindex)
-	if err != nil {
-		return err
-	}
+	//	versionBlob, err := lib.WriteVersionIndexToBuffer(vindex)
+	//	if err != nil {
+	//		return err
+	//	}
 
 	missingContentIndex, err := lib.CreateMissingContent(
 		hash,
@@ -257,12 +268,10 @@ func upSyncVersion(
 		return err
 	}
 	defer missingContentIndex.Dispose()
-	bs := lib.CreateFSBlockStore(fs, jobs, localCachePath)
-	defer bs.Dispose()
 	if missingContentIndex.GetBlockCount() > 0 {
 		err = lib.WriteContent(
 			fs,
-			bs,
+			indexStore,
 			creg,
 			jobs,
 			&progressData{task: "Writing content blocks"},
@@ -272,25 +281,24 @@ func upSyncVersion(
 		if err != nil {
 			return err
 		}
-		err = indexStore.PutContent(
-			context.Background(),
-			&progressData{task: "Uploading"},
-			missingContentIndex,
-			fs,
-			localCachePath)
-		if err != nil {
-			return err
-		}
 	}
 
-	err = indexStore.PutBlob(
-		context.Background(),
-		targetFilePath,
-		"application/octet-stream",
-		versionBlob)
+	localFS := lib.CreateFSStorageAPI()
+	defer localFS.Dispose()
+
+	err = lib.WriteVersionIndex(localFS, vindex, targetFilePath)
 	if err != nil {
 		return err
 	}
+
+	//	err = indexStore.PutBlob(
+	//		context.Background(),
+	//		targetFilePath,
+	//		"application/octet-stream",
+	//		versionBlob)
+	//	if err != nil {
+	//		return err
+	//	}
 
 	return nil
 }
@@ -314,56 +322,54 @@ func downSyncVersion(
 	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	var indexStore store.BlobStore
-	indexStore, err := createBlobStoreForURI(blobStoreURI)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI)
 	if err != nil {
 		return err
 	}
-	defer indexStore.Close()
+	defer remoteIndexStore.Dispose()
 
-	var hash lib.Longtail_HashAPI
-	var remoteContentIndex lib.Longtail_ContentIndex
-	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
-	if err == nil {
-		remoteContentIndex, err = lib.ReadContentIndexFromBuffer(remoteContentIndexBlob)
-		if err != nil {
-			errors.Wrap(err, blobStoreURI+"/store.lci")
-		}
-		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
-		if err != nil {
-			return err
-		}
-	} else {
-		hash, err = createHashAPI(hashAlgorithm)
-		if err != nil {
-			return err
-		}
-		remoteContentIndex, err = lib.CreateContentIndex(
-			hash,
-			nil,
-			nil,
-			nil,
-			0,
-			0)
-		if err != nil {
-			return err
-		}
+	localFS := lib.CreateFSStorageAPI()
+	defer localFS.Dispose()
+
+	localIndexStore := lib.CreateFSBlockStore(localFS, localCachePath)
+	if err != nil {
+		return err
+	}
+	defer localIndexStore.Dispose()
+
+	indexStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
+	defer indexStore.Dispose()
+
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
+	if err != nil {
+		return err
+	}
+
+	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &progressData{task: "Get remote index"})
+	if err != nil {
+		return err
+	}
+
+	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+	if err != nil {
+		return err
 	}
 	defer hash.Dispose()
 
 	var remoteVersionIndex lib.Longtail_VersionIndex
 
-	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
-	if err != nil {
-		return err
-	}
-	remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(remoteVersionBlob)
+	//	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(remoteVersionBlob)
+	remoteVersionIndex, err = lib.ReadVersionIndex(localFS, sourceFilePath)
 	if err != nil {
 		return err
 	}
 
 	var localVersionIndex lib.Longtail_VersionIndex
-	if targetIndexPath == nil {
+	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
 		fileInfos, err := lib.GetFilesRecursively(fs, targetFolderPath)
 		if err != nil {
 			return err
@@ -394,51 +400,6 @@ func downSyncVersion(
 	}
 	defer localVersionIndex.Dispose()
 
-	bs := lib.CreateFSBlockStore(fs, jobs, localCachePath)
-	defer bs.Dispose()
-
-	localContentIndex, err := bs.GetIndex(hash.GetIdentifier(), &progressData{task: "Reading content index"})
-	if err != nil {
-		return err
-	}
-	defer localContentIndex.Dispose()
-
-	missingContentIndex, err := lib.CreateMissingContent(
-		hash,
-		localContentIndex,
-		remoteVersionIndex,
-		targetBlockSize,
-		maxChunksPerBlock)
-	if err != nil {
-		return err
-	}
-	defer missingContentIndex.Dispose()
-
-	if missingContentIndex.GetBlockCount() > 0 {
-		neededContentIndex, err := lib.RetargetContent(remoteContentIndex, missingContentIndex)
-		if err != nil {
-			return err
-		}
-		defer neededContentIndex.Dispose()
-
-		err = indexStore.GetContent(
-			context.Background(),
-			&progressData{task: "Downloading"},
-			neededContentIndex,
-			fs,
-			localCachePath)
-		if err != nil {
-			return err
-		}
-
-		mergedContentIndex, err := lib.MergeContentIndex(localContentIndex, neededContentIndex)
-		if err != nil {
-			return err
-		}
-		localContentIndex.Dispose()
-		localContentIndex = mergedContentIndex
-	}
-
 	versionDiff, err := lib.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
 	if err != nil {
 		return err
@@ -446,13 +407,13 @@ func downSyncVersion(
 	defer versionDiff.Dispose()
 
 	err = lib.ChangeVersion(
-		bs,
+		indexStore,
 		fs,
 		hash,
 		jobs,
 		&progressData{task: "Updating version"},
 		creg,
-		localContentIndex,
+		remoteContentIndex,
 		localVersionIndex,
 		remoteVersionIndex,
 		versionDiff,

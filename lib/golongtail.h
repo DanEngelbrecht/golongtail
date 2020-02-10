@@ -20,7 +20,7 @@ void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
 void Proxy_BlockStore_Dispose(void* context);
 int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block);
 int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
-int Proxy_GetIndex(void* context, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
+int Proxy_GetIndex(void* context, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index);
 int Proxy_GetStoredBlockPath(void* context, uint64_t block_hash, char** out_path);
 void Proxy_Close(void* context);
 
@@ -49,10 +49,10 @@ static int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* bloc
     return Proxy_GetStoredBlock(proxy->m_Context, block_hash, out_stored_block);
 }
 
-static int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+static int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
 {
     struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_GetIndex(proxy->m_Context, default_hash_api_identifier, progress_func, progress_context, out_content_index);
+    return Proxy_GetIndex(proxy->m_Context, job_api, default_hash_api_identifier, progress_func, progress_context, out_content_index);
 }
 
 static int BlockStoreAPIProxy_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
@@ -139,9 +139,9 @@ static int BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_
     return block_store_api->GetStoredBlock(block_store_api, block_hash, out_stored_block);
 }
 
-static int BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+static int BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
 {
-    return block_store_api->GetIndex(block_store_api, default_hash_api_identifier, progress_func, progress_context, out_content_index);
+    return block_store_api->GetIndex(block_store_api, job_api, default_hash_api_identifier, progress_func, progress_context, out_content_index);
 }
 
 static int BlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)

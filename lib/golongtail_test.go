@@ -218,12 +218,12 @@ func TestFSBlockStore(t *testing.T) {
 	defer storageAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
-	blockStoreAPI := CreateFSBlockStore(storageAPI, jobAPI, "content")
+	blockStoreAPI := CreateFSBlockStore(storageAPI, "content")
 	defer blockStoreAPI.Dispose()
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	contentIndex, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), nil)
+	contentIndex, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), jobAPI, nil)
 	defer contentIndex.Dispose()
 	expected := error(nil)
 	if err != expected {
@@ -307,7 +307,7 @@ func TestFSBlockStore(t *testing.T) {
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
 
-	contentIndex2, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), nil)
+	contentIndex2, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), jobAPI, nil)
 	defer contentIndex2.Dispose()
 	if err != expected {
 		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
@@ -359,7 +359,7 @@ func (b TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, 
 	return Longtail_StoredBlock{cStoredBlock: nil}, ENOENT
 }
 
-func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int) {
+func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Progress) (Longtail_ContentIndex, int) {
 	blockCount := len(b.blocks)
 	blockIndexes := make([]Longtail_BlockIndex, blockCount)
 	arrayIndex := 0
@@ -427,7 +427,7 @@ func TestBlockStoreProxy(t *testing.T) {
 		t.Errorf("TestBlockStoreProxy() CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
 	}
 	defer jobAPI.Dispose()
-	contentIndex, err := blockStoreProxy.GetIndex(GetBlake3HashIdentifier(), nil)
+	contentIndex, err := blockStoreProxy.GetIndex(GetBlake3HashIdentifier(), jobAPI, nil)
 	if err != nil {
 		t.Errorf("TestBlockStoreProxy() GetIndex() %q != %q", err, error(nil))
 	}
@@ -575,7 +575,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() CreateContentIndex() %q != %q", err, error(nil))
 	}
 	defer contentIndex.Dispose()
-	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, jobAPI, "block_store")
+	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, "block_store")
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateDefaultCompressionRegistry()
 	compressionRegistry.Dispose()
@@ -959,7 +959,7 @@ func TestUpSyncVersion(t *testing.T) {
 		t.Errorf("WriteContentIndex() err = %q, want %q", err, error(nil))
 	}
 
-	blockStore := CreateFSBlockStore(upsyncStorageAPI, jobAPI, "cache")
+	blockStore := CreateFSBlockStore(upsyncStorageAPI, "cache")
 	defer blockStore.Dispose()
 
 	t.Logf("Get missing content for `current` / `cache`")

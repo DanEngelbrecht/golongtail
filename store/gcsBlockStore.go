@@ -10,52 +10,82 @@ import (
 	"github.com/pkg/errors"
 )
 
-type GCSBlockStore struct {
+type gcsBlockStore struct {
 	url      *url.URL
 	Location string
 	client   *storage.Client
 	bucket   *storage.BucketHandle
+
+	// Fake it:
+	backingStorage    *lib.Longtail_StorageAPI
+	backingBlockStore *lib.Longtail_BlockStoreAPI
 }
 
-func NewGCSBlockStore(u *url.URL) (*GCSBlockStore, error) {
+// NewGCSBlockStore ...
+func NewGCSBlockStore(u *url.URL) (lib.Longtail_BlockStoreAPI, error) {
 	var err error
-	s := &GCSBlockStore{url: u, Location: u.String()}
 	if u.Scheme != "gs" {
-		return s, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+		return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
 
 	ctx := context.Background()
-	s.client, err = storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return s, errors.Wrap(err, u.String())
+		return lib.Longtail_BlockStoreAPI{}, errors.Wrap(err, u.String())
 	}
 
 	bucketName := u.Host
-	s.bucket = s.client.Bucket(bucketName)
+	bucket := client.Bucket(bucketName)
 
+	backingStorage := lib.CreateFSStorageAPI()
+	backingBlockStore := lib.CreateFSBlockStore(backingStorage, "fake_remote_store")
+
+	s, err := lib.CreateBlockStoreAPI(gcsBlockStore{url: u, Location: u.String(), client: client, bucket: bucket, backingStorage: &backingStorage, backingBlockStore: &backingBlockStore})
+	if err != nil {
+		backingBlockStore.Dispose()
+		backingStorage.Dispose()
+		return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("unable to create block store api, %q", err)
+	}
 	return s, nil
 }
 
-func (s GCSBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int {
-	// TODO
-	return 0
+// PutStoredBlock ...
+func (s gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int {
+	err := s.backingBlockStore.PutStoredBlock(storedBlock)
+	if err == nil {
+		return 0
+	}
+	return 1
 }
 
-func (s GCSBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlock, int) {
-	// TODO
-	return lib.Longtail_StoredBlock{}, 0
+// GetStoredBlock ...
+func (s gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlock, int) {
+	storedBlock, err := s.backingBlockStore.GetStoredBlock(blockHash)
+	if err == nil {
+		return storedBlock, 0
+	}
+	return lib.Longtail_StoredBlock{}, 2
 }
 
-func (s GCSBlockStore) GetIndex(defaultHashAPIIdentifier uint32, progress lib.Progress) (lib.Longtail_ContentIndex, int) {
-	// TODO
-	return lib.Longtail_ContentIndex{}, 0
+// GetIndex ...
+func (s gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Progress) (lib.Longtail_ContentIndex, int) {
+	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, progress)
+	if err == nil {
+		return contentIndex, 0
+	}
+	return lib.Longtail_ContentIndex{}, 2
 }
 
-func (s GCSBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
-	// TODO
-	return "", 0
+// GetStoredBlockPath ...
+func (s gcsBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
+	path, err := s.backingBlockStore.GetStoredBlockPath(blockHash)
+	if err == nil {
+		return path, 0
+	}
+	return "", 2
 }
 
-func (s GCSBlockStore) Close() {
+// Close ...
+func (s gcsBlockStore) Close() {
 	// Create and store updated content index
 }

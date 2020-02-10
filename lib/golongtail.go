@@ -60,7 +60,7 @@ type Logger interface {
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock) int
 	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
-	GetIndex(defaultHashAPIIdentifier uint32, progress Progress) (Longtail_ContentIndex, int)
+	GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Progress) (Longtail_ContentIndex, int)
 	GetStoredBlockPath(blockHash uint64) (string, int)
 	Close()
 }
@@ -363,10 +363,10 @@ func GetMeowHashIdentifier() uint32 {
 }
 
 // CreateFSBlockStore() ...
-func CreateFSBlockStore(storageAPI Longtail_StorageAPI, jobAPI Longtail_JobAPI, contentPath string) Longtail_BlockStoreAPI {
+func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, jobAPI.cJobAPI, cContentPath)}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath)}
 }
 
 // CreateCacheBlockStore() ...
@@ -421,6 +421,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	defaulHashAPIIdentifier uint32,
+	jobAPI Longtail_JobAPI,
 	progress Progress) (Longtail_ContentIndex, error) {
 
 	cProgressContext := SavePointer(progress)
@@ -430,6 +431,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 
 	errno := C.BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
+		jobAPI.cJobAPI,
 		C.uint32_t(defaulHashAPIIdentifier),
 		getProgressFunc(progress),
 		cProgressContext,
@@ -1167,10 +1169,11 @@ func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlo
 }
 
 //export Proxy_GetIndex
-func Proxy_GetIndex(context unsafe.Pointer, defaultHashApiIdentifier uint32, progressFunc C.Longtail_JobAPI_ProgressFunc, progressContext unsafe.Pointer, outContentIndex **C.struct_Longtail_ContentIndex) C.int {
+func Proxy_GetIndex(context unsafe.Pointer, job_api *C.struct_Longtail_JobAPI, defaultHashApiIdentifier uint32, progressFunc C.Longtail_JobAPI_ProgressFunc, progressContext unsafe.Pointer, outContentIndex **C.struct_Longtail_ContentIndex) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	contextIndex, errno := blockStore.GetIndex(
 		uint32(defaultHashApiIdentifier),
+		Longtail_JobAPI{cJobAPI: job_api},
 		nil)
 	if errno == 0 {
 		*outContentIndex = contextIndex.cContentIndex
@@ -1203,10 +1206,10 @@ func CreateBlockStoreAPI(blockStore interface{}) (Longtail_BlockStoreAPI, error)
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: blockStoreAPIProxy}, nil
 }
 
-func CreateFSBlockStoreAPI(storageAPI Longtail_StorageAPI, jobAPI Longtail_JobAPI, contentPath string) Longtail_BlockStoreAPI {
+func CreateFSBlockStoreAPI(storageAPI Longtail_StorageAPI, contentPath string) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, jobAPI.cJobAPI, cContentPath)}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath)}
 }
 
 func getLoggerFunc(logger Logger) C.Longtail_Log {

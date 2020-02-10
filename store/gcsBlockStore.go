@@ -1,13 +1,13 @@
 package store
 
 import (
-	"context"
+	//	"context"
 	"fmt"
 	"net/url"
 
 	"cloud.google.com/go/storage"
 	"github.com/DanEngelbrecht/golongtail/lib"
-	"github.com/pkg/errors"
+	//	"github.com/pkg/errors"
 )
 
 type gcsBlockStore struct {
@@ -23,24 +23,24 @@ type gcsBlockStore struct {
 
 // NewGCSBlockStore ...
 func NewGCSBlockStore(u *url.URL) (lib.Longtail_BlockStoreAPI, error) {
-	var err error
+	//	var err error
 	if u.Scheme != "gs" {
 		return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
 
-	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
-	if err != nil {
-		return lib.Longtail_BlockStoreAPI{}, errors.Wrap(err, u.String())
-	}
-
-	bucketName := u.Host
-	bucket := client.Bucket(bucketName)
+	//	ctx := context.Background()
+	//	client, err := storage.NewClient(ctx)
+	//	if err != nil {
+	//		return lib.Longtail_BlockStoreAPI{}, errors.Wrap(err, u.String())
+	//	}
+	//
+	//	bucketName := u.Host
+	//	bucket := client.Bucket(bucketName)
 
 	backingStorage := lib.CreateFSStorageAPI()
 	backingBlockStore := lib.CreateFSBlockStore(backingStorage, "fake_remote_store")
 
-	s := lib.CreateBlockStoreAPI(gcsBlockStore{url: u, Location: u.String(), client: client, bucket: bucket, backingStorage: &backingStorage, backingBlockStore: &backingBlockStore})
+	s := lib.CreateBlockStoreAPI(gcsBlockStore{url: u, Location: u.String(), client: nil, bucket: nil, backingStorage: &backingStorage, backingBlockStore: &backingBlockStore})
 	return s, nil
 }
 
@@ -63,10 +63,8 @@ func (s gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBloc
 }
 
 // GetIndex ...
-func (s gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.ProgressAPI) (lib.Longtail_ContentIndex, int) {
-	progressAPI := lib.CreateProgressAPI(progress)
-	defer progressAPI.Dispose()
-	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, &progressAPI)
+func (s gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI) (lib.Longtail_ContentIndex, int) {
+	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, &progress)
 	if err == nil {
 		return contentIndex, 0
 	}

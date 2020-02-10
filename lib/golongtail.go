@@ -1218,7 +1218,7 @@ func Proxy_Close(context unsafe.Pointer) {
 	blockStore.Close()
 }
 
-func CreateBlockStoreAPI(blockStore interface{}) Longtail_BlockStoreAPI {
+func CreateBlockStoreAPI(blockStore BlockStoreAPI) Longtail_BlockStoreAPI {
 	cContext := SavePointer(blockStore)
 	blockStoreAPIProxy := C.CreateBlockStoreProxyAPI(cContext)
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: blockStoreAPIProxy}

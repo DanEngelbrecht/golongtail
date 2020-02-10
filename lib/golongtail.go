@@ -379,6 +379,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)
 }
 
+// PutStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock) error {
 	errno := C.BlockStore_PutStoredBlock(
@@ -390,6 +391,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	return nil
 }
 
+// HasStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
 	blockHash uint64) (bool, error) {
 	errno := C.BlockStore_GetStoredBlock(
@@ -405,6 +407,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
 	return false, fmt.Errorf("HasStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
 }
 
+// GetStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	blockHash uint64) (Longtail_StoredBlock, error) {
 
@@ -419,6 +422,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
 }
 
+// GetIndex() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	defaulHashAPIIdentifier uint32,
 	jobAPI Longtail_JobAPI,
@@ -442,6 +446,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	return Longtail_ContentIndex{cContentIndex: cContextIndex}, nil
 }
 
+// GetStoredBlockPath() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 	blockHash uint64) (string, error) {
 

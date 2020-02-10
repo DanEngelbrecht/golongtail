@@ -182,7 +182,6 @@ func upSyncVersion(
 	sourceFolderPath string,
 	sourceIndexPath *string,
 	targetFilePath string,
-	localCachePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -452,12 +451,11 @@ var (
 				Default("blake3").
 				Enum("meow", "blake2", "blake3")
 
-	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
-	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
-	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
-	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	commandUpSync    = kingpin.Command("upsync", "Upload a folder")
+	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").String()
+	sourceIndexPath  = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	targetFilePath   = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
+	compression      = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -511,7 +509,6 @@ func main() {
 			*sourceFolderPath,
 			sourceIndexPath,
 			*targetFilePath,
-			*upSyncContentPath,
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,

@@ -105,8 +105,7 @@ static int ReadContent(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_JobAPI* job_api,
     uint32_t content_index_hash_identifier,
-    Longtail_JobAPI_ProgressFunc job_progress_func,
-    void* job_progress_context,
+    struct Longtail_ProgressAPI* progress_api,
     const char* content_path,
     struct Longtail_ContentIndex** out_content_index)
 {
@@ -165,7 +164,7 @@ static int ReadContent(
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, job_progress_func, job_progress_context);
+    err = job_api->WaitForAllJobs(job_api, progress_api);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     struct Longtail_BlockIndex** block_indexes = (struct Longtail_BlockIndex**)Longtail_Alloc(sizeof(struct Longtail_BlockIndex*) * (*file_infos->m_Paths.m_PathCount));
@@ -385,7 +384,12 @@ static int FSBlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_stor
     return 0;
 }
 
-static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, Longtail_JobAPI_ProgressFunc progress_func, void* progress_context, struct Longtail_ContentIndex** out_content_index)
+static int FSBlockStore_GetIndex(
+    struct Longtail_BlockStoreAPI* block_store_api,
+	struct Longtail_JobAPI* job_api,
+    uint32_t default_hash_api_identifier,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_ContentIndex** out_content_index)
 {
     struct FSBlockStoreAPI* fsblockstore_api = (struct FSBlockStoreAPI*)block_store_api;
     Longtail_LockSpinLock(fsblockstore_api->m_Lock);
@@ -393,10 +397,9 @@ static int FSBlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api,
     {
         int err = ReadContent(
             fsblockstore_api->m_StorageAPI,
-            job_api,
+			job_api,
             default_hash_api_identifier,
-            progress_func,
-            progress_context,
+            progress_api,
             fsblockstore_api->m_ContentPath,
             out_content_index);
         if (err)

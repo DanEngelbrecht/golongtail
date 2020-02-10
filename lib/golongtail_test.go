@@ -352,7 +352,7 @@ func (b TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, 
 	return Longtail_StoredBlock{cStoredBlock: nil}, ENOENT
 }
 
-func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Progress) (Longtail_ContentIndex, int) {
+func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
 	blockCount := len(b.blocks)
 	blockIndexes := make([]Longtail_BlockIndex, blockCount)
 	arrayIndex := 0
@@ -385,11 +385,8 @@ func TestBlockStoreProxy(t *testing.T) {
 	SetLogLevel(1)
 
 	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
-	blockStoreProxy, err := CreateBlockStoreAPI(blockStore)
+	blockStoreProxy := CreateBlockStoreAPI(blockStore)
 	expected := error(nil)
-	if err != nil {
-		t.Errorf("TestBlockStoreProxy() CreateBlockStoreAPI() %q != %q", err, expected)
-	}
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
 
@@ -542,11 +539,12 @@ func TestRewriteVersion(t *testing.T) {
 
 	compressionTypes := make([]uint32, fileInfos.GetFileCount())
 
+	createVersionProgress := CreateProgressAPI(testProgress{task: "CreateVersionIndex", t: t})
 	versionIndex, err := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
 		jobAPI,
-		testProgress{task: "CreateVersionIndex", t: t},
+		&createVersionProgress,
 		"content",
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
@@ -572,12 +570,14 @@ func TestRewriteVersion(t *testing.T) {
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateDefaultCompressionRegistry()
 	compressionRegistry.Dispose()
+	writeContentProgress := CreateProgressAPI(testProgress{task: "WriteContent", t: t})
+	defer writeContentProgress.Dispose()
 	err = WriteContent(
 		storageAPI,
 		blockStorageAPI,
 		compressionRegistry,
 		jobAPI,
-		testProgress{task: "WriteContent", t: t},
+		&writeContentProgress,
 		contentIndex,
 		versionIndex,
 		"content")
@@ -585,12 +585,13 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() WriteContent() %q != %q", err, error(nil))
 	}
 
+	writeVersionProgress2 := CreateProgressAPI(testProgress{task: "WriteVersion", t: t})
 	err = WriteVersion(
 		blockStorageAPI,
 		storageAPI,
 		compressionRegistry,
 		jobAPI,
-		testProgress{task: "WriteVersion", t: t},
+		&writeVersionProgress2,
 		contentIndex,
 		versionIndex,
 		"content_copy",

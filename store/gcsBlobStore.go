@@ -99,7 +99,7 @@ func (s GCSBlobStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return b, nil
 }
 
-func gcsProgressProxy(progress lib.Progress,
+func gcsProgressProxy(progress lib.ProgressAPI,
 	blockCount uint32,
 	blocksCopied *uint32) {
 
@@ -119,7 +119,7 @@ func gcsProgressProxy(progress lib.Progress,
 // PutContent ...
 func (s GCSBlobStore) PutContent(
 	ctx context.Context,
-	progress lib.Progress,
+	progress lib.ProgressAPI,
 	contentIndex lib.Longtail_ContentIndex,
 	fs lib.Longtail_StorageAPI,
 	contentPath string) error {
@@ -271,7 +271,7 @@ func (s GCSBlobStore) PutContent(
 // GetContent ...
 func (s GCSBlobStore) GetContent(
 	ctx context.Context,
-	progress lib.Progress,
+	progress lib.ProgressAPI,
 	contentIndex lib.Longtail_ContentIndex,
 	fs lib.Longtail_StorageAPI,
 	contentPath string) error {

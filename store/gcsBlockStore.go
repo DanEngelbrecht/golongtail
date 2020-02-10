@@ -40,12 +40,7 @@ func NewGCSBlockStore(u *url.URL) (lib.Longtail_BlockStoreAPI, error) {
 	backingStorage := lib.CreateFSStorageAPI()
 	backingBlockStore := lib.CreateFSBlockStore(backingStorage, "fake_remote_store")
 
-	s, err := lib.CreateBlockStoreAPI(gcsBlockStore{url: u, Location: u.String(), client: client, bucket: bucket, backingStorage: &backingStorage, backingBlockStore: &backingBlockStore})
-	if err != nil {
-		backingBlockStore.Dispose()
-		backingStorage.Dispose()
-		return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("unable to create block store api, %q", err)
-	}
+	s := lib.CreateBlockStoreAPI(gcsBlockStore{url: u, Location: u.String(), client: client, bucket: bucket, backingStorage: &backingStorage, backingBlockStore: &backingBlockStore})
 	return s, nil
 }
 
@@ -68,8 +63,10 @@ func (s gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBloc
 }
 
 // GetIndex ...
-func (s gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Progress) (lib.Longtail_ContentIndex, int) {
-	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, progress)
+func (s gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.ProgressAPI) (lib.Longtail_ContentIndex, int) {
+	progressAPI := lib.CreateProgressAPI(progress)
+	defer progressAPI.Dispose()
+	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, &progressAPI)
 	if err == nil {
 		return contentIndex, 0
 	}

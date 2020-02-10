@@ -205,7 +205,9 @@ func upSyncVersion(
 		return err
 	}
 
-	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, progressData{task: "Get remote index"})
+	getRemoteIndexProgress := lib.CreateProgressAPI(progressData{task: "Get remote index"})
+	defer getRemoteIndexProgress.Dispose()
+	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
 	if err != nil {
 		return err
 	}
@@ -230,11 +232,13 @@ func upSyncVersion(
 		}
 		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
+		createVersionIndexProgress := lib.CreateProgressAPI(progressData{task: "Indexing version"})
+		defer createVersionIndexProgress.Dispose()
 		vindex, err = lib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
-			progressData{task: "Indexing version"},
+			&createVersionIndexProgress,
 			sourceFolderPath,
 			fileInfos.GetPaths(),
 			fileInfos.GetFileSizes(),
@@ -268,12 +272,14 @@ func upSyncVersion(
 	}
 	defer missingContentIndex.Dispose()
 	if missingContentIndex.GetBlockCount() > 0 {
+		writeContentProgress := lib.CreateProgressAPI(progressData{task: "Writing content blocks"})
+		defer writeContentProgress.Dispose()
 		err = lib.WriteContent(
 			fs,
 			indexStore,
 			creg,
 			jobs,
-			progressData{task: "Writing content blocks"},
+			&writeContentProgress,
 			missingContentIndex,
 			vindex,
 			sourceFolderPath)
@@ -344,7 +350,9 @@ func downSyncVersion(
 		return err
 	}
 
-	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, progressData{task: "Get remote index"})
+	getRemoteIndexProgress := lib.CreateProgressAPI(progressData{task: "Get remote index"})
+	defer getRemoteIndexProgress.Dispose()
+	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
 	if err != nil {
 		return err
 	}
@@ -377,11 +385,13 @@ func downSyncVersion(
 
 		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
+		createVersionIndexProgress := lib.CreateProgressAPI(progressData{task: "Indexing version"})
+		defer createVersionIndexProgress.Dispose()
 		localVersionIndex, err = lib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
-			progressData{task: "Indexing version"},
+			&createVersionIndexProgress,
 			targetFolderPath,
 			fileInfos.GetPaths(),
 			fileInfos.GetFileSizes(),
@@ -405,12 +415,14 @@ func downSyncVersion(
 	}
 	defer versionDiff.Dispose()
 
+	changeVersionProgress := lib.CreateProgressAPI(progressData{task: "Updating version"})
+	defer changeVersionProgress.Dispose()
 	err = lib.ChangeVersion(
 		indexStore,
 		fs,
 		hash,
 		jobs,
-		progressData{task: "Updating version"},
+		&changeVersionProgress,
 		creg,
 		remoteContentIndex,
 		localVersionIndex,

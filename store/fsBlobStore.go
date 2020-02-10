@@ -59,7 +59,7 @@ func (s FSBloblStore) GetBlob(ctx context.Context, key string) ([]byte, error) {
 	return ioutil.ReadFile(blobPath)
 }
 
-func fsProgressProxy(progress lib.Progress,
+func fsProgressProxy(progress lib.ProgressAPI,
 	blockCount uint32,
 	blocksCopied *uint32) {
 
@@ -78,7 +78,7 @@ func fsProgressProxy(progress lib.Progress,
 // PutContent ...
 func (s FSBloblStore) PutContent(
 	ctx context.Context,
-	progress lib.Progress,
+	progress lib.ProgressAPI,
 	contentIndex lib.Longtail_ContentIndex,
 	fs lib.Longtail_StorageAPI,
 	contentPath string) error {
@@ -196,7 +196,7 @@ func (s FSBloblStore) PutContent(
 // GetContent ...
 func (s FSBloblStore) GetContent(
 	ctx context.Context,
-	progress lib.Progress,
+	progress lib.ProgressAPI,
 	contentIndex lib.Longtail_ContentIndex,
 	fs lib.Longtail_StorageAPI,
 	contentPath string) error {

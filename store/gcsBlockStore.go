@@ -121,6 +121,12 @@ func (s gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int 
 	return 0
 }
 
+func (s gcsBlockStore) HasStoredBlock(blockHash uint64) int {
+	s.contentIndexMux.Lock()
+	defer s.contentIndexMux.Unlock()
+	return int(lib.ENOENT)
+}
+
 // GetStoredBlock ...
 func (s gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlock, int) {
 	key := getBlockPath("chunks", blockHash)
@@ -181,22 +187,22 @@ func (s gcsBlockStore) Close() {
 		return
 	}
 
-	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, &progress)
-	if err != nil {
-		return
-	}
+	//	contentIndex, err := s.backingBlockStore.GetIndex(0, jobAPI, &progress)
+	//	if err != nil {
+	//		return
+	//	}
 
-	newBlocks := []lib.Longtail_StoredBlock{}
-	for k, v := range *s.unsavedBlocks {
-		newBlocks = append(newBlocks, v)
-	}
+	//	newBlocks := []lib.Longtail_StoredBlock{}
+	//	for k, v := range *s.unsavedBlocks {
+	//		newBlocks = append(newBlocks, v)
+	//	}
 
-	newContentIndex, err := lib.CreateContentIndexFromBlocks(contentIndex.GetHashAPI(), uint64(len(newBlocks)), newBlocks)
-	if err != nil {
-		return
-	}
-	contentIndex, err = lib.MergeContentIndex(contentIndex, newContentIndex)
-	if err != nil {
-		return
-	}
+	//newContentIndex, err := lib.CreateContentIndexFromBlocks(contentIndex.GetHashAPI(), uint64(len(newBlocks)), newBlocks)
+	//if err != nil {
+	//	return
+	//}
+	//contentIndex, err = lib.MergeContentIndex(contentIndex, newContentIndex)
+	//if err != nil {
+	//	return
+	//}
 }

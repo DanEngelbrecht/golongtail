@@ -59,6 +59,7 @@ type Logger interface {
 
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock) int
+	HasStoredBlock(blockHash uint64) int
 	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
 	GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int)
 	GetStoredBlockPath(blockHash uint64) (string, int)
@@ -1209,6 +1210,11 @@ func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail
 //export Proxy_GetStoredBlock
 func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlock **C.struct_Longtail_StoredBlock) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if outStoredBlock == nil {
+		errno := blockStore.HasStoredBlock(uint64(blockHash))
+		*outStoredBlock = nil
+		return C.int(errno)
+	}
 	storedBlock, errno := blockStore.GetStoredBlock(uint64(blockHash))
 	if errno == 0 {
 		*outStoredBlock = storedBlock.cStoredBlock

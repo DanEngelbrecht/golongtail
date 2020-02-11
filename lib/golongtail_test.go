@@ -7,27 +7,28 @@ import (
 )
 
 type testProgress struct {
-	inited     bool
-	oldPercent uint32
+	inited     *bool
+	oldPercent *uint32
 	task       string
 	t          *testing.T
 }
 
 func (p testProgress) OnProgress(total uint32, current uint32) {
+	inited := p.inited
 	if current < total {
-		if !p.inited {
+		if !(*inited) {
 			p.t.Logf("%s: ", p.task)
-			p.inited = true
+			(*inited) = true
 		}
 		percentDone := (100 * current) / total
-		if (percentDone - p.oldPercent) >= 5 {
+		if (percentDone - (*p.oldPercent)) >= 5 {
 			p.t.Logf("%d%% ", percentDone)
-			p.oldPercent = percentDone
+			(*p.oldPercent) = percentDone
 		}
 		return
 	}
-	if p.inited {
-		if p.oldPercent != 100 {
+	if *inited {
+		if (*p.oldPercent) != 100 {
 			p.t.Logf("100%%")
 		}
 		p.t.Logf(" Done\n")
@@ -539,7 +540,7 @@ func TestRewriteVersion(t *testing.T) {
 
 	compressionTypes := make([]uint32, fileInfos.GetFileCount())
 
-	createVersionProgress := CreateProgressAPI(testProgress{task: "CreateVersionIndex", t: t})
+	createVersionProgress := CreateProgressAPI(testProgress{inited: new(bool), oldPercent: new(uint32), task: "CreateVersionIndex", t: t})
 	versionIndex, err := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
@@ -570,7 +571,7 @@ func TestRewriteVersion(t *testing.T) {
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateDefaultCompressionRegistry()
 	compressionRegistry.Dispose()
-	writeContentProgress := CreateProgressAPI(testProgress{task: "WriteContent", t: t})
+	writeContentProgress := CreateProgressAPI(testProgress{inited: new(bool), oldPercent: new(uint32), task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
 	err = WriteContent(
 		storageAPI,
@@ -585,7 +586,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() WriteContent() %q != %q", err, error(nil))
 	}
 
-	writeVersionProgress2 := CreateProgressAPI(testProgress{task: "WriteVersion", t: t})
+	writeVersionProgress2 := CreateProgressAPI(testProgress{inited: new(bool), oldPercent: new(uint32), task: "WriteVersion", t: t})
 	err = WriteVersion(
 		blockStorageAPI,
 		storageAPI,
@@ -807,7 +808,7 @@ func TestCreateVersionIndex(t *testing.T) {
 		hashAPI,
 		jobAPI,
 		progress,
-		&progressData{task: "Indexing", t: t},
+		&testProgress{task: "Indexing", t: t},
 		"",
 		GetBrotliGenericDefaultCompressionType(),
 		32768)
@@ -863,7 +864,7 @@ func TestReadWriteVersionIndex(t *testing.T) {
 		hashAPI,
 		jobAPI,
 		progress,
-		&progressData{task: "Indexing", t: t},
+		&testProgress{task: "Indexing", t: t},
 		"",
 		fileInfos.GetPaths(),
 		fileInfos.GetFileSizes(),
@@ -964,7 +965,7 @@ func TestUpSyncVersion(t *testing.T) {
 		hashAPI,
 		jobAPI,
 		progress,
-		&progressData{task: "Indexing", t: t},
+		&testProgress{task: "Indexing", t: t},
 		"current",
 		"current.lvi",
 		upsyncStorageAPI,
@@ -1056,7 +1057,7 @@ func TestUpSyncVersion(t *testing.T) {
 			hashAPI,
 			jobAPI,
 			progress,
-			&progressData{task: "Reading local cache", t: t},
+			&testProgress{task: "Reading local cache", t: t},
 			"cache")
 		if err != nil {
 			t.Errorf("UpSyncVersion() ReadContent(%s) = %q, want %q", "cache", err, error(nil))
@@ -1120,7 +1121,7 @@ func TestUpSyncVersion(t *testing.T) {
 		hashAPI,
 		jobAPI,
 		progress,
-		&progressData{task: "Indexing version", t: t},
+		&testProgress{task: "Indexing version", t: t},
 		"current",
 		GetBrotliGenericDefaultCompressionType(),
 		32768)
@@ -1142,7 +1143,7 @@ func TestUpSyncVersion(t *testing.T) {
 		hashAPI,
 		jobAPI,
 		progress,
-		&progressData{task: "Updating version", t: t},
+		&testProgress{task: "Updating version", t: t},
 		compressionRegistry,
 		mergedCacheContentIndex,
 		currentVersionIndex,

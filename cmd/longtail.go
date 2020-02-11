@@ -32,26 +32,27 @@ func (l loggerData) OnLog(level int, message string) {
 }
 
 type progressData struct {
-	inited     bool
-	oldPercent uint32
+	inited     *bool
+	oldPercent *uint32
 	task       string
 }
 
 func (p progressData) OnProgress(totalCount uint32, doneCount uint32) {
+	inited := p.inited
 	if doneCount < totalCount {
-		if !p.inited {
+		if !(*inited) {
 			fmt.Fprintf(os.Stderr, "%s: ", p.task)
-			p.inited = true
+			(*inited) = true
 		}
 		percentDone := (100 * doneCount) / totalCount
-		if (percentDone - p.oldPercent) >= 5 {
+		if (percentDone - (*p.oldPercent)) >= 5 {
 			fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
-			p.oldPercent = percentDone
+			(*p.oldPercent) = percentDone
 		}
 		return
 	}
-	if p.inited {
-		if p.oldPercent != 100 {
+	if *inited {
+		if (*p.oldPercent) != 100 {
 			fmt.Fprintf(os.Stderr, "100%%")
 		}
 		fmt.Fprintf(os.Stderr, " Done\n")
@@ -205,7 +206,7 @@ func upSyncVersion(
 		return err
 	}
 
-	getRemoteIndexProgress := lib.CreateProgressAPI(progressData{task: "Get remote index"})
+	getRemoteIndexProgress := lib.CreateProgressAPI(progressData{inited: new(bool), oldPercent: new(uint32), task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
 	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
 	if err != nil {
@@ -232,7 +233,7 @@ func upSyncVersion(
 		}
 		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
-		createVersionIndexProgress := lib.CreateProgressAPI(progressData{task: "Indexing version"})
+		createVersionIndexProgress := lib.CreateProgressAPI(progressData{inited: new(bool), oldPercent: new(uint32), task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
 		vindex, err = lib.CreateVersionIndex(
 			fs,
@@ -272,7 +273,7 @@ func upSyncVersion(
 	}
 	defer missingContentIndex.Dispose()
 	if missingContentIndex.GetBlockCount() > 0 {
-		writeContentProgress := lib.CreateProgressAPI(progressData{task: "Writing content blocks"})
+		writeContentProgress := lib.CreateProgressAPI(progressData{inited: new(bool), oldPercent: new(uint32), task: "Writing content blocks"})
 		defer writeContentProgress.Dispose()
 		err = lib.WriteContent(
 			fs,
@@ -350,7 +351,7 @@ func downSyncVersion(
 		return err
 	}
 
-	getRemoteIndexProgress := lib.CreateProgressAPI(progressData{task: "Get remote index"})
+	getRemoteIndexProgress := lib.CreateProgressAPI(progressData{inited: new(bool), oldPercent: new(uint32), task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
 	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
 	if err != nil {
@@ -385,7 +386,7 @@ func downSyncVersion(
 
 		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
-		createVersionIndexProgress := lib.CreateProgressAPI(progressData{task: "Indexing version"})
+		createVersionIndexProgress := lib.CreateProgressAPI(progressData{inited: new(bool), oldPercent: new(uint32), task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
 		localVersionIndex, err = lib.CreateVersionIndex(
 			fs,
@@ -415,7 +416,7 @@ func downSyncVersion(
 	}
 	defer versionDiff.Dispose()
 
-	changeVersionProgress := lib.CreateProgressAPI(progressData{task: "Updating version"})
+	changeVersionProgress := lib.CreateProgressAPI(progressData{inited: new(bool), oldPercent: new(uint32), task: "Updating version"})
 	defer changeVersionProgress.Dispose()
 	err = lib.ChangeVersion(
 		indexStore,

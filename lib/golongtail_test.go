@@ -138,26 +138,28 @@ func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, error) {
 		chunkCount+uint32(10000),
 		chunkHashes,
 		chunkSizes,
-		blockData)
+		blockData,
+		false)
 }
 
 func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
 	if storedBlock.cStoredBlock == nil {
 		t.Errorf("validateStoredBlock() %p == %p", storedBlock, Longtail_StoredBlock{cStoredBlock: nil})
 	}
-	chunkCount := storedBlock.GetChunkCount()
-	if storedBlock.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
-		t.Errorf("validateStoredBlock() %q != %q", uint64(0xdeadbeef500177aa)+uint64(chunkCount), storedBlock.GetBlockHash())
+	blockIndex := storedBlock.GetBlockIndex()
+	chunkCount := blockIndex.GetChunkCount()
+	if blockIndex.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
+		t.Errorf("validateStoredBlock() %q != %q", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
 	}
-	if storedBlock.GetCompressionType() != chunkCount+uint32(10000) {
-		t.Errorf("validateStoredBlock() %q != %q", chunkCount+uint32(10000), storedBlock.GetCompressionType())
+	if blockIndex.GetCompressionType() != chunkCount+uint32(10000) {
+		t.Errorf("validateStoredBlock() %q != %q", chunkCount+uint32(10000), blockIndex.GetCompressionType())
 
 	}
-	chunkHashes := storedBlock.GetChunkHashes()
+	chunkHashes := blockIndex.GetChunkHashes()
 	if uint32(len(chunkHashes)) != chunkCount {
 		t.Errorf("validateStoredBlock() %q != %q", chunkCount, uint32(len(chunkHashes)))
 	}
-	chunkSizes := storedBlock.GetChunkSizes()
+	chunkSizes := blockIndex.GetChunkSizes()
 	if uint32(len(chunkSizes)) != chunkCount {
 		t.Errorf("validateStoredBlock() %q != %q", chunkCount, uint32(len(chunkSizes)))
 	}
@@ -242,7 +244,8 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	defer block3.Dispose()
 
-	storedBlock1, err := blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
+	storedBlock1Index := block1.GetBlockIndex()
+	storedBlock1, err := blockStoreAPI.GetStoredBlock(storedBlock1Index.GetBlockHash())
 	if err == expected {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %q == %q", err, expected)
 	}
@@ -250,7 +253,8 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
 	}
 
-	hashBlock2, err := blockStoreAPI.HasStoredBlock(block2.GetBlockHash())
+	storedBlock2Index := block2.GetBlockIndex()
+	hashBlock2, err := blockStoreAPI.HasStoredBlock(storedBlock2Index.GetBlockHash())
 	if err != expected {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %q != %q", err, expected)
 	}
@@ -262,7 +266,7 @@ func TestFSBlockStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
-	storedBlock1, err = blockStoreAPI.GetStoredBlock(block1.GetBlockHash())
+	storedBlock1, err = blockStoreAPI.GetStoredBlock(storedBlock1Index.GetBlockHash())
 	if err != expected {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
@@ -274,7 +278,7 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 
-	hashBlock2, err = blockStoreAPI.HasStoredBlock(block2.GetBlockHash())
+	hashBlock2, err = blockStoreAPI.HasStoredBlock(storedBlock2Index.GetBlockHash())
 	if err != expected {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %q != %q", err, expected)
 	}
@@ -287,14 +291,15 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 
-	storedBlock3, err := blockStoreAPI.GetStoredBlock(block3.GetBlockHash())
+	storedBlock3Index := block3.GetBlockIndex()
+	storedBlock3, err := blockStoreAPI.GetStoredBlock(storedBlock3Index.GetBlockHash())
 	if err != expected {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
 	defer storedBlock3.Dispose()
 	validateStoredBlock(t, storedBlock3)
 
-	storedBlock2, err := blockStoreAPI.GetStoredBlock(block2.GetBlockHash())
+	storedBlock2, err := blockStoreAPI.GetStoredBlock(storedBlock2Index.GetBlockHash())
 	if err != expected {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
 	}
@@ -320,16 +325,18 @@ type TestBlockStore struct {
 }
 
 func (b TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
-	blockHash := storedBlock.GetBlockHash()
+	blockIndex := storedBlock.GetBlockIndex()
+	blockHash := blockIndex.GetBlockHash()
 	if _, ok := b.blocks[blockHash]; ok {
 		return 0
 	}
 	blockCopy, err := CreateStoredBlock(
 		blockHash,
-		storedBlock.GetCompressionType(),
-		storedBlock.GetChunkHashes(),
-		storedBlock.GetChunkSizes(),
-		storedBlock.GetBlockData())
+		blockIndex.GetCompressionType(),
+		blockIndex.GetChunkHashes(),
+		blockIndex.GetChunkSizes(),
+		storedBlock.GetBlockData(),
+		false)
 	if err != nil {
 		return ENOMEM
 	}
@@ -339,12 +346,14 @@ func (b TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
 
 func (b TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int) {
 	if storedBlock, ok := b.blocks[blockHash]; ok {
+		blockIndex := storedBlock.GetBlockIndex()
 		blockCopy, err := CreateStoredBlock(
-			storedBlock.GetBlockHash(),
-			storedBlock.GetCompressionType(),
-			storedBlock.GetChunkHashes(),
-			storedBlock.GetChunkSizes(),
-			storedBlock.GetBlockData())
+			blockIndex.GetBlockHash(),
+			blockIndex.GetCompressionType(),
+			blockIndex.GetChunkHashes(),
+			blockIndex.GetChunkSizes(),
+			storedBlock.GetBlockData(),
+			false)
 		if err != nil {
 			return Longtail_StoredBlock{cStoredBlock: nil}, ENOMEM
 		}
@@ -400,18 +409,20 @@ func TestBlockStoreProxy(t *testing.T) {
 	if err != nil {
 		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %q != %q", err, expected)
 	}
-	getBlock, err := blockStoreProxy.GetStoredBlock(storedBlock.GetBlockHash())
+	storedBlockIndex := storedBlock.GetBlockIndex()
+	getBlock, err := blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash())
 	if err != nil {
 		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %q != %q", err, expected)
 	}
 	defer getBlock.Dispose()
 	validateStoredBlock(t, getBlock)
-	blockPath, err := blockStoreProxy.GetStoredBlockPath(getBlock.GetBlockHash())
+	getBlockIndex := getBlock.GetBlockIndex()
+	blockPath, err := blockStoreProxy.GetStoredBlockPath(getBlockIndex.GetBlockHash())
 	if err != nil {
 		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %q != %q", err, expected)
 	}
-	if blockPath != fmt.Sprintf("%v", getBlock.GetBlockHash()) {
-		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %s != %s", blockPath, fmt.Sprintf("%v", getBlock.GetBlockHash()))
+	if blockPath != fmt.Sprintf("%v", getBlockIndex.GetBlockHash()) {
+		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %s != %s", blockPath, fmt.Sprintf("%v", getBlockIndex.GetBlockHash()))
 	}
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	if jobAPI.cJobAPI == nil {

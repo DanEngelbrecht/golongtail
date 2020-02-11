@@ -237,8 +237,8 @@ func carray2slice32(array *C.uint32_t, len int) []uint32 {
 	return list
 }
 
-func carray2slice8(array *C.uint8_t, len int) []uint8 {
-	var list []uint8
+func carray2sliceByte(array *C.char, len int) []byte {
+	var list []byte
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
 	sliceHeader.Cap = len
 	sliceHeader.Len = len
@@ -468,35 +468,35 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 	return path, nil
 }
 
-func (storedBlock *Longtail_StoredBlock) GetBlockHash() uint64 {
-	return uint64(*storedBlock.cStoredBlock.m_BlockIndex.m_BlockHash)
+func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
+	return uint64(*blockIndex.cBlockIndex.m_BlockHash)
+}
+
+func (blockIndex *Longtail_BlockIndex) GetChunkCount() uint32 {
+	return uint32(*blockIndex.cBlockIndex.m_ChunkCount)
+}
+
+func (blockIndex *Longtail_BlockIndex) GetCompressionType() uint32 {
+	return uint32(*blockIndex.cBlockIndex.m_ChunkCompressionType)
+}
+
+func (blockIndex *Longtail_BlockIndex) GetChunkHashes() []uint64 {
+	size := int(*blockIndex.cBlockIndex.m_ChunkCount)
+	return carray2slice64(blockIndex.cBlockIndex.m_ChunkHashes, size)
+}
+
+func (blockIndex *Longtail_BlockIndex) GetChunkSizes() []uint32 {
+	size := int(*blockIndex.cBlockIndex.m_ChunkCount)
+	return carray2slice32(blockIndex.cBlockIndex.m_ChunkSizes, size)
 }
 
 func (storedBlock *Longtail_StoredBlock) GetBlockIndex() Longtail_BlockIndex {
 	return Longtail_BlockIndex{cBlockIndex: storedBlock.cStoredBlock.m_BlockIndex}
 }
 
-func (storedBlock *Longtail_StoredBlock) GetChunkCount() uint32 {
-	return uint32(*storedBlock.cStoredBlock.m_BlockIndex.m_ChunkCount)
-}
-
-func (storedBlock *Longtail_StoredBlock) GetCompressionType() uint32 {
-	return uint32(*storedBlock.cStoredBlock.m_BlockIndex.m_ChunkCompressionType)
-}
-
-func (storedBlock *Longtail_StoredBlock) GetChunkHashes() []uint64 {
-	size := int(*storedBlock.cStoredBlock.m_BlockIndex.m_ChunkCount)
-	return carray2slice64(storedBlock.cStoredBlock.m_BlockIndex.m_ChunkHashes, size)
-}
-
-func (storedBlock *Longtail_StoredBlock) GetChunkSizes() []uint32 {
-	size := int(*storedBlock.cStoredBlock.m_BlockIndex.m_ChunkCount)
-	return carray2slice32(storedBlock.cStoredBlock.m_BlockIndex.m_ChunkSizes, size)
-}
-
-func (storedBlock *Longtail_StoredBlock) GetBlockData() []uint8 {
+func (storedBlock *Longtail_StoredBlock) GetBlockData() []byte {
 	size := int(storedBlock.cStoredBlock.m_BlockDataSize)
-	return carray2slice8((*C.uint8_t)(storedBlock.cStoredBlock.m_BlockData), size)
+	return carray2sliceByte((*C.char)(storedBlock.cStoredBlock.m_BlockData), size)
 }
 
 func (storedBlock *Longtail_StoredBlock) Dispose() {
@@ -512,7 +512,8 @@ func CreateStoredBlock(
 	compressionType uint32,
 	chunkHashes []uint64,
 	chunkSizes []uint32,
-	blockData []uint8) (Longtail_StoredBlock, error) {
+	blockData []uint8,
+	blockDataIncludesIndex bool) (Longtail_StoredBlock, error) {
 	chunkCount := len(chunkHashes)
 	if chunkCount != len(chunkSizes) {
 		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("CreateStoredBlock: Chunk hash count and cunk size count does not match %d vs %d", chunkCount, len(chunkSizes))
@@ -526,6 +527,11 @@ func CreateStoredBlock(
 		cChunkSizes = (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
 	}
 	blockByteCount := len(blockData)
+	blockByteOffset := 0
+	if !blockDataIncludesIndex {
+		blockByteOffset = int(C.Longtail_GetBlockIndexSize((C.uint32_t)(chunkCount)))
+		blockByteCount = blockByteCount - blockByteOffset
+	}
 	var cStoredBlock *C.struct_Longtail_StoredBlock
 	errno := C.Longtail_CreateStoredBlock(
 		C.TLongtail_Hash(blockHash),
@@ -540,7 +546,7 @@ func CreateStoredBlock(
 	}
 	cBlockBytes := unsafe.Pointer(nil)
 	if blockByteCount > 0 {
-		cBlockBytes = unsafe.Pointer(&blockData[0])
+		cBlockBytes = unsafe.Pointer(&blockData[blockByteOffset])
 	}
 	C.memmove(cStoredBlock.m_BlockData, cBlockBytes, C.size_t(blockByteCount))
 	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
@@ -687,6 +693,31 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, rootPath string) (Longt
 func (paths Longtail_Paths) GetPath(index uint32) string {
 	cPath := C.GetPath(paths.cPaths.m_Offsets, paths.cPaths.m_Data, C.uint32_t(index))
 	return C.GoString(cPath)
+}
+
+// WriteBlockIndexToBuffer ...
+func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, error) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteBlockIndexToBuffer(index.cBlockIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, fmt.Errorf("WriteBlockIndexToBuffer: C.Longtail_WriteBlockIndexToBuffer() failed with error %d", errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, nil
+}
+
+// ReadBlockIndexFromBuffer ...
+func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, error) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var bindex *C.struct_Longtail_BlockIndex
+	errno := C.Longtail_ReadBlockIndexFromBuffer(cBuffer, cSize, &bindex)
+	if errno != 0 {
+		return Longtail_BlockIndex{cBlockIndex: nil}, fmt.Errorf("ReadBlockIndexFromBuffer: C.Longtail_ReadBlockIndexFromBuffer() failed with error %d", errno)
+	}
+	return Longtail_BlockIndex{cBlockIndex: bindex}, nil
 }
 
 // GetVersionIndexPath ...

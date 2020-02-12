@@ -529,7 +529,7 @@ func CreateStoredBlock(
 	}
 	blockByteCount := len(blockData)
 	blockByteOffset := 0
-	if !blockDataIncludesIndex {
+	if blockDataIncludesIndex {
 		blockByteOffset = int(C.Longtail_GetBlockIndexSize((C.uint32_t)(chunkCount)))
 		blockByteCount = blockByteCount - blockByteOffset
 	}
@@ -1212,7 +1212,6 @@ func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlo
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	if outStoredBlock == nil {
 		errno := blockStore.HasStoredBlock(uint64(blockHash))
-		*outStoredBlock = nil
 		return C.int(errno)
 	}
 	storedBlock, errno := blockStore.GetStoredBlock(uint64(blockHash))

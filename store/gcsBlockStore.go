@@ -22,21 +22,42 @@ type gcsBlockStore struct {
 	client   *storage.Client
 	bucket   *storage.BucketHandle
 
-	contentIndexMux *sync.Mutex
-	unsavedBlocks   *map[uint64]lib.Longtail_BlockIndex
+	defaultHashAPI uint32
+
+	contentIndexMux sync.Mutex
+	contentIndex    lib.Longtail_ContentIndex
+	knownBlocks     map[uint64]bool
+	//	unsavedBlocks   map[uint64]lib.Longtail_BlockIndex
 
 	// Fake it:
-	backingStorage    *lib.Longtail_StorageAPI
-	backingBlockStore *lib.Longtail_BlockStoreAPI
+	backingStorage lib.Longtail_StorageAPI
+}
+
+func readContentIndex(storageAPI lib.Longtail_StorageAPI) (lib.Longtail_ContentIndex, int) {
+	contentIndex, err := lib.ReadContentIndex(storageAPI, "fake_storage/store.lci")
+	if err == nil {
+		return contentIndex, 0
+	} else {
+		hashAPI := lib.CreateBlake3HashAPI()
+		defer hashAPI.Dispose()
+		contentIndex, _ := lib.CreateContentIndex(
+			hashAPI,
+			[]uint64{},
+			[]uint32{},
+			[]uint32{},
+			32768,
+			65536)
+		return contentIndex, 0
+	}
 }
 
 // String() ...
-func (s gcsBlockStore) String() string {
+func (s *gcsBlockStore) String() string {
 	return s.Location
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL) (lib.Longtail_BlockStoreAPI, error) {
+func NewGCSBlockStore(u *url.URL, defaultHashAPI uint32) (lib.Longtail_BlockStoreAPI, error) {
 	//	var err error
 	if u.Scheme != "gs" {
 		return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
@@ -52,12 +73,20 @@ func NewGCSBlockStore(u *url.URL) (lib.Longtail_BlockStoreAPI, error) {
 	bucket := client.Bucket(bucketName)
 
 	backingStorage := lib.CreateFSStorageAPI()
-	backingBlockStore := lib.CreateFSBlockStore(backingStorage, "fake_remote_store")
 
-	s := gcsBlockStore{url: u, Location: u.String(), client: client, bucket: bucket, backingStorage: &backingStorage, backingBlockStore: &backingBlockStore}
-	s.contentIndexMux = &sync.Mutex{}
-	s.unsavedBlocks = &map[uint64]lib.Longtail_BlockIndex{}
+	s := &gcsBlockStore{url: u, Location: u.String(), client: client, bucket: bucket, defaultHashAPI: defaultHashAPI, backingStorage: backingStorage}
+	//	s.contentIndexMux = &sync.Mutex{}
+	//	s.unsavedBlocks = &map[uint64]lib.Longtail_BlockIndex{}
 	blockStoreAPI := lib.CreateBlockStoreAPI(s)
+	contentIndex, _ := readContentIndex(backingStorage)
+	s.contentIndex = contentIndex
+	s.knownBlocks = make(map[uint64]bool)
+
+	for b := uint64(0); b < contentIndex.GetBlockCount(); b++ {
+		blockHash := contentIndex.GetBlockHash(b)
+		s.knownBlocks[blockHash] = true
+	}
+
 	return blockStoreAPI, nil
 }
 
@@ -70,65 +99,84 @@ func getBlockPath(basePath string, blockHash uint64) string {
 }
 
 // PutStoredBlock ...
-func (s gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int {
+func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath("chunks", blockHash)
 	ctx := context.Background()
 	objHandle := s.bucket.Object(key)
 	_, err := objHandle.Attrs(ctx)
-	if err != storage.ErrObjectNotExist {
+	if err == storage.ErrObjectNotExist {
+		objWriter := objHandle.NewWriter(ctx)
+
+		blockIndexBytes, err := lib.WriteBlockIndexToBuffer(storedBlock.GetBlockIndex())
+		if err != nil {
+			objWriter.Close()
+			//return errors.Wrap(err, s.String()+"/"+key)
+			return lib.ENOMEM
+		}
+
+		blockData := storedBlock.GetBlockData()
+		blob := append(blockIndexBytes, blockData...)
+
+		_, err = objWriter.Write(blob)
+		if err != nil {
+			objWriter.Close()
+			//		return errors.Wrap(err, s.String()+"/"+key)
+			return lib.EIO
+		}
+
+		err = objWriter.Close()
+		if err != nil {
+			//		return errors.Wrap(err, s.String()+"/"+key)
+			return lib.EIO
+		}
+
+		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
+		if err != nil {
+			return lib.EIO
+		}
+	}
+
+	s.contentIndexMux.Lock()
+	defer s.contentIndexMux.Unlock()
+
+	if _, ok := s.knownBlocks[blockHash]; ok {
 		return 0
 	}
 
-	objWriter := objHandle.NewWriter(ctx)
-
-	blockIndexBytes, err := lib.WriteBlockIndexToBuffer(storedBlock.GetBlockIndex())
-	if err != nil {
-		objWriter.Close()
-		//return errors.Wrap(err, s.String()+"/"+key)
-		return lib.ENOMEM
-	}
-
-	blockData := storedBlock.GetBlockData()
-	blob := append(blockIndexBytes, blockData...)
-
-	_, err = objWriter.Write(blob)
-	if err != nil {
-		objWriter.Close()
-		//		return errors.Wrap(err, s.String()+"/"+key)
-		return lib.EIO
-	}
-
-	err = objWriter.Close()
-	if err != nil {
-		//		return errors.Wrap(err, s.String()+"/"+key)
-		return lib.EIO
-	}
-
-	_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
-	if err != nil {
-		return lib.EIO
-	}
-
-	copyBlockIndex, err := lib.ReadBlockIndexFromBuffer(blockIndexBytes)
+	newBlocks := []lib.Longtail_BlockIndex{blockIndex}
+	//	for _, v := range s.unsavedBlocks {
+	//		newBlocks = append(newBlocks, blockIndex)
+	//	}
+	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI, uint64(len(newBlocks)), newBlocks)
 	if err != nil {
 		return lib.ENOMEM
 	}
-	s.contentIndexMux.Lock()
-	defer s.contentIndexMux.Unlock()
-	(*s.unsavedBlocks)[blockHash] = copyBlockIndex
+	defer addedContentIndex.Dispose()
+
+	newContentIndex, err := lib.MergeContentIndex(s.contentIndex, addedContentIndex)
+	if err != nil {
+		return lib.ENOMEM
+	}
+	s.contentIndex.Dispose()
+	s.contentIndex = newContentIndex
+
+	s.knownBlocks[blockHash] = true
 	return 0
 }
 
-func (s gcsBlockStore) HasStoredBlock(blockHash uint64) int {
+func (s *gcsBlockStore) HasStoredBlock(blockHash uint64) int {
 	s.contentIndexMux.Lock()
 	defer s.contentIndexMux.Unlock()
+	if _, ok := s.knownBlocks[blockHash]; ok {
+		return 0
+	}
 	return int(lib.ENOENT)
 }
 
 // GetStoredBlock ...
-func (s gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlock, int) {
+func (s *gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlock, int) {
 	key := getBlockPath("chunks", blockHash)
 	ctx := context.Background()
 	objHandle := s.bucket.Object(key)
@@ -165,44 +213,51 @@ func (s gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBloc
 }
 
 // GetIndex ...
-func (s gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI) (lib.Longtail_ContentIndex, int) {
-	contentIndex, err := s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, jobAPI, &progress)
-	if err == nil {
-		return contentIndex, 0
+func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI) (lib.Longtail_ContentIndex, int) {
+	buf, err := lib.WriteContentIndexToBuffer(s.contentIndex)
+	if err != nil {
+		return lib.Longtail_ContentIndex{}, lib.ENOMEM
 	}
-	return lib.Longtail_ContentIndex{}, 2
+	copyContentIndex, err := lib.ReadContentIndexFromBuffer(buf)
+	if err != nil {
+		return lib.Longtail_ContentIndex{}, lib.ENOMEM
+	}
+	return copyContentIndex, 0
 }
 
 // GetStoredBlockPath ...
-func (s gcsBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
+func (s *gcsBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
 	return getBlockPath("chunks", blockHash), 0
 }
 
 // Close ...
-func (s gcsBlockStore) Close() {
+func (s *gcsBlockStore) Close() {
 	s.contentIndexMux.Lock()
 	defer s.contentIndexMux.Unlock()
-
-	if len(*s.unsavedBlocks) == 0 {
-		return
-	}
-
-	//	contentIndex, err := s.backingBlockStore.GetIndex(0, jobAPI, &progress)
+	_ = lib.WriteContentIndex(s.backingStorage, s.contentIndex, "fake_storage/store.lci")
+	s.contentIndex.Dispose()
+	//
+	//	unsavedBlockCount := len(s.unsavedBlocks)
+	//	if unsavedBlockCount == 0 {
+	//		return
+	//	}
+	//
+	//	contentIndex, err := lib.ReadContentIndex(s.backingStorage, "fake_storage/store.lci")
 	//	if err != nil {
 	//		return
 	//	}
-
-	//	newBlocks := []lib.Longtail_StoredBlock{}
-	//	for k, v := range *s.unsavedBlocks {
+	//
+	//	newBlocks := []lib.Longtail_BlockIndex{}
+	//	for _, v := range s.unsavedBlocks {
 	//		newBlocks = append(newBlocks, v)
 	//	}
-
-	//newContentIndex, err := lib.CreateContentIndexFromBlocks(contentIndex.GetHashAPI(), uint64(len(newBlocks)), newBlocks)
-	//if err != nil {
-	//	return
-	//}
-	//contentIndex, err = lib.MergeContentIndex(contentIndex, newContentIndex)
-	//if err != nil {
-	//	return
-	//}
+	//
+	//	newContentIndex, err := lib.CreateContentIndexFromBlocks(contentIndex.GetHashAPI(), uint64(len(newBlocks)), newBlocks)
+	//	if err != nil {
+	//		return
+	//	}
+	//	contentIndex, err = lib.MergeContentIndex(contentIndex, newContentIndex)
+	//	if err != nil {
+	//		return
+	//	}
 }

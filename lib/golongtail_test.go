@@ -7,28 +7,27 @@ import (
 )
 
 type testProgress struct {
-	inited     *bool
-	oldPercent *uint32
+	inited     bool
+	oldPercent uint32
 	task       string
 	t          *testing.T
 }
 
-func (p testProgress) OnProgress(total uint32, current uint32) {
-	inited := p.inited
+func (p *testProgress) OnProgress(total uint32, current uint32) {
 	if current < total {
-		if !(*inited) {
+		if !p.inited {
 			p.t.Logf("%s: ", p.task)
-			(*inited) = true
+			p.inited = true
 		}
 		percentDone := (100 * current) / total
-		if (percentDone - (*p.oldPercent)) >= 5 {
+		if (percentDone - p.oldPercent) >= 5 {
 			p.t.Logf("%d%% ", percentDone)
-			(*p.oldPercent) = percentDone
+			p.oldPercent = percentDone
 		}
 		return
 	}
-	if *inited {
-		if (*p.oldPercent) != 100 {
+	if p.inited {
+		if p.oldPercent != 100 {
 			p.t.Logf("100%%")
 		}
 		p.t.Logf(" Done\n")
@@ -39,7 +38,7 @@ type testLogger struct {
 	t *testing.T
 }
 
-func (l testLogger) OnLog(level int, log string) {
+func (l *testLogger) OnLog(level int, log string) {
 	l.t.Logf("%d: %s", level, log)
 }
 
@@ -47,7 +46,7 @@ type testAssert struct {
 	t *testing.T
 }
 
-func (a testAssert) OnAssert(expression string, file string, line int) {
+func (a *testAssert) OnAssert(expression string, file string, line int) {
 	fmt.Printf("ASSERT: %s %s:%d", expression, file, line)
 }
 
@@ -324,7 +323,7 @@ type TestBlockStore struct {
 	blockStoreAPI Longtail_BlockStoreAPI
 }
 
-func (b TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
+func (b *TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	if _, ok := b.blocks[blockHash]; ok {
@@ -344,7 +343,15 @@ func (b TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
 	return 0
 }
 
-func (b TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int) {
+func (b *TestBlockStore) HasStoredBlock(blockHash uint64) int {
+	if _, ok := b.blocks[blockHash]; ok {
+		return 0
+	} else {
+		return ENOENT
+	}
+}
+
+func (b *TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int) {
 	if storedBlock, ok := b.blocks[blockHash]; ok {
 		blockIndex := storedBlock.GetBlockIndex()
 		blockCopy, err := CreateStoredBlock(
@@ -362,7 +369,7 @@ func (b TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, 
 	return Longtail_StoredBlock{cStoredBlock: nil}, ENOENT
 }
 
-func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
+func (b *TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
 	blockCount := len(b.blocks)
 	blockIndexes := make([]Longtail_BlockIndex, blockCount)
 	arrayIndex := 0
@@ -380,11 +387,11 @@ func (b TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtai
 	return cIndex, 0
 }
 
-func (b TestBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
+func (b *TestBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
 	return fmt.Sprintf("%v", blockHash), 0
 }
 
-func (b TestBlockStore) Close() {
+func (b *TestBlockStore) Close() {
 }
 
 func TestBlockStoreProxy(t *testing.T) {
@@ -551,7 +558,7 @@ func TestRewriteVersion(t *testing.T) {
 
 	compressionTypes := make([]uint32, fileInfos.GetFileCount())
 
-	createVersionProgress := CreateProgressAPI(testProgress{inited: new(bool), oldPercent: new(uint32), task: "CreateVersionIndex", t: t})
+	createVersionProgress := CreateProgressAPI(&testProgress{task: "CreateVersionIndex", t: t})
 	versionIndex, err := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
@@ -582,7 +589,7 @@ func TestRewriteVersion(t *testing.T) {
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateDefaultCompressionRegistry()
 	compressionRegistry.Dispose()
-	writeContentProgress := CreateProgressAPI(testProgress{inited: new(bool), oldPercent: new(uint32), task: "WriteContent", t: t})
+	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
 	err = WriteContent(
 		storageAPI,
@@ -597,7 +604,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() WriteContent() %q != %q", err, error(nil))
 	}
 
-	writeVersionProgress2 := CreateProgressAPI(testProgress{inited: new(bool), oldPercent: new(uint32), task: "WriteVersion", t: t})
+	writeVersionProgress2 := CreateProgressAPI(&testProgress{task: "WriteVersion", t: t})
 	err = WriteVersion(
 		blockStorageAPI,
 		storageAPI,

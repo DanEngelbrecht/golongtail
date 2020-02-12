@@ -202,6 +202,36 @@ func TestStoredblock(t *testing.T) {
 	validateStoredBlock(t, storedBlock)
 }
 
+func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
+	originalBlock, err := createStoredBlock(2)
+	if err != nil {
+		t.Errorf("createStoredBlock() %q != %q", err, error(nil))
+	}
+
+	blockIndexData, err := WriteBlockIndexToBuffer(originalBlock.GetBlockIndex())
+	if err != nil {
+		t.Errorf("WriteBlockIndexToBuffer() %q != %q", err, error(nil))
+	}
+
+	blockData := originalBlock.GetBlockData()
+	storedBlockData := append(blockIndexData, blockData...)
+	originalBlock.Dispose()
+	blockIndexData = nil
+
+	copyBlock, err := InitStoredBlockFromData(storedBlockData)
+	if err != nil {
+		t.Errorf("InitStoredBlockFromData() %q != %q", err, error(nil))
+	}
+	defer copyBlock.Dispose()
+	validateStoredBlock(t, copyBlock)
+}
+
 func TestFSBlockStore(t *testing.T) {
 	SetLogger(&testLogger{t: t})
 	defer SetLogger(nil)

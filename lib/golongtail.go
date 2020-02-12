@@ -478,7 +478,7 @@ func (blockIndex *Longtail_BlockIndex) GetChunkCount() uint32 {
 }
 
 func (blockIndex *Longtail_BlockIndex) GetCompressionType() uint32 {
-	return uint32(*blockIndex.cBlockIndex.m_ChunkCompressionType)
+	return uint32(*blockIndex.cBlockIndex.m_DataCompressionType)
 }
 
 func (blockIndex *Longtail_BlockIndex) GetChunkHashes() []uint64 {
@@ -508,6 +508,22 @@ func (blockIndex *Longtail_BlockIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(blockIndex.cBlockIndex))
 }
 
+// InitStoredBlockFromData() ...
+func InitStoredBlockFromData(buffer []byte) (Longtail_StoredBlock, error) {
+	storedBlockDataSize := C.size_t(len(buffer))
+	rawBlockDataBuffer := unsafe.Pointer(&buffer[0])
+	var cStoredBlock *C.struct_Longtail_StoredBlock
+	errno := C.CreateStoredBlockFromRaw(
+		rawBlockDataBuffer,
+		storedBlockDataSize,
+		&cStoredBlock)
+	if errno != 0 {
+		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("InitStoredBlockFromData: Longtail_InitStoredBlockFromData failed with %d", errno)
+	}
+	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
+}
+
+// CreateStoredBlock() ...
 func CreateStoredBlock(
 	blockHash uint64,
 	compressionType uint32,

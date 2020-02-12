@@ -107,11 +107,8 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 	objHandle := s.bucket.Object(key)
 	_, err := objHandle.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
-		objWriter := objHandle.NewWriter(ctx)
-
 		blockIndexBytes, err := lib.WriteBlockIndexToBuffer(storedBlock.GetBlockIndex())
 		if err != nil {
-			objWriter.Close()
 			//return errors.Wrap(err, s.String()+"/"+key)
 			return lib.ENOMEM
 		}
@@ -119,6 +116,7 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 		blockData := storedBlock.GetBlockData()
 		blob := append(blockIndexBytes, blockData...)
 
+		objWriter := objHandle.NewWriter(ctx)
 		_, err = objWriter.Write(blob)
 		if err != nil {
 			objWriter.Close()
@@ -187,25 +185,14 @@ func (s *gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlo
 	}
 	defer obj.Close()
 
-	b, err := ioutil.ReadAll(obj)
+	storedBlockData, err := ioutil.ReadAll(obj)
 
 	if err != nil {
 		//		return nil, err
 		return lib.Longtail_StoredBlock{}, lib.EIO
 	}
 
-	blockIndex, err := lib.ReadBlockIndexFromBuffer(b)
-	if err != nil {
-		return lib.Longtail_StoredBlock{}, lib.EBADF
-	}
-
-	storedBlock, err := lib.CreateStoredBlock(
-		blockIndex.GetBlockHash(),
-		blockIndex.GetCompressionType(),
-		blockIndex.GetChunkHashes(),
-		blockIndex.GetChunkSizes(),
-		b,
-		true)
+	storedBlock, err := lib.InitStoredBlockFromData(storedBlockData)
 	if err != nil {
 		return lib.Longtail_StoredBlock{}, lib.ENOMEM
 	}

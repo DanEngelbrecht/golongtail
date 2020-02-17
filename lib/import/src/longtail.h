@@ -87,25 +87,6 @@ struct Longtail_StorageAPI
     int (*GetEntryProperties)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
 };
 
-typedef struct Longtail_CompressionAPI_CompressionContext* Longtail_CompressionAPI_HCompressionContext;
-typedef struct Longtail_CompressionAPI_DecompressionContext* Longtail_CompressionAPI_HDecompressionContext;
-typedef struct Longtail_CompressionAPI_Settings* Longtail_CompressionAPI_HSettings;
-
-struct Longtail_CompressionAPI
-{
-    struct Longtail_API m_API;
-
-    size_t (*GetMaxCompressedSize)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, size_t size);
-    int (*Compress)(struct Longtail_CompressionAPI* compression_api, Longtail_CompressionAPI_HSettings settings, const char* uncompressed, char* compressed, size_t uncompressed_size, size_t max_compressed_size, size_t* out_compressed_size);
-    int (*Decompress)(struct Longtail_CompressionAPI* compression_api, const char* compressed, char* uncompressed, size_t compressed_size, size_t max_uncompressed_size, size_t* out_uncompressed_size);
-};
-
-struct Longtail_CompressionRegistryAPI
-{
-    struct Longtail_API m_API;
-    int (*GetCompressionType)(struct Longtail_CompressionRegistryAPI* compression_registry, uint32_t compression_type, struct Longtail_CompressionAPI** out_compression_api, Longtail_CompressionAPI_HSettings* out_settings);
-};
-
 struct Longtail_ProgressAPI
 {
     struct Longtail_API m_API;
@@ -113,7 +94,7 @@ struct Longtail_ProgressAPI
 };
 
 typedef void* Longtail_JobAPI_Jobs;
-typedef void (*Longtail_JobAPI_JobFunc)(void* context);
+typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id);
 
 struct Longtail_JobAPI
 {
@@ -124,13 +105,20 @@ struct Longtail_JobAPI
     int (*AddDependecies)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs, uint32_t dependency_job_count, Longtail_JobAPI_Jobs dependency_jobs);
     int (*ReadyJobs)(struct Longtail_JobAPI* job_api, uint32_t job_count, Longtail_JobAPI_Jobs jobs);
     int (*WaitForAllJobs)(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI);
+    int (*ResumeJob)(struct Longtail_JobAPI* job_api, uint32_t job_id);
+};
+
+struct Longtail_AsyncCompleteAPI
+{
+    struct Longtail_API m_API;
+    int (*OnComplete)(struct Longtail_AsyncCompleteAPI* async_complete_api, int err);
 };
 
 struct Longtail_BlockStoreAPI
 {
     struct Longtail_API m_API;
-    int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block);
-    int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
+    int (*PutStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+    int (*GetStoredBlock)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
     int (*GetIndex)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index);
     int (*GetStoredBlockPath)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
 };
@@ -193,7 +181,7 @@ int Longtail_CreateVersionIndex(
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_permissions,
-    const uint32_t* asset_compression_types,
+    const uint32_t* asset_tags,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
@@ -206,7 +194,7 @@ int Longtail_CreateVersionIndexFromBlocks(
     const struct Longtail_Paths* paths,
     const uint64_t* asset_sizes,
     const uint32_t* asset_permissions,
-    const uint32_t* asset_compression_types,
+    const uint32_t* asset_tags,
     uint32_t max_chunk_size,
     struct Longtail_VersionIndex** out_version_index);
 
@@ -262,7 +250,7 @@ int Longtail_CreateContentIndex(
     uint64_t chunk_count,
     const TLongtail_Hash* chunk_hashes,
     const uint32_t* chunk_sizes,
-    const uint32_t* chunk_compression_types,
+    const uint32_t* chunk_tags,
     uint32_t max_block_size,
     uint32_t max_chunks_per_block,
     struct Longtail_ContentIndex** out_content_index);
@@ -290,7 +278,6 @@ int Longtail_ReadContentIndex(
 int Longtail_WriteContent(
     struct Longtail_StorageAPI* source_storage_api,
     struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     struct Longtail_ContentIndex* content_index,
@@ -318,7 +305,6 @@ int Longtail_MergeContentIndex(
 int Longtail_WriteVersion(
     struct Longtail_BlockStoreAPI* block_storage_api,
     struct Longtail_StorageAPI* version_storage_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
     const struct Longtail_ContentIndex* content_index,
@@ -337,7 +323,6 @@ int Longtail_ChangeVersion(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
-    struct Longtail_CompressionRegistryAPI* compression_registry,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
@@ -356,7 +341,7 @@ int Longtail_InitBlockIndexFromData(
 
 int Longtail_CreateBlockIndex(
     struct Longtail_HashAPI* hash_api,
-    uint32_t data_compression_type,
+    uint32_t tag,
     uint32_t chunk_count,
     const uint64_t* chunk_indexes,
     const TLongtail_Hash* chunk_hashes,
@@ -392,7 +377,7 @@ int Longtail_InitStoredBlockFromData(
 int Longtail_CreateStoredBlock(
     TLongtail_Hash block_hash,
     uint32_t chunk_count,
-    uint32_t compression_type,
+    uint32_t tag,
     TLongtail_Hash* chunk_hashes,
     uint32_t* chunk_sizes,
     uint32_t block_data_size,
@@ -402,7 +387,7 @@ struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;
     uint32_t* m_ChunkCount;
-    uint32_t* m_DataCompressionType;
+    uint32_t* m_Tag;
     TLongtail_Hash* m_ChunkHashes; //[]
     uint32_t* m_ChunkSizes; // []
 };
@@ -412,7 +397,7 @@ struct Longtail_StoredBlock
     int (*Dispose)(struct Longtail_StoredBlock* stored_block);
     struct Longtail_BlockIndex* m_BlockIndex;
     void* m_BlockData;
-    uint32_t m_BlockDataSize;
+    uint32_t m_BlockChunksDataSize;
 };
 
 struct Longtail_Paths
@@ -464,7 +449,7 @@ struct Longtail_VersionIndex
     TLongtail_Hash* m_ChunkHashes;      // []
 
     uint32_t* m_ChunkSizes;             // []
-    uint32_t* m_ChunkCompressionTypes;  // []
+    uint32_t* m_ChunkTags;              // []
 
     uint32_t* m_NameOffsets;            // []
     uint32_t m_NameDataSize;
@@ -493,14 +478,6 @@ int Longtail_ValidateContent(
 int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
-
-extern struct Longtail_CompressionRegistryAPI* Longtail_CreateDefaultCompressionRegistry(
-        uint32_t compression_type_count,
-        const uint32_t* compression_types,
-        const struct Longtail_CompressionAPI** compression_apis,
-        const Longtail_CompressionAPI_HSettings* compression_settings);
-
-extern const uint32_t LONGTAIL_NO_COMPRESSION_TYPE;
 
 ///////////// Test functions
 
@@ -536,7 +513,7 @@ struct Longtail_VersionIndex* Longtail_BuildVersionIndex(
     uint32_t chunk_count,
     const uint32_t* chunk_sizes,
     const TLongtail_Hash* chunk_hashes,
-    const uint32_t* chunk_compression_types,
+    const uint32_t* chunk_tags,
     uint32_t hash_api_identifier);
 
 struct Longtail_Chunker;

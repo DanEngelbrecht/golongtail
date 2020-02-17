@@ -57,10 +57,21 @@ type Logger interface {
 	OnLog(level int, log string)
 }
 
+type Longtail_AsyncCompleteAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncCompleteAPI
+}
+
+type Longtail_StoredBlockPtr struct {
+	cStoredBlockPtr **C.struct_Longtail_StoredBlock
+}
+
+func (storedBlock *Longtail_StoredBlock) GetPtr() Longtail_StoredBlockPtr {
+	return Longtail_StoredBlockPtr{cStoredBlockPtr: &storedBlock.cStoredBlock}
+}
+
 type BlockStoreAPI interface {
-	PutStoredBlock(storedBlock Longtail_StoredBlock) int
-	HasStoredBlock(blockHash uint64) int
-	GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int)
+	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncCompleteAPI) int
+	GetStoredBlock(blockHash uint64, outStoredBlock Longtail_StoredBlockPtr, asyncCompleteAPI Longtail_AsyncCompleteAPI) int
 	GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int)
 	GetStoredBlockPath(blockHash uint64) (string, int)
 	Close()
@@ -367,6 +378,11 @@ func GetMeowHashIdentifier() uint32 {
 	return uint32(C.GetMeowHashIdentifier())
 }
 
+//// PutStoredBlock() ...
+func (asyncCompleteAPI *Longtail_AsyncCompleteAPI) OnComplete(errno int) int {
+	return int(C.AsyncComplete_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.int(errno)))
+}
+
 // CreateFSBlockStore() ...
 func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
@@ -386,55 +402,34 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 
 //// PutStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
-	storedBlock Longtail_StoredBlock) error {
+	storedBlock Longtail_StoredBlock,
+	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
 	errno := C.BlockStore_PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		storedBlock.cStoredBlock,
-		nil)
-	if errno != 0 {
-		return fmt.Errorf("PutStoredBlock: C.BlockStore_PutStoredBlock() failed with error %d", errno)
-	}
-	return nil
-}
-
-// HasStoredBlock() ...
-func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
-	blockHash uint64) (bool, error) {
-	errno := C.BlockStore_GetStoredBlock(
-		blockStoreAPI.cBlockStoreAPI,
-		C.uint64_t(blockHash),
-		nil,
-		nil)
-	if errno == C.ENOENT {
-		return false, nil
-	}
-	if errno == 0 {
-		return true, nil
-	}
-	return false, fmt.Errorf("HasStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
 }
 
 // GetStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
-	blockHash uint64) (Longtail_StoredBlock, error) {
+	blockHash uint64,
+	outStoredBlock Longtail_StoredBlockPtr,
+	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
 
-	var cStoredBlock *C.struct_Longtail_StoredBlock
 	errno := C.BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
-		&cStoredBlock,
-		nil)
-	if errno != 0 {
-		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("GetStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
-	}
-	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
+		outStoredBlock.cStoredBlockPtr,
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
 }
 
 // GetIndex() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	defaulHashAPIIdentifier uint32,
 	jobAPI Longtail_JobAPI,
-	progressAPI *Longtail_ProgressAPI) (Longtail_ContentIndex, error) {
+	progressAPI *Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -450,14 +445,14 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 		cProgressAPI,
 		&cContextIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("GetIndex: C.BlockStore_GetIndex() failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: cContextIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: cContextIndex}, 0
 }
 
 // GetStoredBlockPath() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
-	blockHash uint64) (string, error) {
+	blockHash uint64) (string, int) {
 
 	var cPath *C.char
 	errno := C.BlockStore_GetStoredBlockPath(
@@ -465,11 +460,11 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 		C.uint64_t(blockHash),
 		&cPath)
 	if errno != 0 {
-		return "", fmt.Errorf("GetStoredBlockPath: C.BlockStore_GetStoredBlockPath() failed with error %d", errno)
+		return "", int(errno)
 	}
 	defer C.free(unsafe.Pointer(cPath))
 	path := C.GoString(cPath)
-	return path, nil
+	return path, 0
 }
 
 func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
@@ -533,10 +528,10 @@ func CreateStoredBlock(
 	chunkHashes []uint64,
 	chunkSizes []uint32,
 	blockData []uint8,
-	blockDataIncludesIndex bool) (Longtail_StoredBlock, error) {
+	blockDataIncludesIndex bool) (Longtail_StoredBlock, int) {
 	chunkCount := len(chunkHashes)
 	if chunkCount != len(chunkSizes) {
-		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("CreateStoredBlock: Chunk hash count and cunk size count does not match %d vs %d", chunkCount, len(chunkSizes))
+		return Longtail_StoredBlock{cStoredBlock: nil}, EINVAL
 	}
 	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
 	if chunkCount > 0 {
@@ -562,14 +557,14 @@ func CreateStoredBlock(
 		C.uint32_t(blockByteCount),
 		&cStoredBlock)
 	if errno != 0 {
-		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("CreateStoredBlock: C.Create_StoredBlock() failed with error %d", errno)
+		return Longtail_StoredBlock{}, int(errno)
 	}
 	cBlockBytes := unsafe.Pointer(nil)
 	if blockByteCount > 0 {
 		cBlockBytes = unsafe.Pointer(&blockData[blockByteOffset])
 	}
 	C.memmove(cStoredBlock.m_BlockData, cBlockBytes, C.size_t(blockByteCount))
-	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
+	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, 0
 }
 
 // CreateFSStorageAPI ...
@@ -1216,34 +1211,14 @@ func Proxy_BlockStore_Dispose(context unsafe.Pointer) {
 //export Proxy_PutStoredBlock
 func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock})
-	if async_complete_api != nil {
-		C.AsyncComplete_OnComplete(async_complete_api, C.int(errno))
-		return C.int(0)
-	}
+	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock}, Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 
 //export Proxy_GetStoredBlock
 func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlock **C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	if outStoredBlock == nil {
-		errno := blockStore.HasStoredBlock(uint64(blockHash))
-		if async_complete_api != nil {
-			C.AsyncComplete_OnComplete(async_complete_api, C.int(errno))
-			return C.int(0)
-		}
-		return C.int(errno)
-	}
-	storedBlock, errno := blockStore.GetStoredBlock(uint64(blockHash))
-	if errno == 0 {
-		*outStoredBlock = storedBlock.cStoredBlock
-		storedBlock.cStoredBlock = nil
-	}
-	if async_complete_api != nil {
-		C.AsyncComplete_OnComplete(async_complete_api, C.int(errno))
-		return C.int(0)
-	}
+	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_StoredBlockPtr{cStoredBlockPtr: outStoredBlock}, Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

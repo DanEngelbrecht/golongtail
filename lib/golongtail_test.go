@@ -113,7 +113,7 @@ func TestAPICreate(t *testing.T) {
 	defer compressionRegistry.Dispose()
 }
 
-func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, error) {
+func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, int) {
 	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
 	chunkHashes := make([]uint64, chunkCount)
 	chunkSizes := make([]uint32, chunkCount)
@@ -194,10 +194,9 @@ func TestStoredblock(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	storedBlock, err := createStoredBlock(2)
-	expected := error(nil)
-	if err != nil {
-		t.Errorf("CreateStoredBlock() %q != %q", err, expected)
+	storedBlock, errno := createStoredBlock(2)
+	if errno != 0 {
+		t.Errorf("CreateStoredBlock() %d!= %d", errno, 0)
 	}
 	validateStoredBlock(t, storedBlock)
 }
@@ -209,9 +208,9 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	originalBlock, err := createStoredBlock(2)
-	if err != nil {
-		t.Errorf("createStoredBlock() %q != %q", err, error(nil))
+	originalBlock, errno := createStoredBlock(2)
+	if errno != 0 {
+		t.Errorf("createStoredBlock() %d != %d", errno, 0)
 	}
 
 	blockIndexData, err := WriteBlockIndexToBuffer(originalBlock.GetBlockIndex())
@@ -248,97 +247,96 @@ func TestFSBlockStore(t *testing.T) {
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	contentIndex, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), jobAPI, nil)
+	contentIndex, errno := blockStoreAPI.GetIndex(blake3.GetIdentifier(), jobAPI, nil)
 	defer contentIndex.Dispose()
-	expected := error(nil)
-	if err != expected {
-		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", errno, 0)
 	}
 
-	block1, err := createStoredBlock(1)
-	if err != expected {
-		t.Errorf("TestFSBlockStore() createStoredBlock() %q != %q", err, expected)
+	block1, errno := createStoredBlock(1)
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block1.Dispose()
 
-	block2, err := createStoredBlock(2)
-	if err != expected {
-		t.Errorf("TestFSBlockStore() createStoredBlock() %q != %q", err, expected)
+	block2, errno := createStoredBlock(2)
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block2.Dispose()
 
-	block3, err := createStoredBlock(3)
-	if err != expected {
-		t.Errorf("TestFSBlockStore() createStoredBlock() %q != %q", err, expected)
+	block3, errno := createStoredBlock(3)
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block3.Dispose()
 
 	storedBlock1Index := block1.GetBlockIndex()
-	storedBlock1, err := blockStoreAPI.GetStoredBlock(storedBlock1Index.GetBlockHash())
-	if err == expected {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %q == %q", err, expected)
+	storedBlock1Hash := storedBlock1Index.GetBlockHash()
+	var storedBlock1 Longtail_StoredBlock
+	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, storedBlock1.GetPtr(), Longtail_AsyncCompleteAPI{})
+	if errno != ENOENT {
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %d == %d", errno, ENOENT)
 	}
 	if storedBlock1.cStoredBlock != nil {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
 	}
 
-	storedBlock2Index := block2.GetBlockIndex()
-	hashBlock2, err := blockStoreAPI.HasStoredBlock(storedBlock2Index.GetBlockHash())
-	if err != expected {
-		t.Errorf("TestFSBlockStore() HasStoredBlock() %q != %q", err, expected)
+	errno = blockStoreAPI.PutStoredBlock(block1, Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
 	}
-	if hashBlock2 != false {
-		t.Errorf("TestFSBlockStore() HasStoredBlock() %t != %t", hashBlock2, false)
-	}
-
-	err = blockStoreAPI.PutStoredBlock(block1)
-	if err != nil {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
-	}
-	storedBlock1, err = blockStoreAPI.GetStoredBlock(storedBlock1Index.GetBlockHash())
-	if err != expected {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
+	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, storedBlock1.GetPtr(), Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
 	}
 	defer storedBlock1.Dispose()
 	validateStoredBlock(t, storedBlock1)
 
-	err = blockStoreAPI.PutStoredBlock(block2)
-	if err != expected {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
+	errno = blockStoreAPI.PutStoredBlock(block2, Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
 	}
 
-	hashBlock2, err = blockStoreAPI.HasStoredBlock(storedBlock2Index.GetBlockHash())
-	if err != expected {
-		t.Errorf("TestFSBlockStore() HasStoredBlock() %q != %q", err, expected)
+	storedBlock2Index := block2.GetBlockIndex()
+	storedBlock2Hash := storedBlock2Index.GetBlockHash()
+	var storedBlock2 Longtail_StoredBlock
+	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, storedBlock2.GetPtr(), Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %d != %d", errno, 0)
 	}
-	if hashBlock2 != true {
-		t.Errorf("TestFSBlockStore() HasStoredBlock() %t != %t", hashBlock2, true)
+	expected := Longtail_StoredBlock{}
+	if storedBlock2.cStoredBlock == nil {
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %v == %v", storedBlock2, expected)
 	}
 
-	err = blockStoreAPI.PutStoredBlock(block3)
-	if err != expected {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
+	errno = blockStoreAPI.PutStoredBlock(block3, Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
 	}
 
 	storedBlock3Index := block3.GetBlockIndex()
-	storedBlock3, err := blockStoreAPI.GetStoredBlock(storedBlock3Index.GetBlockHash())
-	if err != expected {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
+	storedBlock3Hash := storedBlock3Index.GetBlockHash()
+	var storedBlock3 Longtail_StoredBlock
+	errno = blockStoreAPI.GetStoredBlock(storedBlock3Hash, storedBlock3.GetPtr(), Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
 	}
 	defer storedBlock3.Dispose()
 	validateStoredBlock(t, storedBlock3)
 
-	storedBlock2, err := blockStoreAPI.GetStoredBlock(storedBlock2Index.GetBlockHash())
-	if err != expected {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %q != %q", err, expected)
+	var storedBlock2Again Longtail_StoredBlock
+	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, storedBlock2Again.GetPtr(), Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
 	}
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
 
-	contentIndex2, err := blockStoreAPI.GetIndex(blake3.GetIdentifier(), jobAPI, nil)
+	contentIndex2, errno := blockStoreAPI.GetIndex(blake3.GetIdentifier(), jobAPI, nil)
 	defer contentIndex2.Dispose()
-	if err != expected {
-		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", err, expected)
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() GetIndex () %d != %d", errno, 0)
 	}
 	if contentIndex2.GetBlockCount() != uint64(3) {
 		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(3))
@@ -353,50 +351,43 @@ type TestBlockStore struct {
 	blockStoreAPI Longtail_BlockStoreAPI
 }
 
-func (b *TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
+func (b *TestBlockStore) PutStoredBlock(
+	storedBlock Longtail_StoredBlock,
+	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	if _, ok := b.blocks[blockHash]; ok {
 		return 0
 	}
-	blockCopy, err := CreateStoredBlock(
+	blockCopy, errno := CreateStoredBlock(
 		blockHash,
 		blockIndex.GetTag(),
 		blockIndex.GetChunkHashes(),
 		blockIndex.GetChunkSizes(),
 		storedBlock.GetChunksBlockData(),
 		false)
-	if err != nil {
-		return ENOMEM
+	if errno == 0 {
+		b.blocks[blockHash] = blockCopy
 	}
-	b.blocks[blockHash] = blockCopy
-	return 0
+	return asyncCompleteAPI.OnComplete(errno)
 }
 
-func (b *TestBlockStore) HasStoredBlock(blockHash uint64) int {
-	if _, ok := b.blocks[blockHash]; ok {
-		return 0
-	} else {
-		return ENOENT
-	}
-}
-
-func (b *TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock, int) {
+func (b *TestBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock Longtail_StoredBlockPtr, asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
 	if storedBlock, ok := b.blocks[blockHash]; ok {
 		blockIndex := storedBlock.GetBlockIndex()
-		blockCopy, err := CreateStoredBlock(
+		blockCopy, errno := CreateStoredBlock(
 			blockIndex.GetBlockHash(),
 			blockIndex.GetTag(),
 			blockIndex.GetChunkHashes(),
 			blockIndex.GetChunkSizes(),
 			storedBlock.GetChunksBlockData(),
 			false)
-		if err != nil {
-			return Longtail_StoredBlock{cStoredBlock: nil}, ENOMEM
+		if errno == 0 {
+			*outStoredBlock.cStoredBlockPtr = blockCopy.cStoredBlock
 		}
-		return blockCopy, 0
+		return asyncCompleteAPI.OnComplete(errno)
 	}
-	return Longtail_StoredBlock{cStoredBlock: nil}, ENOENT
+	return asyncCompleteAPI.OnComplete(ENOENT)
 }
 
 func (b *TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
@@ -433,30 +424,30 @@ func TestBlockStoreProxy(t *testing.T) {
 
 	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
 	blockStoreProxy := CreateBlockStoreAPI(blockStore)
-	expected := error(nil)
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
 
-	storedBlock, err := createStoredBlock(2)
-	if err != nil {
-		t.Errorf("TestBlockStoreProxy() createStoredBlock() %q != %q", err, expected)
+	storedBlock, errno := createStoredBlock(2)
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer storedBlock.Dispose()
-	err = blockStoreProxy.PutStoredBlock(storedBlock)
-	if err != nil {
-		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %q != %q", err, expected)
+	errno = blockStoreProxy.PutStoredBlock(storedBlock, Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %d != %d", errno, 0)
 	}
 	storedBlockIndex := storedBlock.GetBlockIndex()
-	getBlock, err := blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash())
-	if err != nil {
-		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %q != %q", err, expected)
+	var getBlock Longtail_StoredBlock
+	errno = blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash(), getBlock.GetPtr(), Longtail_AsyncCompleteAPI{})
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %d!= %d", errno, 0)
 	}
 	defer getBlock.Dispose()
 	validateStoredBlock(t, getBlock)
 	getBlockIndex := getBlock.GetBlockIndex()
-	blockPath, err := blockStoreProxy.GetStoredBlockPath(getBlockIndex.GetBlockHash())
-	if err != nil {
-		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %q != %q", err, expected)
+	blockPath, errno := blockStoreProxy.GetStoredBlockPath(getBlockIndex.GetBlockHash())
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %d != %d", errno, 0)
 	}
 	if blockPath != fmt.Sprintf("%v", getBlockIndex.GetBlockHash()) {
 		t.Errorf("TestBlockStoreProxy() GetStoredBlockPath() %s != %s", blockPath, fmt.Sprintf("%v", getBlockIndex.GetBlockHash()))
@@ -466,9 +457,9 @@ func TestBlockStoreProxy(t *testing.T) {
 		t.Errorf("TestBlockStoreProxy() CreateBikeshedJobAPI() jobAPI.cJobAPI == nil")
 	}
 	defer jobAPI.Dispose()
-	contentIndex, err := blockStoreProxy.GetIndex(GetBlake3HashIdentifier(), jobAPI, nil)
-	if err != nil {
-		t.Errorf("TestBlockStoreProxy() GetIndex() %q != %q", err, error(nil))
+	contentIndex, errno := blockStoreProxy.GetIndex(GetBlake3HashIdentifier(), jobAPI, nil)
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxy() GetIndex() %d != %d", errno, 0)
 	}
 	defer contentIndex.Dispose()
 }
@@ -563,7 +554,7 @@ func TestCreateContentIndex(t *testing.T) {
 		compressionTypes,
 		65536,
 		4096)
-	if err != nil {
+	if err != error(nil) {
 		t.Errorf("TestCreateContentIndex() CreateContentIndex() %q != %q", err, error(nil))
 	}
 	defer contentIndex.Dispose()

@@ -105,7 +105,11 @@ static int BlockStoreAPIProxy_GetStoredBlockPath(struct Longtail_BlockStoreAPI* 
 
 static int AsyncComplete_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
 {
-	return async_complete_api->OnComplete(async_complete_api, err);
+    if (async_complete_api)
+    {
+        return async_complete_api->OnComplete(async_complete_api, err);
+    }
+    return err;
 }
 
 static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)

@@ -113,7 +113,7 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 			return lib.ENOMEM
 		}
 
-		blockData := storedBlock.GetBlockData()
+		blockData := storedBlock.GetChunksBlockData()
 		blob := append(blockIndexBytes, blockData...)
 
 		objWriter := objHandle.NewWriter(ctx)

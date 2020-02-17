@@ -277,7 +277,6 @@ func upSyncVersion(
 		err = lib.WriteContent(
 			fs,
 			indexStore,
-			creg,
 			jobs,
 			&writeContentProgress,
 			missingContentIndex,
@@ -423,7 +422,6 @@ func downSyncVersion(
 		hash,
 		jobs,
 		&changeVersionProgress,
-		creg,
 		remoteContentIndex,
 		localVersionIndex,
 		remoteVersionIndex,

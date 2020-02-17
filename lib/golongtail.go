@@ -323,9 +323,9 @@ func (versionIndex *Longtail_VersionIndex) GetChunkSizes() []uint32 {
 	return carray2slice32(versionIndex.cVersionIndex.m_ChunkSizes, size)
 }
 
-func (versionIndex *Longtail_VersionIndex) GetCompressionTypes() []uint32 {
+func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {
 	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
-	return carray2slice32(versionIndex.cVersionIndex.m_ChunkCompressionTypes, size)
+	return carray2slice32(versionIndex.cVersionIndex.m_ChunkTags, size)
 }
 
 func (versionDiff *Longtail_VersionDiff) Dispose() {
@@ -384,12 +384,13 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)
 }
 
-// PutStoredBlock() ...
+//// PutStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock) error {
 	errno := C.BlockStore_PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
-		storedBlock.cStoredBlock)
+		storedBlock.cStoredBlock,
+		nil)
 	if errno != 0 {
 		return fmt.Errorf("PutStoredBlock: C.BlockStore_PutStoredBlock() failed with error %d", errno)
 	}
@@ -402,6 +403,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) HasStoredBlock(
 	errno := C.BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
+		nil,
 		nil)
 	if errno == C.ENOENT {
 		return false, nil
@@ -420,7 +422,8 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	errno := C.BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
-		&cStoredBlock)
+		&cStoredBlock,
+		nil)
 	if errno != 0 {
 		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("GetStoredBlock: C.BlockStore_GetStoredBlock() failed with error %d", errno)
 	}
@@ -477,8 +480,8 @@ func (blockIndex *Longtail_BlockIndex) GetChunkCount() uint32 {
 	return uint32(*blockIndex.cBlockIndex.m_ChunkCount)
 }
 
-func (blockIndex *Longtail_BlockIndex) GetCompressionType() uint32 {
-	return uint32(*blockIndex.cBlockIndex.m_DataCompressionType)
+func (blockIndex *Longtail_BlockIndex) GetTag() uint32 {
+	return uint32(*blockIndex.cBlockIndex.m_Tag)
 }
 
 func (blockIndex *Longtail_BlockIndex) GetChunkHashes() []uint64 {
@@ -495,8 +498,8 @@ func (storedBlock *Longtail_StoredBlock) GetBlockIndex() Longtail_BlockIndex {
 	return Longtail_BlockIndex{cBlockIndex: storedBlock.cStoredBlock.m_BlockIndex}
 }
 
-func (storedBlock *Longtail_StoredBlock) GetBlockData() []byte {
-	size := int(storedBlock.cStoredBlock.m_BlockDataSize)
+func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
+	size := int(storedBlock.cStoredBlock.m_BlockChunksDataSize)
 	return carray2sliceByte((*C.char)(storedBlock.cStoredBlock.m_BlockData), size)
 }
 
@@ -631,7 +634,7 @@ func (compressionRegistry *Longtail_CompressionRegistryAPI) Dispose() {
 
 // GetNoCompressionType ...
 func GetNoCompressionType() uint32 {
-	return uint32(C.LONGTAIL_NO_COMPRESSION_TYPE)
+	return uint32(0)
 }
 
 // GetBrotliGenericMinCompressionType ...
@@ -985,7 +988,6 @@ func ProgressAPIProxyOnProgress(context unsafe.Pointer, total_count C.uint32_t, 
 func WriteContent(
 	sourceStorageAPI Longtail_StorageAPI,
 	targetBlockStoreAPI Longtail_BlockStoreAPI,
-	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
 	contentIndex Longtail_ContentIndex,
@@ -1003,7 +1005,6 @@ func WriteContent(
 	errno := C.Longtail_WriteContent(
 		sourceStorageAPI.cStorageAPI,
 		targetBlockStoreAPI.cBlockStoreAPI,
-		compressionRegistryAPI.cCompressionRegistryAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
 		contentIndex.cContentIndex,
@@ -1109,7 +1110,6 @@ func MergeContentIndex(
 func WriteVersion(
 	contentBlockStoreAPI Longtail_BlockStoreAPI,
 	versionStorageAPI Longtail_StorageAPI,
-	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
 	contentIndex Longtail_ContentIndex,
@@ -1133,7 +1133,6 @@ func WriteVersion(
 	errno := C.Longtail_WriteVersion(
 		contentBlockStoreAPI.cBlockStoreAPI,
 		versionStorageAPI.cStorageAPI,
-		compressionRegistryAPI.cCompressionRegistryAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
 		contentIndex.cContentIndex,
@@ -1165,7 +1164,6 @@ func ChangeVersion(
 	hashAPI Longtail_HashAPI,
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
-	compressionRegistryAPI Longtail_CompressionRegistryAPI,
 	contentIndex Longtail_ContentIndex,
 	sourceVersionIndex Longtail_VersionIndex,
 	targetVersionIndex Longtail_VersionIndex,
@@ -1192,7 +1190,6 @@ func ChangeVersion(
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
-		compressionRegistryAPI.cCompressionRegistryAPI,
 		contentIndex.cContentIndex,
 		sourceVersionIndex.cVersionIndex,
 		targetVersionIndex.cVersionIndex,
@@ -1217,23 +1214,35 @@ func Proxy_BlockStore_Dispose(context unsafe.Pointer) {
 }
 
 //export Proxy_PutStoredBlock
-func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock) C.int {
+func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock})
+	if async_complete_api != nil {
+		C.AsyncComplete_OnComplete(async_complete_api, C.int(errno))
+		return C.int(0)
+	}
 	return C.int(errno)
 }
 
 //export Proxy_GetStoredBlock
-func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlock **C.struct_Longtail_StoredBlock) C.int {
+func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlock **C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	if outStoredBlock == nil {
 		errno := blockStore.HasStoredBlock(uint64(blockHash))
+		if async_complete_api != nil {
+			C.AsyncComplete_OnComplete(async_complete_api, C.int(errno))
+			return C.int(0)
+		}
 		return C.int(errno)
 	}
 	storedBlock, errno := blockStore.GetStoredBlock(uint64(blockHash))
 	if errno == 0 {
 		*outStoredBlock = storedBlock.cStoredBlock
 		storedBlock.cStoredBlock = nil
+	}
+	if async_complete_api != nil {
+		C.AsyncComplete_OnComplete(async_complete_api, C.int(errno))
+		return C.int(0)
 	}
 	return C.int(errno)
 }

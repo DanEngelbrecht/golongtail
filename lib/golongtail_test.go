@@ -150,8 +150,8 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
 	if blockIndex.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
 		t.Errorf("validateStoredBlock() %q != %q", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
 	}
-	if blockIndex.GetCompressionType() != chunkCount+uint32(10000) {
-		t.Errorf("validateStoredBlock() %q != %q", chunkCount+uint32(10000), blockIndex.GetCompressionType())
+	if blockIndex.GetTag() != chunkCount+uint32(10000) {
+		t.Errorf("validateStoredBlock() %q != %q", chunkCount+uint32(10000), blockIndex.GetTag())
 
 	}
 	chunkHashes := blockIndex.GetChunkHashes()
@@ -172,7 +172,7 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
 		}
 		blockOffset += uint32(chunkSizes[index])
 	}
-	blockData := storedBlock.GetBlockData()
+	blockData := storedBlock.GetChunksBlockData()
 	if uint32(len(blockData)) != blockOffset {
 		t.Errorf("validateStoredBlock() %q != %q", uint32(len(blockData)), blockOffset)
 	}
@@ -219,7 +219,7 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 		t.Errorf("WriteBlockIndexToBuffer() %q != %q", err, error(nil))
 	}
 
-	blockData := originalBlock.GetBlockData()
+	blockData := originalBlock.GetChunksBlockData()
 	storedBlockData := append(blockIndexData, blockData...)
 	originalBlock.Dispose()
 	blockIndexData = nil
@@ -361,10 +361,10 @@ func (b *TestBlockStore) PutStoredBlock(storedBlock Longtail_StoredBlock) int {
 	}
 	blockCopy, err := CreateStoredBlock(
 		blockHash,
-		blockIndex.GetCompressionType(),
+		blockIndex.GetTag(),
 		blockIndex.GetChunkHashes(),
 		blockIndex.GetChunkSizes(),
-		storedBlock.GetBlockData(),
+		storedBlock.GetChunksBlockData(),
 		false)
 	if err != nil {
 		return ENOMEM
@@ -386,10 +386,10 @@ func (b *TestBlockStore) GetStoredBlock(blockHash uint64) (Longtail_StoredBlock,
 		blockIndex := storedBlock.GetBlockIndex()
 		blockCopy, err := CreateStoredBlock(
 			blockIndex.GetBlockHash(),
-			blockIndex.GetCompressionType(),
+			blockIndex.GetTag(),
 			blockIndex.GetChunkHashes(),
 			blockIndex.GetChunkSizes(),
-			storedBlock.GetBlockData(),
+			storedBlock.GetChunksBlockData(),
 			false)
 		if err != nil {
 			return Longtail_StoredBlock{cStoredBlock: nil}, ENOMEM
@@ -608,7 +608,7 @@ func TestRewriteVersion(t *testing.T) {
 		hashAPI,
 		versionIndex.GetChunkHashes(),
 		versionIndex.GetChunkSizes(),
-		versionIndex.GetCompressionTypes(),
+		versionIndex.GetChunkTags(),
 		65536,
 		4096)
 	if err != nil {
@@ -624,7 +624,6 @@ func TestRewriteVersion(t *testing.T) {
 	err = WriteContent(
 		storageAPI,
 		blockStorageAPI,
-		compressionRegistry,
 		jobAPI,
 		&writeContentProgress,
 		contentIndex,
@@ -638,7 +637,6 @@ func TestRewriteVersion(t *testing.T) {
 	err = WriteVersion(
 		blockStorageAPI,
 		storageAPI,
-		compressionRegistry,
 		jobAPI,
 		&writeVersionProgress2,
 		contentIndex,

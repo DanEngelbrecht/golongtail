@@ -22,6 +22,12 @@ static void* OffsetPointer(void* pointer, size_t offset)
     return &((uint8_t*)pointer)[offset];
 }
 
+static int DisposeStoredBlockFromRaw(struct Longtail_StoredBlock* stored_block)
+{
+    Longtail_Free((void*)stored_block);
+    return 0;
+}
+
 static int CreateStoredBlockFromRaw(
     void* data,
     size_t data_size,
@@ -41,13 +47,14 @@ static int CreateStoredBlockFromRaw(
         Longtail_Free(block_data);
         return err;
     }
+    stored_block->Dispose = DisposeStoredBlockFromRaw;
     *out_stored_block = stored_block;
     return 0;
 }
 
 void Proxy_BlockStore_Dispose(void* context);
-int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block);
-int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block);
+int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
 int Proxy_GetIndex(void* context, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progressAPI, struct Longtail_ContentIndex** out_content_index);
 int Proxy_GetStoredBlockPath(void* context, uint64_t block_hash, char** out_path);
 void Proxy_Close(void* context);
@@ -65,16 +72,23 @@ static void BlockStoreAPIProxy_Dispose(struct Longtail_API* block_store_api)
     Longtail_Free(proxy);
 }
 
-static int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
+static int BlockStoreAPIProxy_PutStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StoredBlock* stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_PutStoredBlock(proxy->m_Context, stored_block);
+    return Proxy_PutStoredBlock(proxy->m_Context, stored_block, async_complete_api);
 }
 
-static int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+static int BlockStoreAPIProxy_GetStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t block_hash,
+    struct Longtail_StoredBlock** out_stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
     struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_GetStoredBlock(proxy->m_Context, block_hash, out_stored_block);
+    return Proxy_GetStoredBlock(proxy->m_Context, block_hash, out_stored_block, async_complete_api);
 }
 
 static int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
@@ -87,6 +101,11 @@ static int BlockStoreAPIProxy_GetStoredBlockPath(struct Longtail_BlockStoreAPI* 
 {
     struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
     return Proxy_GetStoredBlockPath(proxy->m_Context, block_hash, out_path);
+}
+
+static int AsyncComplete_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+	return async_complete_api->OnComplete(async_complete_api, err);
 }
 
 static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
@@ -184,14 +203,14 @@ static const char* GetPath(const uint32_t* name_offsets, const char* name_data, 
     return &name_data[name_offsets[index]];
 }
 
-static int BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block)
+static int BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
-    return block_store_api->PutStoredBlock(block_store_api, stored_block);
+    return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api);
 }
 
-static int BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block)
+static int BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
 {
-    return block_store_api->GetStoredBlock(block_store_api, block_hash, out_stored_block);
+    return block_store_api->GetStoredBlock(block_store_api, block_hash, out_stored_block, async_complete_api);
 }
 
 static int BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)

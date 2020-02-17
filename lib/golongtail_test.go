@@ -374,6 +374,9 @@ func (b *TestBlockStore) PutStoredBlock(
 
 func (b *TestBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock Longtail_StoredBlockPtr, asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
 	if storedBlock, ok := b.blocks[blockHash]; ok {
+		if outStoredBlock.cStoredBlockPtr == nil {
+			return 0
+		}
 		blockIndex := storedBlock.GetBlockIndex()
 		blockCopy, errno := CreateStoredBlock(
 			blockIndex.GetBlockHash(),

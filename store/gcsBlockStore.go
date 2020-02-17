@@ -99,7 +99,7 @@ func getBlockPath(basePath string, blockHash uint64) string {
 }
 
 // PutStoredBlock ...
-func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int {
+func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath("chunks", blockHash)
@@ -109,8 +109,7 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 	if err == storage.ErrObjectNotExist {
 		blockIndexBytes, err := lib.WriteBlockIndexToBuffer(storedBlock.GetBlockIndex())
 		if err != nil {
-			//return errors.Wrap(err, s.String()+"/"+key)
-			return lib.ENOMEM
+			return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 		}
 
 		blockData := storedBlock.GetChunksBlockData()
@@ -121,18 +120,18 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 		if err != nil {
 			objWriter.Close()
 			//		return errors.Wrap(err, s.String()+"/"+key)
-			return lib.EIO
+			return asyncCompleteAPI.OnComplete(lib.EIO)
 		}
 
 		err = objWriter.Close()
 		if err != nil {
 			//		return errors.Wrap(err, s.String()+"/"+key)
-			return lib.EIO
+			return asyncCompleteAPI.OnComplete(lib.EIO)
 		}
 
 		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 		if err != nil {
-			return lib.EIO
+			return asyncCompleteAPI.OnComplete(lib.EIO)
 		}
 	}
 
@@ -140,7 +139,7 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 	defer s.contentIndexMux.Unlock()
 
 	if _, ok := s.knownBlocks[blockHash]; ok {
-		return 0
+		return asyncCompleteAPI.OnComplete(0)
 	}
 
 	newBlocks := []lib.Longtail_BlockIndex{blockIndex}
@@ -149,54 +148,51 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock) int
 	//	}
 	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI, uint64(len(newBlocks)), newBlocks)
 	if err != nil {
-		return lib.ENOMEM
+		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}
 	defer addedContentIndex.Dispose()
 
 	newContentIndex, err := lib.MergeContentIndex(s.contentIndex, addedContentIndex)
 	if err != nil {
-		return lib.ENOMEM
+		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}
 	s.contentIndex.Dispose()
 	s.contentIndex = newContentIndex
 
 	s.knownBlocks[blockHash] = true
-	return 0
-}
-
-func (s *gcsBlockStore) HasStoredBlock(blockHash uint64) int {
-	s.contentIndexMux.Lock()
-	defer s.contentIndexMux.Unlock()
-	if _, ok := s.knownBlocks[blockHash]; ok {
-		return 0
-	}
-	return int(lib.ENOENT)
+	return asyncCompleteAPI.OnComplete(0)
 }
 
 // GetStoredBlock ...
-func (s *gcsBlockStore) GetStoredBlock(blockHash uint64) (lib.Longtail_StoredBlock, int) {
+func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock lib.Longtail_StoredBlockPtr, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
 	key := getBlockPath("chunks", blockHash)
 	ctx := context.Background()
 	objHandle := s.bucket.Object(key)
+	if !outStoredBlock.HasPtr() {
+		_, err := objHandle.Attrs(ctx)
+		if err == storage.ErrObjectNotExist {
+			return asyncCompleteAPI.OnComplete(lib.ENOENT)
+		}
+		return asyncCompleteAPI.OnComplete(0)
+	}
 	obj, err := objHandle.NewReader(ctx)
 	if err != nil {
-		//return nil, errors.Wrap(err, s.String()+"/"+key)
-		return lib.Longtail_StoredBlock{}, lib.ENOENT
+		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}
 	defer obj.Close()
 
 	storedBlockData, err := ioutil.ReadAll(obj)
 
 	if err != nil {
-		//		return nil, err
-		return lib.Longtail_StoredBlock{}, lib.EIO
+		return asyncCompleteAPI.OnComplete(lib.EIO)
 	}
 
 	storedBlock, err := lib.InitStoredBlockFromData(storedBlockData)
 	if err != nil {
-		return lib.Longtail_StoredBlock{}, lib.ENOMEM
+		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}
-	return storedBlock, 0
+	outStoredBlock.Set(storedBlock)
+	return asyncCompleteAPI.OnComplete(0)
 }
 
 // GetIndex ...

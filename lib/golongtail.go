@@ -69,6 +69,14 @@ func (storedBlock *Longtail_StoredBlock) GetPtr() Longtail_StoredBlockPtr {
 	return Longtail_StoredBlockPtr{cStoredBlockPtr: &storedBlock.cStoredBlock}
 }
 
+func (storedBlockPtr *Longtail_StoredBlockPtr) Set(storedBlock Longtail_StoredBlock) {
+	*storedBlockPtr.cStoredBlockPtr = storedBlock.cStoredBlock
+}
+
+func (storedBlockPtr *Longtail_StoredBlockPtr) HasPtr() bool {
+	return storedBlockPtr.cStoredBlockPtr != nil
+}
+
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncCompleteAPI) int
 	GetStoredBlock(blockHash uint64, outStoredBlock Longtail_StoredBlockPtr, asyncCompleteAPI Longtail_AsyncCompleteAPI) int

@@ -207,8 +207,9 @@ func upSyncVersion(
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
-	if err != nil {
+	remoteContentIndex, errno := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	if errno != 0 {
+		fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 		return err
 	}
 
@@ -351,8 +352,9 @@ func downSyncVersion(
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, err := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
-	if err != nil {
+	remoteContentIndex, errno := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	if errno != 0 {
+		fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 		return err
 	}
 

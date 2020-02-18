@@ -67,42 +67,38 @@ func un(s string, startTime time.Time) {
 	log.Printf("%s: elapsed %f secs\n", s, elapsed.Seconds())
 }
 
-func createBlobStoreForURI(uri string) (store.BlobStore, error) {
-	blobStoreURL, err := url.Parse(*storageURI)
-	if err == nil {
-		switch blobStoreURL.Scheme {
-		case "gs":
-			return store.NewGCSBlobStore(blobStoreURL)
-		case "s3":
-			return nil, fmt.Errorf("AWS storage not yet implemented")
-		case "abfs":
-			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
-		case "abfss":
-			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
-		case "file":
-			return store.NewFSBlobStore(blobStoreURL.Path[1:])
-		}
-	}
-	return store.NewFSBlobStore(uri)
+type managedBlockStore struct {
+	BlockStore    lib.BlockStoreAPI
+	BlockStoreAPI lib.Longtail_BlockStoreAPI
 }
 
-func createBlockStoreForURI(uri string, hashIdentifier uint32) (lib.Longtail_BlockStoreAPI, error) {
+func (blockStore *managedBlockStore) Dispose() {
+	blockStore.BlockStoreAPI.Dispose()
+	//	blockStore.BlockStore.Close()
+}
+
+func createBlockStoreForURI(uri string, hashIdentifier uint32) (managedBlockStore, error) {
 	blobStoreURL, err := url.Parse(*storageURI)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			return store.NewGCSBlockStore(blobStoreURL, hashIdentifier)
+			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, hashIdentifier)
+			if err != nil {
+				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
+			}
+			blockStoreAPI := lib.CreateBlockStoreAPI(gcsBlockStore)
+			return managedBlockStore{BlockStore: gcsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
 		case "s3":
-			return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("AWS storage not yet implemented")
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("AWS storage not yet implemented")
 		case "abfs":
-			return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen1 storage not yet implemented")
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen1 storage not yet implemented")
 		case "abfss":
-			return lib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			return lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:])}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		}
 	}
-	return lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
+	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:])}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 }
 
 const noCompressionType = uint32(0)
@@ -207,10 +203,9 @@ func upSyncVersion(
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, errno := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	remoteContentIndex, errno := indexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
 	if errno != 0 {
-		fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
-		return err
+		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 
 	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
@@ -277,7 +272,7 @@ func upSyncVersion(
 		defer writeContentProgress.Dispose()
 		err = lib.WriteContent(
 			fs,
-			indexStore,
+			indexStore.BlockStoreAPI,
 			jobs,
 			&writeContentProgress,
 			missingContentIndex,
@@ -347,15 +342,14 @@ func downSyncVersion(
 	}
 	defer localIndexStore.Dispose()
 
-	indexStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
+	indexStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
 	defer indexStore.Dispose()
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, errno := indexStore.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	remoteContentIndex, errno := remoteIndexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
 	if errno != 0 {
-		fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
-		return err
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 
 	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())

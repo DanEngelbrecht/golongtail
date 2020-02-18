@@ -61,6 +61,10 @@ type Longtail_AsyncCompleteAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncCompleteAPI
 }
 
+func (asyncCompleteAPI *Longtail_AsyncCompleteAPI) IsValid() bool {
+	return asyncCompleteAPI.cAsyncCompleteAPI != nil
+}
+
 type Longtail_StoredBlockPtr struct {
 	cStoredBlockPtr **C.struct_Longtail_StoredBlock
 }
@@ -1200,7 +1204,7 @@ func ChangeVersion(
 		cVersionFolderPath,
 		cRetainPermissions)
 	if errno != 0 {
-		return fmt.Errorf("ChangeVersion: C.Longtail_ChangeVersio(`%s`) failed with error %d", versionFolderPath, errno)
+		return fmt.Errorf("ChangeVersion: C.Longtail_ChangeVersion(`%s`) failed with error %d", versionFolderPath, errno)
 	}
 	return nil
 }

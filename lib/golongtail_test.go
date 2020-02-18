@@ -1,8 +1,10 @@
 package lib
 
 import (
+	"crypto/rand"
 	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 )
 
@@ -349,11 +351,14 @@ func TestFSBlockStore(t *testing.T) {
 type TestBlockStore struct {
 	blocks        map[uint64]Longtail_StoredBlock
 	blockStoreAPI Longtail_BlockStoreAPI
+	lock          sync.Mutex
 }
 
 func (b *TestBlockStore) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
 	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	if _, ok := b.blocks[blockHash]; ok {
@@ -372,7 +377,12 @@ func (b *TestBlockStore) PutStoredBlock(
 	return asyncCompleteAPI.OnComplete(errno)
 }
 
-func (b *TestBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock Longtail_StoredBlockPtr, asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
+func (b *TestBlockStore) GetStoredBlock(
+	blockHash uint64,
+	outStoredBlock Longtail_StoredBlockPtr,
+	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	if storedBlock, ok := b.blocks[blockHash]; ok {
 		if outStoredBlock.cStoredBlockPtr == nil {
 			return 0
@@ -393,7 +403,12 @@ func (b *TestBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock Longtai
 	return asyncCompleteAPI.OnComplete(ENOENT)
 }
 
-func (b *TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
+func (b *TestBlockStore) GetIndex(
+	defaultHashAPIIdentifier uint32,
+	jobAPI Longtail_JobAPI,
+	progress Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	blockCount := len(b.blocks)
 	blockIndexes := make([]Longtail_BlockIndex, blockCount)
 	arrayIndex := 0
@@ -412,6 +427,8 @@ func (b *TestBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longta
 }
 
 func (b *TestBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	return fmt.Sprintf("%v", blockHash), 0
 }
 
@@ -467,12 +484,77 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer contentIndex.Dispose()
 }
 
+func TestBlockStoreProxyFull(t *testing.T) {
+	storageAPI := createFilledStorage("content")
+	defer storageAPI.Dispose()
+	hashAPI := CreateBlake3HashAPI()
+	defer hashAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	defer jobAPI.Dispose()
+	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
+	blockStoreAPI := CreateBlockStoreAPI(testBlockStore)
+	defer blockStoreAPI.Dispose()
+	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	if err != nil {
+		t.Errorf("TestBlockStoreProxyFull() GetFilesRecursively() %q != %v", err, nil)
+	}
+	defer fileInfos.Dispose()
+	tags := make([]uint32, fileInfos.GetFileCount())
+	versionIndex, err := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		nil,
+		"content",
+		fileInfos.GetPaths(),
+		fileInfos.GetFileSizes(),
+		fileInfos.GetFilePermissions(),
+		tags,
+		32768)
+	if err != nil {
+		t.Errorf("TestBlockStoreProxyFull() CreateVersionIndex() %q != %v", err, nil)
+	}
+	defer versionIndex.Dispose()
+	contentIndex, err := CreateContentIndex(
+		hashAPI,
+		versionIndex.GetChunkHashes(),
+		versionIndex.GetChunkSizes(),
+		versionIndex.GetChunkTags(),
+		32768*2,
+		8)
+	if err != nil {
+		t.Errorf("TestBlockStoreProxyFull() CreateContentIndex() %q != %v", err, nil)
+	}
+	defer contentIndex.Dispose()
+	err = WriteContent(
+		storageAPI,
+		blockStoreAPI,
+		jobAPI,
+		nil,
+		contentIndex,
+		versionIndex,
+		"content")
+	if err != nil {
+		t.Errorf("TestBlockStoreProxyFull() WriteContent() %q != %v", err, nil)
+	}
+}
+
+func randomArray(size int) []byte {
+	r := make([]byte, size)
+	rand.Read(r)
+	return r
+}
+
 func createFilledStorage(rootPath string) Longtail_StorageAPI {
 	storageAPI := CreateInMemStorageAPI()
 	storageAPI.WriteToStorage(rootPath, "first_folder/my_file.txt", []byte("the content of my_file"))
 	storageAPI.WriteToStorage(rootPath, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
 	storageAPI.WriteToStorage(rootPath, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
 	storageAPI.WriteToStorage(rootPath, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
+	storageAPI.WriteToStorage(rootPath, "bin/small.bin", randomArray(8192))
+	storageAPI.WriteToStorage(rootPath, "bin/huge.bin", randomArray(65535*16))
+	storageAPI.WriteToStorage(rootPath, "bin/medium.bin", randomArray(32768))
+	storageAPI.WriteToStorage(rootPath, "bin/large.bin", randomArray(65535))
 	return storageAPI
 }
 
@@ -484,8 +566,8 @@ func TestGetFileRecursively(t *testing.T) {
 	}
 	defer fileInfos.Dispose()
 	fileCount := fileInfos.GetFileCount()
-	if fileCount != 14 {
-		t.Errorf("TestGetFileRecursively() GetFileCount() %d != %d", fileCount, 14)
+	if fileCount != 19 {
+		t.Errorf("TestGetFileRecursively() GetFileCount() %d != %d", fileCount, 19)
 	}
 	fileSizes := fileInfos.GetFileSizes()
 	if len(fileSizes) != int(fileCount) {

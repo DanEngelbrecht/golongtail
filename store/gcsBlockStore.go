@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -275,7 +276,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI uint32) (lib.BlockStoreAPI, err
 	//	backingStorage := lib.CreateFSStorageAPI()
 
 	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI} //, backingStorage: backingStorage}
-	s.workerCount = 2                                                                                                                             // runtime.NumCPU() * 4
+	s.workerCount = runtime.NumCPU() * 4
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*4)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*4)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*4)

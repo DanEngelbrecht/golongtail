@@ -77,7 +77,7 @@ func (blockStore *managedBlockStore) Dispose() {
 	//	blockStore.BlockStore.Close()
 }
 
-func createBlockStoreForURI(uri string, hashIdentifier uint32) (managedBlockStore, error) {
+func createBlockStoreForURI(uri string, hashIdentifier uint32, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
 	blobStoreURL, err := url.Parse(*storageURI)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -95,10 +95,16 @@ func createBlockStoreForURI(uri string, hashIdentifier uint32) (managedBlockStor
 		case "abfss":
 			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:])}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+			fsBlockStore, err := store.NewFSBlockStore(blobStoreURL.Path[1:], hashIdentifier, jobAPI)
+			if err != nil {
+				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
+			}
+			blockStoreAPI := lib.CreateBlockStoreAPI(fsBlockStore)
+			return managedBlockStore{BlockStore: fsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
+			//			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:])}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		}
 	}
-	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:])}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 }
 
 const noCompressionType = uint32(0)
@@ -195,7 +201,7 @@ func upSyncVersion(
 		return err
 	}
 
-	indexStore, err := createBlockStoreForURI(blobStoreURI, hashIdentifier)
+	indexStore, err := createBlockStoreForURI(blobStoreURI, hashIdentifier, jobs)
 	if err != nil {
 		return err
 	}
@@ -327,7 +333,7 @@ func downSyncVersion(
 		return err
 	}
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, hashIdentifier)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, hashIdentifier, jobs)
 	if err != nil {
 		return err
 	}
@@ -452,15 +458,15 @@ var (
 	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
+	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 				Default("blake3").
 				Enum("meow", "blake2", "blake3")
 
 	commandUpSync    = kingpin.Command("upsync", "Upload a folder")
-	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").String()
+	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").Required().String()
 	sourceIndexPath  = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath   = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
+	targetFilePath   = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").Required().String()
 	compression      = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
@@ -478,9 +484,9 @@ var (
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
-	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").String()
+	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").Required().String()
 	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").String()
+	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").Required().String()
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 )
 

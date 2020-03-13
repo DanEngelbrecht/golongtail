@@ -74,8 +74,8 @@ func NewFSBlockStore(path string, defaultHashAPI uint32, jobAPI lib.Longtail_Job
 	storageAPI := lib.CreateFSStorageAPI()
 	s.fsBlockStore = lib.CreateFSBlockStoreAPI(storageAPI, path)
 	s.workerCount = runtime.NumCPU() * 4
-	s.putBlockChan = make(chan fsPutBlockMessage, s.workerCount*4)
-	s.getBlockChan = make(chan fsGetBlockMessage, s.workerCount*4)
+	s.putBlockChan = make(chan fsPutBlockMessage, s.workerCount*4096)
+	s.getBlockChan = make(chan fsGetBlockMessage, s.workerCount*4096)
 	s.stopChan = make(chan fsStopMessage, s.workerCount)
 
 	for i := 0; i < s.workerCount; i++ {
@@ -89,11 +89,10 @@ func NewFSBlockStore(path string, defaultHashAPI uint32, jobAPI lib.Longtail_Job
 // PutStoredBlock ...
 func (s *fsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
 	if asyncCompleteAPI.IsValid() {
-		if len(s.putBlockChan) == cap(s.putBlockChan) {
-			return asyncCompleteAPI.OnComplete(lib.EBUSY)
+		if len(s.putBlockChan) < cap(s.putBlockChan) {
+			s.putBlockChan <- fsPutBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
+			return 0
 		}
-		s.putBlockChan <- fsPutBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
-		return 0
 	}
 	return s.fsBlockStore.PutStoredBlock(storedBlock, asyncCompleteAPI)
 }
@@ -101,18 +100,17 @@ func (s *fsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyn
 // GetStoredBlock ...
 func (s *fsBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock lib.Longtail_StoredBlockPtr, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
 	if asyncCompleteAPI.IsValid() {
-		if len(s.getBlockChan) == cap(s.getBlockChan) {
-			return asyncCompleteAPI.OnComplete(lib.EBUSY)
+		if len(s.getBlockChan) < cap(s.getBlockChan) {
+			s.getBlockChan <- fsGetBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
+			return 0
 		}
-		s.getBlockChan <- fsGetBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
-		return 0
 	}
 	return s.fsBlockStore.GetStoredBlock(blockHash, outStoredBlock, asyncCompleteAPI)
 }
 
 // GetIndex ...
 func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI) (lib.Longtail_ContentIndex, int) {
-	return s.GetIndex(s.defaultHashAPI, s.jobAPI, progress)
+	return s.fsBlockStore.GetIndex(s.defaultHashAPI, s.jobAPI, &progress)
 }
 
 // GetStoredBlockPath ...

@@ -277,9 +277,9 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI uint32) (lib.BlockStoreAPI, err
 
 	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI} //, backingStorage: backingStorage}
 	s.workerCount = runtime.NumCPU() * 4
-	s.putBlockChan = make(chan putBlockMessage, s.workerCount*4)
-	s.getBlockChan = make(chan getBlockMessage, s.workerCount*4)
-	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*4)
+	s.putBlockChan = make(chan putBlockMessage, s.workerCount*4096)
+	s.getBlockChan = make(chan getBlockMessage, s.workerCount*4096)
+	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*4096)
 	s.queryContentIndexChan = make(chan queryContentIndexMessage)
 	s.responseContentIndexChan = make(chan responseContentIndexMessage)
 	s.stopChan = make(chan stopMessage, s.workerCount)
@@ -305,11 +305,10 @@ func getBlockPath(basePath string, blockHash uint64) string {
 // PutStoredBlock ...
 func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
 	if asyncCompleteAPI.IsValid() {
-		if len(s.putBlockChan) == cap(s.putBlockChan) {
-			return asyncCompleteAPI.OnComplete(lib.EBUSY)
+		if len(s.putBlockChan) < cap(s.putBlockChan) {
+			s.putBlockChan <- putBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
+			return 0
 		}
-		s.putBlockChan <- putBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
-		return 0
 	}
 	return PutStoredBlock(context.Background(), s, s.defaultBucket, s.contentIndexChan, storedBlock, asyncCompleteAPI)
 }
@@ -317,11 +316,10 @@ func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asy
 // GetStoredBlock ...
 func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock lib.Longtail_StoredBlockPtr, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
 	if asyncCompleteAPI.IsValid() {
-		if len(s.getBlockChan) == cap(s.getBlockChan) {
-			return asyncCompleteAPI.OnComplete(lib.EBUSY)
+		if len(s.getBlockChan) < cap(s.getBlockChan) {
+			s.getBlockChan <- getBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
+			return 0
 		}
-		s.getBlockChan <- getBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
-		return 0
 	}
 	return GetStoredBlock(context.Background(), s, s.defaultBucket, blockHash, outStoredBlock, asyncCompleteAPI)
 }

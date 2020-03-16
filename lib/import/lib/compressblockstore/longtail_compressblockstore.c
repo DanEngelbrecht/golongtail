@@ -63,6 +63,7 @@ static int CompressBlock(
     if (compressed_stored_block->m_BlockIndex == 0)
     {
         // TODO: Log
+        Longtail_Free(compressed_stored_block);
         return EINVAL;
     }
 
@@ -92,6 +93,27 @@ static int CompressBlock(
     return 0;
 }
 
+struct OnPutBackingStoreAsync_API
+{
+    struct Longtail_AsyncCompleteAPI m_API;
+    struct Longtail_StoredBlock* m_CompressedBlock;
+    struct Longtail_AsyncCompleteAPI* m_AsyncCompleteAPI;
+};
+
+static int OnPutBackingStoreComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "OnPuttBackingStoreComplete(%p, %d)", async_complete_api, err)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL)
+    struct OnPutBackingStoreAsync_API* async_block_store = (struct OnPutBackingStoreAsync_API*)async_complete_api;
+    if (async_block_store->m_CompressedBlock)
+    {
+        async_block_store->m_CompressedBlock->Dispose(async_block_store->m_CompressedBlock);
+    }
+    async_block_store->m_AsyncCompleteAPI->OnComplete(async_block_store->m_AsyncCompleteAPI, err);
+    Longtail_Free(async_block_store);
+    return 0;
+}
+
 static int CompressBlockStore_PutStoredBlock(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_StoredBlock* stored_block,
@@ -100,6 +122,7 @@ static int CompressBlockStore_PutStoredBlock(
     LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_DEBUG, "CompressBlockStore_PutStoredBlock(%p, %p, %p)", block_store_api, stored_block, async_complete_api)
     LONGTAIL_FATAL_ASSERT(block_store_api, return EINVAL)
     LONGTAIL_FATAL_ASSERT(stored_block, return EINVAL)
+    LONGTAIL_FATAL_ASSERT(async_complete_api, return EINVAL);
 
     struct CompressBlockStoreAPI* block_store = (struct CompressBlockStoreAPI*)block_store_api;
     struct Longtail_StoredBlock* compressed_stored_block;
@@ -108,17 +131,21 @@ static int CompressBlockStore_PutStoredBlock(
     {
         return err;
     }
-    if (compressed_stored_block)
+    struct Longtail_StoredBlock* to_store = compressed_stored_block ? compressed_stored_block : stored_block;
+
+    struct OnPutBackingStoreAsync_API* on_put_backing_store_async_api = (struct OnPutBackingStoreAsync_API*)Longtail_Alloc(sizeof(struct OnPutBackingStoreAsync_API));
+    on_put_backing_store_async_api->m_API.OnComplete = OnPutBackingStoreComplete;
+    on_put_backing_store_async_api->m_API.m_API.Dispose = 0;
+    on_put_backing_store_async_api->m_CompressedBlock = compressed_stored_block;
+    on_put_backing_store_async_api->m_AsyncCompleteAPI = async_complete_api;
+    err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, to_store, &on_put_backing_store_async_api->m_API);
+    if (err)
     {
-        err = block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, compressed_stored_block, async_complete_api);
+        Longtail_Free(on_put_backing_store_async_api);
         compressed_stored_block->Dispose(compressed_stored_block);
-        if (err)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Failed to store block in backing store, %d", err)
-        }
-        return err;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "CompressionBlockStore_PutStoredBlock: Failed to store block in backing store, %d", err)
     }
-    return block_store->m_BackingBlockStore->PutStoredBlock(block_store->m_BackingBlockStore, stored_block, async_complete_api);
+    return err;
 }
 
 static int DecompressBlock(

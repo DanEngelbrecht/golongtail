@@ -27,7 +27,7 @@ func (l *loggerData) OnLog(level int, message string) {
 	case 2:
 		log.Printf("WARNING: %s", message)
 	case 3:
-		log.Fatal(message)
+		log.Printf("ERROR: %s", message)
 	}
 }
 

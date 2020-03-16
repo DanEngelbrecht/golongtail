@@ -49,6 +49,10 @@ type ProgressAPI interface {
 	OnProgress(totalCount uint32, doneCount uint32)
 }
 
+type AsyncCompleteAPI interface {
+	OnComplete(err int) int
+}
+
 type Assert interface {
 	OnAssert(expression string, file string, line int)
 }
@@ -624,6 +628,11 @@ func (progressAPI *Longtail_ProgressAPI) Dispose() {
 	C.Longtail_DisposeAPI(&progressAPI.cProgressAPI.m_API)
 }
 
+// Longtail_AsyncCompleteAPI.Dispose() ...
+func (AsyncCompleteAPI *Longtail_AsyncCompleteAPI) Dispose() {
+	C.Longtail_DisposeAPI(&AsyncCompleteAPI.cAsyncCompleteAPI.m_API)
+}
+
 // Longtail_JobAPI.Dispose() ...
 func (jobAPI *Longtail_JobAPI) Dispose() {
 	C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
@@ -981,14 +990,27 @@ func ReadContentIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Con
 // CreateProgressAPI ...
 func CreateProgressAPI(progress ProgressAPI) Longtail_ProgressAPI {
 	cContext := SavePointer(progress)
-	blockStoreAPIProxy := C.CreateProgressProxyAPI(cContext)
-	return Longtail_ProgressAPI{cProgressAPI: blockStoreAPIProxy}
+	progressAPIProxy := C.CreateProgressProxyAPI(cContext)
+	return Longtail_ProgressAPI{cProgressAPI: progressAPIProxy}
 }
 
 //export ProgressAPIProxyOnProgress
 func ProgressAPIProxyOnProgress(context unsafe.Pointer, total_count C.uint32_t, done_count C.uint32_t) {
 	progress := RestorePointer(context).(ProgressAPI)
 	progress.OnProgress(uint32(total_count), uint32(done_count))
+}
+
+// CreateAsyncCompleteAPI ...
+func CreateAsyncCompleteAPI(asyncComplete AsyncCompleteAPI) Longtail_AsyncCompleteAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncCompleteProxyAPI(cContext)
+	return Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncCompleteAPIProxyOnComplete
+func AsyncCompleteAPIProxyOnComplete(context unsafe.Pointer, err C.int) C.int {
+	asyncComplete := RestorePointer(context).(AsyncCompleteAPI)
+	return C.int(asyncComplete.OnComplete(int(err)))
 }
 
 // WriteContent ...

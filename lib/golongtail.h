@@ -153,6 +153,36 @@ static struct Longtail_ProgressAPI* CreateProgressProxyAPI(void* context)
     return &api->m_API;
 }
 
+
+struct AsyncCompleteAPIProxy
+{
+    struct Longtail_AsyncCompleteAPI m_API;
+    void* m_Context;
+};
+
+int AsyncCompleteAPIProxyOnComplete(void* context, int err);
+
+static int AsyncCompleteAPIProxy_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+    struct AsyncCompleteAPIProxy* proxy = (struct AsyncCompleteAPIProxy*)async_complete_api;
+    return AsyncCompleteAPIProxyOnComplete(proxy->m_Context, err);
+}
+
+static void AsyncCompleteAPIProxy_Dispose(struct Longtail_API* api)
+{
+    struct AsyncCompleteAPIProxy* proxy = (struct AsyncCompleteAPIProxy*)api;
+    Longtail_Free(proxy);
+}
+
+static struct Longtail_AsyncCompleteAPI* CreateAsyncCompleteProxyAPI(void* context)
+{
+    struct AsyncCompleteAPIProxy* api    = (struct AsyncCompleteAPIProxy*)Longtail_Alloc(sizeof(struct AsyncCompleteAPIProxy));
+    api->m_API.m_API.Dispose        = AsyncCompleteAPIProxy_Dispose;
+    api->m_API.OnComplete           = AsyncCompleteAPIProxy_OnComplete;
+    api->m_Context = context;
+    return &api->m_API;
+}
+
 void logProxy(void* context, int level, char* str);
 
 void assertProxy(char* expression, char* file, int line);

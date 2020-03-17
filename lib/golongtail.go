@@ -924,13 +924,17 @@ func CreateContentIndex(
 
 func CreateContentIndexFromBlocks(
 	hashIdentifier uint32,
-	blockCount uint64,
 	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, error) {
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
+	blockCount := len(blockIndexes)
 	for index, blockIndex := range blockIndexes {
 		rawBlockIndexes[index] = blockIndex.cBlockIndex
 	}
-	cBlockIndexes := unsafe.Pointer(&rawBlockIndexes[0])
+	var cBlockIndexes unsafe.Pointer
+	if blockCount > 0 {
+		cBlockIndexes = unsafe.Pointer(&rawBlockIndexes[0])
+	}
+
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_CreateContentIndexFromBlocks(
 		C.uint32_t(hashIdentifier),
@@ -1023,7 +1027,8 @@ func WriteContent(
 	targetBlockStoreAPI Longtail_BlockStoreAPI,
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
-	contentIndex Longtail_ContentIndex,
+	block_store_content_index Longtail_ContentIndex,
+	versionContentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string) error {
 
@@ -1040,7 +1045,8 @@ func WriteContent(
 		targetBlockStoreAPI.cBlockStoreAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
-		contentIndex.cContentIndex,
+		block_store_content_index.cContentIndex,
+		versionContentIndex.cContentIndex,
 		versionIndex.cVersionIndex,
 		cVersionFolderPath)
 	if errno != 0 {

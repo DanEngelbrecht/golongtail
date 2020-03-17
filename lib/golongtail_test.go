@@ -285,15 +285,18 @@ func TestFSBlockStore(t *testing.T) {
 	storedBlock1Index := block1.GetBlockIndex()
 	storedBlock1Hash := storedBlock1Index.GetBlockHash()
 	var storedBlock1 Longtail_StoredBlock
-	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, storedBlock1.GetPtr(), Longtail_AsyncCompleteAPI{})
-	if errno != ENOENT {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %d == %d", errno, ENOENT)
+	completion_api := &testCompletionAPI{}
+	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, storedBlock1.GetPtr(), CreateAsyncCompleteAPI(completion_api))
+	if errno != 0 {
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %d == %d", errno, 0)
+	}
+	if completion_api.err != ENOENT {
+		t.Errorf("TestFSBlockStore() GetStoredBlock::OnComplete() %d == %d", completion_api.err, ENOENT)
 	}
 	if storedBlock1.cStoredBlock != nil {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %p != %p", storedBlock1, Longtail_StoredBlock{cStoredBlock: nil})
 	}
 
-	completion_api := &testCompletionAPI{}
 	errno = blockStoreAPI.PutStoredBlock(block1, CreateAsyncCompleteAPI(completion_api))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() PutStoredBlock() %d != %d", errno, 0)
@@ -301,9 +304,12 @@ func TestFSBlockStore(t *testing.T) {
 	if completion_api.err != 0 {
 		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", completion_api.err, 0)
 	}
-	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, storedBlock1.GetPtr(), Longtail_AsyncCompleteAPI{})
+	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, storedBlock1.GetPtr(), CreateAsyncCompleteAPI(completion_api))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %d != %d", errno, 0)
+	}
+	if completion_api.err != 0 {
+		t.Errorf("TestFSBlockStore() GetStoredBlock::OnComplete() %d != %d", completion_api.err, 0)
 	}
 	defer storedBlock1.Dispose()
 	validateStoredBlock(t, storedBlock1)
@@ -319,9 +325,12 @@ func TestFSBlockStore(t *testing.T) {
 	storedBlock2Index := block2.GetBlockIndex()
 	storedBlock2Hash := storedBlock2Index.GetBlockHash()
 	var storedBlock2 Longtail_StoredBlock
-	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, storedBlock2.GetPtr(), Longtail_AsyncCompleteAPI{})
+	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, storedBlock2.GetPtr(), CreateAsyncCompleteAPI(completion_api))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %d != %d", errno, 0)
+	}
+	if completion_api.err != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", completion_api.err, 0)
 	}
 	expected := Longtail_StoredBlock{}
 	if storedBlock2.cStoredBlock == nil {
@@ -339,17 +348,23 @@ func TestFSBlockStore(t *testing.T) {
 	storedBlock3Index := block3.GetBlockIndex()
 	storedBlock3Hash := storedBlock3Index.GetBlockHash()
 	var storedBlock3 Longtail_StoredBlock
-	errno = blockStoreAPI.GetStoredBlock(storedBlock3Hash, storedBlock3.GetPtr(), Longtail_AsyncCompleteAPI{})
+	errno = blockStoreAPI.GetStoredBlock(storedBlock3Hash, storedBlock3.GetPtr(), CreateAsyncCompleteAPI(completion_api))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %d != %d", errno, 0)
+	}
+	if completion_api.err != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", completion_api.err, 0)
 	}
 	defer storedBlock3.Dispose()
 	validateStoredBlock(t, storedBlock3)
 
 	var storedBlock2Again Longtail_StoredBlock
-	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, storedBlock2Again.GetPtr(), Longtail_AsyncCompleteAPI{})
+	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, storedBlock2Again.GetPtr(), CreateAsyncCompleteAPI(completion_api))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() GetStoredBlock() %d != %d", errno, 0)
+	}
+	if completion_api.err != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", completion_api.err, 0)
 	}
 	defer storedBlock2.Dispose()
 	validateStoredBlock(t, storedBlock2)
@@ -437,7 +452,6 @@ func (b *TestBlockStore) GetIndex(
 	}
 	cIndex, err := CreateContentIndexFromBlocks(
 		defaultHashAPIIdentifier,
-		uint64(len(b.blocks)),
 		blockIndexes)
 	if err != nil {
 		return Longtail_ContentIndex{cContentIndex: nil}, ENOMEM
@@ -482,9 +496,12 @@ func TestBlockStoreProxy(t *testing.T) {
 	}
 	storedBlockIndex := storedBlock.GetBlockIndex()
 	var getBlock Longtail_StoredBlock
-	errno = blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash(), getBlock.GetPtr(), Longtail_AsyncCompleteAPI{})
+	errno = blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash(), getBlock.GetPtr(), CreateAsyncCompleteAPI(completion_api))
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %d!= %d", errno, 0)
+	}
+	if completion_api.err != 0 {
+		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", completion_api.err, 0)
 	}
 	defer getBlock.Dispose()
 	validateStoredBlock(t, getBlock)
@@ -550,11 +567,17 @@ func TestBlockStoreProxyFull(t *testing.T) {
 		t.Errorf("TestBlockStoreProxyFull() CreateContentIndex() %q != %v", err, nil)
 	}
 	defer contentIndex.Dispose()
+	blockStoreContentIndex, errno := blockStoreAPI.GetIndex(hashAPI.GetIdentifier(), jobAPI, nil)
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetIndex() %d != %d", errno, 0)
+	}
+	defer blockStoreContentIndex.Dispose()
 	err = WriteContent(
 		storageAPI,
 		blockStoreAPI,
 		jobAPI,
 		nil,
+		blockStoreContentIndex,
 		contentIndex,
 		versionIndex,
 		"content")
@@ -721,11 +744,17 @@ func TestRewriteVersion(t *testing.T) {
 	compressionRegistry.Dispose()
 	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
+	blockStoreContentIndex, errno := blockStorageAPI.GetIndex(hashAPI.GetIdentifier(), jobAPI, nil)
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetIndex() %d != %d", errno, 0)
+	}
+	defer blockStoreContentIndex.Dispose()
 	err = WriteContent(
 		storageAPI,
 		blockStorageAPI,
 		jobAPI,
 		&writeContentProgress,
+		blockStoreContentIndex,
 		contentIndex,
 		versionIndex,
 		"content")

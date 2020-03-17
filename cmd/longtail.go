@@ -282,11 +282,13 @@ func upSyncVersion(
 	if missingContentIndex.GetBlockCount() > 0 {
 		writeContentProgress := lib.CreateProgressAPI(&progressData{task: "Writing content blocks"})
 		defer writeContentProgress.Dispose()
+
 		err = lib.WriteContent(
 			fs,
 			indexStore.BlockStoreAPI,
 			jobs,
 			&writeContentProgress,
+			remoteContentIndex,
 			missingContentIndex,
 			vindex,
 			sourceFolderPath)

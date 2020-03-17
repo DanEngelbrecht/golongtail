@@ -108,7 +108,7 @@ func putStoredBlock(
 	}
 
 	newBlocks := []lib.Longtail_BlockIndex{blockIndex}
-	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), uint64(len(newBlocks)), newBlocks)
+	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), newBlocks)
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}

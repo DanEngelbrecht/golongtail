@@ -48,7 +48,7 @@ type gcsBlockStore struct {
 	defaultClient *storage.Client
 	defaultBucket *storage.BucketHandle
 
-	defaultHashAPI uint32
+	defaultHashAPI lib.Longtail_HashAPI
 	workerCount    int
 
 	putBlockChan             chan putBlockMessage
@@ -61,30 +61,12 @@ type gcsBlockStore struct {
 	workerWaitGroup sync.WaitGroup
 }
 
-func readContentIndex(storageAPI lib.Longtail_StorageAPI) (lib.Longtail_ContentIndex, int) {
-	contentIndex, err := lib.ReadContentIndex(storageAPI, "fake_storage/store.lci")
-	if err == nil {
-		return contentIndex, 0
-	} else {
-		hashAPI := lib.CreateBlake3HashAPI()
-		defer hashAPI.Dispose()
-		contentIndex, _ := lib.CreateContentIndex(
-			hashAPI,
-			[]uint64{},
-			[]uint32{},
-			[]uint32{},
-			32768,
-			65536)
-		return contentIndex, 0
-	}
-}
-
 // String() ...
 func (s *gcsBlockStore) String() string {
 	return s.Location
 }
 
-func PutStoredBlock(
+func putStoredBlock(
 	ctx context.Context,
 	s *gcsBlockStore,
 	bucket *storage.BucketHandle,
@@ -126,7 +108,7 @@ func PutStoredBlock(
 	}
 
 	newBlocks := []lib.Longtail_BlockIndex{blockIndex}
-	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI, uint64(len(newBlocks)), newBlocks)
+	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), uint64(len(newBlocks)), newBlocks)
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}
@@ -134,7 +116,7 @@ func PutStoredBlock(
 	return asyncCompleteAPI.OnComplete(0)
 }
 
-func GetStoredBlock(
+func getStoredBlock(
 	ctx context.Context,
 	s *gcsBlockStore,
 	bucket *storage.BucketHandle,
@@ -144,13 +126,6 @@ func GetStoredBlock(
 
 	key := getBlockPath("chunks", blockHash)
 	objHandle := bucket.Object(key)
-	if !outStoredBlock.HasPtr() {
-		_, err := objHandle.Attrs(ctx)
-		if err == storage.ErrObjectNotExist {
-			return asyncCompleteAPI.OnComplete(lib.ENOENT)
-		}
-		return asyncCompleteAPI.OnComplete(0)
-	}
 	obj, err := objHandle.NewReader(ctx)
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
@@ -189,14 +164,14 @@ func gcsWorker(
 	for true {
 		select {
 		case putMsg := <-putBlockMessages:
-			errno := PutStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock, putMsg.asyncCompleteAPI)
+			errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock, putMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: PutStoredBlock returned: %d", errno)
+				log.Printf("WARNING: putStoredBlock returned: %d", errno)
 			}
 		case getMsg := <-getBlockMessages:
-			errno := GetStoredBlock(ctx, s, bucket, getMsg.blockHash, getMsg.outStoredBlock, getMsg.asyncCompleteAPI)
+			errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash, getMsg.outStoredBlock, getMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
+				log.Printf("WARNING: getStoredBlock returned: %d", errno)
 			}
 		case _ = <-stopMessages:
 			s.workerWaitGroup.Done()
@@ -207,28 +182,133 @@ func gcsWorker(
 	return nil
 }
 
+func updateRemoteContentIndex(
+	ctx context.Context,
+	bucket *storage.BucketHandle,
+	addedContentIndex lib.Longtail_ContentIndex) error {
+	storeBlob, err := lib.WriteContentIndexToBuffer(addedContentIndex)
+	if err != nil {
+		return err
+	}
+	objHandle := bucket.Object("store.lci")
+	for {
+		writeCondition := storage.Conditions{DoesNotExist: true}
+		objAttrs, _ := objHandle.Attrs(ctx)
+		if objAttrs != nil {
+			writeCondition = storage.Conditions{GenerationMatch: objAttrs.Generation}
+			reader, err := objHandle.If(writeCondition).NewReader(ctx)
+			if err != nil {
+				return err
+			}
+			if reader == nil {
+				continue
+			}
+			blob, err := ioutil.ReadAll(reader)
+			reader.Close()
+			if err != nil {
+				return err
+			}
+
+			remoteContentIndex, err := lib.ReadContentIndexFromBuffer(blob)
+			if err != nil {
+				return err
+			}
+			defer remoteContentIndex.Dispose()
+			mergedContentIndex, err := lib.MergeContentIndex(remoteContentIndex, addedContentIndex)
+			if err != nil {
+				return err
+			}
+			defer mergedContentIndex.Dispose()
+
+			storeBlob, err = lib.WriteContentIndexToBuffer(mergedContentIndex)
+			if err != nil {
+				return err
+			}
+		}
+		writer := objHandle.If(writeCondition).NewWriter(ctx)
+		if writer == nil {
+			continue
+		}
+		_, err = writer.Write(storeBlob)
+		if err != nil {
+			writer.CloseWithError(err)
+			return err
+		}
+		writer.Close()
+		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
+		if err != nil {
+			return err
+		}
+		break
+	}
+	return nil
+}
+
 func contentIndexWorker(
+	ctx context.Context,
 	s *gcsBlockStore,
+	u *url.URL,
 	contentIndexMessages <-chan contentIndexMessage,
 	queryContentIndexMessages <-chan queryContentIndexMessage,
 	responseContentIndexMessages chan<- responseContentIndexMessage,
 	stopMessages <-chan stopMessage) error {
-	backingStorage := lib.CreateFSStorageAPI()
-	defer backingStorage.Dispose()
-	contentIndex, errno := readContentIndex(backingStorage)
-	if errno != 0 {
-		log.Printf("WARNING: Failed to read store content index: %d", errno)
+
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return errors.Wrap(err, u.String())
 	}
-	contentIndexChanged := false
+	bucketName := u.Host
+	bucket := client.Bucket(bucketName)
+
+	var contentIndex lib.Longtail_ContentIndex
+
+	objHandle := bucket.Object("store.lci")
+	obj, err := objHandle.NewReader(ctx)
+	if err == nil {
+		defer obj.Close()
+		storedContentIndexData, err := ioutil.ReadAll(obj)
+		if err == nil {
+			contentIndex, err = lib.ReadContentIndexFromBuffer(storedContentIndexData)
+		}
+	}
+
+	if err != nil {
+		hashAPI := lib.CreateBlake3HashAPI()
+		defer hashAPI.Dispose()
+		contentIndex, err = lib.CreateContentIndex(
+			s.defaultHashAPI,
+			[]uint64{},
+			[]uint32{},
+			[]uint32{},
+			32768,
+			65536)
+		if err != nil {
+			return err
+		}
+	}
+
+	var addedContentIndex lib.Longtail_ContentIndex
+
+	defer contentIndex.Dispose()
+	defer addedContentIndex.Dispose()
+
 	for true {
 		select {
 		case contentIndexMsg := <-contentIndexMessages:
 			newContentIndex, err := lib.MergeContentIndex(contentIndex, contentIndexMsg.contentIndex)
-			contentIndexMsg.contentIndex.Dispose()
 			if err == nil {
 				contentIndex.Dispose()
 				contentIndex = newContentIndex
-				contentIndexChanged = true
+			}
+			if !addedContentIndex.IsValid() {
+				addedContentIndex = contentIndexMsg.contentIndex
+			} else {
+				newAddedContentIndex, err := lib.MergeContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
+				if err == nil {
+					addedContentIndex.Dispose()
+					addedContentIndex = newAddedContentIndex
+				}
+				contentIndexMsg.contentIndex.Dispose()
 			}
 		case _ = <-queryContentIndexMessages:
 			{
@@ -243,8 +323,8 @@ func contentIndexWorker(
 				responseContentIndexMessages <- responseContentIndexMsg
 			}
 		case _ = <-stopMessages:
-			if contentIndexChanged {
-				err := lib.WriteContentIndex(backingStorage, contentIndex, "fake_storage/store.lci")
+			if addedContentIndex.IsValid() {
+				err := updateRemoteContentIndex(ctx, bucket, addedContentIndex)
 				if err != nil {
 					log.Printf("WARNING: Failed to write store content index: %q", err)
 				}
@@ -258,7 +338,7 @@ func contentIndexWorker(
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL, defaultHashAPI uint32) (lib.BlockStoreAPI, error) {
+func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.BlockStoreAPI, error) {
 	//	var err error
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
@@ -277,14 +357,14 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI uint32) (lib.BlockStoreAPI, err
 
 	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI} //, backingStorage: backingStorage}
 	s.workerCount = runtime.NumCPU() * 4
-	s.putBlockChan = make(chan putBlockMessage, s.workerCount*4096)
-	s.getBlockChan = make(chan getBlockMessage, s.workerCount*4096)
-	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*4096)
+	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
+	s.getBlockChan = make(chan getBlockMessage, s.workerCount*8)
+	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*8)
 	s.queryContentIndexChan = make(chan queryContentIndexMessage)
 	s.responseContentIndexChan = make(chan responseContentIndexMessage)
 	s.stopChan = make(chan stopMessage, s.workerCount)
 
-	go contentIndexWorker(s, s.contentIndexChan, s.queryContentIndexChan, s.responseContentIndexChan, s.stopChan)
+	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.queryContentIndexChan, s.responseContentIndexChan, s.stopChan)
 	s.workerWaitGroup.Add(1)
 	for i := 0; i < s.workerCount; i++ {
 		go gcsWorker(ctx, s, u, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.stopChan)
@@ -304,24 +384,14 @@ func getBlockPath(basePath string, blockHash uint64) string {
 
 // PutStoredBlock ...
 func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
-	if asyncCompleteAPI.IsValid() {
-		if len(s.putBlockChan) < cap(s.putBlockChan) {
-			s.putBlockChan <- putBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
-			return 0
-		}
-	}
-	return PutStoredBlock(context.Background(), s, s.defaultBucket, s.contentIndexChan, storedBlock, asyncCompleteAPI)
+	s.putBlockChan <- putBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
+	return 0
 }
 
 // GetStoredBlock ...
 func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock lib.Longtail_StoredBlockPtr, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
-	if asyncCompleteAPI.IsValid() {
-		if len(s.getBlockChan) < cap(s.getBlockChan) {
-			s.getBlockChan <- getBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
-			return 0
-		}
-	}
-	return GetStoredBlock(context.Background(), s, s.defaultBucket, blockHash, outStoredBlock, asyncCompleteAPI)
+	s.getBlockChan <- getBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
+	return 0
 }
 
 // GetIndex ...

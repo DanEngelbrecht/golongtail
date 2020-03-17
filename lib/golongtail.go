@@ -292,6 +292,10 @@ func (fileInfos *Longtail_FileInfos) GetPaths() Longtail_Paths {
 	return Longtail_Paths{cPaths: &fileInfos.cFileInfos.m_Paths}
 }
 
+func (contentIndex *Longtail_ContentIndex) IsValid() bool {
+	return contentIndex.cContentIndex != nil
+}
+
 func (contentIndex *Longtail_ContentIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(contentIndex.cContentIndex))
 }
@@ -305,7 +309,7 @@ func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
 }
 
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
-	return uint32(C.Hash_GetIdentifier(hashAPI.cHashAPI))
+	return uint32(C.HashAPI_GetIdentifier(hashAPI.cHashAPI))
 }
 
 func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {

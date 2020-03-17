@@ -77,12 +77,12 @@ func (blockStore *managedBlockStore) Dispose() {
 	//	blockStore.BlockStore.Close()
 }
 
-func createBlockStoreForURI(uri string, hashIdentifier uint32, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
+func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
 	blobStoreURL, err := url.Parse(*storageURI)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, hashIdentifier)
+			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, defaultHashAPI)
 			if err != nil {
 				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
 			}
@@ -95,7 +95,7 @@ func createBlockStoreForURI(uri string, hashIdentifier uint32, jobAPI lib.Longta
 		case "abfss":
 			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			fsBlockStore, err := store.NewFSBlockStore(blobStoreURL.Path[1:], hashIdentifier, jobAPI)
+			fsBlockStore, err := store.NewFSBlockStore(blobStoreURL.Path[1:], defaultHashAPI.GetIdentifier(), jobAPI)
 			if err != nil {
 				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
 			}
@@ -201,7 +201,13 @@ func upSyncVersion(
 		return err
 	}
 
-	indexStore, err := createBlockStoreForURI(blobStoreURI, hashIdentifier, jobs)
+	defaultHashAPI, err := createHashAPIFromIdentifier(hashIdentifier)
+	if err != nil {
+		return err
+	}
+	defer defaultHashAPI.Dispose()
+
+	indexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
 	if err != nil {
 		return err
 	}
@@ -333,7 +339,13 @@ func downSyncVersion(
 		return err
 	}
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, hashIdentifier, jobs)
+	defaultHashAPI, err := createHashAPIFromIdentifier(hashIdentifier)
+	if err != nil {
+		return err
+	}
+	defer defaultHashAPI.Dispose()
+
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
 	if err != nil {
 		return err
 	}

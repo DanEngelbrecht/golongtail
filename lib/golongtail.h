@@ -275,6 +275,11 @@ static void DisposeStoredBlock(struct Longtail_StoredBlock* stored_block)
     }
 }
 
+static uint32_t HashAPI_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return hash_api->GetIdentifier(hash_api);
+}
+
 #define  LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0'))
 #define  LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1'))
 #define  LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2'))

@@ -300,6 +300,7 @@ func upSyncVersion(
 	localFS := lib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
+	// TODO: Should store version index using uri!
 	err = lib.WriteVersionIndex(localFS, vindex, targetFilePath)
 	if err != nil {
 		return err
@@ -385,6 +386,7 @@ func downSyncVersion(
 	//		return err
 	//	}
 	//	remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(remoteVersionBlob)
+	// TODO: Should retrieve version index using uri!
 	remoteVersionIndex, err = lib.ReadVersionIndex(localFS, sourceFilePath)
 	if err != nil {
 		return err
@@ -480,7 +482,7 @@ var (
 	commandUpSync    = kingpin.Command("upsync", "Upload a folder")
 	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").Required().String()
 	sourceIndexPath  = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath   = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").Required().String()
+	targetFilePath   = commandUpSync.Flag("target-path", "Target file uri").Required().String()
 	compression      = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
@@ -500,7 +502,7 @@ var (
 	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").Required().String()
 	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").Required().String()
+	sourceFilePath      = commandDownSync.Flag("source-path", "Source file uri").Required().String()
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 )
 

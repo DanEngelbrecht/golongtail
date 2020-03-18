@@ -353,9 +353,8 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
         LONGTAIL_ZSTD_MAX_COMPRESSION};
 
-
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        10,
+        10u,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);

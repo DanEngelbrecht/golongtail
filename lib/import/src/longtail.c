@@ -1,6 +1,6 @@
 #include "longtail.h"
 
-#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE)
+#if defined(__GNUC__) && !defined(__clang__) && !defined(APPLE) && !defined(__USE_GNU)
 #define __USE_GNU
 #endif
 

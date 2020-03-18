@@ -642,7 +642,7 @@ func (jobAPI *Longtail_JobAPI) Dispose() {
 	C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
 }
 
-// Longtail_CreateDefaultCompressionRegistry ...
+// CreateDefaultCompressionRegistry ...
 func CreateDefaultCompressionRegistry() Longtail_CompressionRegistryAPI {
 	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.CompressionRegistry_CreateDefault()}
 }
@@ -1260,7 +1260,7 @@ func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail
 }
 
 //export Proxy_GetStoredBlock
-func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash uint64, outStoredBlock **C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
+func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash C.uint64_t, outStoredBlock **C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_StoredBlockPtr{cStoredBlockPtr: outStoredBlock}, Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
@@ -1281,7 +1281,7 @@ func Proxy_GetIndex(context unsafe.Pointer, job_api *C.struct_Longtail_JobAPI, d
 }
 
 //export Proxy_GetStoredBlockPath
-func Proxy_GetStoredBlockPath(context unsafe.Pointer, blockHash uint64, outPath **C.char) C.int {
+func Proxy_GetStoredBlockPath(context unsafe.Pointer, blockHash C.uint64_t, outPath **C.char) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	path, errno := blockStore.GetStoredBlockPath(uint64(blockHash))
 	if errno == 0 {

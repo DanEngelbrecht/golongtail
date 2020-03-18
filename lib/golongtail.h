@@ -5,6 +5,7 @@
 #include "import/lib/blake3/longtail_blake3.h"
 #include "import/lib/brotli/longtail_brotli.h"
 #include "import/lib/cacheblockstore/longtail_cacheblockstore.h"
+#include "import/lib/compressblockstore/longtail_compressblockstore.h"
 #include "import/lib/filestorage/longtail_filestorage.h"
 #include "import/lib/fsblockstore/longtail_fsblockstore.h"
 #include "import/lib/lz4/longtail_lz4.h"

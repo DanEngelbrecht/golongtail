@@ -16,6 +16,72 @@ import (
 	"github.com/pkg/errors"
 )
 
+type gcsFileStorage struct {
+}
+
+func (fileStorage *gcsFileStorage) ReadFromPath(ctx context.Context, path string) ([]byte, error) {
+	u, err := url.Parse(path)
+	if u.Scheme != "gs" {
+		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+	}
+
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	bucketName := u.Host
+	bucket := client.Bucket(bucketName)
+
+	objHandle := bucket.Object(u.Path[1:])
+	objReader, err := objHandle.NewReader(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer objReader.Close()
+
+	return ioutil.ReadAll(objReader)
+}
+
+func (fileStorage *gcsFileStorage) WriteToPath(ctx context.Context, path string, data []byte) error {
+	u, err := url.Parse(path)
+	if u.Scheme != "gs" {
+		return fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+	}
+
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	bucketName := u.Host
+	bucket := client.Bucket(bucketName)
+
+	objHandle := bucket.Object(u.Path[1:])
+	{
+		objWriter := objHandle.NewWriter(ctx)
+		_, err := objWriter.Write(data)
+		objWriter.Close()
+		if err != nil {
+			return err
+		}
+	}
+	_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
+	return err
+}
+
+func (fileStorage *gcsFileStorage) Close() {
+}
+
+// NewGCSFileStorage ...
+func NewGCSFileStorage(u *url.URL) (FileStorage, error) {
+	if u.Scheme != "gs" {
+		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+	}
+	s := &gcsFileStorage{}
+	return s, nil
+}
+
 type putBlockMessage struct {
 	storedBlock      lib.Longtail_StoredBlock
 	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI
@@ -339,7 +405,6 @@ func contentIndexWorker(
 
 // NewGCSBlockStore ...
 func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.BlockStoreAPI, error) {
-	//	var err error
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
@@ -355,7 +420,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.Bloc
 
 	//	backingStorage := lib.CreateFSStorageAPI()
 
-	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI} //, backingStorage: backingStorage}
+	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
 	s.workerCount = runtime.NumCPU() * 4
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*8)

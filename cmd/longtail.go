@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/url"
@@ -78,7 +79,7 @@ func (blockStore *managedBlockStore) Dispose() {
 }
 
 func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
-	blobStoreURL, err := url.Parse(*storageURI)
+	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
@@ -101,10 +102,29 @@ func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, job
 			}
 			blockStoreAPI := lib.CreateBlockStoreAPI(fsBlockStore)
 			return managedBlockStore{BlockStore: fsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
-			//			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), blobStoreURL.Path[1:])}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		}
 	}
 	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+}
+
+func createFileStorageForURI(uri string) (store.FileStorage, error) {
+	blobStoreURL, err := url.Parse(uri)
+	if err == nil {
+		switch blobStoreURL.Scheme {
+		case "gs":
+			return store.NewGCSFileStorage(blobStoreURL)
+		case "s3":
+			return nil, fmt.Errorf("AWS storage not yet implemented")
+		case "abfs":
+			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
+		case "abfss":
+			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
+		case "file":
+			return store.NewFSFileStorage()
+		}
+	}
+
+	return store.NewFSFileStorage()
 }
 
 const noCompressionType = uint32(0)
@@ -257,17 +277,21 @@ func upSyncVersion(
 			return err
 		}
 	} else {
-		vindex, err = lib.ReadVersionIndex(fs, *sourceIndexPath)
+		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
+		if err != nil {
+			return nil
+		}
+		defer fileStorage.Close()
+		vbuffer, err := fileStorage.ReadFromPath(context.Background(), *sourceIndexPath)
+		if err != nil {
+			return err
+		}
+		vindex, err = lib.ReadVersionIndexFromBuffer(vbuffer)
 		if err != nil {
 			return err
 		}
 	}
 	defer vindex.Dispose()
-
-	//	versionBlob, err := lib.WriteVersionIndexToBuffer(vindex)
-	//	if err != nil {
-	//		return err
-	//	}
 
 	missingContentIndex, err := lib.CreateMissingContent(
 		hash,
@@ -297,23 +321,19 @@ func upSyncVersion(
 		}
 	}
 
-	localFS := lib.CreateFSStorageAPI()
-	defer localFS.Dispose()
-
-	// TODO: Should store version index using uri!
-	err = lib.WriteVersionIndex(localFS, vindex, targetFilePath)
+	vbuffer, err := lib.WriteVersionIndexToBuffer(vindex)
 	if err != nil {
 		return err
 	}
-
-	//	err = indexStore.PutBlob(
-	//		context.Background(),
-	//		targetFilePath,
-	//		"application/octet-stream",
-	//		versionBlob)
-	//	if err != nil {
-	//		return err
-	//	}
+	fileStorage, err := createFileStorageForURI(targetFilePath)
+	if err != nil {
+		return nil
+	}
+	defer fileStorage.Close()
+	err = fileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -381,16 +401,22 @@ func downSyncVersion(
 
 	var remoteVersionIndex lib.Longtail_VersionIndex
 
-	//	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
-	//	if err != nil {
-	//		return err
-	//	}
-	//	remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(remoteVersionBlob)
-	// TODO: Should retrieve version index using uri!
-	remoteVersionIndex, err = lib.ReadVersionIndex(localFS, sourceFilePath)
-	if err != nil {
-		return err
+	{
+		fileStorage, err := createFileStorageForURI(sourceFilePath)
+		if err != nil {
+			return nil
+		}
+		defer fileStorage.Close()
+		vbuffer, err := fileStorage.ReadFromPath(context.Background(), sourceFilePath)
+		if err != nil {
+			return err
+		}
+		remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(vbuffer)
+		if err != nil {
+			return err
+		}
 	}
+	defer remoteVersionIndex.Dispose()
 
 	var localVersionIndex lib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
@@ -419,7 +445,16 @@ func downSyncVersion(
 			return err
 		}
 	} else {
-		localVersionIndex, err = lib.ReadVersionIndex(fs, *targetIndexPath)
+		fileStorage, err := createFileStorageForURI(*targetIndexPath)
+		if err != nil {
+			return nil
+		}
+		defer fileStorage.Close()
+		vbuffer, err := fileStorage.ReadFromPath(context.Background(), *targetIndexPath)
+		if err != nil {
+			return err
+		}
+		localVersionIndex, err = lib.ReadVersionIndexFromBuffer(vbuffer)
 		if err != nil {
 			return err
 		}

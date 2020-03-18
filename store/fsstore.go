@@ -1,12 +1,40 @@
 package store
 
 import (
+	"context"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 
 	"github.com/DanEngelbrecht/golongtail/lib"
 )
+
+type fsFileStorage struct {
+}
+
+func (fileStorage *fsFileStorage) ReadFromPath(ctx context.Context, path string) ([]byte, error) {
+	return ioutil.ReadFile(path)
+}
+
+func (fileStorage *fsFileStorage) WriteToPath(ctx context.Context, path string, data []byte) error {
+	err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(path, data, 0644)
+}
+
+func (fileStorage *fsFileStorage) Close() {
+}
+
+// NewFSFileStorage ...
+func NewFSFileStorage() (FileStorage, error) {
+	s := &fsFileStorage{}
+	return s, nil
+}
 
 type fsPutBlockMessage struct {
 	storedBlock      lib.Longtail_StoredBlock

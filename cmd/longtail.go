@@ -534,7 +534,7 @@ var (
 			"zstd_max")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
-	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
+	localCachePath      = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").Required().String()
 	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	sourceFilePath      = commandDownSync.Flag("source-path", "Source file uri").Required().String()
@@ -585,7 +585,7 @@ func main() {
 			*sourceFilePath,
 			*targetFolderPath,
 			targetIndexPath,
-			*downSyncContentPath,
+			*localCachePath,
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,

@@ -99,6 +99,8 @@ static int Win32ErrorToErrno(DWORD err)
         case ERROR_BUSY:
         case ERROR_PIPE_BUSY:
         return EBUSY;
+        case WAIT_TIMEOUT:
+        return ETIME;
         default:
         return EINVAL;
     }
@@ -172,13 +174,15 @@ int Longtail_JoinThread(HLongtail_Thread thread, uint64_t timeout_us)
     switch (result)
     {
         case WAIT_OBJECT_0:
-        return 0;
+            return 0;
+        case WAIT_ABANDONED:
+            return EINVAL;
         case WAIT_TIMEOUT:
-        return ETIME;
+            return ETIME;
         case WAIT_FAILED:
-        return Win32ErrorToErrno(GetLastError());
+            return Win32ErrorToErrno(GetLastError());
         default:
-        return EINVAL;
+            return EINVAL;
     }
 }
 
@@ -212,15 +216,32 @@ int Longtail_CreateSema(void* mem, int initial_count, HLongtail_Sema* out_sema)
 
 int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 {
-    return 0 != ReleaseSemaphore(
+    if (ReleaseSemaphore(
                     semaphore->m_Handle,
                     count,
-                    NULL);
+                    NULL))
+    {
+        return 0;
+    }
+    return EINVAL;
 }
 
 int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    return WAIT_OBJECT_0 == WaitForSingleObject(semaphore->m_Handle, INFINITE);
+    DWORD res = WaitForSingleObject(semaphore->m_Handle, INFINITE);
+    switch (res)
+    {
+        case WAIT_OBJECT_0:
+            return 0;
+        case WAIT_ABANDONED:
+            return EINVAL;
+        case WAIT_TIMEOUT:
+            return ETIME;
+        case WAIT_FAILED:
+            return Win32ErrorToErrno(GetLastError());
+        default:
+            return EINVAL;
+    }
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -629,6 +650,24 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
     return path;
 }
 
+char* Longtail_GetTempFolder()
+{
+    char tmp[MAX_PATH + 1];
+    DWORD res = ExpandEnvironmentStringsA("%TEMP%", tmp, MAX_PATH);
+    if (res == 0 || res > MAX_PATH)
+    {
+        return 0;
+    }
+    char expanded[MAX_PATH + 1];
+    res = GetFullPathNameA(tmp, MAX_PATH, expanded, 0);
+    if (res == 0 || res > MAX_PATH)
+    {
+        return 0;
+    }
+    return Longtail_Strdup(expanded);
+}
+
+
 #endif
 
 #if defined(__APPLE__) || defined(__linux__)
@@ -962,7 +1001,11 @@ int Longtail_PostSema(HLongtail_Sema semaphore, unsigned int count)
 
 int Longtail_WaitSema(HLongtail_Sema semaphore)
 {
-    return sem_wait(&semaphore->m_Semaphore);
+    if (0 == sem_wait(&semaphore->m_Semaphore))
+    {
+        return 0;
+    }
+    return errno;
 }
 
 void Longtail_DeleteSema(HLongtail_Sema semaphore)
@@ -1369,6 +1412,10 @@ const char* Longtail_ConcatPath(const char* folder, const char* file)
     return path;
 }
 
+char* Longtail_GetTempFolder()
+{
+    return Longtail_Strdup("/tmp");
+}
 
 
 #endif

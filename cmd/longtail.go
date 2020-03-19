@@ -13,14 +13,13 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/lib"
 	"github.com/DanEngelbrecht/golongtail/store"
-	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type loggerData struct {
 }
 
-func logger(context interface{}, level int, message string) {
+func (l *loggerData) OnLog(level int, message string) {
 	switch level {
 	case 0:
 		log.Printf("DEBUG: %s", message)
@@ -29,24 +28,23 @@ func logger(context interface{}, level int, message string) {
 	case 2:
 		log.Printf("WARNING: %s", message)
 	case 3:
-		log.Fatal(message)
+		log.Printf("ERROR: %s", message)
 	}
 }
 
 type progressData struct {
 	inited     bool
-	oldPercent int
+	oldPercent uint32
 	task       string
 }
 
-func progress(context interface{}, total int, current int) {
-	p := context.(*progressData)
-	if current < total {
+func (p *progressData) OnProgress(totalCount uint32, doneCount uint32) {
+	if doneCount < totalCount {
 		if !p.inited {
 			fmt.Fprintf(os.Stderr, "%s: ", p.task)
 			p.inited = true
 		}
-		percentDone := (100 * current) / total
+		percentDone := (100 * doneCount) / totalCount
 		if (percentDone - p.oldPercent) >= 5 {
 			fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
 			p.oldPercent = percentDone
@@ -70,12 +68,51 @@ func un(s string, startTime time.Time) {
 	log.Printf("%s: elapsed %f secs\n", s, elapsed.Seconds())
 }
 
-func createBlobStoreForURI(uri string) (store.BlobStore, error) {
-	blobStoreURL, err := url.Parse(*storageURI)
+type managedBlockStore struct {
+	BlockStore    lib.BlockStoreAPI
+	BlockStoreAPI lib.Longtail_BlockStoreAPI
+}
+
+func (blockStore *managedBlockStore) Dispose() {
+	blockStore.BlockStoreAPI.Dispose()
+	//	blockStore.BlockStore.Close()
+}
+
+func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
+	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			return store.NewGCSBlobStore(blobStoreURL)
+			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, defaultHashAPI)
+			if err != nil {
+				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
+			}
+			blockStoreAPI := lib.CreateBlockStoreAPI(gcsBlockStore)
+			return managedBlockStore{BlockStore: gcsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
+		case "s3":
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("AWS storage not yet implemented")
+		case "abfs":
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen1 storage not yet implemented")
+		case "abfss":
+			return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+		case "file":
+			fsBlockStore, err := store.NewFSBlockStore(blobStoreURL.Path[1:], defaultHashAPI.GetIdentifier(), jobAPI)
+			if err != nil {
+				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
+			}
+			blockStoreAPI := lib.CreateBlockStoreAPI(fsBlockStore)
+			return managedBlockStore{BlockStore: fsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
+		}
+	}
+	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+}
+
+func createFileStorageForURI(uri string) (store.FileStorage, error) {
+	blobStoreURL, err := url.Parse(uri)
+	if err == nil {
+		switch blobStoreURL.Scheme {
+		case "gs":
+			return store.NewGCSFileStorage(blobStoreURL)
 		case "s3":
 			return nil, fmt.Errorf("AWS storage not yet implemented")
 		case "abfs":
@@ -83,10 +120,11 @@ func createBlobStoreForURI(uri string) (store.BlobStore, error) {
 		case "abfss":
 			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			return store.NewFSBlobStore(blobStoreURL.Path[1:])
+			return store.NewFSFileStorage()
 		}
 	}
-	return store.NewFSBlobStore(uri)
+
+	return store.NewFSFileStorage()
 }
 
 const noCompressionType = uint32(0)
@@ -141,16 +179,24 @@ func createHashAPIFromIdentifier(hashIdentifier uint32) (lib.Longtail_HashAPI, e
 	return lib.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
 }
 
-func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
+func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	switch *hashAlgorithm {
 	case "meow":
-		return createHashAPIFromIdentifier(lib.GetMeowHashIdentifier())
+		return lib.GetMeowHashIdentifier(), nil
 	case "blake2":
-		return createHashAPIFromIdentifier(lib.GetBlake2HashIdentifier())
+		return lib.GetBlake2HashIdentifier(), nil
 	case "blake3":
-		return createHashAPIFromIdentifier(lib.GetBlake3HashIdentifier())
+		return lib.GetBlake3HashIdentifier(), nil
 	}
-	return lib.Longtail_HashAPI{}, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+	return 0, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+}
+
+func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
+	if err != nil {
+		return lib.Longtail_HashAPI{}, err
+	}
+	return createHashAPIFromIdentifier(hashIdentifier)
 }
 
 func upSyncVersion(
@@ -158,7 +204,6 @@ func upSyncVersion(
 	sourceFolderPath string,
 	sourceIndexPath *string,
 	targetFilePath string,
-	localCachePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -171,45 +216,38 @@ func upSyncVersion(
 	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	indexStore, err := createBlobStoreForURI(blobStoreURI)
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
 	if err != nil {
 		return err
 	}
-	defer indexStore.Close()
 
-	var hash lib.Longtail_HashAPI
-	var remoteContentIndex lib.Longtail_ContentIndex
-	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
-	if err == nil {
-		remoteContentIndex, err = lib.ReadContentIndexFromBuffer(remoteContentIndexBlob)
-		if err != nil {
-			return errors.Wrap(err, blobStoreURI+"/store.lci")
-		}
-		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
-		if err != nil {
-			return err
-		}
-	} else {
-		hash, err = createHashAPI(hashAlgorithm)
-		if err != nil {
-			return err
-		}
-		remoteContentIndex, err = lib.CreateContentIndex(
-			hash,
-			0,
-			nil,
-			nil,
-			nil,
-			0,
-			0)
-		if err != nil {
-			return err
-		}
+	defaultHashAPI, err := createHashAPIFromIdentifier(hashIdentifier)
+	if err != nil {
+		return err
+	}
+	defer defaultHashAPI.Dispose()
+
+	indexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	if err != nil {
+		return err
+	}
+	defer indexStore.Dispose()
+
+	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
+	defer getRemoteIndexProgress.Dispose()
+	remoteContentIndex, errno := indexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	if errno != 0 {
+		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+	}
+
+	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+	if err != nil {
+		return err
 	}
 	defer hash.Dispose()
 
 	var vindex lib.Longtail_VersionIndex
-	if sourceIndexPath == nil {
+	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
 		fileInfos, err := lib.GetFilesRecursively(fs, sourceFolderPath)
 		if err != nil {
 			return err
@@ -222,12 +260,13 @@ func upSyncVersion(
 		}
 		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
+		createVersionIndexProgress := lib.CreateProgressAPI(&progressData{task: "Indexing version"})
+		defer createVersionIndexProgress.Dispose()
 		vindex, err = lib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
-			progress,
-			&progressData{task: "Indexing version"},
+			&createVersionIndexProgress,
 			sourceFolderPath,
 			fileInfos.GetPaths(),
 			fileInfos.GetFileSizes(),
@@ -238,17 +277,21 @@ func upSyncVersion(
 			return err
 		}
 	} else {
-		vindex, err = lib.ReadVersionIndex(fs, *sourceIndexPath)
+		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
+		if err != nil {
+			return nil
+		}
+		defer fileStorage.Close()
+		vbuffer, err := fileStorage.ReadFromPath(context.Background(), *sourceIndexPath)
+		if err != nil {
+			return err
+		}
+		vindex, err = lib.ReadVersionIndexFromBuffer(vbuffer)
 		if err != nil {
 			return err
 		}
 	}
 	defer vindex.Dispose()
-
-	versionBlob, err := lib.WriteVersionIndexToBuffer(vindex)
-	if err != nil {
-		return err
-	}
 
 	missingContentIndex, err := lib.CreateMissingContent(
 		hash,
@@ -260,39 +303,34 @@ func upSyncVersion(
 		return err
 	}
 	defer missingContentIndex.Dispose()
-
 	if missingContentIndex.GetBlockCount() > 0 {
+		writeContentProgress := lib.CreateProgressAPI(&progressData{task: "Writing content blocks"})
+		defer writeContentProgress.Dispose()
+
 		err = lib.WriteContent(
 			fs,
-			fs,
-			creg,
+			indexStore.BlockStoreAPI,
 			jobs,
-			progress,
-			&progressData{task: "Writing content blocks"},
+			&writeContentProgress,
+			remoteContentIndex,
 			missingContentIndex,
 			vindex,
-			sourceFolderPath,
-			localCachePath)
-		if err != nil {
-			return err
-		}
-		err = indexStore.PutContent(
-			context.Background(),
-			progress,
-			&progressData{task: "Uploading"},
-			missingContentIndex,
-			fs,
-			localCachePath)
+			sourceFolderPath)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = indexStore.PutBlob(
-		context.Background(),
-		targetFilePath,
-		"application/octet-stream",
-		versionBlob)
+	vbuffer, err := lib.WriteVersionIndexToBuffer(vindex)
+	if err != nil {
+		return err
+	}
+	fileStorage, err := createFileStorageForURI(targetFilePath)
+	if err != nil {
+		return nil
+	}
+	defer fileStorage.Close()
+	err = fileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
 	if err != nil {
 		return err
 	}
@@ -319,57 +357,69 @@ func downSyncVersion(
 	creg := lib.CreateDefaultCompressionRegistry()
 	defer creg.Dispose()
 
-	var indexStore store.BlobStore
-	indexStore, err := createBlobStoreForURI(blobStoreURI)
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
 	if err != nil {
 		return err
 	}
-	defer indexStore.Close()
 
-	var hash lib.Longtail_HashAPI
-	var remoteContentIndex lib.Longtail_ContentIndex
-	remoteContentIndexBlob, err := indexStore.GetBlob(context.Background(), "store.lci")
-	if err == nil {
-		remoteContentIndex, err = lib.ReadContentIndexFromBuffer(remoteContentIndexBlob)
-		if err != nil {
-			errors.Wrap(err, blobStoreURI+"/store.lci")
-		}
-		hash, err = createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
-		if err != nil {
-			return err
-		}
-	} else {
-		hash, err = createHashAPI(hashAlgorithm)
-		if err != nil {
-			return err
-		}
-		remoteContentIndex, err = lib.CreateContentIndex(
-			hash,
-			0,
-			nil,
-			nil,
-			nil,
-			0,
-			0)
-		if err != nil {
-			return err
-		}
+	defaultHashAPI, err := createHashAPIFromIdentifier(hashIdentifier)
+	if err != nil {
+		return err
+	}
+	defer defaultHashAPI.Dispose()
+
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	if err != nil {
+		return err
+	}
+	defer remoteIndexStore.Dispose()
+
+	localFS := lib.CreateFSStorageAPI()
+	defer localFS.Dispose()
+
+	localIndexStore := lib.CreateFSBlockStore(localFS, localCachePath)
+	if err != nil {
+		return err
+	}
+	defer localIndexStore.Dispose()
+
+	indexStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
+	defer indexStore.Dispose()
+
+	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
+	defer getRemoteIndexProgress.Dispose()
+	remoteContentIndex, errno := remoteIndexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	if errno != 0 {
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+	}
+
+	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+	if err != nil {
+		return err
 	}
 	defer hash.Dispose()
 
 	var remoteVersionIndex lib.Longtail_VersionIndex
 
-	remoteVersionBlob, err := indexStore.GetBlob(context.Background(), sourceFilePath)
-	if err != nil {
-		return err
+	{
+		fileStorage, err := createFileStorageForURI(sourceFilePath)
+		if err != nil {
+			return nil
+		}
+		defer fileStorage.Close()
+		vbuffer, err := fileStorage.ReadFromPath(context.Background(), sourceFilePath)
+		if err != nil {
+			return err
+		}
+		remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(vbuffer)
+		if err != nil {
+			return err
+		}
 	}
-	remoteVersionIndex, err = lib.ReadVersionIndexFromBuffer(remoteVersionBlob)
-	if err != nil {
-		return err
-	}
+	defer remoteVersionIndex.Dispose()
 
 	var localVersionIndex lib.Longtail_VersionIndex
-	if targetIndexPath == nil {
+	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
 		fileInfos, err := lib.GetFilesRecursively(fs, targetFolderPath)
 		if err != nil {
 			return err
@@ -378,12 +428,13 @@ func downSyncVersion(
 
 		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
+		createVersionIndexProgress := lib.CreateProgressAPI(&progressData{task: "Indexing version"})
+		defer createVersionIndexProgress.Dispose()
 		localVersionIndex, err = lib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
-			progress,
-			&progressData{task: "Indexing version"},
+			&createVersionIndexProgress,
 			targetFolderPath,
 			fileInfos.GetPaths(),
 			fileInfos.GetFileSizes(),
@@ -394,61 +445,21 @@ func downSyncVersion(
 			return err
 		}
 	} else {
-		localVersionIndex, err = lib.ReadVersionIndex(fs, *targetIndexPath)
+		fileStorage, err := createFileStorageForURI(*targetIndexPath)
+		if err != nil {
+			return nil
+		}
+		defer fileStorage.Close()
+		vbuffer, err := fileStorage.ReadFromPath(context.Background(), *targetIndexPath)
+		if err != nil {
+			return err
+		}
+		localVersionIndex, err = lib.ReadVersionIndexFromBuffer(vbuffer)
 		if err != nil {
 			return err
 		}
 	}
 	defer localVersionIndex.Dispose()
-
-	localContentIndex, err := lib.ReadContent(
-		fs,
-		hash,
-		jobs,
-		progress,
-		&progressData{task: "Scanning local blocks"},
-		localCachePath)
-	if err != nil {
-		return err
-	}
-	defer localContentIndex.Dispose()
-
-	missingContentIndex, err := lib.CreateMissingContent(
-		hash,
-		localContentIndex,
-		remoteVersionIndex,
-		targetBlockSize,
-		maxChunksPerBlock)
-	if err != nil {
-		return err
-	}
-	defer missingContentIndex.Dispose()
-
-	if missingContentIndex.GetBlockCount() > 0 {
-		neededContentIndex, err := lib.RetargetContent(remoteContentIndex, missingContentIndex)
-		if err != nil {
-			return err
-		}
-		defer neededContentIndex.Dispose()
-
-		err = indexStore.GetContent(
-			context.Background(),
-			progress,
-			&progressData{task: "Downloading"},
-			neededContentIndex,
-			fs,
-			localCachePath)
-		if err != nil {
-			return err
-		}
-
-		mergedContentIndex, err := lib.MergeContentIndex(localContentIndex, neededContentIndex)
-		if err != nil {
-			return err
-		}
-		localContentIndex.Dispose()
-		localContentIndex = mergedContentIndex
-	}
 
 	versionDiff, err := lib.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
 	if err != nil {
@@ -456,19 +467,18 @@ func downSyncVersion(
 	}
 	defer versionDiff.Dispose()
 
+	changeVersionProgress := lib.CreateProgressAPI(&progressData{task: "Updating version"})
+	defer changeVersionProgress.Dispose()
 	err = lib.ChangeVersion(
-		fs,
+		indexStore,
 		fs,
 		hash,
 		jobs,
-		progress,
-		&progressData{task: "Updating version"},
-		creg,
-		localContentIndex,
+		&changeVersionProgress,
+		remoteContentIndex,
 		localVersionIndex,
 		remoteVersionIndex,
 		versionDiff,
-		localCachePath,
 		targetFolderPath,
 		retainPermissions)
 	if err != nil {
@@ -499,17 +509,16 @@ var (
 	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").String()
+	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 				Default("blake3").
 				Enum("meow", "blake2", "blake3")
 
-	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
-	upSyncContentPath = commandUpSync.Flag("content-path", "Location to store blocks prepared for upload").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
-	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").String()
-	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath    = commandUpSync.Flag("target-path", "Target file path relative to --storage-uri").String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	commandUpSync    = kingpin.Command("upsync", "Upload a folder")
+	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").Required().String()
+	sourceIndexPath  = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	targetFilePath   = commandUpSync.Flag("target-path", "Target file uri").Required().String()
+	compression      = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -525,14 +534,17 @@ var (
 			"zstd_max")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
-	downSyncContentPath = commandDownSync.Flag("content-path", "Location for downloaded/cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
-	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").String()
+	localCachePath      = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
+	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").Required().String()
 	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	sourceFilePath      = commandDownSync.Flag("source-path", "Source file path relative to --storage-uri").String()
+	sourceFilePath      = commandDownSync.Flag("source-path", "Source file uri").Required().String()
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 )
 
-func cmdAssertFunc(context interface{}, expression string, file string, line int) {
+type assertData struct {
+}
+
+func (a *assertData) OnAssert(expression string, file string, line int) {
 	log.Fatalf("ASSERT: %s %s:%d", expression, file, line)
 }
 
@@ -546,12 +558,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	l := lib.SetLogger(logger, &loggerData{})
-	defer lib.ClearLogger(l)
+	lib.SetLogger(&loggerData{})
+	defer lib.SetLogger(nil)
 	lib.SetLogLevel(longtailLogLevel)
 
-	lib.SetAssert(cmdAssertFunc, nil)
-	defer lib.ClearAssert()
+	lib.SetAssert(&assertData{})
+	defer lib.SetAssert(nil)
 
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():
@@ -560,7 +572,6 @@ func main() {
 			*sourceFolderPath,
 			sourceIndexPath,
 			*targetFilePath,
-			*upSyncContentPath,
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,
@@ -574,7 +585,7 @@ func main() {
 			*sourceFilePath,
 			*targetFolderPath,
 			targetIndexPath,
-			*downSyncContentPath,
+			*localCachePath,
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,

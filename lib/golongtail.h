@@ -4,14 +4,185 @@
 #include "import/lib/blake2/longtail_blake2.h"
 #include "import/lib/blake3/longtail_blake3.h"
 #include "import/lib/brotli/longtail_brotli.h"
+#include "import/lib/cacheblockstore/longtail_cacheblockstore.h"
+#include "import/lib/compressblockstore/longtail_compressblockstore.h"
 #include "import/lib/filestorage/longtail_filestorage.h"
+#include "import/lib/fsblockstore/longtail_fsblockstore.h"
 #include "import/lib/lz4/longtail_lz4.h"
 #include "import/lib/memstorage/longtail_memstorage.h"
 #include "import/lib/meowhash/longtail_meowhash.h"
 #include "import/lib/zstd/longtail_zstd.h"
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 
-void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
+//void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
+
+static void* OffsetPointer(void* pointer, size_t offset)
+{
+    return &((uint8_t*)pointer)[offset];
+}
+
+static int DisposeStoredBlockFromRaw(struct Longtail_StoredBlock* stored_block)
+{
+    Longtail_Free((void*)stored_block);
+    return 0;
+}
+
+static int CreateStoredBlockFromRaw(
+    void* data,
+    size_t data_size,
+    struct Longtail_StoredBlock** out_stored_block)
+{
+    size_t stored_block_size = Longtail_GetStoredBlockSize(data_size);
+    void* block_data = Longtail_Alloc(stored_block_size);
+    void* rawBlockDataBuffer = OffsetPointer(block_data, stored_block_size-data_size);
+    memmove(rawBlockDataBuffer, data, data_size);
+    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)block_data;
+    int err = Longtail_InitStoredBlockFromData(
+        stored_block,
+        data,
+        data_size);
+    if (err)
+    {
+        Longtail_Free(block_data);
+        return err;
+    }
+    stored_block->Dispose = DisposeStoredBlockFromRaw;
+    *out_stored_block = stored_block;
+    return 0;
+}
+
+void Proxy_BlockStore_Dispose(void* context);
+int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
+int Proxy_GetIndex(void* context, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progressAPI, struct Longtail_ContentIndex** out_content_index);
+int Proxy_GetStoredBlockPath(void* context, uint64_t block_hash, char** out_path);
+void Proxy_Close(void* context);
+
+struct BlockStoreAPIProxy
+{
+    struct Longtail_BlockStoreAPI m_API;
+    void* m_Context;
+};
+
+static void BlockStoreAPIProxy_Dispose(struct Longtail_API* block_store_api)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    Proxy_Close(proxy->m_Context);
+    Longtail_Free(proxy);
+}
+
+static int BlockStoreAPIProxy_PutStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_StoredBlock* stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_PutStoredBlock(proxy->m_Context, stored_block, async_complete_api);
+}
+
+static int BlockStoreAPIProxy_GetStoredBlock(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    uint64_t block_hash,
+    struct Longtail_StoredBlock** out_stored_block,
+    struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetStoredBlock(proxy->m_Context, block_hash, out_stored_block, async_complete_api);
+}
+
+static int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetIndex(proxy->m_Context, job_api, default_hash_api_identifier, progress_api, out_content_index);
+}
+
+static int BlockStoreAPIProxy_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetStoredBlockPath(proxy->m_Context, block_hash, out_path);
+}
+
+static int AsyncComplete_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+    if (async_complete_api)
+    {
+        return async_complete_api->OnComplete(async_complete_api, err);
+    }
+    return err;
+}
+
+static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
+{
+    struct BlockStoreAPIProxy* api = (struct BlockStoreAPIProxy*)Longtail_Alloc(sizeof(struct BlockStoreAPIProxy));
+    api->m_API.m_API.Dispose        = BlockStoreAPIProxy_Dispose;
+    api->m_API.PutStoredBlock       = BlockStoreAPIProxy_PutStoredBlock;
+    api->m_API.GetStoredBlock       = BlockStoreAPIProxy_GetStoredBlock;
+    api->m_API.GetIndex             = BlockStoreAPIProxy_GetIndex;
+    api->m_API.GetStoredBlockPath   = BlockStoreAPIProxy_GetStoredBlockPath;
+    api->m_Context = context;
+    return &api->m_API;
+}
+
+struct ProgressAPIProxy
+{
+    struct Longtail_ProgressAPI m_API;
+    void* m_Context;
+};
+
+void ProgressAPIProxyOnProgress(void* context, uint32_t total_count, uint32_t done_count);
+
+static void ProgressAPIProxy_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total_count, uint32_t done_count)
+{
+    struct ProgressAPIProxy* proxy = (struct ProgressAPIProxy*)progress_api;
+    ProgressAPIProxyOnProgress(proxy->m_Context, total_count, done_count);
+}
+
+static void ProgressAPIProxy_Dispose(struct Longtail_API* api)
+{
+    struct ProgressAPIProxy* proxy = (struct ProgressAPIProxy*)api;
+    Longtail_Free(proxy);
+}
+
+static struct Longtail_ProgressAPI* CreateProgressProxyAPI(void* context)
+{
+    struct ProgressAPIProxy* api    = (struct ProgressAPIProxy*)Longtail_Alloc(sizeof(struct ProgressAPIProxy));
+    api->m_API.m_API.Dispose        = ProgressAPIProxy_Dispose;
+    api->m_API.OnProgress           = ProgressAPIProxy_OnProgress;
+    api->m_Context = context;
+    return &api->m_API;
+}
+
+
+struct AsyncCompleteAPIProxy
+{
+    struct Longtail_AsyncCompleteAPI m_API;
+    void* m_Context;
+};
+
+int AsyncCompleteAPIProxyOnComplete(void* context, int err);
+
+static int AsyncCompleteAPIProxy_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err)
+{
+    struct AsyncCompleteAPIProxy* proxy = (struct AsyncCompleteAPIProxy*)async_complete_api;
+    return AsyncCompleteAPIProxyOnComplete(proxy->m_Context, err);
+}
+
+static void AsyncCompleteAPIProxy_Dispose(struct Longtail_API* api)
+{
+    struct AsyncCompleteAPIProxy* proxy = (struct AsyncCompleteAPIProxy*)api;
+    Longtail_Free(proxy);
+}
+
+static struct Longtail_AsyncCompleteAPI* CreateAsyncCompleteProxyAPI(void* context)
+{
+    struct AsyncCompleteAPIProxy* api    = (struct AsyncCompleteAPIProxy*)Longtail_Alloc(sizeof(struct AsyncCompleteAPIProxy));
+    api->m_API.m_API.Dispose        = AsyncCompleteAPIProxy_Dispose;
+    api->m_API.OnComplete           = AsyncCompleteAPIProxy_OnComplete;
+    api->m_Context = context;
+    return &api->m_API;
+}
 
 void logProxy(void* context, int level, char* str);
 
@@ -67,6 +238,49 @@ static const char* GetPath(const uint32_t* name_offsets, const char* name_data, 
     return &name_data[name_offsets[index]];
 }
 
+static int BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api);
+}
+
+static int BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api)
+{
+    return block_store_api->GetStoredBlock(block_store_api, block_hash, out_stored_block, async_complete_api);
+}
+
+static int BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index)
+{
+    return block_store_api->GetIndex(block_store_api, job_api, default_hash_api_identifier, progress_api, out_content_index);
+}
+
+static int BlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path)
+{
+    return block_store_api->GetStoredBlockPath(block_store_api, block_hash, out_path);
+}
+
+static uint32_t Hash_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return hash_api->GetIdentifier(hash_api);
+}
+
+static uint64_t ContentIndex_GetBlockHash(struct Longtail_ContentIndex* content_index, uint64_t block_index)
+{
+    return content_index->m_BlockHashes[block_index];
+}
+
+static void DisposeStoredBlock(struct Longtail_StoredBlock* stored_block)
+{
+    if (stored_block && stored_block->Dispose)
+    {
+        stored_block->Dispose(stored_block);
+    }
+}
+
+static uint32_t HashAPI_GetIdentifier(struct Longtail_HashAPI* hash_api)
+{
+    return hash_api->GetIdentifier(hash_api);
+}
+
 #define  LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'0'))
 #define  LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'1'))
 #define  LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE     ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'2'))
@@ -74,11 +288,11 @@ static const char* GetPath(const uint32_t* name_offsets, const char* name_data, 
 #define  LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE    ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'b'))
 #define  LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE        ((((uint32_t)'b') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'l') << 8) + ((uint32_t)'c'))
 
-#define  LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE      ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
+#define  LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE        ((((uint32_t)'l') << 24) + (((uint32_t)'z') << 16) + (((uint32_t)'4') << 8) + ((uint32_t)'2'))
 
-#define  LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE        ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
-#define  LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE    ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
-#define  LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE        ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
+#define  LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE           ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'1'))
+#define  LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE       ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'2'))
+#define  LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE           ((((uint32_t)'z') << 24) + (((uint32_t)'t') << 16) + (((uint32_t)'d') << 8) + ((uint32_t)'3'))
 
 static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault()
 {
@@ -139,9 +353,8 @@ static struct Longtail_CompressionRegistryAPI* CompressionRegistry_CreateDefault
         LONGTAIL_ZSTD_DEFAULT_COMPRESSION,
         LONGTAIL_ZSTD_MAX_COMPRESSION};
 
-
     struct Longtail_CompressionRegistryAPI* registry = Longtail_CreateDefaultCompressionRegistry(
-        10,
+        10u,
         (const uint32_t*)compression_types,
         (const struct Longtail_CompressionAPI **)compression_apis,
         (const Longtail_CompressionAPI_HSettings*)compression_settings);

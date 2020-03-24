@@ -213,7 +213,7 @@ func upSyncVersion(
 	defer fs.Dispose()
 	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := lib.CreateDefaultCompressionRegistry()
+	creg := lib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
@@ -354,7 +354,7 @@ func downSyncVersion(
 	defer fs.Dispose()
 	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := lib.CreateDefaultCompressionRegistry()
+	creg := lib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)

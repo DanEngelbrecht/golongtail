@@ -194,7 +194,7 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
+	cFullPath := C.Longtail_Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
 	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	blockSize := C.Storage_GetSize(storageAPI.cStorageAPI, cFullPath)
@@ -215,7 +215,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
+	cFullPath := C.Longtail_Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
 	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
@@ -309,7 +309,7 @@ func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
 }
 
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
-	return uint32(C.HashAPI_GetIdentifier(hashAPI.cHashAPI))
+	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }
 
 func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {
@@ -320,8 +320,10 @@ func (contentIndex *Longtail_ContentIndex) GetChunkCount() uint64 {
 	return uint64(*contentIndex.cContentIndex.m_ChunkCount)
 }
 
-func (contentIndex *Longtail_ContentIndex) GetBlockHash(blockIndex uint64) uint64 {
-	return uint64(C.ContentIndex_GetBlockHash(contentIndex.cContentIndex, C.uint64_t(blockIndex)))
+func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
+
+	size := int(C.Longtail_ContentIndex_GetBlockCount(contentIndex.cContentIndex))
+	return carray2slice64(C.Longtail_ContentIndex_GetBlockHashes(contentIndex.cContentIndex), size)
 }
 
 func (versionIndex *Longtail_VersionIndex) Dispose() {
@@ -385,17 +387,17 @@ func (hashAPI *Longtail_HashAPI) Dispose() {
 
 // GetBlake2HashIdentifier() ...
 func GetBlake2HashIdentifier() uint32 {
-	return uint32(C.GetBlake2HashIdentifier())
+	return uint32(C.Longtail_GetBlake2HashType())
 }
 
 // GetBlake3HashIdentifier() ...
 func GetBlake3HashIdentifier() uint32 {
-	return uint32(C.GetBlake3HashIdentifier())
+	return uint32(C.Longtail_GetBlake3HashType())
 }
 
 // GetMeowHashIdentifier() ...
 func GetMeowHashIdentifier() uint32 {
-	return uint32(C.GetMeowHashIdentifier())
+	return uint32(C.Longtail_GetMeowHashType())
 }
 
 //// PutStoredBlock() ...
@@ -424,7 +426,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
 	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
-	errno := C.BlockStore_PutStoredBlock(
+	errno := C.Longtail_BlockStore_PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		storedBlock.cStoredBlock,
 		asyncCompleteAPI.cAsyncCompleteAPI)
@@ -437,7 +439,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	outStoredBlock Longtail_StoredBlockPtr,
 	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
 
-	errno := C.BlockStore_GetStoredBlock(
+	errno := C.Longtail_BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
 		outStoredBlock.cStoredBlockPtr,
@@ -458,7 +460,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 
 	var cContextIndex *C.struct_Longtail_ContentIndex
 
-	errno := C.BlockStore_GetIndex(
+	errno := C.Longtail_BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
 		jobAPI.cJobAPI,
 		C.uint32_t(defaulHashAPIIdentifier),
@@ -475,7 +477,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
 	blockHash uint64) (string, int) {
 
 	var cPath *C.char
-	errno := C.BlockStore_GetStoredBlockPath(
+	errno := C.Longtail_BlockStore_GetStoredBlockPath(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
 		&cPath)
@@ -519,7 +521,7 @@ func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
 }
 
 func (storedBlock *Longtail_StoredBlock) Dispose() {
-	C.DisposeStoredBlock(storedBlock.cStoredBlock)
+	C.Longtail_StoredBlock_Dispose(storedBlock.cStoredBlock)
 }
 
 func (blockIndex *Longtail_BlockIndex) Dispose() {
@@ -642,9 +644,9 @@ func (jobAPI *Longtail_JobAPI) Dispose() {
 	C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
 }
 
-// CreateDefaultCompressionRegistry ...
-func CreateDefaultCompressionRegistry() Longtail_CompressionRegistryAPI {
-	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.CompressionRegistry_CreateDefault()}
+// CreateFullCompressionRegistry ...
+func CreateFullCompressionRegistry() Longtail_CompressionRegistryAPI {
+	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateFullCompressionRegistry()}
 }
 
 // Longtail_CompressionRegistryAPI ...
@@ -659,52 +661,52 @@ func GetNoCompressionType() uint32 {
 
 // GetBrotliGenericMinCompressionType ...
 func GetBrotliGenericMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliGenericMinQuality())
 }
 
 // GetBrotliGenericDefaultCompressionType ...
 func GetBrotliGenericDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliGenericDefaultQuality())
 }
 
 // GetBrotliGenericMaxCompressionType ...
 func GetBrotliGenericMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliGenericMaxQuality())
 }
 
 // GetBrotliTextMinCompressionType ...
 func GetBrotliTextMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliTextMinQuality())
 }
 
 // GetBrotliTextDefaultCompressionType ...
 func GetBrotliTextDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliTextDefaultQuality())
 }
 
 // GetBrotliTextMaxCompressionType ...
 func GetBrotliTextMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliTextMaxQuality())
 }
 
 // GetLZ4DefaultCompressionType ...
 func GetLZ4DefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetLZ4DefaultQuality())
 }
 
 // GetZStdMinCompressionType ...
 func GetZStdMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetZStdMinQuality())
 }
 
 // GetZStdDefaultCompressionType ...
 func GetZStdDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetZStdDefaultQuality())
 }
 
 // GetZStdMaxCompressionType ...
 func GetZStdMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetZStdMaxQuality())
 }
 
 // LongtailAlloc ...
@@ -731,7 +733,7 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, rootPath string) (Longt
 
 // GetPath ...
 func (paths Longtail_Paths) GetPath(index uint32) string {
-	cPath := C.GetPath(paths.cPaths.m_Offsets, paths.cPaths.m_Data, C.uint32_t(index))
+	cPath := C.Longtail_Paths_GetPath(paths.cPaths, C.uint32_t(index))
 	return C.GoString(cPath)
 }
 
@@ -803,7 +805,7 @@ func CreateVersionIndex(
 	}
 
 	var vindex *C.struct_Longtail_VersionIndex
-	errno := C.Longtail_CreateVersionIndex(
+	errno := C.Longtail_CreateVersionIndexRaw(
 		storageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
@@ -883,7 +885,7 @@ func CreateContentIndex(
 	chunkCount := uint64(len(chunkHashes))
 	var cindex *C.struct_Longtail_ContentIndex
 	if chunkCount == 0 {
-		errno := C.Longtail_CreateContentIndex(
+		errno := C.Longtail_CreateContentIndexRaw(
 			hashAPI.cHashAPI,
 			0,
 			nil,
@@ -905,7 +907,7 @@ func CreateContentIndex(
 		cCompressionTypes = (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
 	}
 
-	errno := C.Longtail_CreateContentIndex(
+	errno := C.Longtail_CreateContentIndexRaw(
 		hashAPI.cHashAPI,
 		C.uint64_t(chunkCount),
 		cChunkHashes,

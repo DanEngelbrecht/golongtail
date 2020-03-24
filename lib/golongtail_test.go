@@ -120,7 +120,7 @@ func TestAPICreate(t *testing.T) {
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
 
-	compressionRegistry := CreateDefaultCompressionRegistry()
+	compressionRegistry := CreateFullCompressionRegistry()
 	defer compressionRegistry.Dispose()
 }
 
@@ -740,7 +740,7 @@ func TestRewriteVersion(t *testing.T) {
 	defer contentIndex.Dispose()
 	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, "block_store")
 	defer blockStorageAPI.Dispose()
-	compressionRegistry := CreateDefaultCompressionRegistry()
+	compressionRegistry := CreateFullCompressionRegistry()
 	compressionRegistry.Dispose()
 	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
@@ -886,7 +886,7 @@ func GetMissingContentUtil(
 		return Longtail_ContentIndex{cContentIndex: nil}, err
 	}
 
-	compressionRegistry := CreateDefaultCompressionRegistry()
+	compressionRegistry := CreateFullCompressionRegistry()
 	defer compressionRegistry.Dispose()
 
 	err = WriteContent(
@@ -1287,7 +1287,7 @@ func TestUpSyncVersion(t *testing.T) {
 	t.Logf("Blocks in cacheContentIndex after merge: %d", mergedCacheContentIndex.GetBlockCount())
 	defer mergedCacheContentIndex.Dispose()
 
-	compressionRegistry := CreateDefaultCompressionRegistry()
+	compressionRegistry := CreateFullCompressionRegistry()
 	defer compressionRegistry.Dispose()
 	t.Log("Created compression registry")
 

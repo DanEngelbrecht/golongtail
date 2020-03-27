@@ -84,25 +84,23 @@ func NewGCSFileStorage(u *url.URL) (FileStorage, error) {
 
 type putBlockMessage struct {
 	storedBlock      lib.Longtail_StoredBlock
-	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI
+	asyncCompleteAPI lib.Longtail_AsyncPutStoredBlockAPI
 }
 
 type getBlockMessage struct {
 	blockHash        uint64
-	outStoredBlock   lib.Longtail_StoredBlockPtr
-	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI
+	asyncCompleteAPI lib.Longtail_AsyncGetStoredBlockAPI
+}
+
+type getIndexMessage struct {
+	defaultHashAPIIdentifier uint32
+	jobAPI                   lib.Longtail_JobAPI
+	progressAPI              lib.Longtail_ProgressAPI
+	asyncCompleteAPI         lib.Longtail_AsyncGetIndexAPI
 }
 
 type contentIndexMessage struct {
 	contentIndex lib.Longtail_ContentIndex
-}
-
-type queryContentIndexMessage struct {
-}
-
-type responseContentIndexMessage struct {
-	contentIndex lib.Longtail_ContentIndex
-	errno        int
 }
 
 type stopMessage struct {
@@ -117,12 +115,11 @@ type gcsBlockStore struct {
 	defaultHashAPI lib.Longtail_HashAPI
 	workerCount    int
 
-	putBlockChan             chan putBlockMessage
-	getBlockChan             chan getBlockMessage
-	contentIndexChan         chan contentIndexMessage
-	queryContentIndexChan    chan queryContentIndexMessage
-	responseContentIndexChan chan responseContentIndexMessage
-	stopChan                 chan stopMessage
+	putBlockChan     chan putBlockMessage
+	getBlockChan     chan getBlockMessage
+	contentIndexChan chan contentIndexMessage
+	getIndexChan     chan getIndexMessage
+	stopChan         chan stopMessage
 
 	workerWaitGroup sync.WaitGroup
 }
@@ -138,7 +135,7 @@ func putStoredBlock(
 	bucket *storage.BucketHandle,
 	contentIndexMessages chan<- contentIndexMessage,
 	storedBlock lib.Longtail_StoredBlock,
-	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
+	asyncCompleteAPI lib.Longtail_AsyncPutStoredBlockAPI) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath("chunks", blockHash)
@@ -187,29 +184,27 @@ func getStoredBlock(
 	s *gcsBlockStore,
 	bucket *storage.BucketHandle,
 	blockHash uint64,
-	outStoredBlock lib.Longtail_StoredBlockPtr,
-	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
+	asyncCompleteAPI lib.Longtail_AsyncGetStoredBlockAPI) int {
 
 	key := getBlockPath("chunks", blockHash)
 	objHandle := bucket.Object(key)
 	obj, err := objHandle.NewReader(ctx)
 	if err != nil {
-		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
+		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.ENOMEM)
 	}
 	defer obj.Close()
 
 	storedBlockData, err := ioutil.ReadAll(obj)
 
 	if err != nil {
-		return asyncCompleteAPI.OnComplete(lib.EIO)
+		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.EIO)
 	}
 
 	storedBlock, err := lib.InitStoredBlockFromData(storedBlockData)
 	if err != nil {
-		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
+		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.ENOMEM)
 	}
-	outStoredBlock.Set(storedBlock)
-	return asyncCompleteAPI.OnComplete(0)
+	return asyncCompleteAPI.OnComplete(storedBlock, 0)
 }
 
 func gcsWorker(
@@ -235,7 +230,7 @@ func gcsWorker(
 				log.Printf("WARNING: putStoredBlock returned: %d", errno)
 			}
 		case getMsg := <-getBlockMessages:
-			errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash, getMsg.outStoredBlock, getMsg.asyncCompleteAPI)
+			errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash, getMsg.asyncCompleteAPI)
 			if errno != 0 {
 				log.Printf("WARNING: getStoredBlock returned: %d", errno)
 			}
@@ -315,8 +310,7 @@ func contentIndexWorker(
 	s *gcsBlockStore,
 	u *url.URL,
 	contentIndexMessages <-chan contentIndexMessage,
-	queryContentIndexMessages <-chan queryContentIndexMessage,
-	responseContentIndexMessages chan<- responseContentIndexMessage,
+	getIndexMessages <-chan getIndexMessage,
 	stopMessages <-chan stopMessage) error {
 
 	client, err := storage.NewClient(ctx)
@@ -376,17 +370,22 @@ func contentIndexWorker(
 				}
 				contentIndexMsg.contentIndex.Dispose()
 			}
-		case _ = <-queryContentIndexMessages:
+		case getIndexMessage := <-getIndexMessages:
 			{
-				responseContentIndexMsg := responseContentIndexMessage{errno: lib.ENOMEM}
 				buf, err := lib.WriteContentIndexToBuffer(contentIndex)
-				if err == nil {
-					contentIndexCopy, err := lib.ReadContentIndexFromBuffer(buf)
-					if err == nil {
-						responseContentIndexMsg = responseContentIndexMessage{contentIndex: contentIndexCopy, errno: 0}
-					}
+				if err != nil {
+					getIndexMessage.asyncCompleteAPI.OnComplete(lib.Longtail_ContentIndex{}, lib.ENOMEM)
+					continue
 				}
-				responseContentIndexMessages <- responseContentIndexMsg
+				contentIndexCopy, err := lib.ReadContentIndexFromBuffer(buf)
+				if err != nil {
+					getIndexMessage.asyncCompleteAPI.OnComplete(lib.Longtail_ContentIndex{}, lib.ENOMEM)
+					continue
+				}
+				errno := getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
+				if errno != 0 {
+					contentIndexCopy.Dispose()
+				}
 			}
 		case _ = <-stopMessages:
 			if addedContentIndex.IsValid() {
@@ -425,11 +424,10 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.Bloc
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*8)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*8)
-	s.queryContentIndexChan = make(chan queryContentIndexMessage)
-	s.responseContentIndexChan = make(chan responseContentIndexMessage)
+	s.getIndexChan = make(chan getIndexMessage)
 	s.stopChan = make(chan stopMessage, s.workerCount)
 
-	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.queryContentIndexChan, s.responseContentIndexChan, s.stopChan)
+	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.getIndexChan, s.stopChan)
 	s.workerWaitGroup.Add(1)
 	for i := 0; i < s.workerCount; i++ {
 		go gcsWorker(ctx, s, u, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.stopChan)
@@ -448,22 +446,21 @@ func getBlockPath(basePath string, blockHash uint64) string {
 }
 
 // PutStoredBlock ...
-func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
+func (s *gcsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncPutStoredBlockAPI) int {
 	s.putBlockChan <- putBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 
 // GetStoredBlock ...
-func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock lib.Longtail_StoredBlockPtr, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
-	s.getBlockChan <- getBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
+func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI lib.Longtail_AsyncGetStoredBlockAPI) int {
+	s.getBlockChan <- getBlockMessage{blockHash: blockHash, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 
 // GetIndex ...
-func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI) (lib.Longtail_ContentIndex, int) {
-	s.queryContentIndexChan <- queryContentIndexMessage{}
-	responseContentIndexMsg := <-s.responseContentIndexChan
-	return responseContentIndexMsg.contentIndex, responseContentIndexMsg.errno
+func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
+	s.getIndexChan <- getIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, jobAPI: jobAPI, progressAPI: progress, asyncCompleteAPI: asyncCompleteAPI}
+	return 0
 }
 
 // GetStoredBlockPath ...

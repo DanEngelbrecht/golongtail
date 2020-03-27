@@ -258,35 +258,77 @@ LONGTAIL_EXPORT inline int Longtail_Job_ReadyJobs(struct Longtail_JobAPI* job_ap
 LONGTAIL_EXPORT inline int Longtail_Job_WaitForAllJobs(struct Longtail_JobAPI* job_api, struct Longtail_ProgressAPI* progressAPI) { return job_api->WaitForAllJobs(job_api, progressAPI); }
 LONGTAIL_EXPORT inline int Longtail_Job_ResumeJob(struct Longtail_JobAPI* job_api, uint32_t job_id) { return job_api->ResumeJob(job_api, job_id); }
 
-////////////// Longtail_AsyncCompleteAPI
+////////////// Longtail_AsyncPutStoredBlockAPI
 
-struct Longtail_AsyncCompleteAPI;
+struct Longtail_AsyncPutStoredBlockAPI;
 
-typedef int (*Longtail_AsyncComplete_OnCompleteFunc)(struct Longtail_AsyncCompleteAPI* async_complete_api, int err);
+typedef int (*Longtail_AsyncPutStoredBlock_OnCompleteFunc)(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
 
-struct Longtail_AsyncCompleteAPI
+struct Longtail_AsyncPutStoredBlockAPI
 {
     struct Longtail_API m_API;
-    Longtail_AsyncComplete_OnCompleteFunc OnComplete;
+    Longtail_AsyncPutStoredBlock_OnCompleteFunc OnComplete;
 };
 
-LONGTAIL_EXPORT uint64_t Longtail_GetAsyncCompleteAPISize();
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncPutStoredBlockAPISize();
 
-LONGTAIL_EXPORT struct Longtail_AsyncCompleteAPI* Longtail_MakeAsyncCompleteAPI(
+LONGTAIL_EXPORT struct Longtail_AsyncPutStoredBlockAPI* Longtail_MakeAsyncPutStoredBlockAPI(
     void* mem,
     Longtail_DisposeFunc dispose_func,
-    Longtail_AsyncComplete_OnCompleteFunc on_complete_func);
+    Longtail_AsyncPutStoredBlock_OnCompleteFunc on_complete_func);
 
-LONGTAIL_EXPORT inline int Longtail_AsyncComplete_OnComplete(struct Longtail_AsyncCompleteAPI* async_complete_api, int err) { return async_complete_api->OnComplete(async_complete_api, err); }
+LONGTAIL_EXPORT inline int Longtail_AsyncPutStoredBlock_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err) { return async_complete_api->OnComplete(async_complete_api, err); }
+
+////////////// Longtail_AsyncGetStoredBlockAPI
+
+struct Longtail_AsyncGetStoredBlockAPI;
+
+typedef int (*Longtail_AsyncGetStoredBlock_OnCompleteFunc)(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
+
+struct Longtail_AsyncGetStoredBlockAPI
+{
+    struct Longtail_API m_API;
+    Longtail_AsyncGetStoredBlock_OnCompleteFunc OnComplete;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetStoredBlockAPISize();
+
+LONGTAIL_EXPORT struct Longtail_AsyncGetStoredBlockAPI* Longtail_MakeAsyncGetStoredBlockAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncGetStoredBlock_OnCompleteFunc on_complete_func);
+
+LONGTAIL_EXPORT inline int Longtail_AsyncGetStoredBlock_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err) { return async_complete_api->OnComplete(async_complete_api, stored_block, err); }
+
+////////////// Longtail_AsyncGetIndexAPI
+
+struct Longtail_AsyncGetIndexAPI;
+
+typedef int (*Longtail_AsyncGetIndex_OnCompleteFunc)(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+
+struct Longtail_AsyncGetIndexAPI
+{
+    struct Longtail_API m_API;
+    Longtail_AsyncGetIndex_OnCompleteFunc OnComplete;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetAsyncGetIndexAPISize();
+
+LONGTAIL_EXPORT struct Longtail_AsyncGetIndexAPI* Longtail_MakeAsyncGetIndexAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_AsyncGetIndex_OnCompleteFunc on_complete_func);
+
+LONGTAIL_EXPORT inline int Longtail_AsyncGetIndex_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err) { return async_complete_api->OnComplete(async_complete_api, content_index, err); }
 
 ////////////// Longtail_BlockStoreAPI
 
 struct Longtail_BlockStoreAPI;
 
-typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api);
-typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index);
-typedef int (*Longtail_BlockStore_GetStoredBlockPathFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path);
+typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_PutStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_GetStoredBlockFunc)(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
+typedef int (*Longtail_BlockStore_GetIndexFunc)(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 
 struct Longtail_BlockStoreAPI
 {
@@ -294,7 +336,6 @@ struct Longtail_BlockStoreAPI
     Longtail_BlockStore_PutStoredBlockFunc PutStoredBlock;
     Longtail_BlockStore_GetStoredBlockFunc GetStoredBlock;
     Longtail_BlockStore_GetIndexFunc GetIndex;
-    Longtail_BlockStore_GetStoredBlockPathFunc GetStoredBlockPath;
 };
 
 
@@ -305,13 +346,11 @@ LONGTAIL_EXPORT struct Longtail_BlockStoreAPI* Longtail_MakeBlockStoreAPI(
     Longtail_DisposeFunc dispose_func,
     Longtail_BlockStore_PutStoredBlockFunc put_stored_block_func,
     Longtail_BlockStore_GetStoredBlockFunc get_stored_block_func,
-    Longtail_BlockStore_GetIndexFunc get_index_func,
-    Longtail_BlockStore_GetStoredBlockPathFunc get_stored_block_path_func);
+    Longtail_BlockStore_GetIndexFunc get_index_func);
 
-LONGTAIL_EXPORT inline int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api) { return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api); }
-LONGTAIL_EXPORT inline int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_StoredBlock** out_stored_block, struct Longtail_AsyncCompleteAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, out_stored_block, async_complete_api); }
-LONGTAIL_EXPORT inline int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_ContentIndex** out_content_index) { return block_store_api->GetIndex(block_store_api, job_api, default_hash_api_identifier, progress_api, out_content_index); }
-LONGTAIL_EXPORT inline int Longtail_BlockStore_GetStoredBlockPath(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, char** out_path) { return block_store_api->GetStoredBlockPath(block_store_api, block_hash, out_path); }
+LONGTAIL_EXPORT inline int Longtail_BlockStore_PutStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api) { return block_store_api->PutStoredBlock(block_store_api, stored_block, async_complete_api); }
+LONGTAIL_EXPORT inline int Longtail_BlockStore_GetStoredBlock(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api) { return block_store_api->GetStoredBlock(block_store_api, block_hash, async_complete_api); }
+LONGTAIL_EXPORT inline int Longtail_BlockStore_GetIndex(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_JobAPI* job_api, uint32_t default_hash_api_identifier, struct Longtail_ProgressAPI* progress_api, struct Longtail_AsyncGetIndexAPI* async_complete_api) { return block_store_api->GetIndex(block_store_api, job_api, default_hash_api_identifier, progress_api, async_complete_api); }
 
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
@@ -596,6 +635,26 @@ LONGTAIL_EXPORT int Longtail_CreateStoredBlock(
     uint32_t block_data_size,
     struct Longtail_StoredBlock** out_stored_block);
 
+LONGTAIL_EXPORT int Longtail_WriteStoredBlockToBuffer(
+    const struct Longtail_StoredBlock* stored_block,
+    void** out_buffer,
+    size_t* out_size);
+
+LONGTAIL_EXPORT int Longtail_ReadStoredBlockFromBuffer(
+    const void* buffer,
+    size_t size,
+    struct Longtail_StoredBlock** out_stored_block);
+
+LONGTAIL_EXPORT int Longtail_WriteStoredBlock(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_StoredBlock* stored_block,
+    const char* path);
+
+LONGTAIL_EXPORT int Longtail_ReadStoredBlock(
+    struct Longtail_StorageAPI* storage_api,
+    const char* path,
+    struct Longtail_StoredBlock** out_stored_block);
+
 LONGTAIL_EXPORT int Longtail_ValidateContent(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
@@ -626,6 +685,7 @@ struct Longtail_StoredBlock
     uint32_t m_BlockChunksDataSize;
 };
 
+LONGTAIL_EXPORT inline void Longtail_StoredBlock_Dispose(struct Longtail_StoredBlock* stored_block) { if (stored_block && stored_block->Dispose) { stored_block->Dispose(stored_block); } }
 LONGTAIL_EXPORT inline struct Longtail_BlockIndex* Longtail_StoredBlock_GetBlockIndex(struct Longtail_StoredBlock* stored_block) { return stored_block->m_BlockIndex; }
 LONGTAIL_EXPORT inline void* Longtail_BlockIndex_BlockData(struct Longtail_StoredBlock* stored_block) { return stored_block->m_BlockData; }
 LONGTAIL_EXPORT inline uint32_t Longtail_BlockIndex_GetBlockChunksDataSize(struct Longtail_StoredBlock* stored_block) { return stored_block->m_BlockChunksDataSize; }

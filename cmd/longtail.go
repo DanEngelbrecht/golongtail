@@ -9,6 +9,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/lib"
@@ -76,6 +77,19 @@ type managedBlockStore struct {
 func (blockStore *managedBlockStore) Dispose() {
 	blockStore.BlockStoreAPI.Dispose()
 	//	blockStore.BlockStore.Close()
+}
+
+type getIndexCompletionAPI struct {
+	wg           sync.WaitGroup
+	contentIndex lib.Longtail_ContentIndex
+	err          int
+}
+
+func (a *getIndexCompletionAPI) OnComplete(contentIndex lib.Longtail_ContentIndex, err int) int {
+	a.err = err
+	a.contentIndex = contentIndex
+	a.wg.Done()
+	return 0
 }
 
 func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
@@ -235,10 +249,19 @@ func upSyncVersion(
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, errno := indexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+
+	getIndexComplete := &getIndexCompletionAPI{}
+	getIndexComplete.wg.Add(1)
+	errno := indexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
+		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
+	getIndexComplete.wg.Wait()
+	if getIndexComplete.err != 0 {
+		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+	}
+	remoteContentIndex := getIndexComplete.contentIndex
 
 	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
 	if err != nil {
@@ -388,10 +411,18 @@ func downSyncVersion(
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, errno := remoteIndexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	getIndexComplete := &getIndexCompletionAPI{}
+	getIndexComplete.wg.Add(1)
+	errno := remoteIndexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
+		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
+	getIndexComplete.wg.Wait()
+	if getIndexComplete.err != 0 {
+		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+	}
+	remoteContentIndex := getIndexComplete.contentIndex
 
 	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
 	if err != nil {

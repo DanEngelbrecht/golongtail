@@ -537,9 +537,9 @@ func parseLevel(lvl string) (int, error) {
 
 var (
 	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("24576").Uint32()
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
-	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("2048").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 				Default("blake3").

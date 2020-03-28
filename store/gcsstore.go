@@ -227,12 +227,12 @@ func gcsWorker(
 		case putMsg := <-putBlockMessages:
 			errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock, putMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: putStoredBlock returned: %d", errno)
+				log.Panicf("WARNING: putStoredBlock returned: %d", errno)
 			}
 		case getMsg := <-getBlockMessages:
 			errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash, getMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: getStoredBlock returned: %d", errno)
+				log.Panicf("WARNING: getStoredBlock returned: %d", errno)
 			}
 		case _ = <-stopMessages:
 			s.workerWaitGroup.Done()
@@ -356,18 +356,22 @@ func contentIndexWorker(
 		select {
 		case contentIndexMsg := <-contentIndexMessages:
 			newContentIndex, err := lib.MergeContentIndex(contentIndex, contentIndexMsg.contentIndex)
-			if err == nil {
-				contentIndex.Dispose()
-				contentIndex = newContentIndex
+			if err != nil {
+				log.Panicf("ERROR: MergeContentIndex returned: %q", err)
+				continue
 			}
+			contentIndex.Dispose()
+			contentIndex = newContentIndex
 			if !addedContentIndex.IsValid() {
 				addedContentIndex = contentIndexMsg.contentIndex
 			} else {
 				newAddedContentIndex, err := lib.MergeContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
-				if err == nil {
-					addedContentIndex.Dispose()
-					addedContentIndex = newAddedContentIndex
+				if err != nil {
+					log.Panicf("ERROR: MergeContentIndex returned: %q", err)
+					continue
 				}
+				addedContentIndex.Dispose()
+				addedContentIndex = newAddedContentIndex
 				contentIndexMsg.contentIndex.Dispose()
 			}
 		case getIndexMessage := <-getIndexMessages:
@@ -420,9 +424,9 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.Bloc
 	//	backingStorage := lib.CreateFSStorageAPI()
 
 	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
-	s.workerCount = runtime.NumCPU() * 4
-	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
-	s.getBlockChan = make(chan getBlockMessage, s.workerCount*8)
+	s.workerCount = runtime.NumCPU() * 2
+	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
+	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*8)
 	s.getIndexChan = make(chan getIndexMessage)
 	s.stopChan = make(chan stopMessage, s.workerCount)

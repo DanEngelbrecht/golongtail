@@ -83,7 +83,9 @@ func fsWorker(
 	fsGetBlockMessages <-chan fsGetBlockMessage,
 	fsGetIndexMessages <-chan fsGetIndexMessage,
 	fsStopMessages <-chan fsStopMessage) error {
-	for true {
+
+	run := true
+	for run {
 		select {
 		case putMsg := <-fsPutBlockMessages:
 			errno := s.fsBlockStore.PutStoredBlock(putMsg.storedBlock, putMsg.asyncCompleteAPI)
@@ -101,10 +103,19 @@ func fsWorker(
 				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
 			}
 		case _ = <-fsStopMessages:
-			s.workerWaitGroup.Done()
-			return nil
+			run = false
 		}
 	}
+
+	select {
+	case putMsg := <-fsPutBlockMessages:
+		errno := s.fsBlockStore.PutStoredBlock(putMsg.storedBlock, putMsg.asyncCompleteAPI)
+		if errno != 0 {
+			log.Panicf("WARNING: putStoredBlock returned: %d", errno)
+		}
+	default:
+	}
+
 	s.workerWaitGroup.Done()
 	return nil
 }

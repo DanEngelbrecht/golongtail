@@ -118,7 +118,7 @@ func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, job
 			return managedBlockStore{BlockStore: fsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
 		}
 	}
-	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, nil
 }
 
 func createFileStorageForURI(uri string) (store.FileStorage, error) {
@@ -241,10 +241,13 @@ func upSyncVersion(
 	}
 	defer defaultHashAPI.Dispose()
 
-	indexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
 	if err != nil {
 		return err
 	}
+	defer remoteStore.Dispose()
+
+	indexStore := lib.CreateCompressBlockStore(remoteStore.BlockStoreAPI, creg)
 	defer indexStore.Dispose()
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
@@ -252,14 +255,14 @@ func upSyncVersion(
 
 	getIndexComplete := &getIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := indexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := indexStore.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
-		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 	getIndexComplete.wg.Wait()
 	if getIndexComplete.err != 0 {
-		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 	remoteContentIndex := getIndexComplete.contentIndex
 
@@ -332,7 +335,7 @@ func upSyncVersion(
 
 		err = lib.WriteContent(
 			fs,
-			indexStore.BlockStoreAPI,
+			indexStore,
 			jobs,
 			&writeContentProgress,
 			remoteContentIndex,
@@ -406,21 +409,24 @@ func downSyncVersion(
 	}
 	defer localIndexStore.Dispose()
 
-	indexStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
+	cacheBlockStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
+	defer cacheBlockStore.Dispose()
+
+	indexStore := lib.CreateCompressBlockStore(cacheBlockStore, creg)
 	defer indexStore.Dispose()
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
 	getIndexComplete := &getIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := remoteIndexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := indexStore.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 	getIndexComplete.wg.Wait()
 	if getIndexComplete.err != 0 {
-		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 	remoteContentIndex := getIndexComplete.contentIndex
 
@@ -537,9 +543,9 @@ func parseLevel(lvl string) (int, error) {
 
 var (
 	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("24576").Uint32()
+	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
-	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("2048").Uint32()
+	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 				Default("blake3").

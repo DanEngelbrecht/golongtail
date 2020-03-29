@@ -438,6 +438,11 @@ func CreateCacheBlockStore(cacheBlockStore Longtail_BlockStoreAPI, persistentBlo
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCacheBlockStoreAPI(cacheBlockStore.cBlockStoreAPI, persistentBlockStore.cBlockStoreAPI)}
 }
 
+// CreateCompressBlockStore() ...
+func CreateCompressBlockStore(backingBlockStore Longtail_BlockStoreAPI, compressionRegistry Longtail_CompressionRegistryAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCompressBlockStoreAPI(backingBlockStore.cBlockStoreAPI, compressionRegistry.cCompressionRegistryAPI)}
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)

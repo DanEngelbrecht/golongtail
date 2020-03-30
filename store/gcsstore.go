@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/DanEngelbrecht/golongtail/lib"
@@ -129,6 +130,44 @@ func (s *gcsBlockStore) String() string {
 	return s.Location
 }
 
+func putBlob(ctx context.Context, objHandle *storage.ObjectHandle, blob []byte) int {
+	objWriter := objHandle.NewWriter(ctx)
+	_, err := objWriter.Write(blob)
+	if err != nil {
+		objWriter.Close()
+		//		return errors.Wrap(err, s.String()+"/"+key)
+		return lib.EIO
+	}
+
+	err = objWriter.Close()
+	if err != nil {
+		//		return errors.Wrap(err, s.String()+"/"+key)
+		return lib.EIO
+	}
+
+	_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
+	if err != nil {
+		return lib.EIO
+	}
+	return 0
+}
+
+func getBlob(ctx context.Context, objHandle *storage.ObjectHandle) ([]byte, int) {
+	obj, err := objHandle.NewReader(ctx)
+	if err != nil {
+		return nil, lib.ENOMEM
+	}
+	defer obj.Close()
+
+	storedBlockData, err := ioutil.ReadAll(obj)
+
+	if err != nil {
+		return nil, lib.EIO
+	}
+
+	return storedBlockData, 0
+}
+
 func putStoredBlock(
 	ctx context.Context,
 	s *gcsBlockStore,
@@ -150,23 +189,24 @@ func putStoredBlock(
 		blockData := storedBlock.GetChunksBlockData()
 		blob := append(blockIndexBytes, blockData...)
 
-		objWriter := objHandle.NewWriter(ctx)
-		_, err = objWriter.Write(blob)
-		if err != nil {
-			objWriter.Close()
-			//		return errors.Wrap(err, s.String()+"/"+key)
-			return asyncCompleteAPI.OnComplete(lib.EIO)
+		errno := putBlob(ctx, objHandle, blob)
+		if errno != 0 {
+			log.Printf("Retrying putBlob %s", key)
+			errno = putBlob(ctx, objHandle, blob)
+		}
+		if errno != 0 {
+			log.Printf("Retrying 500 ms delayed putBlob %s", key)
+			time.Sleep(500 * time.Millisecond)
+			errno = putBlob(ctx, objHandle, blob)
+		}
+		if errno != 0 {
+			log.Printf("Retrying 2 s delayed putBlob %s", key)
+			time.Sleep(2 * time.Second)
+			errno = putBlob(ctx, objHandle, blob)
 		}
 
-		err = objWriter.Close()
-		if err != nil {
-			//		return errors.Wrap(err, s.String()+"/"+key)
-			return asyncCompleteAPI.OnComplete(lib.EIO)
-		}
-
-		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
-		if err != nil {
-			return asyncCompleteAPI.OnComplete(lib.EIO)
+		if errno != 0 {
+			return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 		}
 	}
 
@@ -188,15 +228,24 @@ func getStoredBlock(
 
 	key := getBlockPath("chunks", blockHash)
 	objHandle := bucket.Object(key)
-	obj, err := objHandle.NewReader(ctx)
-	if err != nil {
-		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.ENOMEM)
+
+	storedBlockData, errno := getBlob(ctx, objHandle)
+	if errno != 0 {
+		log.Printf("Retrying getBlob %s", key)
+		storedBlockData, errno = getBlob(ctx, objHandle)
 	}
-	defer obj.Close()
+	if errno != 0 {
+		log.Printf("Retrying 500 ms delayed getBlob %s", key)
+		time.Sleep(500 * time.Millisecond)
+		storedBlockData, errno = getBlob(ctx, objHandle)
+	}
+	if errno != 0 {
+		log.Printf("Retrying 2 s delayed getBlob %s", key)
+		time.Sleep(2 * time.Second)
+		storedBlockData, errno = getBlob(ctx, objHandle)
+	}
 
-	storedBlockData, err := ioutil.ReadAll(obj)
-
-	if err != nil {
+	if errno != 0 {
 		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.EIO)
 	}
 

@@ -461,9 +461,11 @@ func TestFSBlockStore(t *testing.T) {
 }
 
 type TestBlockStore struct {
-	blocks        map[uint64]Longtail_StoredBlock
-	blockStoreAPI Longtail_BlockStoreAPI
-	lock          sync.Mutex
+	blocks            map[uint64]Longtail_StoredBlock
+	maxBlockSize      uint32
+	maxChunksPerBlock uint32
+	blockStoreAPI     Longtail_BlockStoreAPI
+	lock              sync.Mutex
 }
 
 func (b *TestBlockStore) PutStoredBlock(
@@ -524,6 +526,8 @@ func (b *TestBlockStore) GetIndex(
 	}
 	cIndex, err := CreateContentIndexFromBlocks(
 		defaultHashAPIIdentifier,
+		b.maxBlockSize,
+		b.maxChunksPerBlock,
 		blockIndexes)
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
@@ -541,7 +545,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
 	blockStoreProxy := CreateBlockStoreAPI(blockStore)
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
@@ -605,7 +609,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	defer hashAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
-	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
+	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
 	blockStoreAPI := CreateBlockStoreAPI(testBlockStore)
 	defer blockStoreAPI.Dispose()
 	fileInfos, err := GetFilesRecursively(storageAPI, "content")

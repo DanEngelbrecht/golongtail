@@ -92,12 +92,12 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex lib.Longtail_ContentInde
 	return 0
 }
 
-func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
+func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (managedBlockStore, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, defaultHashAPI)
+			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, defaultHashAPI, targetBlockSize, maxChunksPerBlock)
 			if err != nil {
 				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
 			}
@@ -241,7 +241,7 @@ func upSyncVersion(
 	}
 	defer defaultHashAPI.Dispose()
 
-	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, targetBlockSize, maxChunksPerBlock)
 	if err != nil {
 		return err
 	}
@@ -370,9 +370,6 @@ func downSyncVersion(
 	targetFolderPath string,
 	targetIndexPath *string,
 	localCachePath string,
-	targetChunkSize uint32,
-	targetBlockSize uint32,
-	maxChunksPerBlock uint32,
 	hashAlgorithm *string,
 	retainPermissions bool) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
@@ -394,7 +391,8 @@ func downSyncVersion(
 	}
 	defer defaultHashAPI.Dispose()
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, 524288, 1024)
 	if err != nil {
 		return err
 	}
@@ -477,7 +475,7 @@ func downSyncVersion(
 			fileInfos.GetFileSizes(),
 			fileInfos.GetFilePermissions(),
 			compressionTypes,
-			targetChunkSize)
+			remoteVersionIndex.GetTargetChunkSize())
 		if err != nil {
 			return err
 		}
@@ -542,20 +540,20 @@ func parseLevel(lvl string) (int, error) {
 }
 
 var (
-	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
-	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
-				Default("blake3").
-				Enum("meow", "blake2", "blake3")
+	logLevel   = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
+	storageURI = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
+	hashing    = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
+			Default("blake3").
+			Enum("meow", "blake2", "blake3")
 
-	commandUpSync    = kingpin.Command("upsync", "Upload a folder")
-	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").Required().String()
-	sourceIndexPath  = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath   = commandUpSync.Flag("target-path", "Target file uri").Required().String()
-	compression      = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
+	targetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("524288").Uint32()
+	maxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").Required().String()
+	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	targetFilePath    = commandUpSync.Flag("target-path", "Target file uri").Required().String()
+	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -623,9 +621,6 @@ func main() {
 			*targetFolderPath,
 			targetIndexPath,
 			*localCachePath,
-			*targetChunkSize,
-			*targetBlockSize,
-			*maxChunksPerBlock,
 			hashing,
 			!(*noRetainPermissions))
 		if err != nil {

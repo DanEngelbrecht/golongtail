@@ -108,10 +108,12 @@ type stopMessage struct {
 }
 
 type gcsBlockStore struct {
-	url           *url.URL
-	Location      string
-	defaultClient *storage.Client
-	defaultBucket *storage.BucketHandle
+	url               *url.URL
+	Location          string
+	maxBlockSize      uint32
+	maxChunksPerBlock uint32
+	defaultClient     *storage.Client
+	defaultBucket     *storage.BucketHandle
 
 	defaultHashAPI lib.Longtail_HashAPI
 	workerCount    int
@@ -211,7 +213,7 @@ func putStoredBlock(
 	}
 
 	newBlocks := []lib.Longtail_BlockIndex{blockIndex}
-	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), newBlocks)
+	addedContentIndex, err := lib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), s.maxBlockSize, s.maxChunksPerBlock, newBlocks)
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 	}
@@ -399,20 +401,24 @@ func contentIndexWorker(
 			[]uint64{},
 			[]uint32{},
 			[]uint32{},
-			32768,
-			65536)
+			s.maxBlockSize,
+			s.maxChunksPerBlock)
 		if err != nil {
 			return err
 		}
 	}
+
+	// TODO: Might need safer update of these two fields?
+	s.maxBlockSize = contentIndex.GetMaxBlockSize()
+	s.maxChunksPerBlock = contentIndex.GetMaxChunksPerBlock()
 
 	addedContentIndex, err := lib.CreateContentIndex(
 		s.defaultHashAPI,
 		[]uint64{},
 		[]uint32{},
 		[]uint32{},
-		32768,
-		65536)
+		s.maxBlockSize,
+		s.maxChunksPerBlock)
 	if err != nil {
 		return err
 	}
@@ -470,7 +476,7 @@ func contentIndexWorker(
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.BlockStoreAPI, error) {
+func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI, maxBlockSize uint32, maxChunksPerBlock uint32) (lib.BlockStoreAPI, error) {
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
@@ -486,7 +492,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI) (lib.Bloc
 
 	//	backingStorage := lib.CreateFSStorageAPI()
 
-	s := &gcsBlockStore{url: u, Location: u.String(), defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
+	s := &gcsBlockStore{url: u, Location: u.String(), maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)

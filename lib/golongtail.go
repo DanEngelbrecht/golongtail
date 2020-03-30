@@ -319,6 +319,14 @@ func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
 	return uint32(*contentIndex.cContentIndex.m_HashAPI)
 }
 
+func (contentIndex *Longtail_ContentIndex) GetMaxBlockSize() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_MaxBlockSize)
+}
+
+func (contentIndex *Longtail_ContentIndex) GetMaxChunksPerBlock() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_MaxChunksPerBlock)
+}
+
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }
@@ -347,6 +355,10 @@ func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
 
 func (versionIndex *Longtail_VersionIndex) GetHashAPI() uint32 {
 	return uint32(*versionIndex.cVersionIndex.m_HashAPI)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetTargetChunkSize() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_TargetChunkSize)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetCount() uint32 {
@@ -919,6 +931,8 @@ func CreateContentIndex(
 
 func CreateContentIndexFromBlocks(
 	hashIdentifier uint32,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32,
 	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, error) {
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
 	blockCount := len(blockIndexes)
@@ -933,6 +947,8 @@ func CreateContentIndexFromBlocks(
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_CreateContentIndexFromBlocks(
 		C.uint32_t(hashIdentifier),
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
 		C.uint64_t(blockCount),
 		(**C.struct_Longtail_BlockIndex)(cBlockIndexes),
 		&cindex)

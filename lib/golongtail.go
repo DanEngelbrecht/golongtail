@@ -100,7 +100,7 @@ func (storedBlockPtr *Longtail_StoredBlockPtr) HasPtr() bool {
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
-	GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI, asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
+	GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
 	Close()
 }
 
@@ -486,15 +486,11 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 // GetIndex() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 	defaultHashAPIIdentifier uint32,
-	jobAPI Longtail_JobAPI,
-	progressAPI Longtail_ProgressAPI,
 	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
 
 	errno := C.Longtail_BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
-		jobAPI.cJobAPI,
 		C.uint32_t(defaultHashAPIIdentifier),
-		progressAPI.cProgressAPI,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -1304,12 +1300,10 @@ func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash C.uint64_t, async_co
 }
 
 //export Proxy_GetIndex
-func Proxy_GetIndex(context unsafe.Pointer, job_api *C.struct_Longtail_JobAPI, defaultHashApiIdentifier uint32, progressAPI *C.struct_Longtail_ProgressAPI, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
+func Proxy_GetIndex(context unsafe.Pointer, defaultHashApiIdentifier uint32, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetIndex(
 		uint32(defaultHashApiIdentifier),
-		Longtail_JobAPI{cJobAPI: job_api},
-		Longtail_ProgressAPI{cProgressAPI: progressAPI},
 		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }

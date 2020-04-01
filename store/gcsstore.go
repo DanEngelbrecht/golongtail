@@ -95,8 +95,6 @@ type getBlockMessage struct {
 
 type getIndexMessage struct {
 	defaultHashAPIIdentifier uint32
-	jobAPI                   lib.Longtail_JobAPI
-	progressAPI              lib.Longtail_ProgressAPI
 	asyncCompleteAPI         lib.Longtail_AsyncGetIndexAPI
 }
 
@@ -531,8 +529,8 @@ func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI lib.Lo
 }
 
 // GetIndex ...
-func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
-	s.getIndexChan <- getIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, jobAPI: jobAPI, progressAPI: progress, asyncCompleteAPI: asyncCompleteAPI}
+func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
+	s.getIndexChan <- getIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

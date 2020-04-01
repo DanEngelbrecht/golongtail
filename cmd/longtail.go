@@ -250,12 +250,9 @@ func upSyncVersion(
 	indexStore := lib.CreateCompressBlockStore(remoteStore.BlockStoreAPI, creg)
 	defer indexStore.Dispose()
 
-	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
-	defer getRemoteIndexProgress.Dispose()
-
 	getIndexComplete := &getIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := indexStore.GetIndex(hashIdentifier, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
@@ -413,11 +410,9 @@ func downSyncVersion(
 	indexStore := lib.CreateCompressBlockStore(cacheBlockStore, creg)
 	defer indexStore.Dispose()
 
-	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
-	defer getRemoteIndexProgress.Dispose()
 	getIndexComplete := &getIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := indexStore.GetIndex(hashIdentifier, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)

@@ -48,8 +48,6 @@ type fsGetBlockMessage struct {
 
 type fsGetIndexMessage struct {
 	defaultHashAPIIdentifier uint32
-	jobAPI                   lib.Longtail_JobAPI
-	progressAPI              lib.Longtail_ProgressAPI
 	asyncCompleteAPI         lib.Longtail_AsyncGetIndexAPI
 }
 
@@ -98,7 +96,7 @@ func fsWorker(
 				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
 			}
 		case getMsg := <-fsGetIndexMessages:
-			errno := s.fsBlockStore.GetIndex(getMsg.defaultHashAPIIdentifier, getMsg.jobAPI, getMsg.progressAPI, getMsg.asyncCompleteAPI)
+			errno := s.fsBlockStore.GetIndex(getMsg.defaultHashAPIIdentifier, getMsg.asyncCompleteAPI)
 			if errno != 0 {
 				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
 			}
@@ -158,8 +156,8 @@ func (s *fsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI lib.Lon
 }
 
 // GetIndex ...
-func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
-	s.getIndexChan <- fsGetIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, jobAPI: jobAPI, progressAPI: progress, asyncCompleteAPI: asyncCompleteAPI}
+func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
+	s.getIndexChan <- fsGetIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

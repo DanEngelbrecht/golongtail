@@ -49,8 +49,16 @@ type ProgressAPI interface {
 	OnProgress(totalCount uint32, doneCount uint32)
 }
 
-type AsyncCompleteAPI interface {
+type AsyncPutStoredBlockAPI interface {
 	OnComplete(err int) int
+}
+
+type AsyncGetStoredBlockAPI interface {
+	OnComplete(stored_block Longtail_StoredBlock, err int) int
+}
+
+type AsyncGetIndexAPI interface {
+	OnComplete(content_index Longtail_ContentIndex, err int) int
 }
 
 type Assert interface {
@@ -61,12 +69,16 @@ type Logger interface {
 	OnLog(level int, log string)
 }
 
-type Longtail_AsyncCompleteAPI struct {
-	cAsyncCompleteAPI *C.struct_Longtail_AsyncCompleteAPI
+type Longtail_AsyncGetStoredBlockAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetStoredBlockAPI
 }
 
-func (asyncCompleteAPI *Longtail_AsyncCompleteAPI) IsValid() bool {
-	return asyncCompleteAPI.cAsyncCompleteAPI != nil
+type Longtail_AsyncPutStoredBlockAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncPutStoredBlockAPI
+}
+
+type Longtail_AsyncGetIndexAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetIndexAPI
 }
 
 type Longtail_StoredBlockPtr struct {
@@ -86,10 +98,9 @@ func (storedBlockPtr *Longtail_StoredBlockPtr) HasPtr() bool {
 }
 
 type BlockStoreAPI interface {
-	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncCompleteAPI) int
-	GetStoredBlock(blockHash uint64, outStoredBlock Longtail_StoredBlockPtr, asyncCompleteAPI Longtail_AsyncCompleteAPI) int
-	GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI) (Longtail_ContentIndex, int)
-	GetStoredBlockPath(blockHash uint64) (string, int)
+	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
+	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
+	GetIndex(defaultHashAPIIdentifier uint32, jobAPI Longtail_JobAPI, progress Longtail_ProgressAPI, asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
 	Close()
 }
 
@@ -194,7 +205,7 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
+	cFullPath := C.Longtail_Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
 	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	blockSize := C.Storage_GetSize(storageAPI.cStorageAPI, cFullPath)
@@ -215,7 +226,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
-	cFullPath := C.Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
+	cFullPath := C.Longtail_Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
 	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
 	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
@@ -308,8 +319,16 @@ func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
 	return uint32(*contentIndex.cContentIndex.m_HashAPI)
 }
 
+func (contentIndex *Longtail_ContentIndex) GetMaxBlockSize() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_MaxBlockSize)
+}
+
+func (contentIndex *Longtail_ContentIndex) GetMaxChunksPerBlock() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_MaxChunksPerBlock)
+}
+
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
-	return uint32(C.HashAPI_GetIdentifier(hashAPI.cHashAPI))
+	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }
 
 func (contentIndex *Longtail_ContentIndex) GetBlockCount() uint64 {
@@ -320,8 +339,10 @@ func (contentIndex *Longtail_ContentIndex) GetChunkCount() uint64 {
 	return uint64(*contentIndex.cContentIndex.m_ChunkCount)
 }
 
-func (contentIndex *Longtail_ContentIndex) GetBlockHash(blockIndex uint64) uint64 {
-	return uint64(C.ContentIndex_GetBlockHash(contentIndex.cContentIndex, C.uint64_t(blockIndex)))
+func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
+
+	size := int(C.Longtail_ContentIndex_GetBlockCount(contentIndex.cContentIndex))
+	return carray2slice64(C.Longtail_ContentIndex_BlockHashes(contentIndex.cContentIndex), size)
 }
 
 func (versionIndex *Longtail_VersionIndex) Dispose() {
@@ -334,6 +355,10 @@ func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
 
 func (versionIndex *Longtail_VersionIndex) GetHashAPI() uint32 {
 	return uint32(*versionIndex.cVersionIndex.m_HashAPI)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetTargetChunkSize() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_TargetChunkSize)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetCount() uint32 {
@@ -385,22 +410,32 @@ func (hashAPI *Longtail_HashAPI) Dispose() {
 
 // GetBlake2HashIdentifier() ...
 func GetBlake2HashIdentifier() uint32 {
-	return uint32(C.GetBlake2HashIdentifier())
+	return uint32(C.Longtail_GetBlake2HashType())
 }
 
 // GetBlake3HashIdentifier() ...
 func GetBlake3HashIdentifier() uint32 {
-	return uint32(C.GetBlake3HashIdentifier())
+	return uint32(C.Longtail_GetBlake3HashType())
 }
 
 // GetMeowHashIdentifier() ...
 func GetMeowHashIdentifier() uint32 {
-	return uint32(C.GetMeowHashIdentifier())
+	return uint32(C.Longtail_GetMeowHashType())
 }
 
-//// PutStoredBlock() ...
-func (asyncCompleteAPI *Longtail_AsyncCompleteAPI) OnComplete(errno int) int {
-	return int(C.AsyncComplete_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.int(errno)))
+//// Longtail_AsyncPutStoredBlockAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncPutStoredBlockAPI) OnComplete(errno int) int {
+	return int(C.Longtail_AsyncPutStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.int(errno)))
+}
+
+//// Longtail_AsyncGetStoredBlockAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block Longtail_StoredBlock, errno int) int {
+	return int(C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, C.int(errno)))
+}
+
+//// Longtail_AsyncGetIndexAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Longtail_ContentIndex, errno int) int {
+	return int(C.Longtail_AsyncGetIndex_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno)))
 }
 
 // CreateFSBlockStore() ...
@@ -415,6 +450,11 @@ func CreateCacheBlockStore(cacheBlockStore Longtail_BlockStoreAPI, persistentBlo
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCacheBlockStoreAPI(cacheBlockStore.cBlockStoreAPI, persistentBlockStore.cBlockStoreAPI)}
 }
 
+// CreateCompressBlockStore() ...
+func CreateCompressBlockStore(backingBlockStore Longtail_BlockStoreAPI, compressionRegistry Longtail_CompressionRegistryAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCompressBlockStoreAPI(backingBlockStore.cBlockStoreAPI, compressionRegistry.cCompressionRegistryAPI)}
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)
@@ -423,8 +463,8 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 //// PutStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
-	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
-	errno := C.BlockStore_PutStoredBlock(
+	asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int {
+	errno := C.Longtail_BlockStore_PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		storedBlock.cStoredBlock,
 		asyncCompleteAPI.cAsyncCompleteAPI)
@@ -434,57 +474,29 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 // GetStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	blockHash uint64,
-	outStoredBlock Longtail_StoredBlockPtr,
-	asyncCompleteAPI Longtail_AsyncCompleteAPI) int {
+	asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int {
 
-	errno := C.BlockStore_GetStoredBlock(
+	errno := C.Longtail_BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
-		outStoredBlock.cStoredBlockPtr,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
 
 // GetIndex() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
-	defaulHashAPIIdentifier uint32,
+	defaultHashAPIIdentifier uint32,
 	jobAPI Longtail_JobAPI,
-	progressAPI *Longtail_ProgressAPI) (Longtail_ContentIndex, int) {
+	progressAPI Longtail_ProgressAPI,
+	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
 
-	var cProgressAPI *C.struct_Longtail_ProgressAPI
-	if progressAPI != nil {
-		cProgressAPI = progressAPI.cProgressAPI
-	}
-
-	var cContextIndex *C.struct_Longtail_ContentIndex
-
-	errno := C.BlockStore_GetIndex(
+	errno := C.Longtail_BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
 		jobAPI.cJobAPI,
-		C.uint32_t(defaulHashAPIIdentifier),
-		cProgressAPI,
-		&cContextIndex)
-	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
-	}
-	return Longtail_ContentIndex{cContentIndex: cContextIndex}, 0
-}
-
-// GetStoredBlockPath() ...
-func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlockPath(
-	blockHash uint64) (string, int) {
-
-	var cPath *C.char
-	errno := C.BlockStore_GetStoredBlockPath(
-		blockStoreAPI.cBlockStoreAPI,
-		C.uint64_t(blockHash),
-		&cPath)
-	if errno != 0 {
-		return "", int(errno)
-	}
-	defer C.free(unsafe.Pointer(cPath))
-	path := C.GoString(cPath)
-	return path, 0
+		C.uint32_t(defaultHashAPIIdentifier),
+		progressAPI.cProgressAPI,
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
 }
 
 func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
@@ -519,7 +531,7 @@ func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
 }
 
 func (storedBlock *Longtail_StoredBlock) Dispose() {
-	C.DisposeStoredBlock(storedBlock.cStoredBlock)
+	C.Longtail_StoredBlock_Dispose(storedBlock.cStoredBlock)
 }
 
 func (blockIndex *Longtail_BlockIndex) Dispose() {
@@ -632,19 +644,14 @@ func (progressAPI *Longtail_ProgressAPI) Dispose() {
 	C.Longtail_DisposeAPI(&progressAPI.cProgressAPI.m_API)
 }
 
-// Longtail_AsyncCompleteAPI.Dispose() ...
-func (AsyncCompleteAPI *Longtail_AsyncCompleteAPI) Dispose() {
-	C.Longtail_DisposeAPI(&AsyncCompleteAPI.cAsyncCompleteAPI.m_API)
-}
-
 // Longtail_JobAPI.Dispose() ...
 func (jobAPI *Longtail_JobAPI) Dispose() {
 	C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
 }
 
-// CreateDefaultCompressionRegistry ...
-func CreateDefaultCompressionRegistry() Longtail_CompressionRegistryAPI {
-	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.CompressionRegistry_CreateDefault()}
+// CreateFullCompressionRegistry ...
+func CreateFullCompressionRegistry() Longtail_CompressionRegistryAPI {
+	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateFullCompressionRegistry()}
 }
 
 // Longtail_CompressionRegistryAPI ...
@@ -659,52 +666,52 @@ func GetNoCompressionType() uint32 {
 
 // GetBrotliGenericMinCompressionType ...
 func GetBrotliGenericMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_GENERIC_MIN_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliGenericMinQuality())
 }
 
 // GetBrotliGenericDefaultCompressionType ...
 func GetBrotliGenericDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_GENERIC_DEFAULT_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliGenericDefaultQuality())
 }
 
 // GetBrotliGenericMaxCompressionType ...
 func GetBrotliGenericMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_GENERIC_MAX_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliGenericMaxQuality())
 }
 
 // GetBrotliTextMinCompressionType ...
 func GetBrotliTextMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_TEXT_MIN_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliTextMinQuality())
 }
 
 // GetBrotliTextDefaultCompressionType ...
 func GetBrotliTextDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_TEXT_DEFAULT_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliTextDefaultQuality())
 }
 
 // GetBrotliTextMaxCompressionType ...
 func GetBrotliTextMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_BROTLI_TEXT_MAX_QUALITY_TYPE)
+	return uint32(C.Longtail_GetBrotliTextMaxQuality())
 }
 
 // GetLZ4DefaultCompressionType ...
 func GetLZ4DefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_LZ4_DEFAULT_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetLZ4DefaultQuality())
 }
 
 // GetZStdMinCompressionType ...
 func GetZStdMinCompressionType() uint32 {
-	return uint32(C.LONGTAIL_ZSTD_MIN_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetZStdMinQuality())
 }
 
 // GetZStdDefaultCompressionType ...
 func GetZStdDefaultCompressionType() uint32 {
-	return uint32(C.LONGTAIL_ZSTD_DEFAULT_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetZStdDefaultQuality())
 }
 
 // GetZStdMaxCompressionType ...
 func GetZStdMaxCompressionType() uint32 {
-	return uint32(C.LONGTAIL_ZSTD_MAX_COMPRESSION_TYPE)
+	return uint32(C.Longtail_GetZStdMaxQuality())
 }
 
 // LongtailAlloc ...
@@ -731,7 +738,7 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, rootPath string) (Longt
 
 // GetPath ...
 func (paths Longtail_Paths) GetPath(index uint32) string {
-	cPath := C.GetPath(paths.cPaths.m_Offsets, paths.cPaths.m_Data, C.uint32_t(index))
+	cPath := C.Longtail_Paths_GetPath(paths.cPaths, C.uint32_t(index))
 	return C.GoString(cPath)
 }
 
@@ -803,7 +810,7 @@ func CreateVersionIndex(
 	}
 
 	var vindex *C.struct_Longtail_VersionIndex
-	errno := C.Longtail_CreateVersionIndex(
+	errno := C.Longtail_CreateVersionIndexRaw(
 		storageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
@@ -883,7 +890,7 @@ func CreateContentIndex(
 	chunkCount := uint64(len(chunkHashes))
 	var cindex *C.struct_Longtail_ContentIndex
 	if chunkCount == 0 {
-		errno := C.Longtail_CreateContentIndex(
+		errno := C.Longtail_CreateContentIndexRaw(
 			hashAPI.cHashAPI,
 			0,
 			nil,
@@ -905,7 +912,7 @@ func CreateContentIndex(
 		cCompressionTypes = (*C.uint32_t)(unsafe.Pointer(&compressionTypes[0]))
 	}
 
-	errno := C.Longtail_CreateContentIndex(
+	errno := C.Longtail_CreateContentIndexRaw(
 		hashAPI.cHashAPI,
 		C.uint64_t(chunkCount),
 		cChunkHashes,
@@ -924,6 +931,8 @@ func CreateContentIndex(
 
 func CreateContentIndexFromBlocks(
 	hashIdentifier uint32,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32,
 	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, error) {
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
 	blockCount := len(blockIndexes)
@@ -938,6 +947,8 @@ func CreateContentIndexFromBlocks(
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_CreateContentIndexFromBlocks(
 		C.uint32_t(hashIdentifier),
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
 		C.uint64_t(blockCount),
 		(**C.struct_Longtail_BlockIndex)(cBlockIndexes),
 		&cindex)
@@ -1008,17 +1019,43 @@ func ProgressAPIProxyOnProgress(context unsafe.Pointer, total_count C.uint32_t, 
 	progress.OnProgress(uint32(total_count), uint32(done_count))
 }
 
-// CreateAsyncCompleteAPI ...
-func CreateAsyncCompleteAPI(asyncComplete AsyncCompleteAPI) Longtail_AsyncCompleteAPI {
+// CreateAsyncPutStoredBlockAPI ...
+func CreateAsyncPutStoredBlockAPI(asyncComplete AsyncPutStoredBlockAPI) Longtail_AsyncPutStoredBlockAPI {
 	cContext := SavePointer(asyncComplete)
-	asyncCompleteAPIProxy := C.CreateAsyncCompleteProxyAPI(cContext)
-	return Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+	asyncCompleteAPIProxy := C.CreateAsyncPutStoredBlockAPI(cContext)
+	return Longtail_AsyncPutStoredBlockAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
-//export AsyncCompleteAPIProxyOnComplete
-func AsyncCompleteAPIProxyOnComplete(context unsafe.Pointer, err C.int) C.int {
-	asyncComplete := RestorePointer(context).(AsyncCompleteAPI)
+//export AsyncPutStoredBlockAPIProxyOnComplete
+func AsyncPutStoredBlockAPIProxyOnComplete(context unsafe.Pointer, err C.int) C.int {
+	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
 	return C.int(asyncComplete.OnComplete(int(err)))
+}
+
+// CreateAsyncGetStoredBlockAPI ...
+func CreateAsyncGetStoredBlockAPI(asyncComplete AsyncGetStoredBlockAPI) Longtail_AsyncGetStoredBlockAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncGetStoredBlockAPI(cContext)
+	return Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncGetStoredBlockAPIProxyOnComplete
+func AsyncGetStoredBlockAPIProxyOnComplete(context unsafe.Pointer, stored_block *C.struct_Longtail_StoredBlock, err C.int) C.int {
+	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
+	return C.int(asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(err)))
+}
+
+// CreateAsyncGetIndexAPI ...
+func CreateAsyncGetIndexAPI(asyncComplete AsyncGetIndexAPI) Longtail_AsyncGetIndexAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncGetIndexAPI(cContext)
+	return Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncGetIndexAPIProxyOnComplete
+func AsyncGetIndexAPIProxyOnComplete(context unsafe.Pointer, content_index *C.struct_Longtail_ContentIndex, err C.int) C.int {
+	asyncComplete := RestorePointer(context).(AsyncGetIndexAPI)
+	return C.int(asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err)))
 }
 
 // WriteContent ...
@@ -1253,42 +1290,27 @@ func Proxy_BlockStore_Dispose(context unsafe.Pointer) {
 }
 
 //export Proxy_PutStoredBlock
-func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
+func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock}, Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: async_complete_api})
+	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock}, Longtail_AsyncPutStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 
 //export Proxy_GetStoredBlock
-func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash C.uint64_t, outStoredBlock **C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncCompleteAPI) C.int {
+func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash C.uint64_t, async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_StoredBlockPtr{cStoredBlockPtr: outStoredBlock}, Longtail_AsyncCompleteAPI{cAsyncCompleteAPI: async_complete_api})
+	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 
 //export Proxy_GetIndex
-func Proxy_GetIndex(context unsafe.Pointer, job_api *C.struct_Longtail_JobAPI, defaultHashApiIdentifier uint32, progressAPI *C.struct_Longtail_ProgressAPI, outContentIndex **C.struct_Longtail_ContentIndex) C.int {
+func Proxy_GetIndex(context unsafe.Pointer, job_api *C.struct_Longtail_JobAPI, defaultHashApiIdentifier uint32, progressAPI *C.struct_Longtail_ProgressAPI, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	contextIndex, errno := blockStore.GetIndex(
+	errno := blockStore.GetIndex(
 		uint32(defaultHashApiIdentifier),
 		Longtail_JobAPI{cJobAPI: job_api},
-		Longtail_ProgressAPI{cProgressAPI: progressAPI})
-	if errno == 0 {
-		*outContentIndex = contextIndex.cContentIndex
-		contextIndex.cContentIndex = nil
-	}
-	return C.int(errno)
-}
-
-//export Proxy_GetStoredBlockPath
-func Proxy_GetStoredBlockPath(context unsafe.Pointer, blockHash C.uint64_t, outPath **C.char) C.int {
-	blockStore := RestorePointer(context).(BlockStoreAPI)
-	path, errno := blockStore.GetStoredBlockPath(uint64(blockHash))
-	if errno == 0 {
-		cPath := C.CString(path)
-		defer C.free(unsafe.Pointer(cPath))
-		*outPath = C.Longtail_Strdup(cPath)
-	}
+		Longtail_ProgressAPI{cProgressAPI: progressAPI},
+		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

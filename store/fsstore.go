@@ -38,13 +38,19 @@ func NewFSFileStorage() (FileStorage, error) {
 
 type fsPutBlockMessage struct {
 	storedBlock      lib.Longtail_StoredBlock
-	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI
+	asyncCompleteAPI lib.Longtail_AsyncPutStoredBlockAPI
 }
 
 type fsGetBlockMessage struct {
 	blockHash        uint64
-	outStoredBlock   lib.Longtail_StoredBlockPtr
-	asyncCompleteAPI lib.Longtail_AsyncCompleteAPI
+	asyncCompleteAPI lib.Longtail_AsyncGetStoredBlockAPI
+}
+
+type fsGetIndexMessage struct {
+	defaultHashAPIIdentifier uint32
+	jobAPI                   lib.Longtail_JobAPI
+	progressAPI              lib.Longtail_ProgressAPI
+	asyncCompleteAPI         lib.Longtail_AsyncGetIndexAPI
 }
 
 type fsStopMessage struct {
@@ -60,6 +66,7 @@ type fsBlockStore struct {
 
 	putBlockChan chan fsPutBlockMessage
 	getBlockChan chan fsGetBlockMessage
+	getIndexChan chan fsGetIndexMessage
 	stopChan     chan fsStopMessage
 
 	workerWaitGroup sync.WaitGroup
@@ -74,8 +81,11 @@ func fsWorker(
 	s *fsBlockStore,
 	fsPutBlockMessages <-chan fsPutBlockMessage,
 	fsGetBlockMessages <-chan fsGetBlockMessage,
+	fsGetIndexMessages <-chan fsGetIndexMessage,
 	fsStopMessages <-chan fsStopMessage) error {
-	for true {
+
+	run := true
+	for run {
 		select {
 		case putMsg := <-fsPutBlockMessages:
 			errno := s.fsBlockStore.PutStoredBlock(putMsg.storedBlock, putMsg.asyncCompleteAPI)
@@ -83,15 +93,29 @@ func fsWorker(
 				log.Printf("WARNING: PutStoredBlock returned: %d", errno)
 			}
 		case getMsg := <-fsGetBlockMessages:
-			errno := s.fsBlockStore.GetStoredBlock(getMsg.blockHash, getMsg.outStoredBlock, getMsg.asyncCompleteAPI)
+			errno := s.fsBlockStore.GetStoredBlock(getMsg.blockHash, getMsg.asyncCompleteAPI)
+			if errno != 0 {
+				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
+			}
+		case getMsg := <-fsGetIndexMessages:
+			errno := s.fsBlockStore.GetIndex(getMsg.defaultHashAPIIdentifier, getMsg.jobAPI, getMsg.progressAPI, getMsg.asyncCompleteAPI)
 			if errno != 0 {
 				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
 			}
 		case _ = <-fsStopMessages:
-			s.workerWaitGroup.Done()
-			return nil
+			run = false
 		}
 	}
+
+	select {
+	case putMsg := <-fsPutBlockMessages:
+		errno := s.fsBlockStore.PutStoredBlock(putMsg.storedBlock, putMsg.asyncCompleteAPI)
+		if errno != 0 {
+			log.Panicf("WARNING: putStoredBlock returned: %d", errno)
+		}
+	default:
+	}
+
 	s.workerWaitGroup.Done()
 	return nil
 }
@@ -104,10 +128,11 @@ func NewFSBlockStore(path string, defaultHashAPI uint32, jobAPI lib.Longtail_Job
 	s.workerCount = runtime.NumCPU() * 4
 	s.putBlockChan = make(chan fsPutBlockMessage, s.workerCount*4096)
 	s.getBlockChan = make(chan fsGetBlockMessage, s.workerCount*4096)
+	s.getIndexChan = make(chan fsGetIndexMessage, 16)
 	s.stopChan = make(chan fsStopMessage, s.workerCount)
 
 	for i := 0; i < s.workerCount; i++ {
-		go fsWorker(s, s.putBlockChan, s.getBlockChan, s.stopChan)
+		go fsWorker(s, s.putBlockChan, s.getBlockChan, s.getIndexChan, s.stopChan)
 	}
 	s.workerWaitGroup.Add(s.workerCount)
 
@@ -115,35 +140,27 @@ func NewFSBlockStore(path string, defaultHashAPI uint32, jobAPI lib.Longtail_Job
 }
 
 // PutStoredBlock ...
-func (s *fsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
-	if asyncCompleteAPI.IsValid() {
-		if len(s.putBlockChan) < cap(s.putBlockChan) {
-			s.putBlockChan <- fsPutBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
-			return 0
-		}
+func (s *fsBlockStore) PutStoredBlock(storedBlock lib.Longtail_StoredBlock, asyncCompleteAPI lib.Longtail_AsyncPutStoredBlockAPI) int {
+	if len(s.putBlockChan) < cap(s.putBlockChan) {
+		s.putBlockChan <- fsPutBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
+		return 0
 	}
 	return s.fsBlockStore.PutStoredBlock(storedBlock, asyncCompleteAPI)
 }
 
 // GetStoredBlock ...
-func (s *fsBlockStore) GetStoredBlock(blockHash uint64, outStoredBlock lib.Longtail_StoredBlockPtr, asyncCompleteAPI lib.Longtail_AsyncCompleteAPI) int {
-	if asyncCompleteAPI.IsValid() {
-		if len(s.getBlockChan) < cap(s.getBlockChan) {
-			s.getBlockChan <- fsGetBlockMessage{blockHash: blockHash, outStoredBlock: outStoredBlock, asyncCompleteAPI: asyncCompleteAPI}
-			return 0
-		}
+func (s *fsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI lib.Longtail_AsyncGetStoredBlockAPI) int {
+	if len(s.getBlockChan) < cap(s.getBlockChan) {
+		s.getBlockChan <- fsGetBlockMessage{blockHash: blockHash, asyncCompleteAPI: asyncCompleteAPI}
+		return 0
 	}
-	return s.fsBlockStore.GetStoredBlock(blockHash, outStoredBlock, asyncCompleteAPI)
+	return s.fsBlockStore.GetStoredBlock(blockHash, asyncCompleteAPI)
 }
 
 // GetIndex ...
-func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI) (lib.Longtail_ContentIndex, int) {
-	return s.fsBlockStore.GetIndex(s.defaultHashAPI, s.jobAPI, &progress)
-}
-
-// GetStoredBlockPath ...
-func (s *fsBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
-	return s.GetStoredBlockPath(blockHash)
+func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, jobAPI lib.Longtail_JobAPI, progress lib.Longtail_ProgressAPI, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
+	s.getIndexChan <- fsGetIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, jobAPI: jobAPI, progressAPI: progress, asyncCompleteAPI: asyncCompleteAPI}
+	return 0
 }
 
 // Close ...

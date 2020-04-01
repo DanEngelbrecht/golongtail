@@ -9,6 +9,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/lib"
@@ -78,12 +79,25 @@ func (blockStore *managedBlockStore) Dispose() {
 	//	blockStore.BlockStore.Close()
 }
 
-func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI) (managedBlockStore, error) {
+type getIndexCompletionAPI struct {
+	wg           sync.WaitGroup
+	contentIndex lib.Longtail_ContentIndex
+	err          int
+}
+
+func (a *getIndexCompletionAPI) OnComplete(contentIndex lib.Longtail_ContentIndex, err int) int {
+	a.err = err
+	a.contentIndex = contentIndex
+	a.wg.Done()
+	return 0
+}
+
+func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, jobAPI lib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (managedBlockStore, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, defaultHashAPI)
+			gcsBlockStore, err := store.NewGCSBlockStore(blobStoreURL, defaultHashAPI, targetBlockSize, maxChunksPerBlock)
 			if err != nil {
 				return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.Longtail_BlockStoreAPI{}}, err
 			}
@@ -104,7 +118,7 @@ func createBlockStoreForURI(uri string, defaultHashAPI lib.Longtail_HashAPI, job
 			return managedBlockStore{BlockStore: fsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
 		}
 	}
-	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+	return managedBlockStore{BlockStore: nil, BlockStoreAPI: lib.CreateFSBlockStore(lib.CreateFSStorageAPI(), uri)}, nil
 }
 
 func createFileStorageForURI(uri string) (store.FileStorage, error) {
@@ -213,7 +227,7 @@ func upSyncVersion(
 	defer fs.Dispose()
 	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := lib.CreateDefaultCompressionRegistry()
+	creg := lib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
@@ -227,18 +241,30 @@ func upSyncVersion(
 	}
 	defer defaultHashAPI.Dispose()
 
-	indexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, targetBlockSize, maxChunksPerBlock)
 	if err != nil {
 		return err
 	}
+	defer remoteStore.Dispose()
+
+	indexStore := lib.CreateCompressBlockStore(remoteStore.BlockStoreAPI, creg)
 	defer indexStore.Dispose()
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, errno := indexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+
+	getIndexComplete := &getIndexCompletionAPI{}
+	getIndexComplete.wg.Add(1)
+	errno := indexStore.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
-		return fmt.Errorf("indexStore.BlockStoreAPI.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		getIndexComplete.wg.Done()
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
+	getIndexComplete.wg.Wait()
+	if getIndexComplete.err != 0 {
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+	}
+	remoteContentIndex := getIndexComplete.contentIndex
 
 	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
 	if err != nil {
@@ -309,7 +335,7 @@ func upSyncVersion(
 
 		err = lib.WriteContent(
 			fs,
-			indexStore.BlockStoreAPI,
+			indexStore,
 			jobs,
 			&writeContentProgress,
 			remoteContentIndex,
@@ -344,9 +370,6 @@ func downSyncVersion(
 	targetFolderPath string,
 	targetIndexPath *string,
 	localCachePath string,
-	targetChunkSize uint32,
-	targetBlockSize uint32,
-	maxChunksPerBlock uint32,
 	hashAlgorithm *string,
 	retainPermissions bool) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
@@ -354,7 +377,7 @@ func downSyncVersion(
 	defer fs.Dispose()
 	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := lib.CreateDefaultCompressionRegistry()
+	creg := lib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
@@ -368,7 +391,8 @@ func downSyncVersion(
 	}
 	defer defaultHashAPI.Dispose()
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs)
+	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, 524288, 1024)
 	if err != nil {
 		return err
 	}
@@ -383,15 +407,26 @@ func downSyncVersion(
 	}
 	defer localIndexStore.Dispose()
 
-	indexStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
+	cacheBlockStore := lib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
+	defer cacheBlockStore.Dispose()
+
+	indexStore := lib.CreateCompressBlockStore(cacheBlockStore, creg)
 	defer indexStore.Dispose()
 
 	getRemoteIndexProgress := lib.CreateProgressAPI(&progressData{task: "Get remote index"})
 	defer getRemoteIndexProgress.Dispose()
-	remoteContentIndex, errno := remoteIndexStore.BlockStoreAPI.GetIndex(hashIdentifier, jobs, &getRemoteIndexProgress)
+	getIndexComplete := &getIndexCompletionAPI{}
+	getIndexComplete.wg.Add(1)
+	errno := indexStore.GetIndex(hashIdentifier, jobs, getRemoteIndexProgress, lib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
+		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
+	getIndexComplete.wg.Wait()
+	if getIndexComplete.err != 0 {
+		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+	}
+	remoteContentIndex := getIndexComplete.contentIndex
 
 	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
 	if err != nil {
@@ -440,7 +475,7 @@ func downSyncVersion(
 			fileInfos.GetFileSizes(),
 			fileInfos.GetFilePermissions(),
 			compressionTypes,
-			targetChunkSize)
+			remoteVersionIndex.GetTargetChunkSize())
 		if err != nil {
 			return err
 		}
@@ -505,20 +540,20 @@ func parseLevel(lvl string) (int, error) {
 }
 
 var (
-	logLevel          = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	targetChunkSize   = kingpin.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize   = kingpin.Flag("target-block-size", "Target block size").Default("524288").Uint32()
-	maxChunksPerBlock = kingpin.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	storageURI        = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	hashing           = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
-				Default("blake3").
-				Enum("meow", "blake2", "blake3")
+	logLevel   = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
+	storageURI = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
+	hashing    = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
+			Default("blake3").
+			Enum("meow", "blake2", "blake3")
 
-	commandUpSync    = kingpin.Command("upsync", "Upload a folder")
-	sourceFolderPath = commandUpSync.Flag("source-path", "Source folder path").Required().String()
-	sourceIndexPath  = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath   = commandUpSync.Flag("target-path", "Target file uri").Required().String()
-	compression      = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
+	targetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("524288").Uint32()
+	maxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").Required().String()
+	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	targetFilePath    = commandUpSync.Flag("target-path", "Target file uri").Required().String()
+	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -586,9 +621,6 @@ func main() {
 			*targetFolderPath,
 			targetIndexPath,
 			*localCachePath,
-			*targetChunkSize,
-			*targetBlockSize,
-			*maxChunksPerBlock,
 			hashing,
 			!(*noRetainPermissions))
 		if err != nil {

@@ -3,8 +3,6 @@ name: Windows
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 
 jobs:
   build:
@@ -12,15 +10,22 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: test
-        run: |
-          pushd ./lib
-          ./test.bat
-          popd
-      - name: build cmd
-        run: |
-          pushd ./cmd
-          ./build.bat
-          popd
-  
+    - uses: actions/checkout@v2
+    - name: test
+      run: |
+        pushd ./lib
+        ./test.bat
+        popd
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ./build.bat
+        popd
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./cmd/longtail.exe dist/
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-win-x64
+        path: dist

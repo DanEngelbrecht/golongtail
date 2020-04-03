@@ -1,7 +1,7 @@
 name: Linux
 
 on:
-  push:
+  pull_request:
     branches: [ master ]
 
 jobs:
@@ -21,11 +21,3 @@ jobs:
         pushd ./cmd
         ./build.sh
         popd
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./cmd/longtail dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-linux-x64
-        path: dist

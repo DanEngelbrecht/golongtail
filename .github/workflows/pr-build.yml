@@ -1,0 +1,40 @@
+name: Validate PR
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  linux:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: test
+      run: |
+        pushd ./lib
+        ./test.sh
+        popd
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ./build.sh
+        popd
+
+  win32:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: test
+      run: |
+        pushd ./lib
+        ./test.bat
+        popd
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ./build.bat
+        popd

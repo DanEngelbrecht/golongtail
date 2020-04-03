@@ -16,10 +16,10 @@ jobs:
     - name: test
       run: |
         pushd ./lib
-        ../test.sh
+        ./test.sh
         popd
     - name: build cmd
       run: |
         pushd ./cmd
-        ../build.sh
+        ./build.sh
         popd

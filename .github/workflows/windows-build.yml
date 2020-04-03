@@ -16,11 +16,11 @@ jobs:
       - name: test
         run: |
           pushd ./lib
-          ../test.bat
+          ./test.bat
           popd
       - name: build cmd
         run: |
           pushd ./cmd
-          ../build.bat
+          ./build.bat
           popd
   

@@ -28,11 +28,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      - name: test
-        run: |
-          pushd ./lib
-          ./test.bat
-          popd
+    - name: test
+      run: |
+        pushd ./lib
+        ./test.bat
+        popd
     - name: build cmd
       run: |
         pushd ./cmd

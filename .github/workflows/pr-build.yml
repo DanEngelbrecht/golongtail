@@ -27,15 +27,14 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: test
-        run: |
-          pushd ./lib
-          ./test.bat
-          popd
-      - name: build cmd
-        run: |
-          pushd ./cmd
-          ./build.bat
-          popd
-  
+    - uses: actions/checkout@v2
+    - name: test
+      run: |
+        pushd ./lib
+        ./test.bat
+        popd
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ./build.bat
+        popd

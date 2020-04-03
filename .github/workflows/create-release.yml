@@ -33,11 +33,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-      - name: build cmd
-        run: |
-          pushd ./cmd
-          ./build.bat
-          popd
+    - name: build cmd
+      run: |
+        pushd ./cmd
+        ./build.bat
+        popd
     - name: build dist
       run: |
         mkdir dist

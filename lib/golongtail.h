@@ -1,4 +1,6 @@
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
 #include "import/src/longtail.h"
 #include "import/lib/bikeshed/longtail_bikeshed.h"
 #include "import/lib/blake2/longtail_blake2.h"

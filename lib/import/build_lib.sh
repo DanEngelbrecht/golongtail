@@ -1,26 +1,6 @@
 #!/usr/bin/env bash
 
-arch=$(uname -p)
-if [[ $arch == x86_64* ]]; then
-	ARCH_NAME=amd64
-elif [[ $arch == i*86 ]]; then
-	ARCH_NAME=386
-elif  [[ $arch == arm* ]]; then
-	ARCH_NAME=arm
-fi
-
-if [[ "$OSTYPE" == "linux-gnu" ]]; then
-	OS_NAME=linux
-	GCC_EXTRA=-D_GNU_SOURCE
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-	OS_NAME=darwin
-	ARCH_NAME=amd64
-	GCC_EXTRA=-D_GNU_SOURCE
-elif [[ "$OSTYPE" == "win32" ]]; then
-	OS_NAME=windows
-fi
-
-LIB_TARGET_FOLDER=${OS_NAME}_${ARCH_NAME}
+LIB_TARGET_FOLDER=clib
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
 
 echo Building $LIB_TARGET

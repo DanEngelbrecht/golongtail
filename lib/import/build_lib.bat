@@ -1,9 +1,6 @@
 @echo off
 
-reg Query "HKLM\Hardware\Description\System\CentralProcessor\0" | find /i "x86" > NUL && set ARCH_NAME=386 || set ARCH_NAME=amd64
-set OS_NAME=windows
-
-set LIB_TARGET_FOLDER=%OS_NAME%_%ARCH_NAME%
+set LIB_TARGET_FOLDER=clib
 set LIB_TARGET=%LIB_TARGET_FOLDER%/longtail_lib.a
 
 echo Building %LIB_TARGET%

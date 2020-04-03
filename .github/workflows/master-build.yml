@@ -1,11 +1,11 @@
-name: Linux
+name: Build Master
 
 on:
   push:
     branches: [ master ]
 
 jobs:
-  build:
+  linux:
 
     runs-on: ubuntu-latest
 
@@ -21,11 +21,20 @@ jobs:
         pushd ./cmd
         ./build.sh
         popd
-    - name: build dist
+
+  win32:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      - name: test
+        run: |
+          pushd ./lib
+          ./test.bat
+          popd
+    - name: build cmd
       run: |
-        mkdir dist
-        cp ./cmd/longtail dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-linux-x64
-        path: dist
+        pushd ./cmd
+        ./build.bat
+        popd

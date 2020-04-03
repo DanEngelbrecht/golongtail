@@ -1,6 +1,6 @@
 |Branch      | OSX / Linux / Windows |
 |------------|-----------------------|
-|master      | [![Build Status](https://travis-ci.org/DanEngelbrecht/go_longtail.svg?branch=master)](https://travis-ci.org/DanEngelbrecht/go_longtail?branch=master) |
+|master      | [![Build Status](https://github.com/DanEngelbrecht/golongtail/workflows/.github/workflows/master-build.yml/badge.svg)](https://github.com/DanEngelbrecht/golongtail/workflows/.github/workflows/master-build.yml/badge.svg) |
 
 # go_longtail
 

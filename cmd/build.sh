@@ -15,6 +15,6 @@ then
 fi
 
 echo Building longtail executable
-go build .
+go build -ldflags="-s -w" .
 rc=$?; if [[ $rc != 0 ]]; then exit $rc; fi
 echo Success

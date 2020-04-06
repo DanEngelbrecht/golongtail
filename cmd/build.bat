@@ -11,6 +11,6 @@ IF NOT EXIST "%LIB_TARGET%" (
 )
 
 ECHO Building longtail executable
-go build .
+go build -ldflags="-s -w" .
 if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
 ECHO Success

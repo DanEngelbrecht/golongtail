@@ -79,6 +79,7 @@ func NewGCSFileStorage(u *url.URL) (FileStorage, error) {
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
+
 	s := &gcsFileStorage{}
 	return s, nil
 }
@@ -108,6 +109,7 @@ type stopMessage struct {
 type gcsBlockStore struct {
 	url               *url.URL
 	Location          string
+	prefix            string
 	maxBlockSize      uint32
 	maxChunksPerBlock uint32
 	defaultClient     *storage.Client
@@ -177,7 +179,7 @@ func putStoredBlock(
 	asyncCompleteAPI lib.Longtail_AsyncPutStoredBlockAPI) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
-	key := getBlockPath("chunks", blockHash)
+	key := getBlockPath(s.prefix+"chunks", blockHash)
 	objHandle := bucket.Object(key)
 	_, err := objHandle.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
@@ -226,7 +228,7 @@ func getStoredBlock(
 	blockHash uint64,
 	asyncCompleteAPI lib.Longtail_AsyncGetStoredBlockAPI) int {
 
-	key := getBlockPath("chunks", blockHash)
+	key := getBlockPath(s.prefix+"chunks", blockHash)
 	objHandle := bucket.Object(key)
 
 	storedBlockData, errno := getBlob(ctx, objHandle)
@@ -305,12 +307,14 @@ func gcsWorker(
 func updateRemoteContentIndex(
 	ctx context.Context,
 	bucket *storage.BucketHandle,
+	prefix string,
 	addedContentIndex lib.Longtail_ContentIndex) error {
 	storeBlob, err := lib.WriteContentIndexToBuffer(addedContentIndex)
 	if err != nil {
 		return err
 	}
-	objHandle := bucket.Object("store.lci")
+	key := prefix + "store.lci"
+	objHandle := bucket.Object(key)
 	for {
 		writeCondition := storage.Conditions{DoesNotExist: true}
 		objAttrs, _ := objHandle.Attrs(ctx)
@@ -381,7 +385,8 @@ func contentIndexWorker(
 
 	var contentIndex lib.Longtail_ContentIndex
 
-	objHandle := bucket.Object("store.lci")
+	key := s.prefix + "store.lci"
+	objHandle := bucket.Object(key)
 	obj, err := objHandle.NewReader(ctx)
 	if err == nil {
 		defer obj.Close()
@@ -464,7 +469,7 @@ func contentIndexWorker(
 	}
 
 	if addedContentIndex.GetBlockCount() > 0 {
-		err := updateRemoteContentIndex(ctx, bucket, addedContentIndex)
+		err := updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
 		if err != nil {
 			log.Printf("WARNING: Failed to write store content index: %q", err)
 		}
@@ -485,12 +490,15 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI lib.Longtail_HashAPI, maxBlockS
 		return nil, errors.Wrap(err, u.String())
 	}
 
+	prefix := u.Path[1:] // strip initial slash
+
+	if prefix != "" {
+		prefix += "/"
+	}
 	bucketName := u.Host
 	defaultBucket := defaultClient.Bucket(bucketName)
 
-	//	backingStorage := lib.CreateFSStorageAPI()
-
-	s := &gcsBlockStore{url: u, Location: u.String(), maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
+	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
@@ -536,7 +544,7 @@ func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteA
 
 // GetStoredBlockPath ...
 func (s *gcsBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
-	return getBlockPath("chunks", blockHash), 0
+	return getBlockPath(s.prefix+"chunks", blockHash), 0
 }
 
 // Close ...

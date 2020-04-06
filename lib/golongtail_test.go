@@ -165,7 +165,7 @@ func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, int) {
 	blockData := make([]uint8, blockOffset)
 	blockOffset = 0
 	for chunkIndex, _ := range chunkHashes {
-		for index := uint32(0); index < blockOffset; index++ {
+		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
 			blockData[blockOffset+index] = uint8(chunkIndex + 1)
 		}
 		blockOffset += uint32(chunkSizes[chunkIndex])
@@ -217,7 +217,7 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
 	}
 	blockOffset = 0
 	for chunkIndex, _ := range chunkHashes {
-		for index := uint32(0); index < blockOffset; index++ {
+		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
 			if blockData[blockOffset+index] != uint8(chunkIndex+1) {
 				t.Errorf("validateStoredBlock() %q != %q", uint8(chunkIndex+1), blockData[blockOffset+index])
 			}
@@ -301,13 +301,13 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	defer block1.Dispose()
 
-	block2, errno := createStoredBlock(2)
+	block2, errno := createStoredBlock(5)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block2.Dispose()
 
-	block3, errno := createStoredBlock(3)
+	block3, errno := createStoredBlock(9)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -450,11 +450,11 @@ func TestFSBlockStore(t *testing.T) {
 	getIndexComplete.wg.Wait()
 	contentIndex2 := getIndexComplete.contentIndex
 	defer contentIndex2.Dispose()
-	if contentIndex2.GetBlockCount() != uint64(3) {
-		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(3))
+	if contentIndex2.GetBlockCount() != uint64(1) {
+		t.Errorf("TestFSBlockStore() contentIndex2.GetBlockCount() %q != %q", contentIndex2.GetBlockCount(), uint64(1))
 	}
-	if contentIndex2.GetChunkCount() != uint64(1+2+3) {
-		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", contentIndex2.GetBlockCount(), uint64(1+2+3))
+	if contentIndex2.GetChunkCount() != uint64(9) {
+		t.Errorf("TestFSBlockStore() contentIndex2.GetChunkCount() %q != %q", contentIndex2.GetChunkCount(), uint64(9))
 	}
 }
 

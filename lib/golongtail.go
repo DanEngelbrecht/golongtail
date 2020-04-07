@@ -81,26 +81,27 @@ type Longtail_AsyncGetIndexAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetIndexAPI
 }
 
-type Longtail_StoredBlockPtr struct {
-	cStoredBlockPtr **C.struct_Longtail_StoredBlock
-}
-
-func (storedBlock *Longtail_StoredBlock) GetPtr() Longtail_StoredBlockPtr {
-	return Longtail_StoredBlockPtr{cStoredBlockPtr: &storedBlock.cStoredBlock}
-}
-
-func (storedBlockPtr *Longtail_StoredBlockPtr) Set(storedBlock Longtail_StoredBlock) {
-	*storedBlockPtr.cStoredBlockPtr = storedBlock.cStoredBlock
-}
-
-func (storedBlockPtr *Longtail_StoredBlockPtr) HasPtr() bool {
-	return storedBlockPtr.cStoredBlockPtr != nil
+type BlockStoreStats struct {
+	IndexGetCount      uint64
+	BlocksGetCount     uint64
+	BlocksPutCount     uint64
+	ChunksGetCount     uint64
+	ChunksPutCount     uint64
+	BytesGetCount      uint64
+	BytesPutCount      uint64
+	IndexGetRetryCount uint64
+	BlockGetRetryCount uint64
+	BlockPutRetryCount uint64
+	IndexGetFailCount  uint64
+	BlockGetFailCount  uint64
+	BlockPutFailCount  uint64
 }
 
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
+	GetStats() (BlockStoreStats, int)
 	Close()
 }
 
@@ -493,6 +494,31 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 		C.uint32_t(defaultHashAPIIdentifier),
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
+}
+
+// GetStats() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
+	var cStats C.struct_Longtail_BlockStore_Stats
+	errno := C.Longtail_BlockStore_GetStats(
+		blockStoreAPI.cBlockStoreAPI,
+		&cStats)
+
+	stats := BlockStoreStats{
+		IndexGetCount:      (uint64)(cStats.m_IndexGetCount),
+		BlocksGetCount:     (uint64)(cStats.m_BlocksGetCount),
+		BlocksPutCount:     (uint64)(cStats.m_BlocksPutCount),
+		ChunksGetCount:     (uint64)(cStats.m_ChunksGetCount),
+		ChunksPutCount:     (uint64)(cStats.m_ChunksPutCount),
+		BytesGetCount:      (uint64)(cStats.m_BytesGetCount),
+		BytesPutCount:      (uint64)(cStats.m_BytesPutCount),
+		IndexGetRetryCount: (uint64)(cStats.m_IndexGetRetryCount),
+		BlockGetRetryCount: (uint64)(cStats.m_BlockGetRetryCount),
+		BlockPutRetryCount: (uint64)(cStats.m_BlockPutRetryCount),
+		IndexGetFailCount:  (uint64)(cStats.m_IndexGetFailCount),
+		BlockGetFailCount:  (uint64)(cStats.m_BlockGetFailCount),
+		BlockPutFailCount:  (uint64)(cStats.m_BlockPutFailCount),
+	}
+	return stats, int(errno)
 }
 
 func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
@@ -1305,6 +1331,28 @@ func Proxy_GetIndex(context unsafe.Pointer, defaultHashApiIdentifier uint32, asy
 	errno := blockStore.GetIndex(
 		uint32(defaultHashApiIdentifier),
 		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
+	return C.int(errno)
+}
+
+//export Proxy_GetStats
+func Proxy_GetStats(context unsafe.Pointer, out_stats *C.struct_Longtail_BlockStore_Stats) C.int {
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	stats, errno := blockStore.GetStats()
+	if errno == 0 {
+		out_stats.m_IndexGetCount = C.uint64_t(stats.IndexGetCount)
+		out_stats.m_BlocksGetCount = C.uint64_t(stats.BlocksGetCount)
+		out_stats.m_BlocksPutCount = C.uint64_t(stats.BlocksPutCount)
+		out_stats.m_ChunksGetCount = C.uint64_t(stats.ChunksGetCount)
+		out_stats.m_ChunksPutCount = C.uint64_t(stats.ChunksPutCount)
+		out_stats.m_BytesGetCount = C.uint64_t(stats.BytesGetCount)
+		out_stats.m_BytesPutCount = C.uint64_t(stats.BytesPutCount)
+		out_stats.m_IndexGetRetryCount = C.uint64_t(stats.IndexGetRetryCount)
+		out_stats.m_BlockGetRetryCount = C.uint64_t(stats.BlockGetRetryCount)
+		out_stats.m_BlockPutRetryCount = C.uint64_t(stats.BlockPutRetryCount)
+		out_stats.m_IndexGetFailCount = C.uint64_t(stats.IndexGetFailCount)
+		out_stats.m_BlockGetFailCount = C.uint64_t(stats.BlockGetFailCount)
+		out_stats.m_BlockPutFailCount = C.uint64_t(stats.BlockPutFailCount)
+	}
 	return C.int(errno)
 }
 

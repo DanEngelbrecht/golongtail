@@ -60,6 +60,7 @@ void Proxy_BlockStore_Dispose(void* context);
 int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 int Proxy_GetIndex(void* context, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+int Proxy_GetStats(void* context, struct Longtail_BlockStore_Stats* out_stats);
 void Proxy_Close(void* context);
 
 struct BlockStoreAPIProxy
@@ -102,6 +103,14 @@ static int BlockStoreAPIProxy_GetIndex(
     return Proxy_GetIndex(proxy->m_Context, default_hash_api_identifier, async_complete_api);
 }
 
+static int BlockStoreAPIProxy_GetStats(
+    struct Longtail_BlockStoreAPI* block_store_api,
+    struct Longtail_BlockStore_Stats* out_stats)
+{
+    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
+    return Proxy_GetStats(proxy->m_Context, out_stats);
+}
+
 static int AsyncComplete_OnPutBlockComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
 {
     if (async_complete_api)
@@ -136,6 +145,7 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
     api->m_API.PutStoredBlock       = BlockStoreAPIProxy_PutStoredBlock;
     api->m_API.GetStoredBlock       = BlockStoreAPIProxy_GetStoredBlock;
     api->m_API.GetIndex             = BlockStoreAPIProxy_GetIndex;
+    api->m_API.GetStats             = BlockStoreAPIProxy_GetStats;
     api->m_Context = context;
     return &api->m_API;
 }

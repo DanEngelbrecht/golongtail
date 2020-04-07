@@ -534,6 +534,11 @@ func (b *TestBlockStore) GetIndex(
 func (b *TestBlockStore) Close() {
 }
 
+// GetStats ...
+func (s *TestBlockStore) GetStats() (BlockStoreStats, int) {
+	return BlockStoreStats{}, 0
+}
+
 func TestBlockStoreProxy(t *testing.T) {
 	SetLogger(&testLogger{t: t})
 	defer SetLogger(nil)

@@ -464,6 +464,9 @@ type TestBlockStore struct {
 	maxChunksPerBlock uint32
 	blockStoreAPI     Longtail_BlockStoreAPI
 	lock              sync.Mutex
+	getIndexCount     uint64
+	putBlockCount     uint64
+	getBlockCount     uint64
 }
 
 func (b *TestBlockStore) PutStoredBlock(
@@ -485,6 +488,7 @@ func (b *TestBlockStore) PutStoredBlock(
 		false)
 	if errno == 0 {
 		b.blocks[blockHash] = blockCopy
+		b.putBlockCount = b.putBlockCount + 1
 	}
 	return asyncCompleteAPI.OnComplete(errno)
 }
@@ -503,6 +507,7 @@ func (b *TestBlockStore) GetStoredBlock(
 			blockIndex.GetChunkSizes(),
 			storedBlock.GetChunksBlockData(),
 			false)
+		b.getBlockCount = b.getBlockCount + 1
 		return asyncCompleteAPI.OnComplete(blockCopy, errno)
 	}
 	return asyncCompleteAPI.OnComplete(Longtail_StoredBlock{}, ENOENT)
@@ -528,6 +533,7 @@ func (b *TestBlockStore) GetIndex(
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
 	}
+	b.getIndexCount = b.getIndexCount + 1
 	return asyncCompleteAPI.OnComplete(cIndex, 0)
 }
 
@@ -535,8 +541,8 @@ func (b *TestBlockStore) Close() {
 }
 
 // GetStats ...
-func (s *TestBlockStore) GetStats() (BlockStoreStats, int) {
-	return BlockStoreStats{}, 0
+func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
+	return BlockStoreStats{IndexGetCount: b.getIndexCount, BlocksGetCount: b.getBlockCount, BlocksPutCount: b.putBlockCount}, 0
 }
 
 func TestBlockStoreProxy(t *testing.T) {
@@ -579,7 +585,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() GetStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
 	}
 	getBlock := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = Longtail_StoredBlock{}
@@ -594,6 +600,20 @@ func TestBlockStoreProxy(t *testing.T) {
 		getIndexComplete.wg.Done()
 	}
 	getIndexComplete.wg.Wait()
+
+	stats, errno := blockStoreProxy.GetStats()
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxy() GetStats() %d != %d", errno, 0)
+	}
+	if stats.IndexGetCount != 1 {
+		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.IndexGetCount, 1)
+	}
+	if stats.BlocksGetCount != 1 {
+		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.BlocksGetCount, 1)
+	}
+	if stats.BlocksPutCount != 1 {
+		t.Errorf("TestBlockStoreProxy() stats.BlocksPutCount %d != %d", stats.BlocksPutCount, 1)
+	}
 	contentIndex := getIndexComplete.contentIndex
 	defer contentIndex.Dispose()
 }

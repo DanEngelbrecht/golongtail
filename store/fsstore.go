@@ -68,6 +68,8 @@ type fsBlockStore struct {
 	stopChan     chan fsStopMessage
 
 	workerWaitGroup sync.WaitGroup
+
+	stats lib.BlockStoreStats
 }
 
 // String() ...
@@ -159,6 +161,11 @@ func (s *fsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI lib.Lon
 func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI lib.Longtail_AsyncGetIndexAPI) int {
 	s.getIndexChan <- fsGetIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
+}
+
+// GetStats ...
+func (s *fsBlockStore) GetStats() (lib.BlockStoreStats, int) {
+	return s.stats, 0
 }
 
 // Close ...

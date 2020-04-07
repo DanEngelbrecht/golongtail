@@ -213,6 +213,32 @@ func createHashAPI(hashAlgorithm *string) (lib.Longtail_HashAPI, error) {
 	return createHashAPIFromIdentifier(hashIdentifier)
 }
 
+func byteCountDecimal(b uint64) string {
+	const unit = 1000
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
+}
+
+func byteCountBinary(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
 func upSyncVersion(
 	blobStoreURI string,
 	sourceFolderPath string,
@@ -222,7 +248,8 @@ func upSyncVersion(
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
-	hashAlgorithm *string) error {
+	hashAlgorithm *string,
+	showStats bool) error {
 	fs := lib.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := lib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -357,7 +384,20 @@ func upSyncVersion(
 	if err != nil {
 		return err
 	}
-
+	if showStats {
+		stats, errno := indexStore.GetStats()
+		if errno == 0 {
+			log.Printf("STATS:\n------------------\n")
+			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
+			log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
+			log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
+			log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
+			log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
+			log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
+			log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
+			log.Printf("------------------\n")
+		}
+	}
 	return nil
 }
 
@@ -368,7 +408,8 @@ func downSyncVersion(
 	targetIndexPath *string,
 	localCachePath string,
 	hashAlgorithm *string,
-	retainPermissions bool) error {
+	retainPermissions bool,
+	showStats bool) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := lib.CreateFSStorageAPI()
 	defer fs.Dispose()
@@ -514,6 +555,20 @@ func downSyncVersion(
 	if err != nil {
 		return err
 	}
+	if showStats {
+		stats, errno := remoteIndexStore.BlockStore.GetStats()
+		if errno == 0 {
+			log.Printf("STATS:\n------------------\n")
+			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
+			log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
+			log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
+			log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
+			log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
+			log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
+			log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
+			log.Printf("------------------\n")
+		}
+	}
 	return nil
 }
 
@@ -540,6 +595,7 @@ var (
 	hashing    = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
+	showStats = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
 
 	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
 	targetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
@@ -605,7 +661,9 @@ func main() {
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,
-			compression, hashing)
+			compression,
+			hashing,
+			*showStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -617,7 +675,8 @@ func main() {
 			targetIndexPath,
 			*localCachePath,
 			hashing,
-			!(*noRetainPermissions))
+			!(*noRetainPermissions),
+			*showStats)
 		if err != nil {
 			log.Fatal(err)
 		}

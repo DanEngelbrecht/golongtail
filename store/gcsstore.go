@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -125,6 +126,8 @@ type gcsBlockStore struct {
 	stopChan         chan stopMessage
 
 	workerWaitGroup sync.WaitGroup
+
+	stats lib.BlockStoreStats
 }
 
 // String() ...
@@ -183,7 +186,8 @@ func putStoredBlock(
 	objHandle := bucket.Object(key)
 	_, err := objHandle.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
-		blockIndexBytes, err := lib.WriteBlockIndexToBuffer(storedBlock.GetBlockIndex())
+		blockIndex := storedBlock.GetBlockIndex()
+		blockIndexBytes, err := lib.WriteBlockIndexToBuffer(blockIndex)
 		if err != nil {
 			return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 		}
@@ -210,6 +214,10 @@ func putStoredBlock(
 		if errno != 0 {
 			return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 		}
+
+		atomic.AddUint64(&s.stats.BlocksPutCount, 1)
+		atomic.AddUint64(&s.stats.BytesPutCount, (uint64)(len(blob)))
+		atomic.AddUint64(&s.stats.ChunksPutCount, (uint64)(blockIndex.GetChunkCount()))
 	}
 
 	newBlocks := []lib.Longtail_BlockIndex{blockIndex}
@@ -255,6 +263,11 @@ func getStoredBlock(
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.ENOMEM)
 	}
+
+	atomic.AddUint64(&s.stats.BlocksGetCount, 1)
+	atomic.AddUint64(&s.stats.BytesGetCount, (uint64)(len(storedBlockData)))
+	blockIndex := storedBlock.GetBlockIndex()
+	atomic.AddUint64(&s.stats.ChunksGetCount, (uint64)(blockIndex.GetChunkCount()))
 	return asyncCompleteAPI.OnComplete(storedBlock, 0)
 }
 
@@ -451,6 +464,7 @@ func contentIndexWorker(
 			if errno != 0 {
 				contentIndexCopy.Dispose()
 			}
+			atomic.AddUint64(&s.stats.IndexGetCount, 1)
 		case _ = <-stopMessages:
 			run = false
 		}
@@ -542,9 +556,9 @@ func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteA
 	return 0
 }
 
-// GetStoredBlockPath ...
-func (s *gcsBlockStore) GetStoredBlockPath(blockHash uint64) (string, int) {
-	return getBlockPath(s.prefix+"chunks", blockHash), 0
+// GetStats ...
+func (s *gcsBlockStore) GetStats() (lib.BlockStoreStats, int) {
+	return s.stats, 0
 }
 
 // Close ...

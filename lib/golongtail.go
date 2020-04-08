@@ -209,14 +209,25 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 	cFullPath := C.Longtail_Storage_ConcatPath(storageAPI.cStorageAPI, cRootPath, cPath)
 	defer C.Longtail_Free(unsafe.Pointer(cFullPath))
 
-	blockSize := C.Storage_GetSize(storageAPI.cStorageAPI, cFullPath)
-	blockData := make([]byte, int(blockSize))
-	errno := C.int(0)
-	if blockSize > 0 {
-		errno = C.Storage_Read(storageAPI.cStorageAPI, cFullPath, 0, blockSize, unsafe.Pointer(&blockData[0]))
-	}
+	var cOpenFile C.Longtail_StorageAPI_HOpenFile
+	errno := C.Longtail_Storage_OpenReadFile(storageAPI.cStorageAPI, cFullPath, &cOpenFile)
 	if errno != 0 {
-		return nil, fmt.Errorf("ReadFromStorage: Storage_Read(%s/%s) failed with error %d", rootPath, path, errno)
+		return nil, fmt.Errorf("ReadFromStorage: Longtail_Storage_OpenReadFile(%s/%s) failed with error %d", rootPath, path, errno)
+	}
+	defer C.Longtail_Storage_CloseFile(storageAPI.cStorageAPI, cOpenFile)
+
+	var cSize C.uint64_t
+	errno = C.Longtail_Storage_GetSize(storageAPI.cStorageAPI, cOpenFile, &cSize)
+	if errno != 0 {
+		return nil, fmt.Errorf("ReadFromStorage: Longtail_Storage_GetSize(%s/%s) failed with error %d", rootPath, path, errno)
+	}
+
+	blockData := make([]byte, int(cSize))
+	if cSize > 0 {
+		errno = C.Longtail_Storage_Read(storageAPI.cStorageAPI, cOpenFile, 0, cSize, unsafe.Pointer(&blockData[0]))
+		if errno != 0 {
+			return nil, fmt.Errorf("ReadFromStorage: Longtail_Storage_Read(%s/%s) failed with error %d", rootPath, path, errno)
+		}
 	}
 	return blockData, nil
 }
@@ -236,13 +247,21 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	}
 
 	blockSize := C.uint64_t(len(blockData))
-	var data unsafe.Pointer
-	if blockSize > 0 {
-		data = unsafe.Pointer(&blockData[0])
-	}
-	errno = C.Storage_Write(storageAPI.cStorageAPI, cFullPath, blockSize, data)
+
+	var cOpenFile C.Longtail_StorageAPI_HOpenFile
+	errno = C.Longtail_Storage_OpenWriteFile(storageAPI.cStorageAPI, cFullPath, blockSize, &cOpenFile)
 	if errno != 0 {
-		return fmt.Errorf("WriteToStorage: C.Storage_Write(`%s/%s`) failed with error %d", rootPath, path, errno)
+		return fmt.Errorf("ReadFromStorage: Longtail_Storage_OpenWriteFile(%s/%s) failed with error %d", rootPath, path, errno)
+	}
+	defer C.Longtail_Storage_CloseFile(storageAPI.cStorageAPI, cOpenFile)
+
+	if blockSize > 0 {
+		data := unsafe.Pointer(&blockData[0])
+		errno = C.Longtail_Storage_Write(storageAPI.cStorageAPI, cOpenFile, 0, blockSize, data)
+	}
+
+	if errno != 0 {
+		return fmt.Errorf("WriteToStorage: C.Longtail_Storage_Write(`%s/%s`) failed with error %d", rootPath, path, errno)
 	}
 	return nil
 }
@@ -789,12 +808,6 @@ func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, error) {
 	return Longtail_BlockIndex{cBlockIndex: bindex}, nil
 }
 
-// GetVersionIndexPath ...
-func GetVersionIndexPath(vindex Longtail_VersionIndex, index uint32) string {
-	cPath := C.GetPath(vindex.cVersionIndex.m_NameOffsets, vindex.cVersionIndex.m_NameData, C.uint32_t(index))
-	return C.GoString(cPath)
-}
-
 // CreateVersionIndex ...
 func CreateVersionIndex(
 	storageAPI Longtail_StorageAPI,
@@ -1035,10 +1048,18 @@ func CreateProgressAPI(progress ProgressAPI) Longtail_ProgressAPI {
 	return Longtail_ProgressAPI{cProgressAPI: progressAPIProxy}
 }
 
-//export ProgressAPIProxyOnProgress
-func ProgressAPIProxyOnProgress(context unsafe.Pointer, total_count C.uint32_t, done_count C.uint32_t) {
+//export ProgressAPIProxy_OnProgress
+func ProgressAPIProxy_OnProgress(progress_api *C.struct_Longtail_ProgressAPI, total_count C.uint32_t, done_count C.uint32_t) {
+	context := C.ProgressAPIProxy_GetContext(unsafe.Pointer(progress_api))
 	progress := RestorePointer(context).(ProgressAPI)
 	progress.OnProgress(uint32(total_count), uint32(done_count))
+}
+
+//export ProgressAPIProxy_Dispose
+func ProgressAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.ProgressAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
 }
 
 // CreateAsyncPutStoredBlockAPI ...
@@ -1048,10 +1069,18 @@ func CreateAsyncPutStoredBlockAPI(asyncComplete AsyncPutStoredBlockAPI) Longtail
 	return Longtail_AsyncPutStoredBlockAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
-//export AsyncPutStoredBlockAPIProxyOnComplete
-func AsyncPutStoredBlockAPIProxyOnComplete(context unsafe.Pointer, err C.int) C.int {
+//export AsyncPutStoredBlockAPIProxy_OnComplete
+func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, err C.int) C.int {
+	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
 	return C.int(asyncComplete.OnComplete(int(err)))
+}
+
+//export AsyncPutStoredBlockAPIProxy_Dispose
+func AsyncPutStoredBlockAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
 }
 
 // CreateAsyncGetStoredBlockAPI ...
@@ -1061,10 +1090,18 @@ func CreateAsyncGetStoredBlockAPI(asyncComplete AsyncGetStoredBlockAPI) Longtail
 	return Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
-//export AsyncGetStoredBlockAPIProxyOnComplete
-func AsyncGetStoredBlockAPIProxyOnComplete(context unsafe.Pointer, stored_block *C.struct_Longtail_StoredBlock, err C.int) C.int {
+//export AsyncGetStoredBlockAPIProxy_OnComplete
+func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, err C.int) C.int {
+	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
 	return C.int(asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(err)))
+}
+
+//export AsyncGetStoredBlockAPIProxy_Dispose
+func AsyncGetStoredBlockAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
 }
 
 // CreateAsyncGetIndexAPI ...
@@ -1074,10 +1111,18 @@ func CreateAsyncGetIndexAPI(asyncComplete AsyncGetIndexAPI) Longtail_AsyncGetInd
 	return Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
-//export AsyncGetIndexAPIProxyOnComplete
-func AsyncGetIndexAPIProxyOnComplete(context unsafe.Pointer, content_index *C.struct_Longtail_ContentIndex, err C.int) C.int {
+//export AsyncGetIndexAPIProxy_OnComplete
+func AsyncGetIndexAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetIndexAPI, content_index *C.struct_Longtail_ContentIndex, err C.int) C.int {
+	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetIndexAPI)
 	return C.int(asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err)))
+}
+
+//export AsyncGetIndexAPIProxy_Dispose
+func AsyncGetIndexAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
 }
 
 // WriteContent ...
@@ -1300,33 +1345,40 @@ func ChangeVersion(
 	return nil
 }
 
-//export logProxy
-func logProxy(context unsafe.Pointer, level C.int, log *C.char) {
+//export LogProxy_Log
+func LogProxy_Log(context unsafe.Pointer, level C.int, log *C.char) {
 	logger := RestorePointer(context).(Logger)
 	logger.OnLog(int(level), C.GoString(log))
 }
 
-//export Proxy_BlockStore_Dispose
-func Proxy_BlockStore_Dispose(context unsafe.Pointer) {
+//export BlockStoreAPIProxy_Dispose
+func BlockStoreAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	blockStore.Close()
 	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
 }
 
-//export Proxy_PutStoredBlock
-func Proxy_PutStoredBlock(context unsafe.Pointer, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI) C.int {
+//export BlockStoreAPIProxy_PutStoredBlock
+func BlockStoreAPIProxy_PutStoredBlock(api *C.struct_Longtail_BlockStoreAPI, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock}, Longtail_AsyncPutStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 
-//export Proxy_GetStoredBlock
-func Proxy_GetStoredBlock(context unsafe.Pointer, blockHash C.uint64_t, async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI) C.int {
+//export BlockStoreAPIProxy_GetStoredBlock
+func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blockHash C.uint64_t, async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 
-//export Proxy_GetIndex
-func Proxy_GetIndex(context unsafe.Pointer, defaultHashApiIdentifier uint32, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
+//export BlockStoreAPIProxy_GetIndex
+func BlockStoreAPIProxy_GetIndex(api *C.struct_Longtail_BlockStoreAPI, defaultHashApiIdentifier uint32, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetIndex(
 		uint32(defaultHashApiIdentifier),
@@ -1334,8 +1386,9 @@ func Proxy_GetIndex(context unsafe.Pointer, defaultHashApiIdentifier uint32, asy
 	return C.int(errno)
 }
 
-//export Proxy_GetStats
-func Proxy_GetStats(context unsafe.Pointer, out_stats *C.struct_Longtail_BlockStore_Stats) C.int {
+//export BlockStoreAPIProxy_GetStats
+func BlockStoreAPIProxy_GetStats(api *C.struct_Longtail_BlockStoreAPI, out_stats *C.struct_Longtail_BlockStore_Stats) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	stats, errno := blockStore.GetStats()
 	if errno == 0 {
@@ -1356,12 +1409,6 @@ func Proxy_GetStats(context unsafe.Pointer, out_stats *C.struct_Longtail_BlockSt
 	return C.int(errno)
 }
 
-//export Proxy_Close
-func Proxy_Close(context unsafe.Pointer) {
-	blockStore := RestorePointer(context).(BlockStoreAPI)
-	blockStore.Close()
-}
-
 func CreateBlockStoreAPI(blockStore BlockStoreAPI) Longtail_BlockStoreAPI {
 	cContext := SavePointer(blockStore)
 	blockStoreAPIProxy := C.CreateBlockStoreProxyAPI(cContext)
@@ -1378,7 +1425,7 @@ func getLoggerFunc(logger Logger) C.Longtail_Log {
 	if logger == nil {
 		return nil
 	}
-	return C.Longtail_Log(C.logProxy)
+	return C.Longtail_Log(C.LogProxy_Log)
 }
 
 //SetLogger ...
@@ -1396,7 +1443,7 @@ func getAssertFunc(assert Assert) C.Longtail_Assert {
 	if assert == nil {
 		return nil
 	}
-	return C.Longtail_Assert(C.assertProxy)
+	return C.Longtail_Assert(C.AssertProxy_Assert)
 }
 
 var activeAssert Assert
@@ -1407,8 +1454,8 @@ func SetAssert(assert Assert) {
 	activeAssert = assert
 }
 
-//export assertProxy
-func assertProxy(expression *C.char, file *C.char, line C.int) {
+//export AssertProxy_Assert
+func AssertProxy_Assert(expression *C.char, file *C.char, line C.int) {
 	if activeAssert != nil {
 		activeAssert.OnAssert(C.GoString(expression), C.GoString(file), int(line))
 	}

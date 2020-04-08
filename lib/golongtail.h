@@ -19,8 +19,12 @@
 #include <string.h>
 #include <errno.h>
 
-//void progressProxy(void* context, uint32_t total_count, uint32_t done_count);
+void LogProxy_Log(void* context, int level, char* str);
 
+void AssertProxy_Assert(char* expression, char* file, int line);
+
+// TODO: Hopefully we can refactor the calling code to use
+// Longtail_WriteStoredBlock and Longtail_ReadStoredBlock
 static void* OffsetPointer(void* pointer, size_t offset)
 {
     return &((uint8_t*)pointer)[offset];
@@ -56,12 +60,7 @@ static int CreateStoredBlockFromRaw(
     return 0;
 }
 
-void Proxy_BlockStore_Dispose(void* context);
-int Proxy_PutStoredBlock(void* context, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-int Proxy_GetStoredBlock(void* context, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-int Proxy_GetIndex(void* context, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
-int Proxy_GetStats(void* context, struct Longtail_BlockStore_Stats* out_stats);
-void Proxy_Close(void* context);
+////////////// Longtail_BlockStoreAPI
 
 struct BlockStoreAPIProxy
 {
@@ -69,86 +68,27 @@ struct BlockStoreAPIProxy
     void* m_Context;
 };
 
-static void BlockStoreAPIProxy_Dispose(struct Longtail_API* block_store_api)
-{
-    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    Proxy_Close(proxy->m_Context);
-    Longtail_Free(proxy);
-}
-
-static int BlockStoreAPIProxy_PutStoredBlock(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_StoredBlock* stored_block,
-    struct Longtail_AsyncPutStoredBlockAPI* async_complete_api)
-{
-    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_PutStoredBlock(proxy->m_Context, stored_block, async_complete_api);
-}
-
-static int BlockStoreAPIProxy_GetStoredBlock(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    uint64_t block_hash,
-    struct Longtail_AsyncGetStoredBlockAPI* async_complete_api)
-{
-    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_GetStoredBlock(proxy->m_Context, block_hash, async_complete_api);
-}
-
-static int BlockStoreAPIProxy_GetIndex(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    uint32_t default_hash_api_identifier,
-    struct Longtail_AsyncGetIndexAPI* async_complete_api)
-{
-    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_GetIndex(proxy->m_Context, default_hash_api_identifier, async_complete_api);
-}
-
-static int BlockStoreAPIProxy_GetStats(
-    struct Longtail_BlockStoreAPI* block_store_api,
-    struct Longtail_BlockStore_Stats* out_stats)
-{
-    struct BlockStoreAPIProxy* proxy = (struct BlockStoreAPIProxy*)block_store_api;
-    return Proxy_GetStats(proxy->m_Context, out_stats);
-}
-
-static int AsyncComplete_OnPutBlockComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
-{
-    if (async_complete_api)
-    {
-        return async_complete_api->OnComplete(async_complete_api, err);
-    }
-    return err;
-}
-
-static int AsyncComplete_OnGetBlockComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
-{
-    if (async_complete_api)
-    {
-        return async_complete_api->OnComplete(async_complete_api, stored_block, err);
-    }
-    return err;
-}
-
-static int AsyncComplete_OnGetIndexComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
-{
-    if (async_complete_api)
-    {
-        return async_complete_api->OnComplete(async_complete_api, content_index, err);
-    }
-    return err;
-}
+static void* BlockStoreAPIProxy_GetContext(void* api) { return ((struct BlockStoreAPIProxy*)api)->m_Context; }
+void BlockStoreAPIProxy_Dispose(struct Longtail_API* api);
+int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
+int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
 
 static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
 {
     struct BlockStoreAPIProxy* api = (struct BlockStoreAPIProxy*)Longtail_Alloc(sizeof(struct BlockStoreAPIProxy));
-    api->m_API.m_API.Dispose        = BlockStoreAPIProxy_Dispose;
-    api->m_API.PutStoredBlock       = BlockStoreAPIProxy_PutStoredBlock;
-    api->m_API.GetStoredBlock       = BlockStoreAPIProxy_GetStoredBlock;
-    api->m_API.GetIndex             = BlockStoreAPIProxy_GetIndex;
-    api->m_API.GetStats             = BlockStoreAPIProxy_GetStats;
     api->m_Context = context;
-    return &api->m_API;
+    return Longtail_MakeBlockStoreAPI(
+        api,
+        BlockStoreAPIProxy_Dispose,
+        BlockStoreAPIProxy_PutStoredBlock,
+        BlockStoreAPIProxy_GetStoredBlock,
+        BlockStoreAPIProxy_GetIndex,
+        BlockStoreAPIProxy_GetStats);
 }
+
+////////////// Longtail_ProgressAPI
 
 struct ProgressAPIProxy
 {
@@ -156,27 +96,18 @@ struct ProgressAPIProxy
     void* m_Context;
 };
 
-void ProgressAPIProxyOnProgress(void* context, uint32_t total_count, uint32_t done_count);
-
-static void ProgressAPIProxy_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total_count, uint32_t done_count)
-{
-    struct ProgressAPIProxy* proxy = (struct ProgressAPIProxy*)progress_api;
-    ProgressAPIProxyOnProgress(proxy->m_Context, total_count, done_count);
-}
-
-static void ProgressAPIProxy_Dispose(struct Longtail_API* api)
-{
-    struct ProgressAPIProxy* proxy = (struct ProgressAPIProxy*)api;
-    Longtail_Free(proxy);
-}
+static void* ProgressAPIProxy_GetContext(void* api) { return ((struct ProgressAPIProxy*)api)->m_Context; }
+void ProgressAPIProxy_Dispose(struct Longtail_API* api);
+void ProgressAPIProxy_OnProgress(struct Longtail_ProgressAPI* progress_api, uint32_t total_count, uint32_t done_count);
 
 static struct Longtail_ProgressAPI* CreateProgressProxyAPI(void* context)
 {
-    struct ProgressAPIProxy* api    = (struct ProgressAPIProxy*)Longtail_Alloc(sizeof(struct ProgressAPIProxy));
-    api->m_API.m_API.Dispose        = ProgressAPIProxy_Dispose;
-    api->m_API.OnProgress           = ProgressAPIProxy_OnProgress;
+    struct ProgressAPIProxy* api = (struct ProgressAPIProxy*)Longtail_Alloc(sizeof(struct ProgressAPIProxy));
     api->m_Context = context;
-    return &api->m_API;
+    return Longtail_MakeProgressAPI(
+        api,
+        ProgressAPIProxy_Dispose,
+        ProgressAPIProxy_OnProgress);
 }
 
 ////////////// Longtail_AsyncPutStoredBlockAPI
@@ -187,27 +118,18 @@ struct AsyncPutStoredBlockAPIProxy
     void* m_Context;
 };
 
-int AsyncPutStoredBlockAPIProxyOnComplete(void* context, int err);
-
-static int AsyncPutStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err)
-{
-    struct AsyncPutStoredBlockAPIProxy* proxy = (struct AsyncPutStoredBlockAPIProxy*)async_complete_api;
-    return AsyncPutStoredBlockAPIProxyOnComplete(proxy->m_Context, err);
-}
-
-static void AsyncPutStoredBlockAPIProxy_Dispose(struct Longtail_API* api)
-{
-    struct AsyncPutStoredBlockAPIProxy* proxy = (struct AsyncPutStoredBlockAPIProxy*)api;
-    Longtail_Free(proxy);
-}
+static void* AsyncPutStoredBlockAPIProxy_GetContext(void* api) { return ((struct AsyncPutStoredBlockAPIProxy*)api)->m_Context; }
+int AsyncPutStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
+void AsyncPutStoredBlockAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncPutStoredBlockAPI* CreateAsyncPutStoredBlockAPI(void* context)
 {
-    struct AsyncPutStoredBlockAPIProxy* api    = (struct AsyncPutStoredBlockAPIProxy*)Longtail_Alloc(sizeof(struct AsyncPutStoredBlockAPIProxy));
-    api->m_API.m_API.Dispose        = AsyncPutStoredBlockAPIProxy_Dispose;
-    api->m_API.OnComplete           = AsyncPutStoredBlockAPIProxy_OnComplete;
+    struct AsyncPutStoredBlockAPIProxy* api = (struct AsyncPutStoredBlockAPIProxy*)Longtail_Alloc(sizeof(struct AsyncPutStoredBlockAPIProxy));
     api->m_Context = context;
-    return &api->m_API;
+    return Longtail_MakeAsyncPutStoredBlockAPI(
+        api,
+        AsyncPutStoredBlockAPIProxy_Dispose,
+        AsyncPutStoredBlockAPIProxy_OnComplete);
 }
 
 ////////////// Longtail_AsyncGetStoredBlockAPI
@@ -218,27 +140,18 @@ struct AsyncGetStoredBlockAPIProxy
     void* m_Context;
 };
 
-int AsyncGetStoredBlockAPIProxyOnComplete(void* context, struct Longtail_StoredBlock* stored_block, int err);
-
-static int AsyncGetStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err)
-{
-    struct AsyncGetStoredBlockAPIProxy* proxy = (struct AsyncGetStoredBlockAPIProxy*)async_complete_api;
-    return AsyncGetStoredBlockAPIProxyOnComplete(proxy->m_Context, stored_block, err);
-}
-
-static void AsyncGetStoredBlockAPIProxy_Dispose(struct Longtail_API* api)
-{
-    struct AsyncGetStoredBlockAPIProxy* proxy = (struct AsyncGetStoredBlockAPIProxy*)api;
-    Longtail_Free(proxy);
-}
+static void* AsyncGetStoredBlockAPIProxy_GetContext(void* api) { return ((struct AsyncGetStoredBlockAPIProxy*)api)->m_Context; }
+int AsyncGetStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
+void AsyncGetStoredBlockAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncGetStoredBlockAPI* CreateAsyncGetStoredBlockAPI(void* context)
 {
-    struct AsyncGetStoredBlockAPIProxy* api    = (struct AsyncGetStoredBlockAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetStoredBlockAPIProxy));
-    api->m_API.m_API.Dispose        = AsyncGetStoredBlockAPIProxy_Dispose;
-    api->m_API.OnComplete           = AsyncGetStoredBlockAPIProxy_OnComplete;
+    struct AsyncGetStoredBlockAPIProxy* api = (struct AsyncGetStoredBlockAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetStoredBlockAPIProxy));
     api->m_Context = context;
-    return &api->m_API;
+    return Longtail_MakeAsyncGetStoredBlockAPI(
+        api,
+        AsyncGetStoredBlockAPIProxy_Dispose,
+        AsyncGetStoredBlockAPIProxy_OnComplete);
 }
 
 ////////////// Longtail_AsyncGetIndexAPI
@@ -249,74 +162,16 @@ struct AsyncGetIndexAPIProxy
     void* m_Context;
 };
 
-int AsyncGetIndexAPIProxyOnComplete(void* context, struct Longtail_ContentIndex* content_index, int err);
-
-static int AsyncGetIndexAPIProxy_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err)
-{
-    struct AsyncGetIndexAPIProxy* proxy = (struct AsyncGetIndexAPIProxy*)async_complete_api;
-    return AsyncGetIndexAPIProxyOnComplete(proxy->m_Context, content_index, err);
-}
-
-static void AsyncGetIndexAPIProxy_Dispose(struct Longtail_API* api)
-{
-    struct AsyncGetIndexAPIProxy* proxy = (struct AsyncGetIndexAPIProxy*)api;
-    Longtail_Free(proxy);
-}
+static void* AsyncGetIndexAPIProxy_GetContext(void* api) { return ((struct AsyncGetIndexAPIProxy*)api)->m_Context; }
+int AsyncGetIndexAPIProxy_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+void AsyncGetIndexAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncGetIndexAPI* CreateAsyncGetIndexAPI(void* context)
 {
     struct AsyncGetIndexAPIProxy* api    = (struct AsyncGetIndexAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetIndexAPIProxy));
-    api->m_API.m_API.Dispose        = AsyncGetIndexAPIProxy_Dispose;
-    api->m_API.OnComplete           = AsyncGetIndexAPIProxy_OnComplete;
     api->m_Context = context;
-    return &api->m_API;
-}
-
-void logProxy(void* context, int level, char* str);
-
-void assertProxy(char* expression, char* file, int line);
-
-static int Storage_Write(struct Longtail_StorageAPI* api, const char* path, uint64_t length, const void* input)
-{
-    Longtail_StorageAPI_HOpenFile f;
-    int err = api->OpenWriteFile(api, path, length, &f);
-    if (err)
-    {
-        return err;
-    }
-    err = api->Write(api, f, 0, length, input);
-    api->CloseFile(api, f);
-    return err;
-}
-
-static uint64_t Storage_GetSize(struct Longtail_StorageAPI* api, const char* path)
-{
-    Longtail_StorageAPI_HOpenFile f;
-    int err = api->OpenReadFile(api, path, &f);
-    if (err)
-    {
-        return err;
-    }
-    uint64_t s;
-    err = api->GetSize(api, f, &s);
-    api->CloseFile(api, f);
-    return err ? 0 : s;
-}
-
-static int Storage_Read(struct Longtail_StorageAPI* api, const char* path, uint64_t offset, uint64_t length, void* output)
-{
-    Longtail_StorageAPI_HOpenFile f;
-    int err = api->OpenReadFile(api, path, &f);
-    if (err)
-    {
-        return err;
-    }
-    err = api->Read(api, f, offset, length, output);
-    api->CloseFile(api, f);
-    return err;
-}
-
-static const char* GetPath(const uint32_t* name_offsets, const char* name_data, uint32_t index)
-{
-    return &name_data[name_offsets[index]];
+    return Longtail_MakeAsyncGetIndexAPI(
+        api,
+        AsyncGetIndexAPIProxy_Dispose,
+        AsyncGetIndexAPIProxy_OnComplete);
 }

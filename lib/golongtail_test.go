@@ -252,17 +252,14 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 		t.Errorf("createStoredBlock() %d != %d", errno, 0)
 	}
 
-	blockIndexData, err := WriteBlockIndexToBuffer(originalBlock.GetBlockIndex())
+	storedBlockData, err := WriteStoredBlockToBuffer(originalBlock)
 	if err != nil {
-		t.Errorf("WriteBlockIndexToBuffer() %q != %q", err, error(nil))
+		t.Errorf("WriteStoredBlockToBuffer() %q != %q", err, error(nil))
 	}
-
-	blockData := originalBlock.GetChunksBlockData()
-	storedBlockData := append(blockIndexData, blockData...)
 	originalBlock.Dispose()
-	blockIndexData = nil
 
-	copyBlock, err := InitStoredBlockFromData(storedBlockData)
+	copyBlock, err := ReadStoredBlockFromBuffer(storedBlockData)
+
 	if err != nil {
 		t.Errorf("InitStoredBlockFromData() %q != %q", err, error(nil))
 	}

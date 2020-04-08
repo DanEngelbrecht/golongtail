@@ -194,20 +194,24 @@ func putStoredBlock(
 		errno := putBlob(ctx, objHandle, blob)
 		if errno != 0 {
 			log.Printf("Retrying putBlob %s", key)
+			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
 			errno = putBlob(ctx, objHandle, blob)
 		}
 		if errno != 0 {
 			log.Printf("Retrying 500 ms delayed putBlob %s", key)
 			time.Sleep(500 * time.Millisecond)
+			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
 			errno = putBlob(ctx, objHandle, blob)
 		}
 		if errno != 0 {
 			log.Printf("Retrying 2 s delayed putBlob %s", key)
 			time.Sleep(2 * time.Second)
+			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
 			errno = putBlob(ctx, objHandle, blob)
 		}
 
 		if errno != 0 {
+			atomic.AddUint64(&s.stats.BlockPutFailCount, 1)
 			return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 		}
 
@@ -238,20 +242,24 @@ func getStoredBlock(
 	storedBlockData, errno := getBlob(ctx, objHandle)
 	if errno != 0 {
 		log.Printf("Retrying getBlob %s", key)
+		atomic.AddUint64(&s.stats.BlockGetRetryCount, 1)
 		storedBlockData, errno = getBlob(ctx, objHandle)
 	}
 	if errno != 0 {
 		log.Printf("Retrying 500 ms delayed getBlob %s", key)
 		time.Sleep(500 * time.Millisecond)
+		atomic.AddUint64(&s.stats.BlockGetRetryCount, 1)
 		storedBlockData, errno = getBlob(ctx, objHandle)
 	}
 	if errno != 0 {
 		log.Printf("Retrying 2 s delayed getBlob %s", key)
 		time.Sleep(2 * time.Second)
+		atomic.AddUint64(&s.stats.BlockGetRetryCount, 1)
 		storedBlockData, errno = getBlob(ctx, objHandle)
 	}
 
 	if errno != 0 {
+		atomic.AddUint64(&s.stats.BlockGetFailCount, 1)
 		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.EIO)
 	}
 

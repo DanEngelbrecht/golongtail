@@ -186,14 +186,10 @@ func putStoredBlock(
 	objHandle := bucket.Object(key)
 	_, err := objHandle.Attrs(ctx)
 	if err == storage.ErrObjectNotExist {
-		blockIndex := storedBlock.GetBlockIndex()
-		blockIndexBytes, err := lib.WriteBlockIndexToBuffer(blockIndex)
+		blob, err := lib.WriteStoredBlockToBuffer(storedBlock)
 		if err != nil {
 			return asyncCompleteAPI.OnComplete(lib.ENOMEM)
 		}
-
-		blockData := storedBlock.GetChunksBlockData()
-		blob := append(blockIndexBytes, blockData...)
 
 		errno := putBlob(ctx, objHandle, blob)
 		if errno != 0 {
@@ -259,7 +255,7 @@ func getStoredBlock(
 		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.EIO)
 	}
 
-	storedBlock, err := lib.InitStoredBlockFromData(storedBlockData)
+	storedBlock, err := lib.ReadStoredBlockFromBuffer(storedBlockData)
 	if err != nil {
 		return asyncCompleteAPI.OnComplete(lib.Longtail_StoredBlock{}, lib.ENOMEM)
 	}

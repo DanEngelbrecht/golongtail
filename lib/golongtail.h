@@ -23,43 +23,6 @@ void LogProxy_Log(void* context, int level, char* str);
 
 void AssertProxy_Assert(char* expression, char* file, int line);
 
-// TODO: Hopefully we can refactor the calling code to use
-// Longtail_WriteStoredBlock and Longtail_ReadStoredBlock
-static void* OffsetPointer(void* pointer, size_t offset)
-{
-    return &((uint8_t*)pointer)[offset];
-}
-
-static int DisposeStoredBlockFromRaw(struct Longtail_StoredBlock* stored_block)
-{
-    Longtail_Free((void*)stored_block);
-    return 0;
-}
-
-static int CreateStoredBlockFromRaw(
-    void* data,
-    size_t data_size,
-    struct Longtail_StoredBlock** out_stored_block)
-{
-    size_t stored_block_size = Longtail_GetStoredBlockSize(data_size);
-    void* block_data = Longtail_Alloc(stored_block_size);
-    void* rawBlockDataBuffer = OffsetPointer(block_data, stored_block_size-data_size);
-    memmove(rawBlockDataBuffer, data, data_size);
-    struct Longtail_StoredBlock* stored_block = (struct Longtail_StoredBlock*)block_data;
-    int err = Longtail_InitStoredBlockFromData(
-        stored_block,
-        data,
-        data_size);
-    if (err)
-    {
-        Longtail_Free(block_data);
-        return err;
-    }
-    stored_block->Dispose = DisposeStoredBlockFromRaw;
-    *out_stored_block = stored_block;
-    return 0;
-}
-
 ////////////// Longtail_BlockStoreAPI
 
 struct BlockStoreAPIProxy

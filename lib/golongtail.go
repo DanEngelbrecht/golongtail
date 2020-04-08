@@ -579,19 +579,27 @@ func (blockIndex *Longtail_BlockIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(blockIndex.cBlockIndex))
 }
 
-// InitStoredBlockFromData() ...
-func InitStoredBlockFromData(buffer []byte) (Longtail_StoredBlock, error) {
-	storedBlockDataSize := C.size_t(len(buffer))
-	rawBlockDataBuffer := unsafe.Pointer(&buffer[0])
-	var cStoredBlock *C.struct_Longtail_StoredBlock
-	errno := C.CreateStoredBlockFromRaw(
-		rawBlockDataBuffer,
-		storedBlockDataSize,
-		&cStoredBlock)
+func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, error) {
+	var buffer unsafe.Pointer
+	var size C.size_t
+	errno := C.Longtail_WriteStoredBlockToBuffer(storedBlock.cStoredBlock, &buffer, &size)
 	if errno != 0 {
-		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("InitStoredBlockFromData: Longtail_InitStoredBlockFromData failed with %d", errno)
+		return nil, fmt.Errorf("WriteStoredBlockToBuffer: Longtail_WriteStoredBlockToBuffer failed with %d", errno)
 	}
-	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, nil
+}
+
+func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, error) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	size := C.size_t(len(buffer))
+	var stored_block *C.struct_Longtail_StoredBlock
+	errno := C.Longtail_ReadStoredBlockFromBuffer(cBuffer, size, &stored_block)
+	if errno != 0 {
+		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("ReadStoredBlockFromBuffer: Longtail_ReadStoredBlockFromBuffer failed with %d", errno)
+	}
+	return Longtail_StoredBlock{cStoredBlock: stored_block}, nil
 }
 
 // CreateStoredBlock() ...
@@ -1159,39 +1167,6 @@ func WriteContent(
 	return nil
 }
 
-/*
-// ReadContent ...
-func ReadContent(
-	sourceStorageAPI Longtail_StorageAPI,
-	hashAPI Longtail_HashAPI,
-	jobAPI Longtail_JobAPI,
-	progressFunc ProgressFunc,
-	progressContext interface{},
-	contentFolderPath string) (Longtail_ContentIndex, error) {
-
-	var cProgressAPI *C.struct_Longtail_ProgressAPI
-	if progressAPI != nil {
-		cProgressAPI = progressAPI.cProgressAPI
-	}
-
-	cContentFolderPath := C.CString(contentFolderPath)
-	defer C.free(unsafe.Pointer(cContentFolderPath))
-
-	var contentIndex *C.struct_Longtail_ContentIndex
-	errno := C.Longtail_ReadContent(
-		sourceStorageAPI.cStorageAPI,
-		hashAPI.cHashAPI,
-		jobAPI.cJobAPI,
-		cProgressAPI,
-		cProgressProxyData,
-		cContentFolderPath,
-		&contentIndex)
-	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContent: C.Longtail_ReadContent(`%s`) failed with error %d", contentFolderPath, errno)
-	}
-	return Longtail_ContentIndex{cContentIndex: contentIndex}, nil
-}
-*/
 // CreateMissingContent ...
 func CreateMissingContent(
 	hashAPI Longtail_HashAPI,
@@ -1214,17 +1189,6 @@ func CreateMissingContent(
 	return Longtail_ContentIndex{cContentIndex: missingContentIndex}, nil
 }
 
-/*
-//GetPathsForContentBlocks ...
-func GetPathsForContentBlocks(contentIndex Longtail_ContentIndex) (Longtail_Paths, error) {
-	var paths *C.struct_Longtail_Paths
-	errno := C.Longtail_GetPathsForContentBlocks(contentIndex.cContentIndex, &paths)
-	if errno != 0 {
-		return Longtail_Paths{cPaths: nil}, fmt.Errorf("GetPathsForContentBlocks: C.Longtail_GetPathsForContentBlocks() failed with error %d", errno)
-	}
-	return Longtail_Paths{cPaths: paths}, nil
-}
-*/
 // RetargetContent ...
 func RetargetContent(
 	referenceContentIndex Longtail_ContentIndex,

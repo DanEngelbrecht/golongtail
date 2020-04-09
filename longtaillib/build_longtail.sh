@@ -7,7 +7,7 @@ echo Building $LIB_TARGET
 
 mkdir -p longtail/obj
 mkdir -p $LIB_TARGET_FOLDER
-pushd longtail\obj >>/dev/null
+pushd longtail/obj >>/dev/null
 BIKESHED_SRC="../lib/bikeshed/*.c"
 BLAKE2_SRC="../lib/blake2/*.c ../lib/blake2/ext/*.c"
 BLAKE3_SRC="../lib/blake3/*.c ../lib/blake3/ext/*.c"

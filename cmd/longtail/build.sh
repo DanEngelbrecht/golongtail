@@ -1,15 +1,14 @@
 
 #!/bin/bash
 
-LIB_TARGET_FOLDER=../longtaillib
+LIB_TARGET_FOLDER=../../longtaillib
 LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
 
 echo "LIB_TARGET $LIB_TARGET"
 
 if [ ! -e $LIB_TARGET ]
 then
-	echo Building longtail library, this takes a couple of minutes, hold on...
-	pushd ../../longtaillib >>/dev/null
+	pushd ${LIB_TARGET_FOLDER} >>/dev/null
 	./build_longtail.sh
 	popd
 fi

@@ -1,7 +1,7 @@
 @echo off
 
 set LIB_TARGET_FOLDER=.
-set LIB_TARGET=%LIB_TARGET_FOLDER%/longtail_lib.a
+set LIB_TARGET=%LIB_TARGET_FOLDER%\longtail_lib.a
 
 echo Building %LIB_TARGET%
 

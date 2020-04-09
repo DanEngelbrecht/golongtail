@@ -8,7 +8,6 @@ echo "LIB_TARGET $LIB_TARGET"
 
 if [ ! -e $LIB_TARGET ]
 then
-	echo Building longtail library, this takes a couple of minutes, hold on...
 	./build_longtail.sh
 fi
 

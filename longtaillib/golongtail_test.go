@@ -615,6 +615,13 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer contentIndex.Dispose()
 }
 
+type testPathFilter struct {
+}
+
+func (p *testPathFilter) Include(rootPath string, assetFolder string, assetName string, isDir bool, size uint64, permissions uint16) bool {
+	return true
+}
+
 func TestBlockStoreProxyFull(t *testing.T) {
 	storageAPI := createFilledStorage("content")
 	defer storageAPI.Dispose()
@@ -625,7 +632,10 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
 	blockStoreAPI := CreateBlockStoreAPI(testBlockStore)
 	defer blockStoreAPI.Dispose()
-	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+
+	pathFilter := CreatePathFilterAPI(&testPathFilter{})
+
+	fileInfos, err := GetFilesRecursively(storageAPI, pathFilter, "content")
 	if err != nil {
 		t.Errorf("TestBlockStoreProxyFull() GetFilesRecursively() %q != %v", err, nil)
 	}
@@ -703,7 +713,7 @@ func createFilledStorage(rootPath string) Longtail_StorageAPI {
 
 func TestGetFileRecursively(t *testing.T) {
 	storageAPI := createFilledStorage("content")
-	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
 	if err != nil {
 		t.Errorf("TestGetFileRecursively() GetFilesRecursively() %q != %q", err, error(nil))
 	}
@@ -728,7 +738,7 @@ func TestGetFileRecursively(t *testing.T) {
 
 func TestCreateVersionIndex(t *testing.T) {
 	storageAPI := createFilledStorage("content")
-	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
 	if err != nil {
 		t.Errorf("TestCreateVersionIndex() GetFilesRecursively() %q != %q", err, error(nil))
 	}
@@ -796,7 +806,7 @@ func TestCreateContentIndex(t *testing.T) {
 
 func TestRewriteVersion(t *testing.T) {
 	storageAPI := createFilledStorage("content")
-	fileInfos, err := GetFilesRecursively(storageAPI, "content")
+	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
 	if err != nil {
 		t.Errorf("TestRewriteVersion() GetFilesRecursively() %q != %q", err, error(nil))
 	}

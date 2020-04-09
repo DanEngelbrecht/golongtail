@@ -1,9 +1,0 @@
-cc_library(
-    name = "longtail",
-    srcs = glob(["src/**/*.c",
-                 "src/**/*.h"]),
-    hdrs = [ "src/longtail.h" ],
-    copts = [ "-D_GNU_SOURCE -std=gnu99 -m64 -O3 -msse4.1" ],
-    linkopts = [ "-lm -pthread" ],
-    visibility = [ "//:__subpackages__" ],
-)

@@ -1,8 +1,0 @@
-cc_library(
-    name = "lizard",
-    srcs = glob([ "**/*.c",
-                  "**/*.h",
-                  "**/*.inl",
-    ]),
-    visibility = [ "//import/lib/lizard:__subpackages__" ],
-)

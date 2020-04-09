@@ -51,6 +51,28 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         BlockStoreAPIProxy_GetStats);
 }
 
+////////////// Longtail_PathFilterAPI
+
+struct PathFilterAPIProxy
+{
+    struct Longtail_PathFilterAPI m_API;
+    void* m_Context;
+};
+
+static void* PathFilterAPIProxy_GetContext(void* api) { return ((struct PathFilterAPIProxy*)api)->m_Context; }
+void PathFilterAPIProxy_Dispose(struct Longtail_API* api);
+int PathFilterAPIProxy_Include(struct Longtail_PathFilterAPI* path_filter_api, char* root_path, char* asset_folder, char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
+
+static struct Longtail_PathFilterAPI* CreatePathFilterProxyAPI(void* context)
+{
+    struct PathFilterAPIProxy* api = (struct PathFilterAPIProxy*)Longtail_Alloc(sizeof(struct PathFilterAPIProxy));
+    api->m_Context = context;
+    return Longtail_MakePathFilterAPI(
+        api,
+        PathFilterAPIProxy_Dispose,
+        (Longtail_PathFilter_IncludeFunc)PathFilterAPIProxy_Include);   // Constness cast
+}
+
 ////////////// Longtail_ProgressAPI
 
 struct ProgressAPIProxy

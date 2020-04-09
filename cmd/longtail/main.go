@@ -312,7 +312,7 @@ func upSyncVersion(
 
 	var vindex longtaillib.Longtail_VersionIndex
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(fs, sourceFolderPath)
+		fileInfos, err := longtaillib.GetFilesRecursively(fs, longtaillib.Longtail_PathFilterAPI{}, sourceFolderPath)
 		if err != nil {
 			return err
 		}
@@ -505,7 +505,7 @@ func downSyncVersion(
 
 	var localVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(fs, targetFolderPath)
+		fileInfos, err := longtaillib.GetFilesRecursively(fs, longtaillib.Longtail_PathFilterAPI{}, targetFolderPath)
 		if err != nil {
 			return err
 		}

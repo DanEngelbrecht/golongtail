@@ -1,17 +1,11 @@
 
 #!/bin/bash
 
-LIB_TARGET_FOLDER=../../longtaillib
-LIB_TARGET=${LIB_TARGET_FOLDER}/longtail_lib.a
+LIB_TARGET_FOLDER="../../longtaillib"
 
-echo "LIB_TARGET $LIB_TARGET"
-
-if [ ! -e $LIB_TARGET ]
-then
-	pushd ${LIB_TARGET_FOLDER} >>/dev/null
-	./build_longtail.sh
-	popd
-fi
+pushd ${LIB_TARGET_FOLDER} >>/dev/null
+./build_longtail.sh
+popd >>/dev/null
 
 echo Building longtail executable
 go build -ldflags="-s -w" .

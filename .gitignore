@@ -6,9 +6,7 @@
 *.dylib
 *.obj
 *.o
-
-cmd/longtail.exe
-cmd/longtail
+*.a
 
 # Test binary, built with `go test -c`
 *.test
@@ -18,9 +16,3 @@ cmd/longtail
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
-
-# Bazel generated files
-bazel-bin
-bazel-golongtail
-bazel-out
-bazel-testlogs

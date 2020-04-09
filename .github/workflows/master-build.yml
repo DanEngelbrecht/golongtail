@@ -13,12 +13,12 @@ jobs:
     - uses: actions/checkout@v2
     - name: test
       run: |
-        pushd ./lib
+        pushd ./longtaillib
         ./test.sh
         popd
     - name: build cmd
       run: |
-        pushd ./cmd
+        pushd ./cmd/longtail
         ./build.sh
         popd
 
@@ -30,11 +30,11 @@ jobs:
     - uses: actions/checkout@v2
     - name: test
       run: |
-        pushd ./lib
+        pushd ./longtaillib
         ./test.bat
         popd
     - name: build cmd
       run: |
-        pushd ./cmd
+        pushd ./cmd/longtail
         ./build.bat
         popd

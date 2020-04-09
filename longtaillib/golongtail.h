@@ -8,7 +8,7 @@
 #include "longtail/lib/brotli/longtail_brotli.h"
 #include "longtail/lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "longtail/lib/compressblockstore/longtail_compressblockstore.h"
-#include "longtail/lib/compressionregistry/longtail_full_compression_registry.h"
+#include "longtail/lib/compressionregistry/longtail_zstd_compression_registry.h"
 #include "longtail/lib/filestorage/longtail_filestorage.h"
 #include "longtail/lib/fsblockstore/longtail_fsblockstore.h"
 #include "longtail/lib/lz4/longtail_lz4.h"

@@ -1,0 +1,11 @@
+package longtaillib
+
+// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -msse4.1 -maes -DLONGTAIL_ASSERTS
+// #include "longtail/lib/zstd/ext/common/debug.c"
+// #include "longtail/lib/zstd/ext/common/entropy_common.c"
+// #include "longtail/lib/zstd/ext/common/error_private.c"
+// #include "longtail/lib/zstd/ext/common/fse_decompress.c"
+// #include "longtail/lib/zstd/ext/common/pool.c"
+// #include "longtail/lib/zstd/ext/common/threading.c"
+// #include "longtail/lib/zstd/ext/common/zstd_common.c"
+import "C"

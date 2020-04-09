@@ -1,7 +1,6 @@
 package longtaillib
 
 // #cgo CFLAGS: -g -std=gnu99
-// #cgo LDFLAGS: -l:/longtail_lib.a -L. -lm
 // #include "golongtail.h"
 import "C"
 import (

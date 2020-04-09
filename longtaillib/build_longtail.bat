@@ -1,12 +1,12 @@
 @echo off
 
 If %PROCESSOR_ARCHITECTURE% == AMD64 (
-    set ARCH=x86_64
+    set ARCH=amd64
 ) Else (
     set ARCH=x86
 )
 
-set PLATFORM=Win_%ARCH%
+set PLATFORM=windows_%ARCH%
 
 set LIB_TARGET_FOLDER=.
 set LIB_TARGET=%LIB_TARGET_FOLDER%\longtail_%PLATFORM%.a

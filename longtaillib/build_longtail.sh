@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 
-unameOut="$(uname -s)"
-case "${unameOut}" in
-    Linux*)     os=Linux;;
-    Darwin*)    os=Mac;;
-    CYGWIN*)    os=Cygwin;;
-    MINGW*)     os=MinGw;;
-    *)          os="UNKNOWN:${unameOut}"
+rawPlatform="$(uname -s)"
+case "${rawPlatform}" in
+    Linux*)     os=linux;;
+    Darwin*)    os=darwin;;
+    *)          os="UNKNOWN:${rawPlatform}"
 esac
-arch="$(uname -m)"
+rawArch="$(uname -m)"
+
+case "${rawArch}" in
+	x86_64)     arch=amd64;;
+	*)          arch="${rawArch}"
+esac
 
 PLATFORM=${os}_${arch}
 
@@ -41,6 +44,6 @@ then
 	BROTLI_SRC="../lib/brotli/*.c ../lib/brotli/ext/common/*.c ../lib/brotli/ext/dec/*.c ../lib/brotli/ext/enc/*.c ../lib/brotli/ext/fuzz/*.c"
 	ZSTD_SRC="../lib/zstd/*.c ../lib/zstd/ext/common/*.c ../lib/zstd/ext/compress/*.c ../lib/zstd/ext/decompress/*.c"
 	gcc -c $GCC_EXTRA -std=gnu99 -m64 -O3 -g -pthread -msse4.1 -maes ../src/*.c ../src/ext/*.c ../lib/*.c $BIKESHED_SRC $BLAKE2_SRC $BLAKE3_SRC $CACHEBLOCKSTORE_SRC $COMPRESSBLOCKSTORE_SRC $FULL_COMPRESSION_REGISTRY_SRC $FILESTORAGE_SRC $FSBLOCKSTORE_SRC $MEMSTORAGE_SRC $MEOWHASH_SRC $LIZARD_SRC $LZ4_SRC $BROTLI_SRC $ZSTD_SRC
-	popd
+	popd >>/dev/null
 	ar cr -v $LIB_TARGET longtail/obj/*.o
 fi

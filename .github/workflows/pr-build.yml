@@ -22,7 +22,7 @@ jobs:
         ./build.sh
         popd
 
-  linux:
+  macos:
 
     runs-on: macos-latest
 

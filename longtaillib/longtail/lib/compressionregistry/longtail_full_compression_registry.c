@@ -29,7 +29,7 @@ LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompr
         return 0;
     }
 
-    uint32_t compression_types[10] = {
+    uint32_t compression_types[13] = {
         Longtail_GetBrotliGenericMinQuality(),
         Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetBrotliGenericMaxQuality(),
@@ -53,7 +53,7 @@ LONGTAIL_EXPORT struct Longtail_CompressionRegistryAPI* Longtail_CreateFullCompr
         zstd_compression,
         zstd_compression,
         zstd_compression};
-    uint32_t compression_settings[13] = {
+    uint32_t compression_settings[10] = {
         Longtail_GetBrotliGenericMinQuality(),
         Longtail_GetBrotliGenericDefaultQuality(),
         Longtail_GetBrotliGenericMaxQuality(),

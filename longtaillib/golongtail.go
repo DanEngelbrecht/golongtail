@@ -670,6 +670,16 @@ func (storageAPI *Longtail_StorageAPI) Dispose() {
 	C.Longtail_DisposeAPI(&storageAPI.cStorageAPI.m_API)
 }
 
+// CreateBrotliCompressionAPI ...
+func CreateBrotliCompressionAPI() Longtail_CompressionAPI {
+	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateBrotliCompressionAPI()}
+}
+
+// CreateLZ4CompressionAPI ...
+func CreateLZ4CompressionAPI() Longtail_CompressionAPI {
+	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLZ4CompressionAPI()}
+}
+
 // CreateZStdCompressionAPI ...
 func CreateZStdCompressionAPI() Longtail_CompressionAPI {
 	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateZStdCompressionAPI()}
@@ -715,40 +725,40 @@ func GetNoCompressionType() uint32 {
 	return uint32(0)
 }
 
-//// GetBrotliGenericMinCompressionType ...
-//func GetBrotliGenericMinCompressionType() uint32 {
-//	return uint32(C.Longtail_GetBrotliGenericMinQuality())
-//}
-//
-//// GetBrotliGenericDefaultCompressionType ...
-//func GetBrotliGenericDefaultCompressionType() uint32 {
-//	return uint32(C.Longtail_GetBrotliGenericDefaultQuality())
-//}
-//
-//// GetBrotliGenericMaxCompressionType ...
-//func GetBrotliGenericMaxCompressionType() uint32 {
-//	return uint32(C.Longtail_GetBrotliGenericMaxQuality())
-//}
-//
-//// GetBrotliTextMinCompressionType ...
-//func GetBrotliTextMinCompressionType() uint32 {
-//	return uint32(C.Longtail_GetBrotliTextMinQuality())
-//}
-//
-//// GetBrotliTextDefaultCompressionType ...
-//func GetBrotliTextDefaultCompressionType() uint32 {
-//	return uint32(C.Longtail_GetBrotliTextDefaultQuality())
-//}
-//
-//// GetBrotliTextMaxCompressionType ...
-//func GetBrotliTextMaxCompressionType() uint32 {
-//	return uint32(C.Longtail_GetBrotliTextMaxQuality())
-//}
-//
-//// GetLZ4DefaultCompressionType ...
-//func GetLZ4DefaultCompressionType() uint32 {
-//	return uint32(C.Longtail_GetLZ4DefaultQuality())
-//}
+// GetBrotliGenericMinCompressionType ...
+func GetBrotliGenericMinCompressionType() uint32 {
+	return uint32(C.Longtail_GetBrotliGenericMinQuality())
+}
+
+// GetBrotliGenericDefaultCompressionType ...
+func GetBrotliGenericDefaultCompressionType() uint32 {
+	return uint32(C.Longtail_GetBrotliGenericDefaultQuality())
+}
+
+// GetBrotliGenericMaxCompressionType ...
+func GetBrotliGenericMaxCompressionType() uint32 {
+	return uint32(C.Longtail_GetBrotliGenericMaxQuality())
+}
+
+// GetBrotliTextMinCompressionType ...
+func GetBrotliTextMinCompressionType() uint32 {
+	return uint32(C.Longtail_GetBrotliTextMinQuality())
+}
+
+// GetBrotliTextDefaultCompressionType ...
+func GetBrotliTextDefaultCompressionType() uint32 {
+	return uint32(C.Longtail_GetBrotliTextDefaultQuality())
+}
+
+// GetBrotliTextMaxCompressionType ...
+func GetBrotliTextMaxCompressionType() uint32 {
+	return uint32(C.Longtail_GetBrotliTextMaxQuality())
+}
+
+// GetLZ4DefaultCompressionType ...
+func GetLZ4DefaultCompressionType() uint32 {
+	return uint32(C.Longtail_GetLZ4DefaultQuality())
+}
 
 // GetZStdMinCompressionType ...
 func GetZStdMinCompressionType() uint32 {

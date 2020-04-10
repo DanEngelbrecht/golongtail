@@ -136,11 +136,11 @@ func TestAPICreate(t *testing.T) {
 	meow := CreateMeowHashAPI()
 	defer meow.Dispose()
 
-	//	lz4 := CreateLZ4CompressionAPI()
-	//	defer lz4.Dispose()
-	//
-	//	brotli := CreateBrotliCompressionAPI()
-	//	defer brotli.Dispose()
+	lz4 := CreateLZ4CompressionAPI()
+	defer lz4.Dispose()
+
+	brotli := CreateBrotliCompressionAPI()
+	defer brotli.Dispose()
 
 	zstd := CreateZStdCompressionAPI()
 	defer zstd.Dispose()

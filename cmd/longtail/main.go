@@ -161,20 +161,20 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	switch *compressionAlgorithm {
 	case "none":
 		return noCompressionType, nil
-		//	case "brotli":
-		//		return longtaillib.GetBrotliGenericDefaultCompressionType(), nil
-		//	case "brotli_min":
-		//		return longtaillib.GetBrotliGenericMinCompressionType(), nil
-		//	case "brotli_max":
-		//		return longtaillib.GetBrotliGenericMaxCompressionType(), nil
-		//	case "brotli_text":
-		//		return longtaillib.GetBrotliTextDefaultCompressionType(), nil
-		//	case "brotli_text_min":
-		//		return longtaillib.GetBrotliTextMinCompressionType(), nil
-		//	case "brotli_text_max":
-		//		return longtaillib.GetBrotliTextMaxCompressionType(), nil
-		//	case "lz4":
-		//		return longtaillib.GetLZ4DefaultCompressionType(), nil
+	case "brotli":
+		return longtaillib.GetBrotliGenericDefaultCompressionType(), nil
+	case "brotli_min":
+		return longtaillib.GetBrotliGenericMinCompressionType(), nil
+	case "brotli_max":
+		return longtaillib.GetBrotliGenericMaxCompressionType(), nil
+	case "brotli_text":
+		return longtaillib.GetBrotliTextDefaultCompressionType(), nil
+	case "brotli_text_min":
+		return longtaillib.GetBrotliTextMinCompressionType(), nil
+	case "brotli_text_max":
+		return longtaillib.GetBrotliTextMaxCompressionType(), nil
+	case "lz4":
+		return longtaillib.GetLZ4DefaultCompressionType(), nil
 	case "zstd":
 		return longtaillib.GetZStdMaxCompressionType(), nil
 	case "zstd_min":

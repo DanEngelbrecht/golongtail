@@ -22,6 +22,23 @@ jobs:
         ./build.sh
         popd
 
+  linux:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: test
+      run: |
+        pushd ./longtaillib
+        ./test.sh
+        popd
+    - name: build cmd
+      run: |
+        pushd ./cmd/longtail
+        ./build.sh
+        popd
+
   win32:
 
     runs-on: windows-latest

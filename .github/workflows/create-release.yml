@@ -27,6 +27,26 @@ jobs:
         name: dist-linux-x64
         path: dist
 
+  build-macos:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: build cmd
+      run: |
+        pushd ./cmd/longtail
+        ./build.sh
+        popd
+    - name: build dist
+      run: |
+        mkdir dist
+        cp ./cmd/longtail/longtail dist/
+    - uses: actions/upload-artifact@master
+      with:
+        name: dist-macos-x64
+        path: dist
+
   build-win32:
 
     runs-on: windows-latest
@@ -51,7 +71,7 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    needs: [build-linux, build-win32]
+    needs: [build-linux, build-macos, build-win32]
 
     steps:
     - name: Checkout code
@@ -73,6 +93,11 @@ jobs:
       with:
         name: dist-linux-x64
         path: dist-linux-x64
+    - name: Download MacOs artifacts
+      uses: actions/download-artifact@v1
+      with:
+        name: dist-macos-x64
+        path: dist-macos-x64
     - name: Download Win32 artifacts
       uses: actions/download-artifact@v1
       with:
@@ -82,6 +107,10 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
+    - name: Zip MacOS artifacts
+      uses: montudor/action-zip@v0.1.0
+      with:
+        args: zip -qq -r ./macos-x64.zip ./dist-macos-x64
     - name: Zip Win32 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
@@ -92,5 +121,6 @@ jobs:
         args: |
           win32-x64.zip
           linux-x64.zip
+          macos-x64.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

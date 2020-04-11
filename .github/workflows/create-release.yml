@@ -16,7 +16,7 @@ jobs:
     - name: build cmd
       run: |
         pushd ./cmd/longtail
-        ./build.sh
+        go build -ldflags="-s -w" .
         popd
     - name: build dist
       run: |
@@ -36,7 +36,7 @@ jobs:
     - name: build cmd
       run: |
         pushd ./cmd/longtail
-        ./build.sh
+        go build -ldflags="-s -w" .
         popd
     - name: build dist
       run: |
@@ -56,7 +56,7 @@ jobs:
     - name: build cmd
       run: |
         pushd ./cmd/longtail
-        ./build.bat
+        go build -ldflags="-s -w" .
         popd
     - name: build dist
       run: |

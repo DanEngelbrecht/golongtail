@@ -14,12 +14,12 @@ jobs:
     - name: test
       run: |
         pushd ./longtaillib
-        ./test.sh
+        go test .
         popd
     - name: build cmd
       run: |
         pushd ./cmd/longtail
-        ./build.sh
+        go build .
         popd
 
   macos:
@@ -31,12 +31,12 @@ jobs:
     - name: test
       run: |
         pushd ./longtaillib
-        ./test.sh
+        go test .
         popd
     - name: build cmd
       run: |
         pushd ./cmd/longtail
-        ./build.sh
+        go build .
         popd
 
   win32:
@@ -48,10 +48,10 @@ jobs:
     - name: test
       run: |
         pushd ./longtaillib
-        ./test.bat
+        go test .
         popd
     - name: build cmd
       run: |
         pushd ./cmd/longtail
-        ./build.bat
+        go build .
         popd

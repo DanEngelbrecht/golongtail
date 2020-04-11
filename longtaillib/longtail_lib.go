@@ -1,7 +1,6 @@
-// -build windows
 package longtaillib
 
-// #cgo CFLAGS: -g -std=gnu99
+// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -msse4.1 -maes -O3
 // #include "longtail/lib/blake2/longtail_blake2.c"
 // #include "longtail/lib/blake3/longtail_blake3.c"
 // #include "longtail/lib/bikeshed/longtail_bikeshed.c"

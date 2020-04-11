@@ -1,6 +1,7 @@
 package longtaillib
 
-// #cgo CFLAGS: -g -std=gnu99
+// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -msse4.1 -maes -O3
+// #cgo LDFLAGS: -lm
 // #include "golongtail.h"
 import "C"
 import (
@@ -670,14 +671,14 @@ func (storageAPI *Longtail_StorageAPI) Dispose() {
 	C.Longtail_DisposeAPI(&storageAPI.cStorageAPI.m_API)
 }
 
-// CreateLZ4CompressionAPI ...
-func CreateLZ4CompressionAPI() Longtail_CompressionAPI {
-	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLZ4CompressionAPI()}
-}
-
 // CreateBrotliCompressionAPI ...
 func CreateBrotliCompressionAPI() Longtail_CompressionAPI {
 	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateBrotliCompressionAPI()}
+}
+
+// CreateLZ4CompressionAPI ...
+func CreateLZ4CompressionAPI() Longtail_CompressionAPI {
+	return Longtail_CompressionAPI{cCompressionAPI: C.Longtail_CreateLZ4CompressionAPI()}
 }
 
 // CreateZStdCompressionAPI ...
@@ -706,8 +707,13 @@ func (jobAPI *Longtail_JobAPI) Dispose() {
 }
 
 // CreateFullCompressionRegistry ...
-func CreateFullCompressionRegistry() Longtail_CompressionRegistryAPI {
-	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateFullCompressionRegistry()}
+//func CreateFullCompressionRegistry() Longtail_CompressionRegistryAPI {
+//	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateFullCompressionRegistry()}
+//}
+
+// CreateZStdCompressionRegistry ...
+func CreateZStdCompressionRegistry() Longtail_CompressionRegistryAPI {
+	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateZStdCompressionRegistry()}
 }
 
 // Longtail_CompressionRegistryAPI ...

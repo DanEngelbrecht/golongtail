@@ -148,7 +148,7 @@ func TestAPICreate(t *testing.T) {
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobAPI.Dispose()
 
-	compressionRegistry := CreateFullCompressionRegistry()
+	compressionRegistry := CreateZStdCompressionRegistry()
 	defer compressionRegistry.Dispose()
 }
 
@@ -846,7 +846,7 @@ func TestRewriteVersion(t *testing.T) {
 	defer contentIndex.Dispose()
 	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, "block_store")
 	defer blockStorageAPI.Dispose()
-	compressionRegistry := CreateFullCompressionRegistry()
+	compressionRegistry := CreateZStdCompressionRegistry()
 	compressionRegistry.Dispose()
 	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()

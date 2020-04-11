@@ -268,7 +268,7 @@ func upSyncVersion(
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := longtaillib.CreateFullCompressionRegistry()
+	creg := longtaillib.CreateZStdCompressionRegistry()
 	defer creg.Dispose()
 
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
@@ -429,7 +429,7 @@ func downSyncVersion(
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := longtaillib.CreateFullCompressionRegistry()
+	creg := longtaillib.CreateZStdCompressionRegistry()
 	defer creg.Dispose()
 
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)

@@ -9,6 +9,7 @@
 #include "longtail/lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "longtail/lib/compressblockstore/longtail_compressblockstore.h"
 #include "longtail/lib/compressionregistry/longtail_zstd_compression_registry.h"
+#include "longtail/lib/retainingblockstore/longtail_retainingblockstore.h"
 #include "longtail/lib/filestorage/longtail_filestorage.h"
 #include "longtail/lib/fsblockstore/longtail_fsblockstore.h"
 #include "longtail/lib/lz4/longtail_lz4.h"
@@ -34,6 +35,7 @@ struct BlockStoreAPIProxy
 static void* BlockStoreAPIProxy_GetContext(void* api) { return ((struct BlockStoreAPIProxy*)api)->m_Context; }
 void BlockStoreAPIProxy_Dispose(struct Longtail_API* api);
 int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
+int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, uint64_t* block_hashes, uint32_t* block_ref_counts);
 int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* api, uint32_t default_hash_api_identifier, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
@@ -46,6 +48,7 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         api,
         BlockStoreAPIProxy_Dispose,
         BlockStoreAPIProxy_PutStoredBlock,
+        (Longtail_BlockStore_PreflightGetFunc)BlockStoreAPIProxy_PreflightGet,
         BlockStoreAPIProxy_GetStoredBlock,
         BlockStoreAPIProxy_GetIndex,
         BlockStoreAPIProxy_GetStats);

@@ -483,6 +483,11 @@ func CreateCompressBlockStore(backingBlockStore Longtail_BlockStoreAPI, compress
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCompressBlockStoreAPI(backingBlockStore.cBlockStoreAPI, compressionRegistry.cCompressionRegistryAPI)}
 }
 
+// CreateRetainBlockStore() ...
+func CreateRetainingBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateRetainingBlockStoreAPI(backingBlockStore.cBlockStoreAPI)}
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)
@@ -1376,6 +1381,13 @@ func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blo
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
+}
+
+//export BlockStoreAPIProxy_PreflightGet
+func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, blockCount C.uint64_t, blockHashes *C.uint64_t, blockRefCounts *C.uint32_t) C.int {
+	//	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	//	blockStore := RestorePointer(context).(BlockStoreAPI)
+	return 0
 }
 
 //export BlockStoreAPIProxy_GetIndex

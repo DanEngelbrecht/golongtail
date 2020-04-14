@@ -347,7 +347,7 @@ func updateRemoteContentIndex(
 				return err
 			}
 			if reader == nil {
-				log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewReader(ctx) failed, retrying")
+				log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewReader(ctx) returned nil, retrying")
 				continue
 			}
 			blob, err := ioutil.ReadAll(reader)
@@ -378,6 +378,7 @@ func updateRemoteContentIndex(
 		}
 		writer := objHandle.If(writeCondition).NewWriter(ctx)
 		if writer == nil {
+			log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewWriter(ctx) returned nil, retrying")
 			continue
 		}
 		_, err = writer.Write(storeBlob)

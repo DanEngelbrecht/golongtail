@@ -96,16 +96,6 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_Con
 	return 0
 }
 
-//type managedBlockStore struct {
-//	BlockStore    longtaillib.BlockStoreAPI
-//	BlockStoreAPI longtaillib.Longtail_BlockStoreAPI
-//}
-
-//func (blockStore *managedBlockStore) Dispose() {
-//	blockStore.BlockStoreAPI.Dispose()
-//	//	blockStore.BlockStore.Close()
-//}
-
 func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {

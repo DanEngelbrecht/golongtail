@@ -123,9 +123,11 @@ type gcsBlockStore struct {
 	getBlockChan     chan getBlockMessage
 	contentIndexChan chan contentIndexMessage
 	getIndexChan     chan getIndexMessage
-	stopChan         chan stopMessage
+	workerStopChan   chan stopMessage
+	indexStopChan    chan stopMessage
 
-	workerWaitGroup sync.WaitGroup
+	workerWaitGroup      sync.WaitGroup
+	indexWorkerWaitGroup sync.WaitGroup
 
 	stats longtaillib.BlockStoreStats
 }
@@ -451,7 +453,7 @@ func contentIndexWorker(
 	for run {
 		select {
 		case contentIndexMsg := <-contentIndexMessages:
-			newAddedContentIndex, err := longtaillib.MergeContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
+			newAddedContentIndex, err := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 			if err != nil {
 				log.Panicf("ERROR: MergeContentIndex returned: %q", err)
 				continue
@@ -460,7 +462,7 @@ func contentIndexWorker(
 			addedContentIndex = newAddedContentIndex
 			contentIndexMsg.contentIndex.Dispose()
 		case getIndexMessage := <-getIndexMessages:
-			contentIndexCopy, err := longtaillib.MergeContentIndex(contentIndex, addedContentIndex)
+			contentIndexCopy, err := longtaillib.AddContentIndex(contentIndex, addedContentIndex)
 			if err != nil {
 				log.Panicf("ERROR: MergeContentIndex returned: %q", err)
 				continue
@@ -477,7 +479,7 @@ func contentIndexWorker(
 
 	select {
 	case contentIndexMsg := <-contentIndexMessages:
-		newAddedContentIndex, err := longtaillib.MergeContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
+		newAddedContentIndex, err := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 		if err != nil {
 			log.Panicf("ERROR: MergeContentIndex returned: %q", err)
 		}
@@ -493,7 +495,7 @@ func contentIndexWorker(
 			log.Printf("WARNING: Failed to write store content index: %q", err)
 		}
 	}
-	s.workerWaitGroup.Done()
+	s.indexWorkerWaitGroup.Done()
 	return nil
 }
 
@@ -518,17 +520,18 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 	defaultBucket := defaultClient.Bucket(bucketName)
 
 	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
-	s.workerCount = runtime.NumCPU()
+	s.workerCount = runtime.NumCPU() * 2
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*2048)
 	s.getIndexChan = make(chan getIndexMessage)
-	s.stopChan = make(chan stopMessage, s.workerCount)
+	s.workerStopChan = make(chan stopMessage, s.workerCount)
+	s.indexStopChan = make(chan stopMessage, 1)
 
-	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.getIndexChan, s.stopChan)
-	s.workerWaitGroup.Add(1)
+	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.getIndexChan, s.workerStopChan)
+	s.indexWorkerWaitGroup.Add(1)
 	for i := 0; i < s.workerCount; i++ {
-		go gcsWorker(ctx, s, u, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.stopChan)
+		go gcsWorker(ctx, s, u, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.indexStopChan)
 	}
 	s.workerWaitGroup.Add(s.workerCount)
 
@@ -573,8 +576,10 @@ func (s *gcsBlockStore) GetStats() (longtaillib.BlockStoreStats, int) {
 
 // Close ...
 func (s *gcsBlockStore) Close() {
-	for i := 0; i < s.workerCount+1; i++ {
-		s.stopChan <- stopMessage{}
+	for i := 0; i < s.workerCount; i++ {
+		s.workerStopChan <- stopMessage{}
 	}
 	s.workerWaitGroup.Wait()
+	s.indexStopChan <- stopMessage{}
+	s.indexWorkerWaitGroup.Wait()
 }

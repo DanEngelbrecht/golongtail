@@ -86,6 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+           - Fixed bug where index was not completely updated with all put blocks
+           - Fixed performance issue when storing many blocks in one session
         draft: false
         prerelease: false
     - name: Download Linux artifacts

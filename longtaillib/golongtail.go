@@ -1257,6 +1257,18 @@ func MergeContentIndex(
 	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, nil
 }
 
+// AddContentIndex ...
+func AddContentIndex(
+	localContentIndex Longtail_ContentIndex,
+	remoteContentIndex Longtail_ContentIndex) (Longtail_ContentIndex, error) {
+	var mergedContentIndex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_AddContentIndex(localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("AddContentIndex: C.Longtail_AddContentIndex() failed with error %d", errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, nil
+}
+
 // WriteVersion ...
 func WriteVersion(
 	contentBlockStoreAPI Longtail_BlockStoreAPI,

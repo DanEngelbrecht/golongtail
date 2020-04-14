@@ -96,43 +96,41 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_Con
 	return 0
 }
 
-type managedBlockStore struct {
-	BlockStore    longtaillib.BlockStoreAPI
-	BlockStoreAPI longtaillib.Longtail_BlockStoreAPI
-}
+//type managedBlockStore struct {
+//	BlockStore    longtaillib.BlockStoreAPI
+//	BlockStoreAPI longtaillib.Longtail_BlockStoreAPI
+//}
 
-func (blockStore *managedBlockStore) Dispose() {
-	blockStore.BlockStoreAPI.Dispose()
-	//	blockStore.BlockStore.Close()
-}
+//func (blockStore *managedBlockStore) Dispose() {
+//	blockStore.BlockStoreAPI.Dispose()
+//	//	blockStore.BlockStore.Close()
+//}
 
-func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (managedBlockStore, error) {
+func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
 			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(blobStoreURL, defaultHashAPI, targetBlockSize, maxChunksPerBlock)
 			if err != nil {
-				return managedBlockStore{BlockStore: nil, BlockStoreAPI: longtaillib.Longtail_BlockStoreAPI{}}, err
+				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
-			blockStoreAPI := longtaillib.CreateBlockStoreAPI(gcsBlockStore)
-			return managedBlockStore{BlockStore: gcsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
+			return longtaillib.CreateBlockStoreAPI(gcsBlockStore), nil
 		case "s3":
-			return managedBlockStore{BlockStore: nil, BlockStoreAPI: longtaillib.Longtail_BlockStoreAPI{}}, fmt.Errorf("AWS storage not yet implemented")
+			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("AWS storage not yet implemented")
 		case "abfs":
-			return managedBlockStore{BlockStore: nil, BlockStoreAPI: longtaillib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen1 storage not yet implemented")
+			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen1 storage not yet implemented")
 		case "abfss":
-			return managedBlockStore{BlockStore: nil, BlockStoreAPI: longtaillib.Longtail_BlockStoreAPI{}}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
 			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], defaultHashAPI.GetIdentifier(), jobAPI)
 			if err != nil {
-				return managedBlockStore{BlockStore: nil, BlockStoreAPI: longtaillib.Longtail_BlockStoreAPI{}}, err
+				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
-			blockStoreAPI := longtaillib.CreateBlockStoreAPI(fsBlockStore)
-			return managedBlockStore{BlockStore: fsBlockStore, BlockStoreAPI: blockStoreAPI}, nil
+			return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
 		}
 	}
-	return managedBlockStore{BlockStore: nil, BlockStoreAPI: longtaillib.CreateFSBlockStore(longtaillib.CreateFSStorageAPI(), uri)}, nil
+	return longtaillib.CreateFSBlockStore(longtaillib.CreateFSStorageAPI(), uri), nil
 }
 
 func createFileStorageForURI(uri string) (longtailstorelib.FileStorage, error) {
@@ -288,7 +286,7 @@ func upSyncVersion(
 	}
 	defer remoteStore.Dispose()
 
-	indexStore := longtaillib.CreateCompressBlockStore(remoteStore.BlockStoreAPI, creg)
+	indexStore := longtaillib.CreateCompressBlockStore(remoteStore, creg)
 	defer indexStore.Dispose()
 
 	getIndexComplete := &getIndexCompletionAPI{}
@@ -459,7 +457,7 @@ func downSyncVersion(
 	}
 	defer localIndexStore.Dispose()
 
-	cacheBlockStore := longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore.BlockStoreAPI)
+	cacheBlockStore := longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
 	defer cacheBlockStore.Dispose()
 
 	compressBlockStore := longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
@@ -573,7 +571,7 @@ func downSyncVersion(
 		return err
 	}
 	if showStats {
-		stats, errno := remoteIndexStore.BlockStore.GetStats()
+		stats, errno := remoteIndexStore.GetStats()
 		if errno == 0 {
 			log.Printf("STATS:\n------------------\n")
 			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))

@@ -447,10 +447,11 @@ func TestFSBlockStore(t *testing.T) {
 	getIndexComplete.wg.Wait()
 	contentIndex2 := getIndexComplete.contentIndex
 	defer contentIndex2.Dispose()
-	if contentIndex2.GetBlockCount() != uint64(1) {
+	// FSBlockStore does not use "MergeContentIndex" only "AddContentIndex" so the index will contain redunant blocks due way this test is written
+	if contentIndex2.GetBlockCount() != uint64(3) {
 		t.Errorf("TestFSBlockStore() contentIndex2.GetBlockCount() %q != %q", contentIndex2.GetBlockCount(), uint64(1))
 	}
-	if contentIndex2.GetChunkCount() != uint64(9) {
+	if contentIndex2.GetChunkCount() != uint64(15) {
 		t.Errorf("TestFSBlockStore() contentIndex2.GetChunkCount() %q != %q", contentIndex2.GetChunkCount(), uint64(9))
 	}
 }

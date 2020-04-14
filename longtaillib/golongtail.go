@@ -484,7 +484,7 @@ func CreateCompressBlockStore(backingBlockStore Longtail_BlockStoreAPI, compress
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCompressBlockStoreAPI(backingBlockStore.cBlockStoreAPI, compressionRegistry.cCompressionRegistryAPI)}
 }
 
-// CreateRetainBlockStore() ...
+// CreateRetainingBlockStore() ...
 func CreateRetainingBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateRetainingBlockStoreAPI(backingBlockStore.cBlockStoreAPI)}
 }

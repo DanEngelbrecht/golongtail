@@ -491,6 +491,10 @@ func (b *TestBlockStore) PutStoredBlock(
 	return asyncCompleteAPI.OnComplete(errno)
 }
 
+func (b *TestBlockStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
+	return 0
+}
+
 func (b *TestBlockStore) GetStoredBlock(
 	blockHash uint64,
 	asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int {

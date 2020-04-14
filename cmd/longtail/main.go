@@ -465,10 +465,7 @@ func downSyncVersion(
 	compressBlockStore := longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
 	defer compressBlockStore.Dispose()
 
-	statsBlockStore := longtaillib.CreateBlockStoreAPI(longtailstorelib.NewStatsBlockStore(compressBlockStore))
-	defer statsBlockStore.Dispose()
-
-	indexStore := longtaillib.CreateRetainingBlockStore(statsBlockStore)
+	indexStore := longtaillib.CreateRetainingBlockStore(compressBlockStore)
 	defer indexStore.Dispose()
 
 	getIndexComplete := &getIndexCompletionAPI{}

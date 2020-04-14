@@ -31,6 +31,11 @@ func (s *statsBlockStore) PutStoredBlock(storedBlock longtaillib.Longtail_Stored
 	return s.backingBlockStore.PutStoredBlock(storedBlock, asyncCompleteAPI)
 }
 
+// PreflightGet ...
+func (b *statsBlockStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
+	return 0
+}
+
 // GetStoredBlock ...
 func (s *statsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longtaillib.Longtail_AsyncGetStoredBlockAPI) int {
 	s.mux.Lock()

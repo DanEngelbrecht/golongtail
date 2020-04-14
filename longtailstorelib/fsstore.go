@@ -148,6 +148,11 @@ func (s *fsBlockStore) PutStoredBlock(storedBlock longtaillib.Longtail_StoredBlo
 	return s.fsBlockStore.PutStoredBlock(storedBlock, asyncCompleteAPI)
 }
 
+// PreflightGet ...
+func (s *fsBlockStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
+	return 0
+}
+
 // GetStoredBlock ...
 func (s *fsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longtaillib.Longtail_AsyncGetStoredBlockAPI) int {
 	if len(s.getBlockChan) < cap(s.getBlockChan) {

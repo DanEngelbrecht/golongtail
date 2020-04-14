@@ -178,8 +178,7 @@ func putStoredBlock(
 	s *gcsBlockStore,
 	bucket *storage.BucketHandle,
 	contentIndexMessages chan<- contentIndexMessage,
-	storedBlock longtaillib.Longtail_StoredBlock,
-	asyncCompleteAPI longtaillib.Longtail_AsyncPutStoredBlockAPI) int {
+	storedBlock longtaillib.Longtail_StoredBlock) int {
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath(s.prefix+"chunks", blockHash)
@@ -188,7 +187,7 @@ func putStoredBlock(
 	if err == storage.ErrObjectNotExist {
 		blob, err := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 		if err != nil {
-			return asyncCompleteAPI.OnComplete(longtaillib.ENOMEM)
+			return longtaillib.ENOMEM
 		}
 
 		errno := putBlob(ctx, objHandle, blob)
@@ -212,7 +211,7 @@ func putStoredBlock(
 
 		if errno != 0 {
 			atomic.AddUint64(&s.stats.BlockPutFailCount, 1)
-			return asyncCompleteAPI.OnComplete(longtaillib.ENOMEM)
+			return longtaillib.ENOMEM
 		}
 
 		atomic.AddUint64(&s.stats.BlocksPutCount, 1)
@@ -223,18 +222,17 @@ func putStoredBlock(
 	newBlocks := []longtaillib.Longtail_BlockIndex{blockIndex}
 	addedContentIndex, err := longtaillib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), s.maxBlockSize, s.maxChunksPerBlock, newBlocks)
 	if err != nil {
-		return asyncCompleteAPI.OnComplete(longtaillib.ENOMEM)
+		return longtaillib.ENOMEM
 	}
 	contentIndexMessages <- contentIndexMessage{contentIndex: addedContentIndex}
-	return asyncCompleteAPI.OnComplete(0)
+	return 0
 }
 
 func getStoredBlock(
 	ctx context.Context,
 	s *gcsBlockStore,
 	bucket *storage.BucketHandle,
-	blockHash uint64,
-	asyncCompleteAPI longtaillib.Longtail_AsyncGetStoredBlockAPI) int {
+	blockHash uint64) (longtaillib.Longtail_StoredBlock, int) {
 
 	key := getBlockPath(s.prefix+"chunks", blockHash)
 	objHandle := bucket.Object(key)
@@ -260,19 +258,19 @@ func getStoredBlock(
 
 	if errno != 0 {
 		atomic.AddUint64(&s.stats.BlockGetFailCount, 1)
-		return asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoredBlock{}, longtaillib.EIO)
+		return longtaillib.Longtail_StoredBlock{}, longtaillib.EIO
 	}
 
 	storedBlock, err := longtaillib.ReadStoredBlockFromBuffer(storedBlockData)
 	if err != nil {
-		return asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoredBlock{}, longtaillib.ENOMEM)
+		return longtaillib.Longtail_StoredBlock{}, longtaillib.ENOMEM
 	}
 
 	atomic.AddUint64(&s.stats.BlocksGetCount, 1)
 	atomic.AddUint64(&s.stats.BytesGetCount, (uint64)(len(storedBlockData)))
 	blockIndex := storedBlock.GetBlockIndex()
 	atomic.AddUint64(&s.stats.ChunksGetCount, (uint64)(blockIndex.GetChunkCount()))
-	return asyncCompleteAPI.OnComplete(storedBlock, 0)
+	return storedBlock, 0
 }
 
 func gcsWorker(
@@ -294,14 +292,16 @@ func gcsWorker(
 	for run {
 		select {
 		case putMsg := <-putBlockMessages:
-			errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock, putMsg.asyncCompleteAPI)
+			errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock)
+			errno = putMsg.asyncCompleteAPI.OnComplete(errno)
 			if errno != 0 {
-				log.Panicf("WARNING: putStoredBlock returned: %d", errno)
+				log.Panicf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
 			}
 		case getMsg := <-getBlockMessages:
-			errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash, getMsg.asyncCompleteAPI)
+			storedBlock, errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash)
+			errno = getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
 			if errno != 0 {
-				log.Panicf("WARNING: getStoredBlock returned: %d", errno)
+				log.Panicf("WARNING: getMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
 			}
 		case _ = <-stopMessages:
 			run = false
@@ -310,9 +310,10 @@ func gcsWorker(
 
 	select {
 	case putMsg := <-putBlockMessages:
-		errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock, putMsg.asyncCompleteAPI)
+		errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock)
+		errno = putMsg.asyncCompleteAPI.OnComplete(errno)
 		if errno != 0 {
-			log.Panicf("WARNING: putStoredBlock returned: %d", errno)
+			log.Panicf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
 		}
 	default:
 	}
@@ -545,6 +546,11 @@ func getBlockPath(basePath string, blockHash uint64) string {
 // PutStoredBlock ...
 func (s *gcsBlockStore) PutStoredBlock(storedBlock longtaillib.Longtail_StoredBlock, asyncCompleteAPI longtaillib.Longtail_AsyncPutStoredBlockAPI) int {
 	s.putBlockChan <- putBlockMessage{storedBlock: storedBlock, asyncCompleteAPI: asyncCompleteAPI}
+	return 0
+}
+
+// PreflightGet ...
+func (s *gcsBlockStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
 	return 0
 }
 

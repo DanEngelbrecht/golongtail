@@ -218,14 +218,14 @@ func createHashAPI(hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) 
 func byteCountDecimal(b uint64) string {
 	const unit = 1000
 	if b < unit {
-		return fmt.Sprintf("%d B", b)
+		return fmt.Sprintf("%d", b)
 	}
 	div, exp := uint64(unit), 0
 	for n := b / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
+	return fmt.Sprintf("%.1f %c", float64(b)/float64(div), "kMGTPE"[exp])
 }
 
 func byteCountBinary(b uint64) string {
@@ -387,16 +387,22 @@ func upSyncVersion(
 		return err
 	}
 	if showStats {
-		stats, errno := indexStore.GetStats()
+		stats, errno := remoteStore.GetStats()
 		if errno == 0 {
 			log.Printf("STATS:\n------------------\n")
-			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
-			log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
-			log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
-			log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
-			log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
-			log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
-			log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
+			log.Printf("IndexGetCount:      %s\n", byteCountDecimal(stats.IndexGetCount))
+			log.Printf("BlocksGetCount:     %s\n", byteCountDecimal(stats.BlocksGetCount))
+			log.Printf("BlocksPutCount:     %s\n", byteCountDecimal(stats.BlocksPutCount))
+			log.Printf("ChunksGetCount:     %s\n", byteCountDecimal(stats.ChunksGetCount))
+			log.Printf("ChunksPutCount:     %s\n", byteCountDecimal(stats.ChunksPutCount))
+			log.Printf("BytesGetCount:      %s\n", byteCountBinary(stats.BytesGetCount))
+			log.Printf("BytesPutCount:      %s\n", byteCountBinary(stats.BytesPutCount))
+			log.Printf("IndexGetRetryCount: %s\n", byteCountBinary(stats.IndexGetRetryCount))
+			log.Printf("BlockGetRetryCount: %s\n", byteCountBinary(stats.BlockGetRetryCount))
+			log.Printf("BlockPutRetryCount: %s\n", byteCountBinary(stats.BlockPutRetryCount))
+			log.Printf("IndexGetFailCount:  %s\n", byteCountBinary(stats.IndexGetFailCount))
+			log.Printf("BlockGetFailCount:  %s\n", byteCountBinary(stats.BlockGetFailCount))
+			log.Printf("BlockPutFailCount:  %s\n", byteCountBinary(stats.BlockPutFailCount))
 			log.Printf("------------------\n")
 		}
 	}
@@ -564,13 +570,19 @@ func downSyncVersion(
 		stats, errno := remoteIndexStore.GetStats()
 		if errno == 0 {
 			log.Printf("STATS:\n------------------\n")
-			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
-			log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
-			log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
-			log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
-			log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
-			log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
-			log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
+			log.Printf("IndexGetCount:      %s\n", byteCountDecimal(stats.IndexGetCount))
+			log.Printf("BlocksGetCount:     %s\n", byteCountDecimal(stats.BlocksGetCount))
+			log.Printf("BlocksPutCount:     %s\n", byteCountDecimal(stats.BlocksPutCount))
+			log.Printf("ChunksGetCount:     %s\n", byteCountDecimal(stats.ChunksGetCount))
+			log.Printf("ChunksPutCount:     %s\n", byteCountDecimal(stats.ChunksPutCount))
+			log.Printf("BytesGetCount:      %s\n", byteCountBinary(stats.BytesGetCount))
+			log.Printf("BytesPutCount:      %s\n", byteCountBinary(stats.BytesPutCount))
+			log.Printf("IndexGetRetryCount: %s\n", byteCountBinary(stats.IndexGetRetryCount))
+			log.Printf("BlockGetRetryCount: %s\n", byteCountBinary(stats.BlockGetRetryCount))
+			log.Printf("BlockPutRetryCount: %s\n", byteCountBinary(stats.BlockPutRetryCount))
+			log.Printf("IndexGetFailCount:  %s\n", byteCountBinary(stats.IndexGetFailCount))
+			log.Printf("BlockGetFailCount:  %s\n", byteCountBinary(stats.BlockGetFailCount))
+			log.Printf("BlockPutFailCount:  %s\n", byteCountBinary(stats.BlockPutFailCount))
 			log.Printf("------------------\n")
 		}
 	}

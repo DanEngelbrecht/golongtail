@@ -285,6 +285,7 @@ func gcsWorker(
 	stopMessages <-chan stopMessage) error {
 	client, err := storage.NewClient(ctx)
 	if err != nil {
+		s.workerWaitGroup.Done()
 		return errors.Wrap(err, u.String())
 	}
 	bucketName := u.Host
@@ -297,13 +298,13 @@ func gcsWorker(
 			errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock)
 			errno = putMsg.asyncCompleteAPI.OnComplete(errno)
 			if errno != 0 {
-				log.Panicf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
+				log.Printf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
 			}
 		case getMsg := <-getBlockMessages:
 			storedBlock, errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash)
 			errno = getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
 			if errno != 0 {
-				log.Panicf("WARNING: getMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
+				log.Printf("WARNING: getMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
 			}
 		case _ = <-stopMessages:
 			run = false
@@ -315,7 +316,7 @@ func gcsWorker(
 		errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock)
 		errno = putMsg.asyncCompleteAPI.OnComplete(errno)
 		if errno != 0 {
-			log.Panicf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
+			log.Printf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
 		}
 	default:
 	}
@@ -331,6 +332,7 @@ func updateRemoteContentIndex(
 	addedContentIndex longtaillib.Longtail_ContentIndex) error {
 	storeBlob, err := longtaillib.WriteContentIndexToBuffer(addedContentIndex)
 	if err != nil {
+		log.Printf("updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer(addedContentIndex) with %q", err)
 		return err
 	}
 	key := prefix + "store.lci"
@@ -345,42 +347,50 @@ func updateRemoteContentIndex(
 				return err
 			}
 			if reader == nil {
+				log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewReader(ctx) returned nil, retrying")
 				continue
 			}
 			blob, err := ioutil.ReadAll(reader)
 			reader.Close()
 			if err != nil {
+				log.Printf("updateRemoteContentIndex: ioutil.ReadAll(reader) failed with %q", err)
 				return err
 			}
 
 			remoteContentIndex, err := longtaillib.ReadContentIndexFromBuffer(blob)
 			if err != nil {
+				log.Printf("updateRemoteContentIndex: longtaillib.ReadContentIndexFromBuffer(blob) failed with %q", err)
 				return err
 			}
 			defer remoteContentIndex.Dispose()
 			mergedContentIndex, err := longtaillib.MergeContentIndex(remoteContentIndex, addedContentIndex)
 			if err != nil {
+				log.Printf("updateRemoteContentIndex: longtaillib.MergeContentIndex(remoteContentIndex, addedContentIndex) failed with %q", err)
 				return err
 			}
 			defer mergedContentIndex.Dispose()
 
 			storeBlob, err = longtaillib.WriteContentIndexToBuffer(mergedContentIndex)
 			if err != nil {
+				log.Printf("updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer(mergedContentIndex) failed with %q", err)
 				return err
 			}
 		}
 		writer := objHandle.If(writeCondition).NewWriter(ctx)
 		if writer == nil {
+			log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewWriter(ctx) returned nil, retrying")
 			continue
 		}
 		_, err = writer.Write(storeBlob)
 		if err != nil {
+			log.Printf("updateRemoteContentIndex: writer.Write(storeBlob) failed with %q", err)
 			writer.CloseWithError(err)
 			return err
 		}
 		writer.Close()
 		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 		if err != nil {
+			log.Printf("updateRemoteContentIndex: objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: \"application/octet-stream\"}) failed with %q", err)
 			return err
 		}
 		break
@@ -398,6 +408,7 @@ func contentIndexWorker(
 
 	client, err := storage.NewClient(ctx)
 	if err != nil {
+		s.indexWorkerWaitGroup.Done()
 		return errors.Wrap(err, u.String())
 	}
 	bucketName := u.Host
@@ -427,6 +438,7 @@ func contentIndexWorker(
 			s.maxBlockSize,
 			s.maxChunksPerBlock)
 		if err != nil {
+			s.indexWorkerWaitGroup.Done()
 			return err
 		}
 	}
@@ -443,6 +455,7 @@ func contentIndexWorker(
 		s.maxBlockSize,
 		s.maxChunksPerBlock)
 	if err != nil {
+		s.indexWorkerWaitGroup.Done()
 		return err
 	}
 
@@ -455,16 +468,17 @@ func contentIndexWorker(
 		case contentIndexMsg := <-contentIndexMessages:
 			newAddedContentIndex, err := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 			if err != nil {
-				log.Panicf("ERROR: MergeContentIndex returned: %q", err)
+				log.Printf("ERROR: MergeContentIndex returned: %q", err)
 				continue
 			}
 			addedContentIndex.Dispose()
 			addedContentIndex = newAddedContentIndex
 			contentIndexMsg.contentIndex.Dispose()
 		case getIndexMessage := <-getIndexMessages:
-			contentIndexCopy, err := longtaillib.AddContentIndex(contentIndex, addedContentIndex)
+			contentIndexCopy, err := longtaillib.MergeContentIndex(contentIndex, addedContentIndex)
 			if err != nil {
-				log.Panicf("ERROR: MergeContentIndex returned: %q", err)
+				log.Printf("ERROR: MergeContentIndex returned: %q", err)
+				getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, longtaillib.ENOMEM)
 				continue
 			}
 			errno := getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
@@ -481,7 +495,7 @@ func contentIndexWorker(
 	case contentIndexMsg := <-contentIndexMessages:
 		newAddedContentIndex, err := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 		if err != nil {
-			log.Panicf("ERROR: MergeContentIndex returned: %q", err)
+			log.Printf("ERROR: MergeContentIndex returned: %q", err)
 		}
 		addedContentIndex.Dispose()
 		addedContentIndex = newAddedContentIndex
@@ -511,7 +525,10 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 		return nil, errors.Wrap(err, u.String())
 	}
 
-	prefix := u.Path[1:] // strip initial slash
+	prefix := u.Path
+	if len(u.Path) > 0 {
+		prefix = u.Path[1:] // strip initial slash
+	}
 
 	if prefix != "" {
 		prefix += "/"
@@ -520,7 +537,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 	defaultBucket := defaultClient.Bucket(bucketName)
 
 	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
-	s.workerCount = runtime.NumCPU() * 2
+	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*2048)
@@ -528,12 +545,13 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 	s.workerStopChan = make(chan stopMessage, s.workerCount)
 	s.indexStopChan = make(chan stopMessage, 1)
 
-	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.getIndexChan, s.workerStopChan)
 	s.indexWorkerWaitGroup.Add(1)
-	for i := 0; i < s.workerCount; i++ {
-		go gcsWorker(ctx, s, u, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.indexStopChan)
-	}
+	go contentIndexWorker(ctx, s, u, s.contentIndexChan, s.getIndexChan, s.indexStopChan)
+
 	s.workerWaitGroup.Add(s.workerCount)
+	for i := 0; i < s.workerCount; i++ {
+		go gcsWorker(ctx, s, u, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.workerStopChan)
+	}
 
 	return s, nil
 }

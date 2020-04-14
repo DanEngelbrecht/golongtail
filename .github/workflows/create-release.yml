@@ -86,8 +86,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Fixed bug where index was not completely updated with all put blocks
-           - Fixed performance issue when storing many blocks in one session
+           - Fixed hang bug at exit
+           - More logging when gcs block store fails operations
+           - Changed panics() to logging on gcs block store failed operations
         draft: false
         prerelease: false
     - name: Download Linux artifacts

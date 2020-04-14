@@ -103,6 +103,7 @@ type BlockStoreStats struct {
 
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
+	PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
 	GetStats() (BlockStoreStats, int)
@@ -481,6 +482,11 @@ func CreateCacheBlockStore(cacheBlockStore Longtail_BlockStoreAPI, persistentBlo
 // CreateCompressBlockStore() ...
 func CreateCompressBlockStore(backingBlockStore Longtail_BlockStoreAPI, compressionRegistry Longtail_CompressionRegistryAPI) Longtail_BlockStoreAPI {
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCompressBlockStoreAPI(backingBlockStore.cBlockStoreAPI, compressionRegistry.cCompressionRegistryAPI)}
+}
+
+// CreateRetainingBlockStore() ...
+func CreateRetainingBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateRetainingBlockStoreAPI(backingBlockStore.cBlockStoreAPI)}
 }
 
 // Longtail_BlockStoreAPI.Dispose() ...
@@ -1375,6 +1381,19 @@ func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blo
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetStoredBlock(uint64(blockHash), Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
+	return C.int(errno)
+}
+
+//export BlockStoreAPIProxy_PreflightGet
+func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, blockCount C.uint64_t, blockHashes *C.uint64_t, blockRefCounts *C.uint32_t) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+
+	size := int(blockCount)
+	hashes := carray2slice64(blockHashes, size)
+	refCounts := carray2slice32(blockRefCounts, size)
+
+	errno := blockStore.PreflightGet(uint64(blockCount), hashes, refCounts)
 	return C.int(errno)
 }
 

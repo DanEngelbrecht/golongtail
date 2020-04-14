@@ -527,7 +527,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 
 	prefix := u.Path
 	if len(u.Path) > 0 {
-		prefix:= u.Path[1:] // strip initial slash
+		prefix = u.Path[1:] // strip initial slash
 	}
 
 	if prefix != "" {

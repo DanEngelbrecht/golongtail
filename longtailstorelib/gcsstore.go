@@ -129,7 +129,8 @@ type gcsBlockStore struct {
 	workerWaitGroup      sync.WaitGroup
 	indexWorkerWaitGroup sync.WaitGroup
 
-	stats longtaillib.BlockStoreStats
+	stats         longtaillib.BlockStoreStats
+	outFinalStats *longtaillib.BlockStoreStats
 }
 
 // String() ...
@@ -213,7 +214,7 @@ func putStoredBlock(
 
 		if errno != 0 {
 			atomic.AddUint64(&s.stats.BlockPutFailCount, 1)
-			return longtaillib.ENOMEM
+			return errno
 		}
 
 		atomic.AddUint64(&s.stats.BlocksPutCount, 1)
@@ -514,7 +515,7 @@ func contentIndexWorker(
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, maxBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.BlockStoreAPI, error) {
+func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, maxBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
@@ -536,7 +537,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 	bucketName := u.Host
 	defaultBucket := defaultClient.Bucket(bucketName)
 
-	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI}
+	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI, outFinalStats: outFinalStats}
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
@@ -600,4 +601,7 @@ func (s *gcsBlockStore) Close() {
 	s.workerWaitGroup.Wait()
 	s.indexStopChan <- stopMessage{}
 	s.indexWorkerWaitGroup.Wait()
+	if s.outFinalStats != nil {
+		*s.outFinalStats = s.stats
+	}
 }

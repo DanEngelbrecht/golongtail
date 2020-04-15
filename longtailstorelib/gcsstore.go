@@ -140,9 +140,6 @@ func (s *gcsBlockStore) String() string {
 
 func putBlob(ctx context.Context, objHandle *storage.ObjectHandle, blob []byte) int {
 	objWriter := objHandle.NewWriter(ctx)
-	if objWriter == nil {
-		return longtaillib.EEXIST
-	}
 	_, err := objWriter.Write(blob)
 	if err != nil {
 		objWriter.Close()
@@ -224,6 +221,7 @@ func putStoredBlock(
 		atomic.AddUint64(&s.stats.BytesPutCount, (uint64)(len(blob)))
 		atomic.AddUint64(&s.stats.ChunksPutCount, (uint64)(blockIndex.GetChunkCount()))
 	}
+
 	newBlocks := []longtaillib.Longtail_BlockIndex{blockIndex}
 	addedContentIndex, err := longtaillib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), s.maxBlockSize, s.maxChunksPerBlock, newBlocks)
 	if err != nil {

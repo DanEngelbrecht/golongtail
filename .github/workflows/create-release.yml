@@ -88,6 +88,7 @@ jobs:
           Changes in this Release
            - Stats for remote store are now *final* stats after operation is complete
            - Return correct error code in gcs block store putBlob
+           - Use shareblockstore
         draft: false
         prerelease: false
     - name: Download Linux artifacts

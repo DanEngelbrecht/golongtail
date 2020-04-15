@@ -218,14 +218,14 @@ func createHashAPI(hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) 
 func byteCountDecimal(b uint64) string {
 	const unit = 1000
 	if b < unit {
-		return fmt.Sprintf("%d B", b)
+		return fmt.Sprintf("%d", b)
 	}
 	div, exp := uint64(unit), 0
 	for n := b / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "kMGTPE"[exp])
+	return fmt.Sprintf("%.1f %c", float64(b)/float64(div), "kMGTPE"[exp])
 }
 
 func byteCountBinary(b uint64) string {

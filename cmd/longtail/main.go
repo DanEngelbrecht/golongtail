@@ -89,11 +89,10 @@ type getIndexCompletionAPI struct {
 	err          int
 }
 
-func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_ContentIndex, err int) int {
+func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_ContentIndex, err int) {
 	a.err = err
 	a.contentIndex = contentIndex
 	a.wg.Done()
-	return 0
 }
 
 func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {

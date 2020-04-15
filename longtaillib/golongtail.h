@@ -108,7 +108,7 @@ struct AsyncPutStoredBlockAPIProxy
 };
 
 static void* AsyncPutStoredBlockAPIProxy_GetContext(void* api) { return ((struct AsyncPutStoredBlockAPIProxy*)api)->m_Context; }
-int AsyncPutStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
+void AsyncPutStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncPutStoredBlockAPI* async_complete_api, int err);
 void AsyncPutStoredBlockAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncPutStoredBlockAPI* CreateAsyncPutStoredBlockAPI(void* context)
@@ -130,7 +130,7 @@ struct AsyncGetStoredBlockAPIProxy
 };
 
 static void* AsyncGetStoredBlockAPIProxy_GetContext(void* api) { return ((struct AsyncGetStoredBlockAPIProxy*)api)->m_Context; }
-int AsyncGetStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
+void AsyncGetStoredBlockAPIProxy_OnComplete(struct Longtail_AsyncGetStoredBlockAPI* async_complete_api, struct Longtail_StoredBlock* stored_block, int err);
 void AsyncGetStoredBlockAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncGetStoredBlockAPI* CreateAsyncGetStoredBlockAPI(void* context)
@@ -152,7 +152,7 @@ struct AsyncGetIndexAPIProxy
 };
 
 static void* AsyncGetIndexAPIProxy_GetContext(void* api) { return ((struct AsyncGetIndexAPIProxy*)api)->m_Context; }
-int AsyncGetIndexAPIProxy_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+void AsyncGetIndexAPIProxy_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
 void AsyncGetIndexAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncGetIndexAPI* CreateAsyncGetIndexAPI(void* context)

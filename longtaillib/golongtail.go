@@ -489,6 +489,11 @@ func CreateRetainingBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtai
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateRetainingBlockStoreAPI(backingBlockStore.cBlockStoreAPI)}
 }
 
+// CreateShareBlockStore() ...
+func CreateShareBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateShareBlockStoreAPI(backingBlockStore.cBlockStoreAPI)}
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)

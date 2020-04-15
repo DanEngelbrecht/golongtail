@@ -86,9 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Fixed hang bug at exit
-           - More logging when gcs block store fails operations
-           - Changed panics() to logging on gcs block store failed operations
+           - Stats for remote store are now *final* stats after operation is complete
+           - Return correct error code in gcs block store putBlob
         draft: false
         prerelease: false
     - name: Download Linux artifacts

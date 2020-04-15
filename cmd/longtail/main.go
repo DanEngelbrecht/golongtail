@@ -96,12 +96,12 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_Con
 	return 0
 }
 
-func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.Longtail_BlockStoreAPI, error) {
+func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(blobStoreURL, defaultHashAPI, targetBlockSize, maxChunksPerBlock)
+			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(blobStoreURL, defaultHashAPI, targetBlockSize, maxChunksPerBlock, outFinalStats)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -251,7 +251,7 @@ func upSyncVersion(
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
 	hashAlgorithm *string,
-	showStats bool) error {
+	outFinalStats *longtaillib.BlockStoreStats) error {
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -270,7 +270,7 @@ func upSyncVersion(
 	}
 	defer defaultHashAPI.Dispose()
 
-	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, targetBlockSize, maxChunksPerBlock)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, targetBlockSize, maxChunksPerBlock, outFinalStats)
 	if err != nil {
 		return err
 	}
@@ -386,20 +386,6 @@ func upSyncVersion(
 	if err != nil {
 		return err
 	}
-	if showStats {
-		stats, errno := indexStore.GetStats()
-		if errno == 0 {
-			log.Printf("STATS:\n------------------\n")
-			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
-			log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
-			log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
-			log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
-			log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
-			log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
-			log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
-			log.Printf("------------------\n")
-		}
-	}
 	return nil
 }
 
@@ -411,7 +397,7 @@ func downSyncVersion(
 	localCachePath string,
 	hashAlgorithm *string,
 	retainPermissions bool,
-	showStats bool) error {
+	outFinalStats *longtaillib.BlockStoreStats) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
@@ -432,7 +418,7 @@ func downSyncVersion(
 	defer defaultHashAPI.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, 524288, 1024)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, 524288, 1024, outFinalStats)
 	if err != nil {
 		return err
 	}
@@ -560,20 +546,6 @@ func downSyncVersion(
 	if err != nil {
 		return err
 	}
-	if showStats {
-		stats, errno := remoteIndexStore.GetStats()
-		if errno == 0 {
-			log.Printf("STATS:\n------------------\n")
-			log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
-			log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
-			log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
-			log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
-			log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
-			log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
-			log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
-			log.Printf("------------------\n")
-		}
-	}
 	return nil
 }
 
@@ -632,6 +604,8 @@ func main() {
 	longtaillib.SetAssert(&assertData{})
 	defer longtaillib.SetAssert(nil)
 
+	var stats longtaillib.BlockStoreStats
+
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():
 		err := upSyncVersion(
@@ -644,7 +618,7 @@ func main() {
 			*maxChunksPerBlock,
 			compression,
 			hashing,
-			*showStats)
+			&stats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -657,9 +631,21 @@ func main() {
 			*localCachePath,
 			hashing,
 			!(*noRetainPermissions),
-			*showStats)
+			&stats)
 		if err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	if *showStats {
+		log.Printf("STATS:\n------------------\n")
+		log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
+		log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
+		log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
+		log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
+		log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
+		log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
+		log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
+		log.Printf("------------------\n")
 	}
 }

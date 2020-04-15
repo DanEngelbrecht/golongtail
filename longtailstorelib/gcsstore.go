@@ -129,7 +129,8 @@ type gcsBlockStore struct {
 	workerWaitGroup      sync.WaitGroup
 	indexWorkerWaitGroup sync.WaitGroup
 
-	stats longtaillib.BlockStoreStats
+	stats         longtaillib.BlockStoreStats
+	outFinalStats *longtaillib.BlockStoreStats
 }
 
 // String() ...
@@ -138,7 +139,11 @@ func (s *gcsBlockStore) String() string {
 }
 
 func putBlob(ctx context.Context, objHandle *storage.ObjectHandle, blob []byte) int {
-	objWriter := objHandle.NewWriter(ctx)
+	writeCondition := storage.Conditions{DoesNotExist: true}
+	objWriter := objHandle.If(writeCondition).NewWriter(ctx)
+	if objWriter == nil {
+		return longtaillib.EEXIST
+	}
 	_, err := objWriter.Write(blob)
 	if err != nil {
 		objWriter.Close()
@@ -185,37 +190,36 @@ func putStoredBlock(
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath(s.prefix+"chunks", blockHash)
 	objHandle := bucket.Object(key)
-	_, err := objHandle.Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
-		blob, err := longtaillib.WriteStoredBlockToBuffer(storedBlock)
-		if err != nil {
-			return longtaillib.ENOMEM
-		}
+	blob, err := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+	if err != nil {
+		return longtaillib.ENOMEM
+	}
 
-		errno := putBlob(ctx, objHandle, blob)
-		if errno != 0 {
-			log.Printf("Retrying putBlob %s", key)
-			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
-			errno = putBlob(ctx, objHandle, blob)
-		}
-		if errno != 0 {
-			log.Printf("Retrying 500 ms delayed putBlob %s", key)
-			time.Sleep(500 * time.Millisecond)
-			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
-			errno = putBlob(ctx, objHandle, blob)
-		}
-		if errno != 0 {
-			log.Printf("Retrying 2 s delayed putBlob %s", key)
-			time.Sleep(2 * time.Second)
-			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
-			errno = putBlob(ctx, objHandle, blob)
-		}
+	errno := putBlob(ctx, objHandle, blob)
+	if errno != 0 && errno != longtaillib.EEXIST {
+		log.Printf("Retrying putBlob %s", key)
+		atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
+		errno = putBlob(ctx, objHandle, blob)
+	}
+	if errno != 0 && errno != longtaillib.EEXIST {
+		log.Printf("Retrying 500 ms delayed putBlob %s", key)
+		time.Sleep(500 * time.Millisecond)
+		atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
+		errno = putBlob(ctx, objHandle, blob)
+	}
+	if errno != 0 && errno != longtaillib.EEXIST {
+		log.Printf("Retrying 2 s delayed putBlob %s", key)
+		time.Sleep(2 * time.Second)
+		atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
+		errno = putBlob(ctx, objHandle, blob)
+	}
 
-		if errno != 0 {
-			atomic.AddUint64(&s.stats.BlockPutFailCount, 1)
-			return longtaillib.ENOMEM
-		}
+	if errno != 0 && errno != longtaillib.EEXIST {
+		atomic.AddUint64(&s.stats.BlockPutFailCount, 1)
+		return errno
+	}
 
+	if errno == 0 {
 		atomic.AddUint64(&s.stats.BlocksPutCount, 1)
 		atomic.AddUint64(&s.stats.BytesPutCount, (uint64)(len(blob)))
 		atomic.AddUint64(&s.stats.ChunksPutCount, (uint64)(blockIndex.GetChunkCount()))
@@ -514,7 +518,7 @@ func contentIndexWorker(
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, maxBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.BlockStoreAPI, error) {
+func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, maxBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
@@ -600,4 +604,5 @@ func (s *gcsBlockStore) Close() {
 	s.workerWaitGroup.Wait()
 	s.indexStopChan <- stopMessage{}
 	s.indexWorkerWaitGroup.Wait()
+	*s.outFinalStats = s.stats
 }

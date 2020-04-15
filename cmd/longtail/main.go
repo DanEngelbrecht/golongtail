@@ -639,13 +639,19 @@ func main() {
 
 	if *showStats {
 		log.Printf("STATS:\n------------------\n")
-		log.Printf("IndexGetCount:  %s\n", byteCountDecimal(stats.IndexGetCount))
-		log.Printf("BlocksGetCount: %s\n", byteCountDecimal(stats.BlocksGetCount))
-		log.Printf("BlocksPutCount: %s\n", byteCountDecimal(stats.BlocksPutCount))
-		log.Printf("ChunksGetCount: %s\n", byteCountDecimal(stats.ChunksGetCount))
-		log.Printf("ChunksPutCount: %s\n", byteCountDecimal(stats.ChunksPutCount))
-		log.Printf("BytesGetCount:  %s\n", byteCountBinary(stats.BytesGetCount))
-		log.Printf("BytesPutCount:  %s\n", byteCountBinary(stats.BytesPutCount))
+		log.Printf("IndexGetCount:      %s\n", byteCountDecimal(stats.IndexGetCount))
+		log.Printf("BlocksGetCount:     %s\n", byteCountDecimal(stats.BlocksGetCount))
+		log.Printf("BlocksPutCount:     %s\n", byteCountDecimal(stats.BlocksPutCount))
+		log.Printf("ChunksGetCount:     %s\n", byteCountDecimal(stats.ChunksGetCount))
+		log.Printf("ChunksPutCount:     %s\n", byteCountDecimal(stats.ChunksPutCount))
+		log.Printf("BytesGetCount:      %s\n", byteCountBinary(stats.BytesGetCount))
+		log.Printf("BytesPutCount:      %s\n", byteCountBinary(stats.BytesPutCount))
+		log.Printf("IndexGetRetryCount: %s\n", byteCountDecimal(stats.IndexGetRetryCount))
+		log.Printf("BlockGetRetryCount: %s\n", byteCountDecimal(stats.BlockGetRetryCount))
+		log.Printf("BlockPutRetryCount: %s\n", byteCountDecimal(stats.BlockPutRetryCount))
+		log.Printf("IndexGetFailCount:  %s\n", byteCountDecimal(stats.IndexGetFailCount))
+		log.Printf("BlockGetFailCount:  %s\n", byteCountDecimal(stats.BlockGetFailCount))
+		log.Printf("BlockPutFailCount:  %s\n", byteCountDecimal(stats.BlockPutFailCount))
 		log.Printf("------------------\n")
 	}
 }

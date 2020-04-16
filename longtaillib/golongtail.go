@@ -54,15 +54,15 @@ type PathFilterAPI interface {
 }
 
 type AsyncPutStoredBlockAPI interface {
-	OnComplete(err int) int
+	OnComplete(err int)
 }
 
 type AsyncGetStoredBlockAPI interface {
-	OnComplete(stored_block Longtail_StoredBlock, err int) int
+	OnComplete(stored_block Longtail_StoredBlock, err int)
 }
 
 type AsyncGetIndexAPI interface {
-	OnComplete(content_index Longtail_ContentIndex, err int) int
+	OnComplete(content_index Longtail_ContentIndex, err int)
 }
 
 type Assert interface {
@@ -453,18 +453,18 @@ func GetMeowHashIdentifier() uint32 {
 }
 
 //// Longtail_AsyncPutStoredBlockAPI::OnComplete() ...
-func (asyncCompleteAPI *Longtail_AsyncPutStoredBlockAPI) OnComplete(errno int) int {
-	return int(C.Longtail_AsyncPutStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.int(errno)))
+func (asyncCompleteAPI *Longtail_AsyncPutStoredBlockAPI) OnComplete(errno int) {
+	C.Longtail_AsyncPutStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.int(errno))
 }
 
 //// Longtail_AsyncGetStoredBlockAPI::OnComplete() ...
-func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block Longtail_StoredBlock, errno int) int {
-	return int(C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, C.int(errno)))
+func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block Longtail_StoredBlock, errno int) {
+	C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, C.int(errno))
 }
 
 //// Longtail_AsyncGetIndexAPI::OnComplete() ...
-func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Longtail_ContentIndex, errno int) int {
-	return int(C.Longtail_AsyncGetIndex_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno)))
+func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
+	C.Longtail_AsyncGetIndex_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
 }
 
 // CreateFSBlockStore() ...
@@ -1127,10 +1127,10 @@ func CreateAsyncPutStoredBlockAPI(asyncComplete AsyncPutStoredBlockAPI) Longtail
 }
 
 //export AsyncPutStoredBlockAPIProxy_OnComplete
-func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, err C.int) C.int {
+func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, err C.int) {
 	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
-	return C.int(asyncComplete.OnComplete(int(err)))
+	asyncComplete.OnComplete(int(err))
 }
 
 //export AsyncPutStoredBlockAPIProxy_Dispose
@@ -1148,10 +1148,10 @@ func CreateAsyncGetStoredBlockAPI(asyncComplete AsyncGetStoredBlockAPI) Longtail
 }
 
 //export AsyncGetStoredBlockAPIProxy_OnComplete
-func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, err C.int) C.int {
+func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, err C.int) {
 	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
-	return C.int(asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(err)))
+	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(err))
 }
 
 //export AsyncGetStoredBlockAPIProxy_Dispose
@@ -1169,10 +1169,10 @@ func CreateAsyncGetIndexAPI(asyncComplete AsyncGetIndexAPI) Longtail_AsyncGetInd
 }
 
 //export AsyncGetIndexAPIProxy_OnComplete
-func AsyncGetIndexAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetIndexAPI, content_index *C.struct_Longtail_ContentIndex, err C.int) C.int {
+func AsyncGetIndexAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetIndexAPI, content_index *C.struct_Longtail_ContentIndex, err C.int) {
 	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetIndexAPI)
-	return C.int(asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err)))
+	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err))
 }
 
 //export AsyncGetIndexAPIProxy_Dispose

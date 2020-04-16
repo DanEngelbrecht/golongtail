@@ -41,10 +41,9 @@ type testPutBlockCompletionAPI struct {
 	err int
 }
 
-func (a *testPutBlockCompletionAPI) OnComplete(err int) int {
+func (a *testPutBlockCompletionAPI) OnComplete(err int) {
 	a.err = err
 	a.wg.Done()
-	return 0
 }
 
 type testGetBlockCompletionAPI struct {
@@ -53,11 +52,10 @@ type testGetBlockCompletionAPI struct {
 	err         int
 }
 
-func (a *testGetBlockCompletionAPI) OnComplete(storedBlock Longtail_StoredBlock, err int) int {
+func (a *testGetBlockCompletionAPI) OnComplete(storedBlock Longtail_StoredBlock, err int) {
 	a.storedBlock = storedBlock
 	a.err = err
 	a.wg.Done()
-	return 0
 }
 
 type testGetIndexCompletionAPI struct {
@@ -66,11 +64,10 @@ type testGetIndexCompletionAPI struct {
 	err          int
 }
 
-func (a *testGetIndexCompletionAPI) OnComplete(contentIndex Longtail_ContentIndex, err int) int {
+func (a *testGetIndexCompletionAPI) OnComplete(contentIndex Longtail_ContentIndex, err int) {
 	a.err = err
 	a.contentIndex = contentIndex
 	a.wg.Done()
-	return 0
 }
 
 type testLogger struct {
@@ -315,17 +312,14 @@ func TestFSBlockStore(t *testing.T) {
 	getStoredBlockComplete := &testGetBlockCompletionAPI{}
 	getStoredBlockComplete.wg.Add(1)
 	errno = blockStoreAPI.GetStoredBlock(storedBlock1Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
-	if errno != 0 {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %d == %d", errno, 0)
+	if errno != ENOENT {
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %d == %d", errno, ENOENT)
 		getStoredBlockComplete.wg.Done()
 	}
-	getStoredBlockComplete.wg.Wait()
-	if getStoredBlockComplete.err != ENOENT {
-		t.Errorf("TestFSBlockStore() GetStoredBlock::OnComplete() %d == %d", getStoredBlockComplete.err, ENOENT)
-	}
+	getStoredBlockComplete.wg.Done()
 	nullBlock := Longtail_StoredBlock{}
 	if getStoredBlockComplete.storedBlock != nullBlock {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %p != %p", getStoredBlockComplete.storedBlock, nullBlock)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.storedBlock %p != %p", getStoredBlockComplete.storedBlock, nullBlock)
 	}
 
 	putStoredBlockComplete := &testPutBlockCompletionAPI{}
@@ -337,7 +331,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", putStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %d != %d", putStoredBlockComplete.err, 0)
 	}
 
 	getStoredBlockComplete.wg.Add(1)
@@ -348,7 +342,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() GetStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %d != %d", getStoredBlockComplete.err, 0)
 	}
 	storedBlock1 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -366,7 +360,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", putStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %d != %d", putStoredBlockComplete.err, 0)
 	}
 
 	storedBlock2Index := block2.GetBlockIndex()
@@ -379,7 +373,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %d != %d", getStoredBlockComplete.err, 0)
 	}
 	storedBlock2 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -397,7 +391,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", putStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %d != %d", putStoredBlockComplete.err, 0)
 	}
 
 	storedBlock3Index := block3.GetBlockIndex()
@@ -410,7 +404,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %d != %d", getStoredBlockComplete.err, 0)
 	}
 	storedBlock3 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -428,7 +422,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() PutStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %d != %d", getStoredBlockComplete.err, 0)
 	}
 	storedBlock2Again := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -487,8 +481,11 @@ func (b *TestBlockStore) PutStoredBlock(
 	if errno == 0 {
 		b.blocks[blockHash] = blockCopy
 		b.putBlockCount = b.putBlockCount + 1
+		asyncCompleteAPI.OnComplete(0)
+		return 0
 	}
-	return asyncCompleteAPI.OnComplete(errno)
+	asyncCompleteAPI.OnComplete(errno)
+	return 0
 }
 
 func (b *TestBlockStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
@@ -510,9 +507,13 @@ func (b *TestBlockStore) GetStoredBlock(
 			storedBlock.GetChunksBlockData(),
 			false)
 		b.getBlockCount = b.getBlockCount + 1
-		return asyncCompleteAPI.OnComplete(blockCopy, errno)
+		if errno == 0 {
+			asyncCompleteAPI.OnComplete(blockCopy, errno)
+			return 0
+		}
 	}
-	return asyncCompleteAPI.OnComplete(Longtail_StoredBlock{}, ENOENT)
+	asyncCompleteAPI.OnComplete(Longtail_StoredBlock{}, ENOENT)
+	return 0
 }
 
 func (b *TestBlockStore) GetIndex(
@@ -533,10 +534,12 @@ func (b *TestBlockStore) GetIndex(
 		b.maxChunksPerBlock,
 		blockIndexes)
 	if err != nil {
-		return asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
+		asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
+		return 0
 	}
 	b.getIndexCount = b.getIndexCount + 1
-	return asyncCompleteAPI.OnComplete(cIndex, 0)
+	asyncCompleteAPI.OnComplete(cIndex, 0)
+	return 0
 }
 
 func (b *TestBlockStore) Close() {
@@ -574,7 +577,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != 0 {
-		t.Errorf("TestBlockStoreProxy() PutStoredBlock::OnComplete() %d != %d", putStoredBlockComplete.err, 0)
+		t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %d != %d", putStoredBlockComplete.err, 0)
 	}
 
 	getStoredBlockComplete := &testGetBlockCompletionAPI{}
@@ -587,7 +590,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != 0 {
-		t.Errorf("TestFSBlockStore() GetStoredBlock::OnComplete() %d != %d", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %d != %d", getStoredBlockComplete.err, 0)
 	}
 	getBlock := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = Longtail_StoredBlock{}

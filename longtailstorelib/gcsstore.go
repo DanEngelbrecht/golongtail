@@ -297,16 +297,10 @@ func gcsWorker(
 		select {
 		case putMsg := <-putBlockMessages:
 			errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock)
-			errno = putMsg.asyncCompleteAPI.OnComplete(errno)
-			if errno != 0 {
-				log.Printf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
-			}
+			putMsg.asyncCompleteAPI.OnComplete(errno)
 		case getMsg := <-getBlockMessages:
 			storedBlock, errno := getStoredBlock(ctx, s, bucket, getMsg.blockHash)
-			errno = getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
-			if errno != 0 {
-				log.Printf("WARNING: getMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
-			}
+			getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
 		case _ = <-stopMessages:
 			run = false
 		}
@@ -315,10 +309,7 @@ func gcsWorker(
 	select {
 	case putMsg := <-putBlockMessages:
 		errno := putStoredBlock(ctx, s, bucket, contentIndexMessages, putMsg.storedBlock)
-		errno = putMsg.asyncCompleteAPI.OnComplete(errno)
-		if errno != 0 {
-			log.Printf("WARNING: putMsg.asyncCompleteAPI.OnComplete returned: %d", errno)
-		}
+		putMsg.asyncCompleteAPI.OnComplete(errno)
 	default:
 	}
 
@@ -482,10 +473,7 @@ func contentIndexWorker(
 				getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, longtaillib.ENOMEM)
 				continue
 			}
-			errno := getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
-			if errno != 0 {
-				contentIndexCopy.Dispose()
-			}
+			getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
 			atomic.AddUint64(&s.stats.IndexGetCount, 1)
 		case _ = <-stopMessages:
 			run = false

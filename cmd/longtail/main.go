@@ -637,7 +637,8 @@ func main() {
 	}
 
 	if *showStats {
-		log.Printf("STATS:\n------------------\n")
+		log.Printf("STATS:\n")
+		log.Printf("------------------\n")
 		log.Printf("IndexGetCount:      %s\n", byteCountDecimal(stats.IndexGetCount))
 		log.Printf("BlocksGetCount:     %s\n", byteCountDecimal(stats.BlocksGetCount))
 		log.Printf("BlocksPutCount:     %s\n", byteCountDecimal(stats.BlocksPutCount))

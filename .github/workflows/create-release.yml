@@ -89,6 +89,7 @@ jobs:
            - Stats for remote store are now *final* stats after operation is complete
            - Return correct error code in gcs block store putBlob
            - Use shareblockstore
+           - Refactored closing of block stores and callback to fix hang bugs/incomplete store index
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -282,7 +282,6 @@ func upSyncVersion(
 	if err != nil {
 		return err
 	}
-	defer hash.Dispose()
 
 	var vindex longtaillib.Longtail_VersionIndex
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
@@ -462,7 +461,6 @@ func downSyncVersion(
 	if err != nil {
 		return err
 	}
-	defer hash.Dispose()
 
 	var localVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {

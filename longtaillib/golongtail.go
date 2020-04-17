@@ -105,7 +105,7 @@ type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
 	PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
-	GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
+	GetIndex(asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
 	GetStats() (BlockStoreStats, int)
 	Close()
 }
@@ -144,6 +144,10 @@ type Longtail_JobAPI struct {
 
 type Longtail_CompressionRegistryAPI struct {
 	cCompressionRegistryAPI *C.struct_Longtail_CompressionRegistryAPI
+}
+
+type Longtail_HashRegistryAPI struct {
+	cHashRegistryAPI *C.struct_Longtail_HashRegistryAPI
 }
 
 type Longtail_CompressionAPI struct {
@@ -344,8 +348,8 @@ func (contentIndex *Longtail_ContentIndex) GetVersion() uint32 {
 	return uint32(*contentIndex.cContentIndex.m_Version)
 }
 
-func (contentIndex *Longtail_ContentIndex) GetHashAPI() uint32 {
-	return uint32(*contentIndex.cContentIndex.m_HashAPI)
+func (contentIndex *Longtail_ContentIndex) GetHashIdentifier() uint32 {
+	return uint32(*contentIndex.cContentIndex.m_HashIdentifier)
 }
 
 func (contentIndex *Longtail_ContentIndex) GetMaxBlockSize() uint32 {
@@ -369,7 +373,6 @@ func (contentIndex *Longtail_ContentIndex) GetChunkCount() uint64 {
 }
 
 func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
-
 	size := int(C.Longtail_ContentIndex_GetBlockCount(contentIndex.cContentIndex))
 	return carray2slice64(C.Longtail_ContentIndex_BlockHashes(contentIndex.cContentIndex), size)
 }
@@ -382,8 +385,8 @@ func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
 	return uint32(*versionIndex.cVersionIndex.m_Version)
 }
 
-func (versionIndex *Longtail_VersionIndex) GetHashAPI() uint32 {
-	return uint32(*versionIndex.cVersionIndex.m_HashAPI)
+func (versionIndex *Longtail_VersionIndex) GetHashIdentifier() uint32 {
+	return uint32(*versionIndex.cVersionIndex.m_HashIdentifier)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetTargetChunkSize() uint32 {
@@ -415,6 +418,31 @@ func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {
 
 func (versionDiff *Longtail_VersionDiff) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionDiff.cVersionDiff))
+}
+
+// CreateFullHashRegistry ...
+func CreateFullHashRegistry() Longtail_HashRegistryAPI {
+	return Longtail_HashRegistryAPI{cHashRegistryAPI: C.Longtail_CreateFullHashRegistry()}
+}
+
+// CreateBlake3HashRegistry ...
+func CreateBlake3HashRegistry() Longtail_HashRegistryAPI {
+	return Longtail_HashRegistryAPI{cHashRegistryAPI: C.Longtail_CreateBlake3HashRegistry()}
+}
+
+// Longtail_HashRegistryAPI ...
+func (hashRegistry *Longtail_HashRegistryAPI) Dispose() {
+	C.Longtail_DisposeAPI(&hashRegistry.cHashRegistryAPI.m_API)
+}
+
+// Longtail_HashRegistryAPI ...
+func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (Longtail_HashAPI, error) {
+	var hash_api *C.struct_Longtail_HashAPI
+	errno := C.Longtail_GetHashRegistry_GetHashAPI(hashRegistry.cHashRegistryAPI, C.uint32_t(hashIdentifier), &hash_api)
+	if errno != 0 {
+		return Longtail_HashAPI{cHashAPI: nil}, fmt.Errorf("GetHashAPI: C.Longtail_GetHashRegistry_GetHashAPI(%d) get hash api failed with error %d", hashIdentifier, errno)
+	}
+	return Longtail_HashAPI{cHashAPI: hash_api}, nil
 }
 
 // CreateBlake2HashAPI ...
@@ -524,12 +552,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 
 // GetIndex() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
-	defaultHashAPIIdentifier uint32,
 	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
 
 	errno := C.Longtail_BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
-		C.uint32_t(defaultHashAPIIdentifier),
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -561,6 +587,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
 
 func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
 	return uint64(*blockIndex.cBlockIndex.m_BlockHash)
+}
+
+func (blockIndex *Longtail_BlockIndex) GetHashIdentifier() uint32 {
+	return uint32(*blockIndex.cBlockIndex.m_HashIdentifier)
 }
 
 func (blockIndex *Longtail_BlockIndex) GetChunkCount() uint32 {
@@ -624,6 +654,7 @@ func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, error) {
 // CreateStoredBlock() ...
 func CreateStoredBlock(
 	blockHash uint64,
+	hashIdentifier uint32,
 	compressionType uint32,
 	chunkHashes []uint64,
 	chunkSizes []uint32,
@@ -650,6 +681,7 @@ func CreateStoredBlock(
 	var cStoredBlock *C.struct_Longtail_StoredBlock
 	errno := C.Longtail_CreateStoredBlock(
 		C.TLongtail_Hash(blockHash),
+		C.uint32_t(hashIdentifier),
 		C.uint32_t(chunkCount),
 		C.uint32_t(compressionType),
 		cChunkHashes,
@@ -718,9 +750,9 @@ func (jobAPI *Longtail_JobAPI) Dispose() {
 }
 
 // CreateFullCompressionRegistry ...
-//func CreateFullCompressionRegistry() Longtail_CompressionRegistryAPI {
-//	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateFullCompressionRegistry()}
-//}
+func CreateFullCompressionRegistry() Longtail_CompressionRegistryAPI {
+	return Longtail_CompressionRegistryAPI{cCompressionRegistryAPI: C.Longtail_CreateFullCompressionRegistry()}
+}
 
 // CreateZStdCompressionRegistry ...
 func CreateZStdCompressionRegistry() Longtail_CompressionRegistryAPI {
@@ -997,7 +1029,6 @@ func CreateContentIndex(
 }
 
 func CreateContentIndexFromBlocks(
-	hashIdentifier uint32,
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32,
 	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, error) {
@@ -1013,7 +1044,6 @@ func CreateContentIndexFromBlocks(
 
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_CreateContentIndexFromBlocks(
-		C.uint32_t(hashIdentifier),
 		C.uint32_t(maxBlockSize),
 		C.uint32_t(maxChunksPerBlock),
 		C.uint64_t(blockCount),
@@ -1415,11 +1445,10 @@ func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, block
 }
 
 //export BlockStoreAPIProxy_GetIndex
-func BlockStoreAPIProxy_GetIndex(api *C.struct_Longtail_BlockStoreAPI, defaultHashApiIdentifier uint32, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
+func BlockStoreAPIProxy_GetIndex(api *C.struct_Longtail_BlockStoreAPI, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetIndex(
-		uint32(defaultHashApiIdentifier),
 		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }

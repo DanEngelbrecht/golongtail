@@ -95,12 +95,12 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_Con
 	a.wg.Done()
 }
 
-func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_HashAPI, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {
+func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(blobStoreURL, defaultHashAPI, targetBlockSize, maxChunksPerBlock, outFinalStats)
+			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(blobStoreURL, targetBlockSize, maxChunksPerBlock, outFinalStats)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -112,7 +112,7 @@ func createBlockStoreForURI(uri string, defaultHashAPI longtaillib.Longtail_Hash
 		case "abfss":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], defaultHashAPI.GetIdentifier(), jobAPI)
+			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], jobAPI)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -181,19 +181,6 @@ func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compr
 	return compressionTypes
 }
 
-func createHashAPIFromIdentifier(hashIdentifier uint32) (longtaillib.Longtail_HashAPI, error) {
-	if hashIdentifier == longtaillib.GetMeowHashIdentifier() {
-		return longtaillib.CreateMeowHashAPI(), nil
-	}
-	if hashIdentifier == longtaillib.GetBlake2HashIdentifier() {
-		return longtaillib.CreateBlake2HashAPI(), nil
-	}
-	if hashIdentifier == longtaillib.GetBlake3HashIdentifier() {
-		return longtaillib.CreateBlake3HashAPI(), nil
-	}
-	return longtaillib.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
-}
-
 func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	switch *hashAlgorithm {
 	case "meow":
@@ -206,12 +193,12 @@ func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	return 0, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
 }
 
-func createHashAPI(hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) {
+func createHashAPI(hashRegistry longtaillib.Longtail_HashRegistryAPI, hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) {
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
 	if err != nil {
 		return longtaillib.Longtail_HashAPI{}, err
 	}
-	return createHashAPIFromIdentifier(hashIdentifier)
+	return hashRegistry.GetHashAPI(hashIdentifier)
 }
 
 func byteCountDecimal(b uint64) string {
@@ -255,21 +242,10 @@ func upSyncVersion(
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := longtaillib.CreateZStdCompressionRegistry()
+	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
-	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
-	if err != nil {
-		return err
-	}
-
-	defaultHashAPI, err := createHashAPIFromIdentifier(hashIdentifier)
-	if err != nil {
-		return err
-	}
-	defer defaultHashAPI.Dispose()
-
-	remoteStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, targetBlockSize, maxChunksPerBlock, outFinalStats)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, outFinalStats)
 	if err != nil {
 		return err
 	}
@@ -280,7 +256,7 @@ func upSyncVersion(
 
 	getIndexComplete := &getIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(hashIdentifier, longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
@@ -291,7 +267,18 @@ func upSyncVersion(
 	}
 	remoteContentIndex := getIndexComplete.contentIndex
 
-	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
+	hashIdentifier := remoteContentIndex.GetHashIdentifier()
+	if hashIdentifier == 0 {
+		hashIdentifier, err = getHashIdentifier(hashAlgorithm)
+		if err != nil {
+			return err
+		}
+	}
+
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
 		return err
 	}
@@ -394,7 +381,6 @@ func downSyncVersion(
 	targetFolderPath string,
 	targetIndexPath *string,
 	localCachePath string,
-	hashAlgorithm *string,
 	retainPermissions bool,
 	outFinalStats *longtaillib.BlockStoreStats) error {
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
@@ -402,22 +388,11 @@ func downSyncVersion(
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
 	defer jobs.Dispose()
-	creg := longtaillib.CreateZStdCompressionRegistry()
+	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
-	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
-	if err != nil {
-		return err
-	}
-
-	defaultHashAPI, err := createHashAPIFromIdentifier(hashIdentifier)
-	if err != nil {
-		return err
-	}
-	defer defaultHashAPI.Dispose()
-
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, defaultHashAPI, jobs, 524288, 1024, outFinalStats)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 524288, 1024, outFinalStats)
 	if err != nil {
 		return err
 	}
@@ -443,7 +418,7 @@ func downSyncVersion(
 
 	getIndexComplete := &getIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(hashIdentifier, longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
@@ -453,12 +428,6 @@ func downSyncVersion(
 		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
 	}
 	remoteContentIndex := getIndexComplete.contentIndex
-
-	hash, err := createHashAPIFromIdentifier(remoteContentIndex.GetHashAPI())
-	if err != nil {
-		return err
-	}
-	defer hash.Dispose()
 
 	var remoteVersionIndex longtaillib.Longtail_VersionIndex
 
@@ -478,6 +447,22 @@ func downSyncVersion(
 		}
 	}
 	defer remoteVersionIndex.Dispose()
+
+	hashIdentifier := remoteContentIndex.GetHashIdentifier()
+	if hashIdentifier == 0 {
+		hashIdentifier = remoteVersionIndex.GetHashIdentifier()
+	} else if remoteVersionIndex.GetHashIdentifier() != hashIdentifier {
+		return fmt.Errorf("Remote store hash algorithm (%d) does not match hash algorithm of version (%d)", remoteVersionIndex.GetHashIdentifier(), hashIdentifier)
+	}
+
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+	if err != nil {
+		return err
+	}
+	defer hash.Dispose()
 
 	var localVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
@@ -551,12 +536,12 @@ func downSyncVersion(
 var (
 	logLevel   = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	storageURI = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	hashing    = kingpin.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
+	showStats  = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+
+	commandUpSync = kingpin.Command("upsync", "Upload a folder")
+	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
-	showStats = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
-
-	commandUpSync     = kingpin.Command("upsync", "Upload a folder")
 	targetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	targetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("524288").Uint32()
 	maxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
@@ -628,7 +613,6 @@ func main() {
 			*targetFolderPath,
 			targetIndexPath,
 			*localCachePath,
-			hashing,
 			!(*noRetainPermissions),
 			&stats)
 		if err != nil {

@@ -46,8 +46,8 @@ func (s *statsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI long
 }
 
 // GetIndex ...
-func (s *statsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
-	return s.backingBlockStore.GetIndex(defaultHashAPIIdentifier, asyncCompleteAPI)
+func (s *statsBlockStore) GetIndex(asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
+	return s.backingBlockStore.GetIndex(asyncCompleteAPI)
 }
 
 // GetStats ...

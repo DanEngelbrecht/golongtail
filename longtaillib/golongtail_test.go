@@ -149,7 +149,7 @@ func TestAPICreate(t *testing.T) {
 	defer compressionRegistry.Dispose()
 }
 
-func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, int) {
+func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (Longtail_StoredBlock, int) {
 	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
 	chunkHashes := make([]uint64, chunkCount)
 	chunkSizes := make([]uint32, chunkCount)
@@ -170,6 +170,7 @@ func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, int) {
 
 	return CreateStoredBlock(
 		blockHash,
+		hashIdentifier,
 		chunkCount+uint32(10000),
 		chunkHashes,
 		chunkSizes,
@@ -177,11 +178,14 @@ func createStoredBlock(chunkCount uint32) (Longtail_StoredBlock, int) {
 		false)
 }
 
-func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock) {
+func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIdentifier uint32) {
 	if storedBlock.cStoredBlock == nil {
 		t.Errorf("validateStoredBlock() %p == %p", storedBlock, Longtail_StoredBlock{cStoredBlock: nil})
 	}
 	blockIndex := storedBlock.GetBlockIndex()
+	if blockIndex.GetHashIdentifier() != hashIdentifier {
+		t.Errorf("validateStoredBlock() %d == %d", blockIndex.GetHashIdentifier(), hashIdentifier)
+	}
 	chunkCount := blockIndex.GetChunkCount()
 	if blockIndex.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
 		t.Errorf("validateStoredBlock() %q != %q", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
@@ -230,11 +234,11 @@ func TestStoredblock(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	storedBlock, errno := createStoredBlock(2)
+	storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
 	if errno != 0 {
 		t.Errorf("CreateStoredBlock() %d!= %d", errno, 0)
 	}
-	validateStoredBlock(t, storedBlock)
+	validateStoredBlock(t, storedBlock, 0xdeadbeef)
 }
 
 func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
@@ -244,7 +248,7 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	originalBlock, errno := createStoredBlock(2)
+	originalBlock, errno := createStoredBlock(2, 0xdeadbeef)
 	if errno != 0 {
 		t.Errorf("createStoredBlock() %d != %d", errno, 0)
 	}
@@ -261,7 +265,7 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 		t.Errorf("InitStoredBlockFromData() %q != %q", err, error(nil))
 	}
 	defer copyBlock.Dispose()
-	validateStoredBlock(t, copyBlock)
+	validateStoredBlock(t, copyBlock, 0xdeadbeef)
 }
 
 func TestFSBlockStore(t *testing.T) {
@@ -280,7 +284,7 @@ func TestFSBlockStore(t *testing.T) {
 
 	getIndexComplete := &testGetIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := blockStoreAPI.GetIndex(blake3.GetIdentifier(), CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := blockStoreAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() GetIndex () %q != %q", errno, 0)
 		getIndexComplete.wg.Done()
@@ -289,19 +293,19 @@ func TestFSBlockStore(t *testing.T) {
 	contentIndex := getIndexComplete.contentIndex
 	defer contentIndex.Dispose()
 
-	block1, errno := createStoredBlock(1)
+	block1, errno := createStoredBlock(1, blake3.GetIdentifier())
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block1.Dispose()
 
-	block2, errno := createStoredBlock(5)
+	block2, errno := createStoredBlock(5, blake3.GetIdentifier())
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block2.Dispose()
 
-	block3, errno := createStoredBlock(9)
+	block3, errno := createStoredBlock(9, blake3.GetIdentifier())
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -350,7 +354,7 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %v != %v", storedBlock1, nullBlock)
 	}
 	defer storedBlock1.Dispose()
-	validateStoredBlock(t, storedBlock1)
+	validateStoredBlock(t, storedBlock1, blake3.GetIdentifier())
 
 	putStoredBlockComplete.wg.Add(1)
 	errno = blockStoreAPI.PutStoredBlock(block2, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
@@ -381,7 +385,7 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %v != %v", storedBlock2, nullBlock)
 	}
 	defer storedBlock2.Dispose()
-	validateStoredBlock(t, storedBlock2)
+	validateStoredBlock(t, storedBlock2, blake3.GetIdentifier())
 
 	putStoredBlockComplete.wg.Add(1)
 	errno = blockStoreAPI.PutStoredBlock(block3, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
@@ -412,7 +416,7 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %v != %v", storedBlock3, nullBlock)
 	}
 	defer storedBlock3.Dispose()
-	validateStoredBlock(t, storedBlock3)
+	validateStoredBlock(t, storedBlock3, blake3.GetIdentifier())
 
 	getStoredBlockComplete.wg.Add(1)
 	errno = blockStoreAPI.GetStoredBlock(storedBlock2Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
@@ -430,10 +434,10 @@ func TestFSBlockStore(t *testing.T) {
 		t.Errorf("TestFSBlockStore() HasStoredBlock() %v != %v", storedBlock2Again, nullBlock)
 	}
 	defer storedBlock2Again.Dispose()
-	validateStoredBlock(t, storedBlock2Again)
+	validateStoredBlock(t, storedBlock2Again, blake3.GetIdentifier())
 
 	getIndexComplete.wg.Add(1)
-	errno = blockStoreAPI.GetIndex(blake3.GetIdentifier(), CreateAsyncGetIndexAPI(getIndexComplete))
+	errno = blockStoreAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() GetIndex () %d != %d", errno, 0)
 		getIndexComplete.wg.Done()
@@ -473,6 +477,7 @@ func (b *TestBlockStore) PutStoredBlock(
 	}
 	blockCopy, errno := CreateStoredBlock(
 		blockHash,
+		blockIndex.GetHashIdentifier(),
 		blockIndex.GetTag(),
 		blockIndex.GetChunkHashes(),
 		blockIndex.GetChunkSizes(),
@@ -501,6 +506,7 @@ func (b *TestBlockStore) GetStoredBlock(
 		blockIndex := storedBlock.GetBlockIndex()
 		blockCopy, errno := CreateStoredBlock(
 			blockIndex.GetBlockHash(),
+			blockIndex.GetHashIdentifier(),
 			blockIndex.GetTag(),
 			blockIndex.GetChunkHashes(),
 			blockIndex.GetChunkSizes(),
@@ -517,7 +523,6 @@ func (b *TestBlockStore) GetStoredBlock(
 }
 
 func (b *TestBlockStore) GetIndex(
-	defaultHashAPIIdentifier uint32,
 	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
 	b.lock.Lock()
 	defer b.lock.Unlock()
@@ -529,7 +534,6 @@ func (b *TestBlockStore) GetIndex(
 		arrayIndex++
 	}
 	cIndex, err := CreateContentIndexFromBlocks(
-		defaultHashAPIIdentifier,
 		b.maxBlockSize,
 		b.maxChunksPerBlock,
 		blockIndexes)
@@ -562,7 +566,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
 
-	storedBlock, errno := createStoredBlock(2)
+	storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -595,11 +599,11 @@ func TestBlockStoreProxy(t *testing.T) {
 	getBlock := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = Longtail_StoredBlock{}
 	defer getBlock.Dispose()
-	validateStoredBlock(t, getBlock)
+	validateStoredBlock(t, getBlock, 0xdeadbeef)
 
 	getIndexComplete := &testGetIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno = blockStoreProxy.GetIndex(GetBlake3HashIdentifier(), CreateAsyncGetIndexAPI(getIndexComplete))
+	errno = blockStoreProxy.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() GetIndex() %d != %d", errno, 0)
 		getIndexComplete.wg.Done()
@@ -678,7 +682,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 
 	getIndexComplete := &testGetIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := blockStoreAPI.GetIndex(hashAPI.GetIdentifier(), CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := blockStoreAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetIndex() %d != %d", errno, 0)
 		getIndexComplete.wg.Done()
@@ -773,8 +777,8 @@ func TestCreateVersionIndex(t *testing.T) {
 		t.Errorf("TestCreateVersionIndex() CreateVersionIndex() %q != %q", err, error(nil))
 	}
 	defer versionIndex.Dispose()
-	if versionIndex.GetHashAPI() != hashAPI.GetIdentifier() {
-		t.Errorf("TestCreateVersionIndex() GetHashAPI() %d != %d", versionIndex.GetHashAPI(), hashAPI.GetIdentifier())
+	if versionIndex.GetHashIdentifier() != hashAPI.GetIdentifier() {
+		t.Errorf("TestCreateVersionIndex() GetHashIdentifier() %d != %d", versionIndex.GetHashIdentifier(), hashAPI.GetIdentifier())
 	}
 	if versionIndex.GetAssetCount() != fileInfos.GetFileCount() {
 		t.Errorf("TestCreateVersionIndex() GetAssetCount() %d != %d", versionIndex.GetAssetCount(), fileInfos.GetFileCount())
@@ -860,7 +864,7 @@ func TestRewriteVersion(t *testing.T) {
 	defer writeContentProgress.Dispose()
 	getIndexComplete := &testGetIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
-	errno := blockStorageAPI.GetIndex(hashAPI.GetIdentifier(), CreateAsyncGetIndexAPI(getIndexComplete))
+	errno := blockStorageAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetIndex() %d != %d", errno, 0)
 		getIndexComplete.wg.Done()

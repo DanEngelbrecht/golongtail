@@ -47,8 +47,7 @@ type fsGetBlockMessage struct {
 }
 
 type fsGetIndexMessage struct {
-	defaultHashAPIIdentifier uint32
-	asyncCompleteAPI         longtaillib.Longtail_AsyncGetIndexAPI
+	asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI
 }
 
 type fsStopMessage struct {
@@ -59,8 +58,7 @@ type fsBlockStore struct {
 	fsBlockStore longtaillib.Longtail_BlockStoreAPI
 	jobAPI       longtaillib.Longtail_JobAPI
 
-	defaultHashAPI uint32
-	workerCount    int
+	workerCount int
 
 	putBlockChan chan fsPutBlockMessage
 	getBlockChan chan fsGetBlockMessage
@@ -98,7 +96,7 @@ func fsWorker(
 				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
 			}
 		case getMsg := <-fsGetIndexMessages:
-			errno := s.fsBlockStore.GetIndex(getMsg.defaultHashAPIIdentifier, getMsg.asyncCompleteAPI)
+			errno := s.fsBlockStore.GetIndex(getMsg.asyncCompleteAPI)
 			if errno != 0 {
 				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
 			}
@@ -121,8 +119,8 @@ func fsWorker(
 }
 
 // NewFSBlockStore ...
-func NewFSBlockStore(path string, defaultHashAPI uint32, jobAPI longtaillib.Longtail_JobAPI) (longtaillib.BlockStoreAPI, error) {
-	s := &fsBlockStore{fsRoot: path, jobAPI: jobAPI, defaultHashAPI: defaultHashAPI}
+func NewFSBlockStore(path string, jobAPI longtaillib.Longtail_JobAPI) (longtaillib.BlockStoreAPI, error) {
+	s := &fsBlockStore{fsRoot: path, jobAPI: jobAPI}
 	storageAPI := longtaillib.CreateFSStorageAPI()
 	s.fsBlockStore = longtaillib.CreateFSBlockStoreAPI(storageAPI, path)
 	s.workerCount = runtime.NumCPU() * 4
@@ -163,8 +161,8 @@ func (s *fsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longtai
 }
 
 // GetIndex ...
-func (s *fsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
-	s.getIndexChan <- fsGetIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, asyncCompleteAPI: asyncCompleteAPI}
+func (s *fsBlockStore) GetIndex(asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
+	s.getIndexChan <- fsGetIndexMessage{asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

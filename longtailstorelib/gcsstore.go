@@ -96,8 +96,7 @@ type getBlockMessage struct {
 }
 
 type getIndexMessage struct {
-	defaultHashAPIIdentifier uint32
-	asyncCompleteAPI         longtaillib.Longtail_AsyncGetIndexAPI
+	asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI
 }
 
 type contentIndexMessage struct {
@@ -116,8 +115,7 @@ type gcsBlockStore struct {
 	defaultClient     *storage.Client
 	defaultBucket     *storage.BucketHandle
 
-	defaultHashAPI longtaillib.Longtail_HashAPI
-	workerCount    int
+	workerCount int
 
 	putBlockChan     chan putBlockMessage
 	getBlockChan     chan getBlockMessage
@@ -223,7 +221,7 @@ func putStoredBlock(
 	}
 
 	newBlocks := []longtaillib.Longtail_BlockIndex{blockIndex}
-	addedContentIndex, err := longtaillib.CreateContentIndexFromBlocks(s.defaultHashAPI.GetIdentifier(), s.maxBlockSize, s.maxChunksPerBlock, newBlocks)
+	addedContentIndex, err := longtaillib.CreateContentIndexFromBlocks(s.maxBlockSize, s.maxChunksPerBlock, newBlocks)
 	if err != nil {
 		return longtaillib.ENOMEM
 	}
@@ -422,13 +420,11 @@ func contentIndexWorker(
 	if err != nil {
 		hashAPI := longtaillib.CreateBlake3HashAPI()
 		defer hashAPI.Dispose()
-		contentIndex, err = longtaillib.CreateContentIndex(
-			s.defaultHashAPI,
-			[]uint64{},
-			[]uint32{},
-			[]uint32{},
+
+		contentIndex, err = longtaillib.CreateContentIndexFromBlocks(
 			s.maxBlockSize,
-			s.maxChunksPerBlock)
+			s.maxChunksPerBlock,
+			[]longtaillib.Longtail_BlockIndex{})
 		if err != nil {
 			s.indexWorkerWaitGroup.Done()
 			return err
@@ -439,13 +435,10 @@ func contentIndexWorker(
 	s.maxBlockSize = contentIndex.GetMaxBlockSize()
 	s.maxChunksPerBlock = contentIndex.GetMaxChunksPerBlock()
 
-	addedContentIndex, err := longtaillib.CreateContentIndex(
-		s.defaultHashAPI,
-		[]uint64{},
-		[]uint32{},
-		[]uint32{},
+	addedContentIndex, err := longtaillib.CreateContentIndexFromBlocks(
 		s.maxBlockSize,
-		s.maxChunksPerBlock)
+		s.maxChunksPerBlock,
+		[]longtaillib.Longtail_BlockIndex{})
 	if err != nil {
 		s.indexWorkerWaitGroup.Done()
 		return err
@@ -503,7 +496,7 @@ func contentIndexWorker(
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, maxBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
+func NewGCSBlockStore(u *url.URL, maxBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
@@ -525,7 +518,7 @@ func NewGCSBlockStore(u *url.URL, defaultHashAPI longtaillib.Longtail_HashAPI, m
 	bucketName := u.Host
 	defaultBucket := defaultClient.Bucket(bucketName)
 
-	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, defaultHashAPI: defaultHashAPI, outFinalStats: outFinalStats}
+	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, outFinalStats: outFinalStats}
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
@@ -571,8 +564,8 @@ func (s *gcsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longta
 }
 
 // GetIndex ...
-func (s *gcsBlockStore) GetIndex(defaultHashAPIIdentifier uint32, asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
-	s.getIndexChan <- getIndexMessage{defaultHashAPIIdentifier: defaultHashAPIIdentifier, asyncCompleteAPI: asyncCompleteAPI}
+func (s *gcsBlockStore) GetIndex(asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
+	s.getIndexChan <- getIndexMessage{asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

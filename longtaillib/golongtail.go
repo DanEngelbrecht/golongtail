@@ -146,6 +146,10 @@ type Longtail_CompressionRegistryAPI struct {
 	cCompressionRegistryAPI *C.struct_Longtail_CompressionRegistryAPI
 }
 
+type Longtail_HashRegistryAPI struct {
+	cHashRegistryAPI *C.struct_Longtail_HashRegistryAPI
+}
+
 type Longtail_CompressionAPI struct {
 	cCompressionAPI *C.struct_Longtail_CompressionAPI
 }
@@ -369,7 +373,6 @@ func (contentIndex *Longtail_ContentIndex) GetChunkCount() uint64 {
 }
 
 func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
-
 	size := int(C.Longtail_ContentIndex_GetBlockCount(contentIndex.cContentIndex))
 	return carray2slice64(C.Longtail_ContentIndex_BlockHashes(contentIndex.cContentIndex), size)
 }
@@ -415,6 +418,31 @@ func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {
 
 func (versionDiff *Longtail_VersionDiff) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(versionDiff.cVersionDiff))
+}
+
+// CreateFullHashRegistry ...
+func CreateFullHashRegistry() Longtail_HashRegistryAPI {
+	return Longtail_HashRegistryAPI{cHashRegistryAPI: C.Longtail_CreateFullHashRegistry()}
+}
+
+// CreateBlake3HashRegistry ...
+func CreateBlake3HashRegistry() Longtail_HashRegistryAPI {
+	return Longtail_HashRegistryAPI{cHashRegistryAPI: C.Longtail_CreateBlake3HashRegistry()}
+}
+
+// Longtail_HashRegistryAPI ...
+func (hashRegistry *Longtail_HashRegistryAPI) Dispose() {
+	C.Longtail_DisposeAPI(&hashRegistry.cHashRegistryAPI.m_API)
+}
+
+// Longtail_HashRegistryAPI ...
+func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (Longtail_HashAPI, error) {
+	var hash_api *C.struct_Longtail_HashAPI
+	errno := C.Longtail_GetHashRegistry_GetHashAPI(hashRegistry.cHashRegistryAPI, C.uint32_t(hashIdentifier), &hash_api)
+	if errno != 0 {
+		return Longtail_HashAPI{cHashAPI: nil}, fmt.Errorf("GetHashAPI: C.Longtail_GetHashRegistry_GetHashAPI(%d) get hash api failed with error %d", hashIdentifier, errno)
+	}
+	return Longtail_HashAPI{cHashAPI: hash_api}, nil
 }
 
 // CreateBlake2HashAPI ...

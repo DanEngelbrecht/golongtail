@@ -181,19 +181,6 @@ func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compr
 	return compressionTypes
 }
 
-func createHashAPIFromIdentifier(hashIdentifier uint32) (longtaillib.Longtail_HashAPI, error) {
-	if hashIdentifier == longtaillib.GetMeowHashIdentifier() {
-		return longtaillib.CreateMeowHashAPI(), nil
-	}
-	if hashIdentifier == longtaillib.GetBlake2HashIdentifier() {
-		return longtaillib.CreateBlake2HashAPI(), nil
-	}
-	if hashIdentifier == longtaillib.GetBlake3HashIdentifier() {
-		return longtaillib.CreateBlake3HashAPI(), nil
-	}
-	return longtaillib.Longtail_HashAPI{}, fmt.Errorf("not a supported hash identifier: `%d`", hashIdentifier)
-}
-
 func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	switch *hashAlgorithm {
 	case "meow":
@@ -206,12 +193,12 @@ func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	return 0, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
 }
 
-func createHashAPI(hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) {
+func createHashAPI(hashRegistry longtaillib.Longtail_HashRegistryAPI, hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) {
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
 	if err != nil {
 		return longtaillib.Longtail_HashAPI{}, err
 	}
-	return createHashAPIFromIdentifier(hashIdentifier)
+	return hashRegistry.GetHashAPI(hashIdentifier)
 }
 
 func byteCountDecimal(b uint64) string {
@@ -288,7 +275,10 @@ func upSyncVersion(
 		}
 	}
 
-	hash, err := createHashAPIFromIdentifier(hashIdentifier)
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
 		return err
 	}
@@ -465,7 +455,10 @@ func downSyncVersion(
 		return fmt.Errorf("Remote store hash algorithm (%d) does not match hash algorithm of version (%d)", remoteVersionIndex.GetHashIdentifier(), hashIdentifier)
 	}
 
-	hash, err := createHashAPIFromIdentifier(hashIdentifier)
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
 		return err
 	}

@@ -86,10 +86,11 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Stats for remote store are now *final* stats after operation is complete
-           - Return correct error code in gcs block store putBlob
-           - Use shareblockstore
-           - Refactored closing of block stores and callback to fix hang bugs/incomplete store index
+           - Updated to longtail v0.0.14
+           - Use hash registry
+           - Remove use of defaultHashIdentifier in blockstore GetIndex
+           - Restore use of full compression registry
+           - downSync no longer accepts a hash algorithm parameter - it is now inferred from block store or version GetIndex
         draft: false
         prerelease: false
     - name: Download Linux artifacts

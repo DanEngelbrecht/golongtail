@@ -193,14 +193,6 @@ func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	return 0, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
 }
 
-func createHashAPI(hashRegistry longtaillib.Longtail_HashRegistryAPI, hashAlgorithm *string) (longtaillib.Longtail_HashAPI, error) {
-	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
-	if err != nil {
-		return longtaillib.Longtail_HashAPI{}, err
-	}
-	return hashRegistry.GetHashAPI(hashIdentifier)
-}
-
 func byteCountDecimal(b uint64) string {
 	const unit = 1000
 	if b < unit {

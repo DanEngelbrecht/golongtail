@@ -164,7 +164,7 @@ static int ReadContent(
     const uint32_t default_path_count = 512;
     const uint32_t default_path_data_size = default_path_count * 128;
 
-    uint32_t path_count = *file_infos->m_Paths.m_PathCount;
+    uint32_t path_count = file_infos->m_Count;
     if (path_count == 0)
     {
         err = Longtail_CreateContentIndexFromBlocks(
@@ -176,12 +176,13 @@ static int ReadContent(
         Longtail_Free(file_infos);
         return err;
     }
-    err = job_api->ReserveJobs(job_api, path_count);
+    Longtail_JobAPI_Group job_group;
+    err = job_api->ReserveJobs(job_api, path_count, &job_group);
     if (err)
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSBlockStore::ReadContent(%p, %p, %s, %p) job_api->ReserveJobs(%p, %u) failed with %d",
             storage_api, job_api, content_path, out_content_index,
-            job_api, *file_infos->m_Paths.m_PathCount,
+            job_api, path_count,
             err)
         Longtail_Free(file_infos);
         file_infos = 0;
@@ -202,7 +203,7 @@ static int ReadContent(
     for (uint32_t path_index = 0; path_index < path_count; ++path_index)
     {
         struct ScanBlockJob* job = &scan_jobs[path_index];
-        const char* block_path = &file_infos->m_Paths.m_Data[file_infos->m_Paths.m_Offsets[path_index]];
+        const char* block_path = &file_infos->m_PathData[file_infos->m_PathStartOffsets[path_index]];
         job->m_BlockIndex = 0;
 
         job->m_StorageAPI = storage_api;
@@ -214,13 +215,13 @@ static int ReadContent(
         Longtail_JobAPI_JobFunc job_func[] = {ScanBlock};
         void* ctx[] = {job};
         Longtail_JobAPI_Jobs jobs;
-        err = job_api->CreateJobs(job_api, 1, job_func, ctx, &jobs);
+        err = job_api->CreateJobs(job_api, job_group, 1, job_func, ctx, &jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
         err = job_api->ReadyJobs(job_api, 1, jobs);
         LONGTAIL_FATAL_ASSERT(!err, return err)
     }
 
-    err = job_api->WaitForAllJobs(job_api, 0);
+    err = job_api->WaitForAllJobs(job_api, job_group, 0);
     LONGTAIL_FATAL_ASSERT(!err, return err)
 
     size_t block_indexes_size = sizeof(struct Longtail_BlockIndex*) * (path_count);

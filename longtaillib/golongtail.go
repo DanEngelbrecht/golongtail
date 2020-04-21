@@ -110,10 +110,6 @@ type BlockStoreAPI interface {
 	Close()
 }
 
-type Longtail_Paths struct {
-	cPaths *C.struct_Longtail_Paths
-}
-
 type Longtail_FileInfos struct {
 	cFileInfos *C.struct_Longtail_FileInfos
 }
@@ -279,14 +275,6 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	return nil
 }
 
-func (paths *Longtail_Paths) Dispose() {
-	C.Longtail_Free(unsafe.Pointer(paths.cPaths))
-}
-
-func (paths *Longtail_Paths) GetPathCount() uint32 {
-	return uint32(*paths.cPaths.m_PathCount)
-}
-
 func (fileInfos *Longtail_FileInfos) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
 }
@@ -309,6 +297,15 @@ func carray2slice32(array *C.uint32_t, len int) []uint32 {
 	return list
 }
 
+func carray2slice16(array *C.uint16_t, len int) []uint16 {
+	var list []uint16
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
+	sliceHeader.Cap = len
+	sliceHeader.Len = len
+	sliceHeader.Data = uintptr(unsafe.Pointer(array))
+	return list
+}
+
 func carray2sliceByte(array *C.char, len int) []byte {
 	var list []byte
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
@@ -319,21 +316,17 @@ func carray2sliceByte(array *C.char, len int) []byte {
 }
 
 func (fileInfos *Longtail_FileInfos) GetFileCount() uint32 {
-	return uint32(*fileInfos.cFileInfos.m_Paths.m_PathCount)
+	return uint32(fileInfos.cFileInfos.m_Count)
 }
 
 func (fileInfos *Longtail_FileInfos) GetFileSizes() []uint64 {
-	size := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
-	return carray2slice64(fileInfos.cFileInfos.m_FileSizes, size)
+	size := int(fileInfos.cFileInfos.m_Count)
+	return carray2slice64(fileInfos.cFileInfos.m_Sizes, size)
 }
 
-func (fileInfos *Longtail_FileInfos) GetFilePermissions() []uint32 {
-	size := int(*fileInfos.cFileInfos.m_Paths.m_PathCount)
-	return carray2slice32(fileInfos.cFileInfos.m_Permissions, size)
-}
-
-func (fileInfos *Longtail_FileInfos) GetPaths() Longtail_Paths {
-	return Longtail_Paths{cPaths: &fileInfos.cFileInfos.m_Paths}
+func (fileInfos *Longtail_FileInfos) GetFilePermissions() []uint16 {
+	size := int(fileInfos.cFileInfos.m_Count)
+	return carray2slice16(fileInfos.cFileInfos.m_Permissions, size)
 }
 
 func (contentIndex *Longtail_ContentIndex) IsValid() bool {
@@ -841,9 +834,14 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_Pat
 	return Longtail_FileInfos{cFileInfos: fileInfos}, nil
 }
 
+// GetPathCount ...
+func (fileInfos *Longtail_FileInfos) GetPathCount() uint32 {
+	return uint32(fileInfos.cFileInfos.m_Count)
+}
+
 // GetPath ...
-func (paths Longtail_Paths) GetPath(index uint32) string {
-	cPath := C.Longtail_Paths_GetPath(paths.cPaths, C.uint32_t(index))
+func (fileInfos Longtail_FileInfos) GetPath(index uint32) string {
+	cPath := C.Longtail_FileInfos_GetPath(fileInfos.cFileInfos, C.uint32_t(index))
 	return C.GoString(cPath)
 }
 
@@ -879,9 +877,7 @@ func CreateVersionIndex(
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
 	rootPath string,
-	paths Longtail_Paths,
-	assetSizes []uint64,
-	assetPermissions []uint32,
+	fileInfos Longtail_FileInfos,
 	assetCompressionTypes []uint32,
 	maxChunkSize uint32) (Longtail_VersionIndex, error) {
 
@@ -893,31 +889,19 @@ func CreateVersionIndex(
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 
-	cAssetSizes := unsafe.Pointer(nil)
-	if len(assetSizes) > 0 {
-		cAssetSizes = unsafe.Pointer(&assetSizes[0])
-	}
-
-	cAssetPermissions := unsafe.Pointer(nil)
-	if len(assetPermissions) > 0 {
-		cAssetPermissions = unsafe.Pointer(&assetPermissions[0])
-	}
-
 	cCompressionTypes := unsafe.Pointer(nil)
 	if len(assetCompressionTypes) > 0 {
 		cCompressionTypes = unsafe.Pointer(&assetCompressionTypes[0])
 	}
 
 	var vindex *C.struct_Longtail_VersionIndex
-	errno := C.Longtail_CreateVersionIndexRaw(
+	errno := C.Longtail_CreateVersionIndex(
 		storageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
 		cRootPath,
-		paths.cPaths,
-		(*C.uint64_t)(cAssetSizes),
-		(*C.uint32_t)(cAssetPermissions),
+		fileInfos.cFileInfos,
 		(*C.uint32_t)(cCompressionTypes),
 		C.uint32_t(maxChunkSize),
 		&vindex)

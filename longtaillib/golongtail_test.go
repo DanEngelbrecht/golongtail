@@ -659,9 +659,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 		jobAPI,
 		nil,
 		"content",
-		fileInfos.GetPaths(),
-		fileInfos.GetFileSizes(),
-		fileInfos.GetFilePermissions(),
+		fileInfos,
 		tags,
 		32768)
 	if err != nil {
@@ -742,7 +740,7 @@ func TestGetFileRecursively(t *testing.T) {
 	if len(permissions) != int(fileCount) {
 		t.Errorf("TestGetFileRecursively() GetFilePermissions() %d != %d", len(permissions), fileCount)
 	}
-	path := fileInfos.GetPaths().GetPath(0)
+	path := fileInfos.GetPath(0)
 	if path != "first_folder/" {
 		t.Errorf("TestGetFileRecursively() GetPaths().GetPath() %s != %s", path, "first_folder/")
 	}
@@ -767,9 +765,7 @@ func TestCreateVersionIndex(t *testing.T) {
 		jobAPI,
 		nil,
 		"content",
-		fileInfos.GetPaths(),
-		fileInfos.GetFileSizes(),
-		fileInfos.GetFilePermissions(),
+		fileInfos,
 		compressionTypes,
 		32768)
 
@@ -836,9 +832,7 @@ func TestRewriteVersion(t *testing.T) {
 		jobAPI,
 		&createVersionProgress,
 		"content",
-		fileInfos.GetPaths(),
-		fileInfos.GetFileSizes(),
-		fileInfos.GetFilePermissions(),
+		fileInfos,
 		compressionTypes,
 		32768)
 	if err != nil {

@@ -297,9 +297,7 @@ func upSyncVersion(
 			jobs,
 			&createVersionIndexProgress,
 			sourceFolderPath,
-			fileInfos.GetPaths(),
-			fileInfos.GetFileSizes(),
-			fileInfos.GetFilePermissions(),
+			fileInfos,
 			compressionTypes,
 			targetChunkSize)
 		if err != nil {
@@ -472,9 +470,7 @@ func downSyncVersion(
 			jobs,
 			&createVersionIndexProgress,
 			targetFolderPath,
-			fileInfos.GetPaths(),
-			fileInfos.GetFileSizes(),
-			fileInfos.GetFilePermissions(),
+			fileInfos,
 			compressionTypes,
 			remoteVersionIndex.GetTargetChunkSize())
 		if err != nil {

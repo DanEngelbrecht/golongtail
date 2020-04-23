@@ -540,7 +540,7 @@ func NewGCSBlockStore(u *url.URL, maxBlockSize uint32, maxChunksPerBlock uint32,
 
 func getBlockPath(basePath string, blockHash uint64) string {
 	fileName := fmt.Sprintf("0x%016x.lsb", blockHash)
-	dir := filepath.Join(basePath, fileName[2:4])
+	dir := filepath.Join(basePath, fileName[2:6])
 	name := filepath.Join(dir, fileName)
 	name = strings.Replace(name, "\\", "/", -1)
 	return name

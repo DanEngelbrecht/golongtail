@@ -86,8 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Updated to longtail v0.0.17
-           - *Breaking Compatability Change* VersionIndex files are incompatible with v0.0.16
+           - Updated to longtail v0.0.19
+           - *BREAKING CHANGE* Change naming of stored block in GCS
         draft: false
         prerelease: false
     - name: Download Linux artifacts

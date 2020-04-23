@@ -1252,6 +1252,11 @@ static int ChunkAssets(
         }
     }
 
+    if (job_count == 0)
+    {
+        return 0;
+    }
+
     Longtail_JobAPI_Group job_group = 0;
     int err = job_api->ReserveJobs(job_api, job_count, &job_group);
     if (err)
@@ -1768,7 +1773,7 @@ int Longtail_CreateVersionIndex(
     uint32_t target_chunk_size,
     struct Longtail_VersionIndex** out_version_index)
 {
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex(%p, %p, %s, %p, %p, %p, %p, %u, %p)",
+    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_INFO, "Longtail_CreateVersionIndex(%p, %p, %p, %p, %s, %p, %p, %p, %u, %p)",
         storage_api,
         hash_api,
         job_api,
@@ -2421,6 +2426,14 @@ int Longtail_WriteBlockIndex(
     return 0;
 }
 
+struct Longtail_BlockIndexHeader
+{
+    TLongtail_Hash m_BlockHash;
+    uint32_t m_HashIdentifier;
+    uint32_t m_ChunkCount;
+    uint32_t m_Tag;
+};
+
 int Longtail_ReadBlockIndex(
     struct Longtail_StorageAPI* storage_api,
     const char* path,
@@ -2446,7 +2459,7 @@ int Longtail_ReadBlockIndex(
         storage_api->CloseFile(storage_api, f);
         return err;
     }
-    if (block_size < (sizeof(TLongtail_Hash) + sizeof(uint32_t)))
+    if (block_size < (sizeof(struct Longtail_BlockIndexHeader)))
     {
         LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) truncated block, failed with %d", storage_api, path, out_block_index, err)
         storage_api->CloseFile(storage_api, f);
@@ -2459,28 +2472,38 @@ int Longtail_ReadBlockIndex(
         return err;
     }
     uint64_t read_offset = 0;
-    TLongtail_Hash block_hash;
-    err = storage_api->Read(storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(TLongtail_Hash), &block_hash, err)
-        storage_api->CloseFile(storage_api, f);
-        return err;
-    }
-    read_offset += sizeof(TLongtail_Hash);
-    uint32_t chunk_count;
-    err = storage_api->Read(storage_api, f, read_offset, sizeof(uint32_t), &chunk_count);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(uint32_t), &chunk_count, err)
-        storage_api->CloseFile(storage_api, f);
-        return err;
-    }
-    size_t block_index_size = Longtail_GetBlockIndexSize(chunk_count);
 
-    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(chunk_count);
+    struct Longtail_BlockIndexHeader blockIndexHeader;
+    err = storage_api->Read(storage_api, f, read_offset, sizeof(struct Longtail_BlockIndexHeader), &blockIndexHeader);
+    if (err)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) storage_api->Read(%p, %p, %" PRIu64 ", %" PRIu64 ", %p) failed with %d", storage_api, path, out_block_index, storage_api, f, read_offset, sizeof(struct Longtail_BlockIndexHeader), &blockIndexHeader, err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    read_offset += sizeof(struct Longtail_BlockIndexHeader);
+
+    size_t block_index_size = Longtail_GetBlockIndexSize(blockIndexHeader.m_ChunkCount);
+    if (block_index_size >= block_size)
+    {
+        err = EBADF;
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) block size is larger than file on disk, failed with %d",
+            storage_api, path, out_block_index,
+            block_index_size,
+            err)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+
+    uint32_t block_index_data_size = (uint32_t)Longtail_GetBlockIndexDataSize(blockIndexHeader.m_ChunkCount);
     void* block_index_mem = Longtail_Alloc(block_index_size);
-    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, chunk_count);
+    if (!block_index_mem)
+    {
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ReadBlockIndex(%p, %s, %p) Longtail_Alloc(%" PRIu64 ") failed with %d", storage_api, path, out_block_index, block_index_size, ENOMEM)
+        storage_api->CloseFile(storage_api, f);
+        return err;
+    }
+    struct Longtail_BlockIndex* block_index = Longtail_InitBlockIndex(block_index_mem, blockIndexHeader.m_ChunkCount);
     err = storage_api->Read(storage_api, f, 0, block_index_data_size, &block_index[1]);
     if (err)
     {
@@ -6058,38 +6081,6 @@ int Longtail_ChangeVersion(
             err)
         return err;
     }
-    struct ContentLookup* content_lookup;
-    err = CreateContentLookup(
-        *content_index->m_BlockCount,
-        content_index->m_BlockHashes,
-        *content_index->m_ChunkCount,
-        content_index->m_ChunkHashes,
-        content_index->m_ChunkBlockIndexes,
-        &content_lookup);
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) CreateContentLookup(%" PRIu64 ", %p, %" PRIu64 ", %p, %p, %p) failed with %d",
-            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-            *content_index->m_BlockCount, content_index->m_BlockHashes, *content_index->m_ChunkCount, content_index->m_ChunkHashes, content_index->m_ChunkBlockIndexes, &content_lookup,
-            err)
-        return err;
-    }
-
-    uint32_t target_version_chunk_count = *target_version->m_ChunkCount;
-    for (uint32_t i = 0; i < target_version_chunk_count; ++i)
-    {
-        TLongtail_Hash chunk_hash = target_version->m_ChunkHashes[i];
-        intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
-        if (-1 == chunk_content_index_ptr)
-        {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) can't find chunk 0x%" PRIx64 " in content index",
-                block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-                chunk_hash)
-            DeleteContentLookup(content_lookup);
-            content_lookup = 0;
-            return EINVAL;
-       }
-    }
 
     uint32_t retry_count = 10;
     uint32_t successful_remove_count = 0;
@@ -6115,8 +6106,6 @@ int Longtail_ChangeVersion(
                             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to remove directory %s, %d", full_asset_path, err)
                             Longtail_Free(full_asset_path);
                             full_asset_path = 0;
-                            DeleteContentLookup(content_lookup);
-                            content_lookup = 0;
                             return err;
                         }
                         Longtail_Free(full_asset_path);
@@ -6137,8 +6126,6 @@ int Longtail_ChangeVersion(
                             LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion: Failed to remove file %s, %d", full_asset_path, err)
                             Longtail_Free(full_asset_path);
                             full_asset_path = 0;
-                            DeleteContentLookup(content_lookup);
-                            content_lookup = 0;
                             return err;
                         }
                         Longtail_Free(full_asset_path);
@@ -6165,80 +6152,117 @@ int Longtail_ChangeVersion(
     uint32_t modified_content_count = *version_diff->m_ModifiedContentCount;
     uint32_t write_asset_count = added_count + modified_content_count;
 
-    size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
-    uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(asset_indexes_size);
-    if (!asset_indexes)
+    if (write_asset_count > 0)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) Longtail_Alloc(%" PRIu64 ") failed with %d",
-            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-            asset_indexes_size,
-            ENOMEM)
-        DeleteContentLookup(content_lookup);
-        return ENOMEM;
-    }
-    for (uint32_t i = 0; i < added_count; ++i)
-    {
-        asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
-    }
-    for (uint32_t i = 0; i < modified_content_count; ++i)
-    {
-        asset_indexes[added_count + i] = version_diff->m_TargetContentModifiedAssetIndexes[i];
-    }
+        struct ContentLookup* content_lookup;
+        err = CreateContentLookup(
+            *content_index->m_BlockCount,
+            content_index->m_BlockHashes,
+            *content_index->m_ChunkCount,
+            content_index->m_ChunkHashes,
+            content_index->m_ChunkBlockIndexes,
+            &content_lookup);
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) CreateContentLookup(%" PRIu64 ", %p, %" PRIu64 ", %p, %p, %p) failed with %d",
+                block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                *content_index->m_BlockCount, content_index->m_BlockHashes, *content_index->m_ChunkCount, content_index->m_ChunkHashes, content_index->m_ChunkBlockIndexes, &content_lookup,
+                err)
+            return err;
+        }
 
-    struct AssetWriteList* awl;
-    err = BuildAssetWriteList(
-        write_asset_count,
-        asset_indexes,
-        target_version->m_NameOffsets,
-        target_version->m_NameData,
-        target_version->m_ChunkHashes,
-        target_version->m_AssetChunkCounts,
-        target_version->m_AssetChunkIndexStarts,
-        target_version->m_AssetChunkIndexes,
-        content_lookup,
-        &awl);
+        uint32_t target_version_chunk_count = *target_version->m_ChunkCount;
+        for (uint32_t i = 0; i < target_version_chunk_count; ++i)
+        {
+            TLongtail_Hash chunk_hash = target_version->m_ChunkHashes[i];
+            intptr_t chunk_content_index_ptr = hmgeti(content_lookup->m_ChunkHashToChunkIndex, chunk_hash);
+            if (-1 == chunk_content_index_ptr)
+            {
+                LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) can't find chunk 0x%" PRIx64 " in content index",
+                    block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                    chunk_hash)
+                DeleteContentLookup(content_lookup);
+                content_lookup = 0;
+                return EINVAL;
+           }
+        }
 
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) BuildAssetWriteList(%u, %p, %p, %p, %p, %p, %p, %p, %p, %p) failed with %d",
-            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-            write_asset_count, asset_indexes, target_version->m_NameOffsets, target_version->m_NameData, target_version->m_ChunkHashes, target_version->m_AssetChunkCounts, target_version->m_AssetChunkIndexStarts, target_version->m_AssetChunkIndexes, content_lookup, &awl,
-            err)
+        size_t asset_indexes_size = sizeof(uint32_t) * write_asset_count;
+        uint32_t* asset_indexes = (uint32_t*)Longtail_Alloc(asset_indexes_size);
+        if (!asset_indexes)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) Longtail_Alloc(%" PRIu64 ") failed with %d",
+                block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                asset_indexes_size,
+                ENOMEM)
+            DeleteContentLookup(content_lookup);
+            return ENOMEM;
+        }
+        for (uint32_t i = 0; i < added_count; ++i)
+        {
+            asset_indexes[i] = version_diff->m_TargetAddedAssetIndexes[i];
+        }
+        for (uint32_t i = 0; i < modified_content_count; ++i)
+        {
+            asset_indexes[added_count + i] = version_diff->m_TargetContentModifiedAssetIndexes[i];
+        }
+
+        struct AssetWriteList* awl;
+        err = BuildAssetWriteList(
+            write_asset_count,
+            asset_indexes,
+            target_version->m_NameOffsets,
+            target_version->m_NameData,
+            target_version->m_ChunkHashes,
+            target_version->m_AssetChunkCounts,
+            target_version->m_AssetChunkIndexStarts,
+            target_version->m_AssetChunkIndexes,
+            content_lookup,
+            &awl);
+
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) BuildAssetWriteList(%u, %p, %p, %p, %p, %p, %p, %p, %p, %p) failed with %d",
+                block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                write_asset_count, asset_indexes, target_version->m_NameOffsets, target_version->m_NameData, target_version->m_ChunkHashes, target_version->m_AssetChunkCounts, target_version->m_AssetChunkIndexStarts, target_version->m_AssetChunkIndexes, content_lookup, &awl,
+                err)
+            Longtail_Free(asset_indexes);
+            asset_indexes = 0;
+            DeleteContentLookup(content_lookup);
+            content_lookup = 0;
+            return err;
+        }
         Longtail_Free(asset_indexes);
         asset_indexes = 0;
+
+        err = WriteAssets(
+            block_store_api,
+            version_storage_api,
+            job_api,
+            progress_api,
+            content_index,
+            target_version,
+            version_path,
+            content_lookup,
+            awl,
+            retain_permissions);
+
+        Longtail_Free(awl);
+        awl = 0;
+
+        if (err)
+        {
+            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %d) failed with %d",
+                block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
+                block_store_api, version_storage_api, job_api, progress_api, content_index, target_version, version_path, content_lookup, awl, retain_permissions,
+                err)
+            DeleteContentLookup(content_lookup);
+            content_lookup = 0;
+            return err;
+        }
+
         DeleteContentLookup(content_lookup);
         content_lookup = 0;
-        return err;
-    }
-
-    Longtail_Free(asset_indexes);
-    asset_indexes = 0;
-
-    err = WriteAssets(
-        block_store_api,
-        version_storage_api,
-        job_api,
-        progress_api,
-        content_index,
-        target_version,
-        version_path,
-        content_lookup,
-        awl,
-        retain_permissions);
-
-    Longtail_Free(awl);
-    awl = 0;
-
-    DeleteContentLookup(content_lookup);
-    content_lookup = 0;
-
-    if (err)
-    {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) WriteAssets(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %d) failed with %d",
-            block_store_api, version_storage_api, hash_api, job_api, progress_api, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
-            block_store_api, version_storage_api, job_api, progress_api, content_index, target_version, version_path, content_lookup, awl, retain_permissions,
-            err)
-        return err;
     }
 
     if (retain_permissions)

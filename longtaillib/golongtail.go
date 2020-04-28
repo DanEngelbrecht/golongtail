@@ -827,7 +827,7 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_Pat
 	cFolderPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cFolderPath))
 	var fileInfos *C.struct_Longtail_FileInfos
-	errno := C.Longtail_GetFilesRecursively(storageAPI.cStorageAPI, pathFilter.cPathFilterAPI, cFolderPath, &fileInfos)
+	errno := C.Longtail_GetFilesRecursively(storageAPI.cStorageAPI, pathFilter.cPathFilterAPI, nil, nil, cFolderPath, &fileInfos)
 	if errno != 0 {
 		return Longtail_FileInfos{cFileInfos: nil}, fmt.Errorf("GetFilesRecursively: C.Longtail_GetFilesRecursively(`%s`) failed with error %d", rootPath, errno)
 	}
@@ -900,6 +900,8 @@ func CreateVersionIndex(
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
+		nil,
+		nil,
 		cRootPath,
 		fileInfos.cFileInfos,
 		(*C.uint32_t)(cCompressionTypes),
@@ -1220,6 +1222,8 @@ func WriteContent(
 		targetBlockStoreAPI.cBlockStoreAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
+		nil,
+		nil,
 		block_store_content_index.cContentIndex,
 		versionContentIndex.cContentIndex,
 		versionIndex.cVersionIndex,
@@ -1317,6 +1321,8 @@ func WriteVersion(
 		versionStorageAPI.cStorageAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
+		nil,
+		nil,
 		contentIndex.cContentIndex,
 		versionIndex.cVersionIndex,
 		cVersionFolderPath,
@@ -1372,6 +1378,8 @@ func ChangeVersion(
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
+		nil,
+		nil,
 		contentIndex.cContentIndex,
 		sourceVersionIndex.cVersionIndex,
 		targetVersionIndex.cVersionIndex,

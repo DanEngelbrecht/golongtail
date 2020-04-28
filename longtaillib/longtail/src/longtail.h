@@ -34,6 +34,40 @@ struct Longtail_API
 LONGTAIL_EXPORT void Longtail_DisposeAPI(struct Longtail_API* api);
 #define SAFE_DISPOSE_API(api) if (api) { Longtail_DisposeAPI(&api->m_API);}
 
+////////////// Longtail_CancelAPI
+
+struct Longtail_CancelAPI;
+
+typedef struct Longtail_CancelAPI_CancelToken* Longtail_CancelAPI_HCancelToken;
+
+typedef int (*Longtail_CancelAPI_CreateTokenFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token);
+typedef int (*Longtail_CancelAPI_CancelFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+typedef int (*Longtail_CancelAPI_IsCancelledFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+typedef int (*Longtail_CancelAPI_DisposeTokenFunc)(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+struct Longtail_CancelAPI
+{
+    struct Longtail_API m_API;
+    Longtail_CancelAPI_CreateTokenFunc CreateToken;
+    Longtail_CancelAPI_CancelFunc Cancel;
+    Longtail_CancelAPI_IsCancelledFunc IsCancelled;
+    Longtail_CancelAPI_DisposeTokenFunc DisposeToken;
+};
+
+LONGTAIL_EXPORT uint64_t Longtail_GetCancelAPISize();
+
+LONGTAIL_EXPORT struct Longtail_CancelAPI* Longtail_MakeCancelAPI(
+    void* mem,
+    Longtail_DisposeFunc dispose_func,
+    Longtail_CancelAPI_CreateTokenFunc create_token_func,
+    Longtail_CancelAPI_CancelFunc cancel_func,
+    Longtail_CancelAPI_IsCancelledFunc is_cancelled,
+    Longtail_CancelAPI_DisposeTokenFunc dispose_token_func);
+
+LONGTAIL_EXPORT int Longtail_CancelAPI_CreateToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken* out_token);
+LONGTAIL_EXPORT int Longtail_CancelAPI_Cancel(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+LONGTAIL_EXPORT int Longtail_CancelAPI_DisposeToken(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+LONGTAIL_EXPORT int Longtail_CancelAPI_IsCancelled(struct Longtail_CancelAPI* cancel_api, Longtail_CancelAPI_HCancelToken token);
+
 ////////////// Longtail_PathFilterAPI
 
 struct Longtail_PathFilterAPI;
@@ -181,6 +215,14 @@ enum {
     Longtail_StorageAPI_UserReadAccess      = 0400
 };
 
+struct Longtail_StorageAPI_EntryProperties
+{
+    const char* m_Name;
+    uint64_t m_Size;
+    uint16_t m_Permissions;
+    int m_IsDir;
+};
+
 struct Longtail_StorageAPI;
 
 typedef int (*Longtail_Storage_OpenReadFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
@@ -201,9 +243,7 @@ typedef int (*Longtail_Storage_RemoveFileFunc)(struct Longtail_StorageAPI* stora
 typedef int (*Longtail_Storage_StartFindFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator);
 typedef int (*Longtail_Storage_FindNextFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 typedef void (*Longtail_Storage_CloseFindFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-typedef const char* (*Longtail_Storage_GetFileNameFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-typedef const char* (*Longtail_Storage_GetDirectoryNameFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
+typedef int (*Longtail_Storage_GetEntryPropertiesFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
 
 struct Longtail_StorageAPI
 {
@@ -226,8 +266,6 @@ struct Longtail_StorageAPI
     Longtail_Storage_StartFindFunc StartFind;
     Longtail_Storage_FindNextFunc FindNext;
     Longtail_Storage_CloseFindFunc CloseFind;
-    Longtail_Storage_GetFileNameFunc GetFileName;
-    Longtail_Storage_GetDirectoryNameFunc GetDirectoryName;
     Longtail_Storage_GetEntryPropertiesFunc GetEntryProperties;
 };
 
@@ -254,8 +292,6 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_StartFindFunc start_find_func,
     Longtail_Storage_FindNextFunc find_next_func,
     Longtail_Storage_CloseFindFunc close_find_func,
-    Longtail_Storage_GetFileNameFunc get_file_name_func,
-    Longtail_Storage_GetDirectoryNameFunc get_directory_name_func,
     Longtail_Storage_GetEntryPropertiesFunc get_entry_properties_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
@@ -276,9 +312,7 @@ LONGTAIL_EXPORT int Longtail_Storage_RemoveFile(struct Longtail_StorageAPI* stor
 LONGTAIL_EXPORT int Longtail_Storage_StartFind(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HIterator* out_iterator);
 LONGTAIL_EXPORT int Longtail_Storage_FindNext(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
 LONGTAIL_EXPORT void Longtail_Storage_CloseFind(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-LONGTAIL_EXPORT const char* Longtail_Storage_GetFileName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-LONGTAIL_EXPORT const char* Longtail_Storage_GetDirectoryName(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator);
-LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, uint64_t* out_size, uint16_t* out_permissions);
+LONGTAIL_EXPORT int Longtail_Storage_GetEntryProperties(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HIterator iterator, struct Longtail_StorageAPI_EntryProperties* out_properties);
 
 ////////////// Longtail_ProgressAPI
 
@@ -531,6 +565,8 @@ LONGTAIL_EXPORT char* Longtail_Strdup(const char* path);
 LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     struct Longtail_StorageAPI* storage_api,
     struct Longtail_PathFilterAPI* path_filter_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
@@ -539,6 +575,8 @@ LONGTAIL_EXPORT int Longtail_CreateVersionIndex(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const char* root_path,
     const struct Longtail_FileInfos* file_infos,
     const uint32_t* optional_asset_tags,
@@ -637,6 +675,8 @@ LONGTAIL_EXPORT int Longtail_WriteContent(
     struct Longtail_BlockStoreAPI* block_store_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     struct Longtail_ContentIndex* block_store_content_index,
     struct Longtail_ContentIndex* version_content_index,
     struct Longtail_VersionIndex* version_index,
@@ -670,6 +710,8 @@ LONGTAIL_EXPORT int Longtail_WriteVersion(
     struct Longtail_StorageAPI* version_storage_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index,
     const char* version_path,
@@ -686,6 +728,8 @@ LONGTAIL_EXPORT int Longtail_ChangeVersion(
     struct Longtail_HashAPI* hash_api,
     struct Longtail_JobAPI* job_api,
     struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* source_version,
     const struct Longtail_VersionIndex* target_version,
@@ -775,6 +819,10 @@ LONGTAIL_EXPORT int Longtail_ValidateVersion(
     const struct Longtail_ContentIndex* content_index,
     const struct Longtail_VersionIndex* version_index);
 
+int Longtail_StripContentIndex(
+    struct Longtail_VersionIndex* version_index,
+    struct Longtail_ContentIndex* full_content_index,
+    struct Longtail_ContentIndex** out_reduced_content_index);
 struct Longtail_BlockIndex
 {
     TLongtail_Hash* m_BlockHash;

@@ -86,7 +86,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Updated to longtail v0.0.20
+           - Added go.mod for longtaillib module
         draft: false
         prerelease: false
     - name: Download Linux artifacts

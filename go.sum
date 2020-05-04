@@ -28,6 +28,8 @@ github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym
 github.com/DanEngelbrecht/golongtail v0.0.6 h1:JT8LJgfCdIlidsVilhZa6d76qlnh9IuK5klz6b9UsO8=
 github.com/DanEngelbrecht/golongtail/lib v0.0.0-20200408111602-c4f131e78b1b h1:ybv5wphpzdOkt7Vt0edcRyfQjhlnG1wodxyibcYN/2A=
 github.com/DanEngelbrecht/golongtail/lib v0.0.0-20200408111602-c4f131e78b1b/go.mod h1:HTNmK1u8rAqjXlwRM5n7XWOSRPK/QpmCDTUfzi/Emxg=
+github.com/DanEngelbrecht/golongtail/longtaillib v0.0.21 h1:9mm6zjUmTV8g+gt6CqoW1p4Rs9zbaI15jYcMj5uHW+w=
+github.com/DanEngelbrecht/golongtail/longtaillib v0.0.21/go.mod h1:ejpeLHDNZcsHACYHjP2aupKUtItLWdmdhJiMrQOJcQ0=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 h1:JYp7IbQjafoB+tBA3gMyHYHrpOtNuDiK/uB5uXxq5wM=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d h1:UQZhZ2O0vMHr2cI+DC1Mbh0TJxzA3RcLoMsFw+aXw7E=

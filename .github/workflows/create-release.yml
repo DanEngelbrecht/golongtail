@@ -87,6 +87,8 @@ jobs:
         body: |
           Changes in this Release
            - Added go.mod for longtaillib module
+           - Bumped longtail to v0.0.21
+           - Bumped default block size to 8Mb
         draft: false
         prerelease: false
     - name: Download Linux artifacts

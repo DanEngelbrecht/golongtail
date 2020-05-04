@@ -381,7 +381,7 @@ func downSyncVersion(
 	defer creg.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 524288, 1024, outFinalStats)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, outFinalStats)
 	if err != nil {
 		return err
 	}
@@ -529,7 +529,7 @@ var (
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
 	targetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("524288").Uint32()
+	targetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	maxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").Required().String()
 	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()

@@ -86,9 +86,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Added go.mod for longtaillib module
-           - Bumped longtail to v0.0.21
-           - Bumped default block size to 8Mb
+           - Bumped longtail to v0.0.22
+           - Added `--input-include-filter-regex` option to filter source/target folders
+           - Added `--input-exclude-filter-regex` option to filter source/target folders
         draft: false
         prerelease: false
     - name: Download Linux artifacts

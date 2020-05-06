@@ -50,7 +50,7 @@ type ProgressAPI interface {
 	OnProgress(totalCount uint32, doneCount uint32)
 }
 type PathFilterAPI interface {
-	Include(rootPath string, assetFolder string, assetName string, isDir bool, size uint64, permissions uint16) bool
+	Include(rootPath string, assetPath string, assetName string, isDir bool, size uint64, permissions uint16) bool
 }
 
 type AsyncPutStoredBlockAPI interface {
@@ -1118,11 +1118,11 @@ func CreatePathFilterAPI(pathFilter PathFilterAPI) Longtail_PathFilterAPI {
 }
 
 //export PathFilterAPIProxy_Include
-func PathFilterAPIProxy_Include(path_filter_api *C.struct_Longtail_PathFilterAPI, root_path *C.char, asset_folder *C.char, asset_name *C.char, is_dir C.int, size C.uint64_t, permissions C.uint16_t) C.int {
+func PathFilterAPIProxy_Include(path_filter_api *C.struct_Longtail_PathFilterAPI, root_path *C.char, asset_path *C.char, asset_name *C.char, is_dir C.int, size C.uint64_t, permissions C.uint16_t) C.int {
 	context := C.PathFilterAPIProxy_GetContext(unsafe.Pointer(path_filter_api))
 	pathFilter := RestorePointer(context).(PathFilterAPI)
 	isDir := is_dir != 0
-	if pathFilter.Include(C.GoString(root_path), C.GoString(asset_folder), C.GoString(asset_name), isDir, uint64(size), uint16(permissions)) {
+	if pathFilter.Include(C.GoString(root_path), C.GoString(asset_path), C.GoString(asset_name), isDir, uint64(size), uint16(permissions)) {
 		return 1
 	}
 	return 0

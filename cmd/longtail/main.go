@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -219,6 +220,64 @@ func byteCountBinary(b uint64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+//Include(rootPath string, assetFolder string, assetName string, isDir bool, size uint64, permissions uint16) bool
+type regexPathFilter struct {
+	compiledIncludeRegexes []*regexp.Regexp
+	compiledExcludeRegexes []*regexp.Regexp
+}
+
+func (f *regexPathFilter) Include(rootPath string, assetFolder string, assetPath string, isDir bool, size uint64, permissions uint16) bool {
+	for _, r := range f.compiledExcludeRegexes {
+		if r.MatchString(assetPath) {
+			log.Printf("INFO: Skipping `%s`", assetPath)
+			return false
+		}
+	}
+	if len(f.compiledIncludeRegexes) == 0 {
+		return true
+	}
+	for _, r := range f.compiledIncludeRegexes {
+		if r.MatchString(assetPath) {
+			return true
+		}
+	}
+	log.Printf("INFO: Skipping `%s`", assetPath)
+	return false
+}
+
+func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
+	var compiledRegexes []*regexp.Regexp
+	m := 0
+	s := 0
+	for i := 0; i < len(regexes); i++ {
+		if (regexes)[i] == '\\' {
+			m = -1
+		} else if m == 0 && (regexes)[i] == '*' {
+			m++
+		} else if m == 1 && (regexes)[i] == '*' {
+			r := (regexes)[s:(i - 1)]
+			regex, err := regexp.Compile(r)
+			if err != nil {
+				return nil, err
+			}
+			compiledRegexes = append(compiledRegexes, regex)
+			s = i + 1
+			m = 0
+		} else {
+			m = 0
+		}
+	}
+	if s < len(regexes) {
+		r := (regexes)[s:]
+		regex, err := regexp.Compile(r)
+		if err != nil {
+			return nil, err
+		}
+		compiledRegexes = append(compiledRegexes, regex)
+	}
+	return compiledRegexes, nil
+}
+
 func upSyncVersion(
 	blobStoreURI string,
 	sourceFolderPath string,
@@ -229,7 +288,33 @@ func upSyncVersion(
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
 	hashAlgorithm *string,
+	includeFilterRegEx *string,
+	excludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
+
+	var pathFilter longtaillib.Longtail_PathFilterAPI
+
+	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
+		regexPathFilter := &regexPathFilter{}
+		if includeFilterRegEx != nil {
+			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
+		}
+		if excludeFilterRegEx != nil {
+			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
+		}
+		if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
+			pathFilter = longtaillib.CreatePathFilterAPI(regexPathFilter)
+		}
+	}
+
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -277,7 +362,10 @@ func upSyncVersion(
 
 	var vindex longtaillib.Longtail_VersionIndex
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(fs, longtaillib.Longtail_PathFilterAPI{}, sourceFolderPath)
+		fileInfos, err := longtaillib.GetFilesRecursively(
+			fs,
+			pathFilter,
+			sourceFolderPath)
 		if err != nil {
 			return err
 		}
@@ -371,7 +459,33 @@ func downSyncVersion(
 	targetIndexPath *string,
 	localCachePath string,
 	retainPermissions bool,
+	includeFilterRegEx *string,
+	excludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
+
+	var pathFilter longtaillib.Longtail_PathFilterAPI
+
+	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
+		regexPathFilter := &regexPathFilter{}
+		if includeFilterRegEx != nil {
+			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
+		}
+		if excludeFilterRegEx != nil {
+			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
+		}
+		if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
+			pathFilter = longtaillib.CreatePathFilterAPI(regexPathFilter)
+		}
+	}
+
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
@@ -454,7 +568,10 @@ func downSyncVersion(
 
 	var localVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(fs, longtaillib.Longtail_PathFilterAPI{}, targetFolderPath)
+		fileInfos, err := longtaillib.GetFilesRecursively(
+			fs,
+			pathFilter,
+			targetFolderPath)
 		if err != nil {
 			return err
 		}
@@ -520,9 +637,11 @@ func downSyncVersion(
 }
 
 var (
-	logLevel   = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	storageURI = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	showStats  = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
+	storageURI         = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
+	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
+	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 
 	commandUpSync = kingpin.Command("upsync", "Upload a folder")
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
@@ -588,6 +707,8 @@ func main() {
 			*maxChunksPerBlock,
 			compression,
 			hashing,
+			includeFilterRegEx,
+			excludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)
@@ -600,6 +721,8 @@ func main() {
 			targetIndexPath,
 			*localCachePath,
 			!(*noRetainPermissions),
+			includeFilterRegEx,
+			excludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)

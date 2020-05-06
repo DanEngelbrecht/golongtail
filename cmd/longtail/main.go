@@ -459,7 +459,33 @@ func downSyncVersion(
 	targetIndexPath *string,
 	localCachePath string,
 	retainPermissions bool,
+	inputIncludeFilterRegEx *string,
+	inputExcludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
+
+	var pathFilter longtaillib.Longtail_PathFilterAPI
+
+	if inputIncludeFilterRegEx != nil || inputExcludeFilterRegEx != nil {
+		regexPathFilter := &regexPathFilter{}
+		if inputIncludeFilterRegEx != nil {
+			compiledIncludeRegexes, err := splitRegexes(*inputIncludeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
+		}
+		if inputExcludeFilterRegEx != nil {
+			compiledExcludeRegexes, err := splitRegexes(*inputExcludeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
+		}
+		if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
+			pathFilter = longtaillib.CreatePathFilterAPI(regexPathFilter)
+		}
+	}
+
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
@@ -542,7 +568,10 @@ func downSyncVersion(
 
 	var localVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(fs, longtaillib.Longtail_PathFilterAPI{}, targetFolderPath)
+		fileInfos, err := longtaillib.GetFilesRecursively(
+			fs,
+			pathFilter,
+			targetFolderPath)
 		if err != nil {
 			return err
 		}
@@ -608,9 +637,11 @@ func downSyncVersion(
 }
 
 var (
-	logLevel   = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	storageURI = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	showStats  = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+	logLevel                = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
+	storageURI              = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
+	showStats               = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+	inputIncludeFilterRegEx = kingpin.Flag("input-include-filter-regex", "Optionl regex to use to filter input files in source folder to include. Separate regexes with **").String()
+	inputExcludeFilterRegEx = kingpin.Flag("input-exclude-filter-regex", "Optionl regex to use to filter input files in source folder to exclude. Separate regexes with **").String()
 
 	commandUpSync = kingpin.Command("upsync", "Upload a folder")
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
@@ -636,8 +667,6 @@ var (
 			"zstd",
 			"zstd_min",
 			"zstd_max")
-	inputIncludeFilterRegEx = commandUpSync.Flag("input-include-filter-regex", "Optionl regex to use to filter input files in source folder to include. Separate regexes with **").String()
-	inputExcludeFilterRegEx = commandUpSync.Flag("input-exclude-filter-regex", "Optionl regex to use to filter input files in source folder to exclude. Separate regexes with **").String()
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	localCachePath      = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
@@ -692,6 +721,8 @@ func main() {
 			targetIndexPath,
 			*localCachePath,
 			!(*noRetainPermissions),
+			inputIncludeFilterRegEx,
+			inputExcludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)

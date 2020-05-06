@@ -288,23 +288,23 @@ func upSyncVersion(
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
 	hashAlgorithm *string,
-	inputIncludeFilterRegEx *string,
-	inputExcludeFilterRegEx *string,
+	includeFilterRegEx *string,
+	excludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
 
 	var pathFilter longtaillib.Longtail_PathFilterAPI
 
-	if inputIncludeFilterRegEx != nil || inputExcludeFilterRegEx != nil {
+	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
 		regexPathFilter := &regexPathFilter{}
-		if inputIncludeFilterRegEx != nil {
-			compiledIncludeRegexes, err := splitRegexes(*inputIncludeFilterRegEx)
+		if includeFilterRegEx != nil {
+			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
 			if err != nil {
 				return err
 			}
 			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
 		}
-		if inputExcludeFilterRegEx != nil {
-			compiledExcludeRegexes, err := splitRegexes(*inputExcludeFilterRegEx)
+		if excludeFilterRegEx != nil {
+			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
 			if err != nil {
 				return err
 			}
@@ -459,23 +459,23 @@ func downSyncVersion(
 	targetIndexPath *string,
 	localCachePath string,
 	retainPermissions bool,
-	inputIncludeFilterRegEx *string,
-	inputExcludeFilterRegEx *string,
+	includeFilterRegEx *string,
+	excludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
 
 	var pathFilter longtaillib.Longtail_PathFilterAPI
 
-	if inputIncludeFilterRegEx != nil || inputExcludeFilterRegEx != nil {
+	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
 		regexPathFilter := &regexPathFilter{}
-		if inputIncludeFilterRegEx != nil {
-			compiledIncludeRegexes, err := splitRegexes(*inputIncludeFilterRegEx)
+		if includeFilterRegEx != nil {
+			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
 			if err != nil {
 				return err
 			}
 			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
 		}
-		if inputExcludeFilterRegEx != nil {
-			compiledExcludeRegexes, err := splitRegexes(*inputExcludeFilterRegEx)
+		if excludeFilterRegEx != nil {
+			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
 			if err != nil {
 				return err
 			}
@@ -637,11 +637,11 @@ func downSyncVersion(
 }
 
 var (
-	logLevel                = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	storageURI              = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	showStats               = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
-	inputIncludeFilterRegEx = kingpin.Flag("input-include-filter-regex", "Optionl regex to use to filter input files in source folder to include. Separate regexes with **").String()
-	inputExcludeFilterRegEx = kingpin.Flag("input-exclude-filter-regex", "Optionl regex to use to filter input files in source folder to exclude. Separate regexes with **").String()
+	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
+	storageURI         = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
+	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
+	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 
 	commandUpSync = kingpin.Command("upsync", "Upload a folder")
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
@@ -707,8 +707,8 @@ func main() {
 			*maxChunksPerBlock,
 			compression,
 			hashing,
-			inputIncludeFilterRegEx,
-			inputExcludeFilterRegEx,
+			includeFilterRegEx,
+			excludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)
@@ -721,8 +721,8 @@ func main() {
 			targetIndexPath,
 			*localCachePath,
 			!(*noRetainPermissions),
-			inputIncludeFilterRegEx,
-			inputExcludeFilterRegEx,
+			includeFilterRegEx,
+			excludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)

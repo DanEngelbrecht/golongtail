@@ -87,8 +87,8 @@ jobs:
         body: |
           Changes in this Release
            - Bumped longtail to v0.0.22
-           - Added `--input-include-filter-regex` option to filter source/target folders
-           - Added `--input-exclude-filter-regex` option to filter source/target folders
+           - Added `--include-filter-regex` option to filter source/target folders
+           - Added `--exclude-filter-regex` option to filter source/target folders
         draft: false
         prerelease: false
     - name: Download Linux artifacts

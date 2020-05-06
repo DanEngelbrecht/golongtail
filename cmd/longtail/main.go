@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -219,6 +220,64 @@ func byteCountBinary(b uint64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+//Include(rootPath string, assetFolder string, assetName string, isDir bool, size uint64, permissions uint16) bool
+type regexPathFilter struct {
+	compiledIncludeRegexes []*regexp.Regexp
+	compiledExcludeRegexes []*regexp.Regexp
+}
+
+func (f *regexPathFilter) Include(rootPath string, assetFolder string, assetPath string, isDir bool, size uint64, permissions uint16) bool {
+	for _, r := range f.compiledExcludeRegexes {
+		if r.MatchString(assetPath) {
+			log.Printf("INFO: Skipping `%s`", assetPath)
+			return false
+		}
+	}
+	if len(f.compiledIncludeRegexes) == 0 {
+		return true
+	}
+	for _, r := range f.compiledIncludeRegexes {
+		if r.MatchString(assetPath) {
+			return true
+		}
+	}
+	log.Printf("INFO: Skipping `%s`", assetPath)
+	return false
+}
+
+func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
+	var compiledRegexes []*regexp.Regexp
+	m := 0
+	s := 0
+	for i := 0; i < len(regexes); i++ {
+		if (regexes)[i] == '\\' {
+			m = -1
+		} else if m == 0 && (regexes)[i] == '*' {
+			m++
+		} else if m == 1 && (regexes)[i] == '*' {
+			r := (regexes)[s:(i - 1)]
+			regex, err := regexp.Compile(r)
+			if err != nil {
+				return nil, err
+			}
+			compiledRegexes = append(compiledRegexes, regex)
+			s = i + 1
+			m = 0
+		} else {
+			m = 0
+		}
+	}
+	if s < len(regexes) {
+		r := (regexes)[s:]
+		regex, err := regexp.Compile(r)
+		if err != nil {
+			return nil, err
+		}
+		compiledRegexes = append(compiledRegexes, regex)
+	}
+	return compiledRegexes, nil
+}
+
 func upSyncVersion(
 	blobStoreURI string,
 	sourceFolderPath string,
@@ -229,7 +288,33 @@ func upSyncVersion(
 	maxChunksPerBlock uint32,
 	compressionAlgorithm *string,
 	hashAlgorithm *string,
+	inputIncludeFilterRegEx *string,
+	inputExcludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
+
+	var pathFilter longtaillib.Longtail_PathFilterAPI
+
+	if inputIncludeFilterRegEx != nil || inputExcludeFilterRegEx != nil {
+		regexPathFilter := &regexPathFilter{}
+		if inputIncludeFilterRegEx != nil {
+			compiledIncludeRegexes, err := splitRegexes(*inputIncludeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
+		}
+		if inputExcludeFilterRegEx != nil {
+			compiledExcludeRegexes, err := splitRegexes(*inputExcludeFilterRegEx)
+			if err != nil {
+				return err
+			}
+			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
+		}
+		if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
+			pathFilter = longtaillib.CreatePathFilterAPI(regexPathFilter)
+		}
+	}
+
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
@@ -277,7 +362,10 @@ func upSyncVersion(
 
 	var vindex longtaillib.Longtail_VersionIndex
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(fs, longtaillib.Longtail_PathFilterAPI{}, sourceFolderPath)
+		fileInfos, err := longtaillib.GetFilesRecursively(
+			fs,
+			pathFilter,
+			sourceFolderPath)
 		if err != nil {
 			return err
 		}
@@ -548,6 +636,8 @@ var (
 			"zstd",
 			"zstd_min",
 			"zstd_max")
+	inputIncludeFilterRegEx = commandUpSync.Flag("input-include-filter-regex", "Optionl regex to use to filter input files in source folder to include. Separate regexes with **").String()
+	inputExcludeFilterRegEx = commandUpSync.Flag("input-exclude-filter-regex", "Optionl regex to use to filter input files in source folder to exclude. Separate regexes with **").String()
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
 	localCachePath      = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
@@ -588,6 +678,8 @@ func main() {
 			*maxChunksPerBlock,
 			compression,
 			hashing,
+			inputIncludeFilterRegEx,
+			inputExcludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)

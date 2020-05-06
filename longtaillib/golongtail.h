@@ -70,7 +70,7 @@ struct PathFilterAPIProxy
 
 static void* PathFilterAPIProxy_GetContext(void* api) { return ((struct PathFilterAPIProxy*)api)->m_Context; }
 void PathFilterAPIProxy_Dispose(struct Longtail_API* api);
-int PathFilterAPIProxy_Include(struct Longtail_PathFilterAPI* path_filter_api, char* root_path, char* asset_folder, char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
+int PathFilterAPIProxy_Include(struct Longtail_PathFilterAPI* path_filter_api, char* root_path, char* asset_path, char* asset_name, int is_dir, uint64_t size, uint16_t permissions);
 
 static struct Longtail_PathFilterAPI* CreatePathFilterProxyAPI(void* context)
 {

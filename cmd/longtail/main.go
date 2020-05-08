@@ -14,6 +14,7 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -226,7 +227,7 @@ type regexPathFilter struct {
 	compiledExcludeRegexes []*regexp.Regexp
 }
 
-func (f *regexPathFilter) Include(rootPath string, assetFolder string, assetPath string, isDir bool, size uint64, permissions uint16) bool {
+func (f *regexPathFilter) Include(rootPath string, assetPath string, assetName string, isDir bool, size uint64, permissions uint16) bool {
 	for _, r := range f.compiledExcludeRegexes {
 		if r.MatchString(assetPath) {
 			log.Printf("INFO: Skipping `%s`", assetPath)

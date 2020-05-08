@@ -86,9 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Bumped longtail to v0.0.22
-           - Added `--include-filter-regex` option to filter source/target folders
-           - Added `--exclude-filter-regex` option to filter source/target folders
+           - Fixed path filter parsing (use relative path of asset for filtering)
+           - Fixed mod specs
         draft: false
         prerelease: false
     - name: Download Linux artifacts

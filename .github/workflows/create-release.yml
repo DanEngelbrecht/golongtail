@@ -86,8 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Fixed path filter parsing (use relative path of asset for filtering)
-           - Fixed mod specs
+           - Update to longail v0.0.23
+             - Removes ERROR log when creating directories
         draft: false
         prerelease: false
     - name: Download Linux artifacts

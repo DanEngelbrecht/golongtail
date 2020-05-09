@@ -86,7 +86,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Update to longail v0.0.24
+           - Update to longtail v0.0.24
            - Removed redundant function `CreateFSBlockStoreAPI` (use `CreateFSBlockStore` instead)
         draft: false
         prerelease: false

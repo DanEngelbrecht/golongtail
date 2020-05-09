@@ -119,10 +119,10 @@ func fsWorker(
 }
 
 // NewFSBlockStore ...
-func NewFSBlockStore(path string, jobAPI longtaillib.Longtail_JobAPI) (longtaillib.BlockStoreAPI, error) {
+func NewFSBlockStore(path string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.BlockStoreAPI, error) {
 	s := &fsBlockStore{fsRoot: path, jobAPI: jobAPI}
 	storageAPI := longtaillib.CreateFSStorageAPI()
-	s.fsBlockStore = longtaillib.CreateFSBlockStoreAPI(storageAPI, path)
+	s.fsBlockStore = longtaillib.CreateFSBlockStore(storageAPI, path, targetBlockSize, maxChunksPerBlock)
 	s.workerCount = runtime.NumCPU() * 4
 	s.putBlockChan = make(chan fsPutBlockMessage, s.workerCount*4096)
 	s.getBlockChan = make(chan fsGetBlockMessage, s.workerCount*4096)

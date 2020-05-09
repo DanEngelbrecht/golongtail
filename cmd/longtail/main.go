@@ -114,14 +114,14 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 		case "abfss":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], jobAPI)
+			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], jobAPI, targetBlockSize, maxChunksPerBlock)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
 			return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
 		}
 	}
-	return longtaillib.CreateFSBlockStore(longtaillib.CreateFSStorageAPI(), uri), nil
+	return longtaillib.CreateFSBlockStore(longtaillib.CreateFSStorageAPI(), uri, targetBlockSize, maxChunksPerBlock), nil
 }
 
 func createFileStorageForURI(uri string) (longtailstorelib.FileStorage, error) {
@@ -505,7 +505,7 @@ func downSyncVersion(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	localIndexStore := longtaillib.CreateFSBlockStore(localFS, localCachePath)
+	localIndexStore := longtaillib.CreateFSBlockStore(localFS, localCachePath, 8388608, 1024)
 	if err != nil {
 		return err
 	}

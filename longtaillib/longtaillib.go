@@ -489,10 +489,10 @@ func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Long
 }
 
 // CreateFSBlockStore() ...
-func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string) Longtail_BlockStoreAPI {
+func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string, defaultMaxBlockSize uint32, defaultMaxChunksPerBlock uint32) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath)}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath, C.uint32_t(defaultMaxBlockSize), C.uint32_t(defaultMaxChunksPerBlock))}
 }
 
 // CreateCacheBlockStore() ...
@@ -1472,12 +1472,6 @@ func CreateBlockStoreAPI(blockStore BlockStoreAPI) Longtail_BlockStoreAPI {
 	cContext := SavePointer(blockStore)
 	blockStoreAPIProxy := C.CreateBlockStoreProxyAPI(cContext)
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: blockStoreAPIProxy}
-}
-
-func CreateFSBlockStoreAPI(storageAPI Longtail_StorageAPI, contentPath string) Longtail_BlockStoreAPI {
-	cContentPath := C.CString(contentPath)
-	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath)}
 }
 
 func getLoggerFunc(logger Logger) C.Longtail_Log {

@@ -277,7 +277,7 @@ func TestFSBlockStore(t *testing.T) {
 
 	storageAPI := CreateInMemStorageAPI()
 	defer storageAPI.Dispose()
-	blockStoreAPI := CreateFSBlockStore(storageAPI, "content")
+	blockStoreAPI := CreateFSBlockStore(storageAPI, "content", 8388608, 1024)
 	defer blockStoreAPI.Dispose()
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
@@ -850,7 +850,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() CreateContentIndex() %q != %q", err, error(nil))
 	}
 	defer contentIndex.Dispose()
-	blockStorageAPI := CreateFSBlockStoreAPI(storageAPI, "block_store")
+	blockStorageAPI := CreateFSBlockStore(storageAPI, "block_store", 65536, 4096)
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateZStdCompressionRegistry()
 	compressionRegistry.Dispose()

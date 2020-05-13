@@ -540,16 +540,16 @@ static int SafeCreateDir(struct Longtail_StorageAPI* storage_api, const char* pa
     LONGTAIL_FATAL_ASSERT(storage_api != 0, return EINVAL)
     LONGTAIL_FATAL_ASSERT(path != 0, return EINVAL)
     int err = storage_api->CreateDir(storage_api, path);
-    if ((!err) || (err == EEXIST))
+    if (err)
     {
-        return 0;
+        if ((err == EEXIST) || storage_api->IsDir(storage_api, path))
+        {
+            return 0;
+        }
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir(%p, %s) failed with %d", (void*)storage_api, path, err)
+        return err;
     }
-    if (storage_api->IsDir(storage_api, path))
-    {
-        return 0;
-    }
-    LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "SafeCreateDir(%p, %s) failed with %d", (void*)storage_api, path, err)
-    return err;
+    return 0;
 }
 
 int EnsureParentPathExists(struct Longtail_StorageAPI* storage_api, const char* path)
@@ -4199,10 +4199,11 @@ static int BlockReader(void* context, uint32_t job_id, int is_cancelled)
     int err = job->m_BlockStoreAPI->GetStoredBlock(job->m_BlockStoreAPI, job->m_BlockHash, &job->m_AsyncCompleteAPI);
     if (err)
     {
-        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "BlockReader(%p, %u, %d) failed with %d",
+        LONGTAIL_LOG(err == ECANCELED ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "BlockReader(%p, %u, %d) failed with %d",
             context, job_id, is_cancelled,
             err)
-        return err;
+        job->m_Err = err;
+        return 0;
     }
     return EBUSY;
 }
@@ -6168,7 +6169,7 @@ int Longtail_AddContentIndex(
         &content_index[1],
         content_index_size - sizeof(struct Longtail_ContentIndex),
         hash_identifier,
-        *local_content_index->m_MaxChunksPerBlock,
+        *local_content_index->m_MaxBlockSize,
         *local_content_index->m_MaxChunksPerBlock,
         block_count,
         chunk_count);
@@ -6785,7 +6786,7 @@ int Longtail_ChangeVersion(
 
         if (err)
         {
-            LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
+            LONGTAIL_LOG(err == ECANCELED ?  LONGTAIL_LOG_LEVEL_WARNING: LONGTAIL_LOG_LEVEL_ERROR, "Longtail_ChangeVersion(%p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %p, %s, %u) failed with %d",
                 block_store_api, version_storage_api, hash_api, job_api, progress_api, optional_cancel_api, optional_cancel_token, content_index, source_version, target_version, version_diff, version_path, retain_permissions,
                 err)
             DeleteContentLookup(content_lookup);

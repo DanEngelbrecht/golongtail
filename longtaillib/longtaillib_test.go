@@ -546,6 +546,12 @@ func (b *TestBlockStore) GetIndex(
 	return 0
 }
 
+func (b *TestBlockStore) RetargetContent(
+	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
+	asyncCompleteAPI.OnComplete(nil)
+	return 0
+}
+
 func (b *TestBlockStore) Close() {
 }
 

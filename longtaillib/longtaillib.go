@@ -11,40 +11,41 @@ import (
 	"unsafe"
 )
 
-const EPERM = 1    /* Not super-user */
-const ENOENT = 2   /* No such file or directory */
-const ESRCH = 3    /* No such process */
-const EINTR = 4    /* Interrupted system call */
-const EIO = 5      /* I/O error */
-const ENXIO = 6    /* No such device or address */
-const E2BIG = 7    /* Arg list too long */
-const ENOEXEC = 8  /* Exec format error */
-const EBADF = 9    /* Bad file number */
-const ECHILD = 10  /* No children */
-const EAGAIN = 11  /* No more processes */
-const ENOMEM = 12  /* Not enough core */
-const EACCES = 13  /* Permission denied */
-const EFAULT = 14  /* Bad address */
-const ENOTBLK = 15 /* Block device required */
-const EBUSY = 16   /* Mount device busy */
-const EEXIST = 17  /* File exists */
-const EXDEV = 18   /* Cross-device link */
-const ENODEV = 19  /* No such device */
-const ENOTDIR = 20 /* Not a directory */
-const EISDIR = 21  /* Is a directory */
-const EINVAL = 22  /* Invalid argument */
-const ENFILE = 23  /* Too many open files in system */
-const EMFILE = 24  /* Too many open files */
-const ENOTTY = 25  /* Not a typewriter */
-const ETXTBSY = 26 /* Text file busy */
-const EFBIG = 27   /* File too large */
-const ENOSPC = 28  /* No space left on device */
-const ESPIPE = 29  /* Illegal seek */
-const EROFS = 30   /* Read only file system */
-const EMLINK = 31  /* Too many links */
-const EPIPE = 32   /* Broken pipe */
-const EDOM = 33    /* Math arg out of domain of func */
-const ERANGE = 34  /* Math result not representable */
+const EPERM = 1       /* Not super-user */
+const ENOENT = 2      /* No such file or directory */
+const ESRCH = 3       /* No such process */
+const EINTR = 4       /* Interrupted system call */
+const EIO = 5         /* I/O error */
+const ENXIO = 6       /* No such device or address */
+const E2BIG = 7       /* Arg list too long */
+const ENOEXEC = 8     /* Exec format error */
+const EBADF = 9       /* Bad file number */
+const ECHILD = 10     /* No children */
+const EAGAIN = 11     /* No more processes */
+const ENOMEM = 12     /* Not enough core */
+const EACCES = 13     /* Permission denied */
+const EFAULT = 14     /* Bad address */
+const ENOTBLK = 15    /* Block device required */
+const EBUSY = 16      /* Mount device busy */
+const EEXIST = 17     /* File exists */
+const EXDEV = 18      /* Cross-device link */
+const ENODEV = 19     /* No such device */
+const ENOTDIR = 20    /* Not a directory */
+const EISDIR = 21     /* Is a directory */
+const EINVAL = 22     /* Invalid argument */
+const ENFILE = 23     /* Too many open files in system */
+const EMFILE = 24     /* Too many open files */
+const ENOTTY = 25     /* Not a typewriter */
+const ETXTBSY = 26    /* Text file busy */
+const EFBIG = 27      /* File too large */
+const ENOSPC = 28     /* No space left on device */
+const ESPIPE = 29     /* Illegal seek */
+const EROFS = 30      /* Read only file system */
+const EMLINK = 31     /* Too many links */
+const EPIPE = 32      /* Broken pipe */
+const EDOM = 33       /* Math arg out of domain of func */
+const ERANGE = 34     /* Math result not representable */
+const ECANCELED = 105 /* Cancelled by user */
 
 type ProgressAPI interface {
 	OnProgress(totalCount uint32, doneCount uint32)
@@ -62,6 +63,10 @@ type AsyncGetStoredBlockAPI interface {
 }
 
 type AsyncGetIndexAPI interface {
+	OnComplete(content_index Longtail_ContentIndex, err int)
+}
+
+type AsyncRetargetContentAPI interface {
 	OnComplete(content_index Longtail_ContentIndex, err int)
 }
 
@@ -85,6 +90,10 @@ type Longtail_AsyncGetIndexAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetIndexAPI
 }
 
+type Longtail_AsyncRetargetContentAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncRetargetContentAPI
+}
+
 type BlockStoreStats struct {
 	IndexGetCount      uint64
 	BlocksGetCount     uint64
@@ -106,6 +115,7 @@ type BlockStoreAPI interface {
 	PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetIndex(asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
+	RetargetContent(Longtail_ContentIndex contentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI)
 	GetStats() (BlockStoreStats, int)
 	Close()
 }
@@ -488,6 +498,11 @@ func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Long
 	C.Longtail_AsyncGetIndex_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
 }
 
+//// Longtail_AsyncRetargetContentAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
+	C.Longtail_AsyncRetargetContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
+}
+
 // CreateFSBlockStore() ...
 func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string, defaultMaxBlockSize uint32, defaultMaxChunksPerBlock uint32) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
@@ -549,6 +564,18 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 
 	errno := C.Longtail_BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
+}
+
+// RetargetContent() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) RetargetContent(
+	contentIndex Longtail_ContentIndex,
+	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
+
+	errno := C.Longtail_BlockStore_RetargetContent(
+		blockStoreAPI.cBlockStoreAPI,
+		contentIndex.cContentIndex,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -1198,6 +1225,27 @@ func AsyncGetIndexAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	C.Longtail_Free(unsafe.Pointer(api))
 }
 
+// CreateAsyncRetargetContentAPI ...
+func CreateAsyncRetargetContentAPI(asyncComplete AsyncRetargetContentAPI) Longtail_AsyncRetargetContentAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncRetargetContentAPI(cContext)
+	return Longtail_AsyncRetargetContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncRetargetContentAPIProxy_OnComplete
+func AsyncRetargetContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncRetargetContentAPI, content_index *C.struct_Longtail_ContentIndex, err C.int) {
+	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
+	asyncComplete := RestorePointer(context).(AsyncRetargetContentAPI)
+	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err))
+}
+
+//export AsyncRetargetContentAPIProxy_Dispose
+func AsyncRetargetContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
+}
+
 // WriteContent ...
 func WriteContent(
 	sourceStorageAPI Longtail_StorageAPI,
@@ -1442,6 +1490,16 @@ func BlockStoreAPIProxy_GetIndex(api *C.struct_Longtail_BlockStoreAPI, async_com
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetIndex(
 		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
+	return C.int(errno)
+}
+
+//export BlockStoreAPIProxy_RetargetContent
+func BlockStoreAPIProxy_RetargetContent(api *C.struct_Longtail_BlockStoreAPI, content_index *C.struct_Longtail_ContentIndex, async_complete_api *C.struct_Longtail_AsyncRetargetContentAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	errno := blockStore.RetargetContent(
+		Longtail_ContentIndex{cContentIndex: content_index},
+		Longtail_AsyncRetargetContentAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

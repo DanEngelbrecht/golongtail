@@ -11,6 +11,8 @@ import (
 	"unsafe"
 )
 
+// TODO:(dan.engelbrecht) Make return codes consistently use errno and provide errno->error conversion
+
 const EPERM = 1       /* Not super-user */
 const ENOENT = 2      /* No such file or directory */
 const ESRCH = 3       /* No such process */
@@ -45,7 +47,7 @@ const EMLINK = 31     /* Too many links */
 const EPIPE = 32      /* Broken pipe */
 const EDOM = 33       /* Math arg out of domain of func */
 const ERANGE = 34     /* Math result not representable */
-const ECANCELED = 105 /* Cancelled by user */
+const ECANCELED = 105 /* Operation canceled */
 
 type ProgressAPI interface {
 	OnProgress(totalCount uint32, doneCount uint32)
@@ -115,7 +117,7 @@ type BlockStoreAPI interface {
 	PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetIndex(asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
-	RetargetContent(Longtail_ContentIndex contentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI)
+	RetargetContent(contentIndex Longtail_ContentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int
 	GetStats() (BlockStoreStats, int)
 	Close()
 }
@@ -755,8 +757,8 @@ func (compressionAPI *Longtail_CompressionAPI) Dispose() {
 }
 
 // CreateBikeshedJobAPI ...
-func CreateBikeshedJobAPI(workerCount uint32) Longtail_JobAPI {
-	return Longtail_JobAPI{cJobAPI: C.Longtail_CreateBikeshedJobAPI(C.uint32_t(workerCount))}
+func CreateBikeshedJobAPI(workerCount uint32, workerPriority int) Longtail_JobAPI {
+	return Longtail_JobAPI{cJobAPI: C.Longtail_CreateBikeshedJobAPI(C.uint32_t(workerCount), C.int(workerPriority))}
 }
 
 // Longtail_ProgressAPI.Dispose() ...

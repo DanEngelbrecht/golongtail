@@ -70,6 +70,18 @@ func (a *testGetIndexCompletionAPI) OnComplete(contentIndex Longtail_ContentInde
 	a.wg.Done()
 }
 
+type testRetargetContentCompletionAPI struct {
+	wg           sync.WaitGroup
+	contentIndex Longtail_ContentIndex
+	err          int
+}
+
+func (a *testRetargetContentCompletionAPI) OnComplete(contentIndex Longtail_ContentIndex, err int) {
+	a.err = err
+	a.contentIndex = contentIndex
+	a.wg.Done()
+}
+
 type testLogger struct {
 	t *testing.T
 }
@@ -142,7 +154,7 @@ func TestAPICreate(t *testing.T) {
 	zstd := CreateZStdCompressionAPI()
 	defer zstd.Dispose()
 
-	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 
 	compressionRegistry := CreateZStdCompressionRegistry()
@@ -524,6 +536,17 @@ func (b *TestBlockStore) GetStoredBlock(
 
 func (b *TestBlockStore) GetIndex(
 	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
+	cIndex, err := b.GetIndexSync()
+	if err != nil {
+		asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
+		return 0
+	}
+	b.getIndexCount = b.getIndexCount + 1
+	asyncCompleteAPI.OnComplete(cIndex, 0)
+	return 0
+}
+
+func (b *TestBlockStore) GetIndexSync() (Longtail_ContentIndex, error) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	blockCount := len(b.blocks)
@@ -537,18 +560,25 @@ func (b *TestBlockStore) GetIndex(
 		b.maxBlockSize,
 		b.maxChunksPerBlock,
 		blockIndexes)
+	return cIndex, err
+}
+
+func (b *TestBlockStore) RetargetContent(
+	contentIndex Longtail_ContentIndex,
+	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
+	cIndex, err := b.GetIndexSync()
 	if err != nil {
 		asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
 		return 0
 	}
-	b.getIndexCount = b.getIndexCount + 1
-	asyncCompleteAPI.OnComplete(cIndex, 0)
-	return 0
-}
+	defer cIndex.Dispose()
 
-func (b *TestBlockStore) RetargetContent(
-	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
-	asyncCompleteAPI.OnComplete(nil)
+	cRetargetedIndex, err := RetargetContent(cIndex, contentIndex)
+	if err != nil {
+		asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, ENOMEM)
+		return 0
+	}
+	asyncCompleteAPI.OnComplete(cRetargetedIndex, 0)
 	return 0
 }
 
@@ -645,7 +675,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	defer storageAPI.Dispose()
 	hashAPI := CreateBlake3HashAPI()
 	defer hashAPI.Dispose()
-	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
 	blockStoreAPI := CreateBlockStoreAPI(testBlockStore)
@@ -760,7 +790,7 @@ func TestCreateVersionIndex(t *testing.T) {
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
-	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 
 	compressionTypes := make([]uint32, fileInfos.GetFileCount())
@@ -826,7 +856,7 @@ func TestRewriteVersion(t *testing.T) {
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
-	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 
 	compressionTypes := make([]uint32, fileInfos.GetFileCount())
@@ -862,6 +892,7 @@ func TestRewriteVersion(t *testing.T) {
 	compressionRegistry.Dispose()
 	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
+
 	getIndexComplete := &testGetIndexCompletionAPI{}
 	getIndexComplete.wg.Add(1)
 	errno := blockStorageAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
@@ -872,6 +903,7 @@ func TestRewriteVersion(t *testing.T) {
 	getIndexComplete.wg.Wait()
 	blockStoreContentIndex := getIndexComplete.contentIndex
 	defer blockStoreContentIndex.Dispose()
+
 	err = WriteContent(
 		storageAPI,
 		blockStorageAPI,
@@ -884,6 +916,17 @@ func TestRewriteVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("TestRewriteVersion() WriteContent() %q != %q", err, error(nil))
 	}
+
+	retargetContentComplete := &testRetargetContentCompletionAPI{}
+	retargetContentComplete.wg.Add(1)
+	errno = blockStorageAPI.RetargetContent(contentIndex, CreateAsyncRetargetContentAPI(retargetContentComplete))
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.RetargetContent() %d != %d", errno, 0)
+		retargetContentComplete.wg.Done()
+	}
+	retargetContentComplete.wg.Wait()
+	retargetedContentIndex := retargetContentComplete.contentIndex
+	defer retargetedContentIndex.Dispose()
 
 	writeVersionProgress2 := CreateProgressAPI(&testProgress{task: "WriteVersion", t: t})
 	err = WriteVersion(

@@ -29,7 +29,7 @@ func (fileStorage *gcsFileStorage) ReadFromPath(ctx context.Context, path string
 
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, path)
 	}
 
 	bucketName := u.Host
@@ -38,11 +38,15 @@ func (fileStorage *gcsFileStorage) ReadFromPath(ctx context.Context, path string
 	objHandle := bucket.Object(u.Path[1:])
 	objReader, err := objHandle.NewReader(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, path)
 	}
 	defer objReader.Close()
 
-	return ioutil.ReadAll(objReader)
+	b, err := ioutil.ReadAll(objReader)
+	if err != nil {
+		return nil, errors.Wrap(err, path)
+	}
+	return b, nil
 }
 
 func (fileStorage *gcsFileStorage) WriteToPath(ctx context.Context, path string, data []byte) error {
@@ -53,7 +57,7 @@ func (fileStorage *gcsFileStorage) WriteToPath(ctx context.Context, path string,
 
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return err
+		return errors.Wrap(err, path)
 	}
 
 	bucketName := u.Host
@@ -65,11 +69,14 @@ func (fileStorage *gcsFileStorage) WriteToPath(ctx context.Context, path string,
 		_, err := objWriter.Write(data)
 		objWriter.Close()
 		if err != nil {
-			return err
+			return errors.Wrap(err, path)
 		}
 	}
 	_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
-	return err
+	if err != nil {
+		return errors.Wrap(err, path)
+	}
+	return nil
 }
 
 func (fileStorage *gcsFileStorage) Close() {

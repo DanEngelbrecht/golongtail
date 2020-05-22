@@ -11,40 +11,117 @@ import (
 	"unsafe"
 )
 
-const EPERM = 1    /* Not super-user */
-const ENOENT = 2   /* No such file or directory */
-const ESRCH = 3    /* No such process */
-const EINTR = 4    /* Interrupted system call */
-const EIO = 5      /* I/O error */
-const ENXIO = 6    /* No such device or address */
-const E2BIG = 7    /* Arg list too long */
-const ENOEXEC = 8  /* Exec format error */
-const EBADF = 9    /* Bad file number */
-const ECHILD = 10  /* No children */
-const EAGAIN = 11  /* No more processes */
-const ENOMEM = 12  /* Not enough core */
-const EACCES = 13  /* Permission denied */
-const EFAULT = 14  /* Bad address */
-const ENOTBLK = 15 /* Block device required */
-const EBUSY = 16   /* Mount device busy */
-const EEXIST = 17  /* File exists */
-const EXDEV = 18   /* Cross-device link */
-const ENODEV = 19  /* No such device */
-const ENOTDIR = 20 /* Not a directory */
-const EISDIR = 21  /* Is a directory */
-const EINVAL = 22  /* Invalid argument */
-const ENFILE = 23  /* Too many open files in system */
-const EMFILE = 24  /* Too many open files */
-const ENOTTY = 25  /* Not a typewriter */
-const ETXTBSY = 26 /* Text file busy */
-const EFBIG = 27   /* File too large */
-const ENOSPC = 28  /* No space left on device */
-const ESPIPE = 29  /* Illegal seek */
-const EROFS = 30   /* Read only file system */
-const EMLINK = 31  /* Too many links */
-const EPIPE = 32   /* Broken pipe */
-const EDOM = 33    /* Math arg out of domain of func */
-const ERANGE = 34  /* Math result not representable */
+const EPERM = 1       /* Not super-user */
+const ENOENT = 2      /* No such file or directory */
+const ESRCH = 3       /* No such process */
+const EINTR = 4       /* Interrupted system call */
+const EIO = 5         /* I/O error */
+const ENXIO = 6       /* No such device or address */
+const E2BIG = 7       /* Arg list too long */
+const ENOEXEC = 8     /* Exec format error */
+const EBADF = 9       /* Bad file number */
+const ECHILD = 10     /* No children */
+const EAGAIN = 11     /* No more processes */
+const ENOMEM = 12     /* Not enough core */
+const EACCES = 13     /* Permission denied */
+const EFAULT = 14     /* Bad address */
+const ENOTBLK = 15    /* Block device required */
+const EBUSY = 16      /* Mount device busy */
+const EEXIST = 17     /* File exists */
+const EXDEV = 18      /* Cross-device link */
+const ENODEV = 19     /* No such device */
+const ENOTDIR = 20    /* Not a directory */
+const EISDIR = 21     /* Is a directory */
+const EINVAL = 22     /* Invalid argument */
+const ENFILE = 23     /* Too many open files in system */
+const EMFILE = 24     /* Too many open files */
+const ENOTTY = 25     /* Not a typewriter */
+const ETXTBSY = 26    /* Text file busy */
+const EFBIG = 27      /* File too large */
+const ENOSPC = 28     /* No space left on device */
+const ESPIPE = 29     /* Illegal seek */
+const EROFS = 30      /* Read only file system */
+const EMLINK = 31     /* Too many links */
+const EPIPE = 32      /* Broken pipe */
+const EDOM = 33       /* Math arg out of domain of func */
+const ERANGE = 34     /* Math result not representable */
+const ECANCELED = 105 /* Operation canceled */
+
+func ErrNoToDescription(errno int) string {
+	switch errno {
+	case EPERM:
+		return "Not super-user"
+	case ENOENT:
+		return "No such file or directory"
+	case ESRCH:
+		return "No such process"
+	case EINTR:
+		return "Interrupted system call"
+	case EIO:
+		return "I/O error"
+	case ENXIO:
+		return "No such device or address"
+	case E2BIG:
+		return "Arg list too long"
+	case ENOEXEC:
+		return "Exec format error"
+	case EBADF:
+		return "Bad file number"
+	case ECHILD:
+		return "No children"
+	case EAGAIN:
+		return "No more processes"
+	case ENOMEM:
+		return "Not enough core"
+	case EACCES:
+		return "Permission denied"
+	case EFAULT:
+		return "Bad address"
+	case ENOTBLK:
+		return "Block device required"
+	case EBUSY:
+		return "Mount device busy"
+	case EEXIST:
+		return "File exists"
+	case EXDEV:
+		return "Cross-device link"
+	case ENODEV:
+		return "No such device"
+	case ENOTDIR:
+		return "Not a directory"
+	case EISDIR:
+		return "Is a directory"
+	case EINVAL:
+		return "Invalid argument"
+	case ENFILE:
+		return "Too many open files in system"
+	case EMFILE:
+		return "Too many open files"
+	case ENOTTY:
+		return "Not a typewriter"
+	case ETXTBSY:
+		return "Text file busy"
+	case EFBIG:
+		return "File too large"
+	case ENOSPC:
+		return "No space left on device"
+	case ESPIPE:
+		return "Illegal seek"
+	case EROFS:
+		return "Read only file system"
+	case EMLINK:
+		return "Too many links"
+	case EPIPE:
+		return "Broken pipe"
+	case EDOM:
+		return "Math arg out of domain of func"
+	case ERANGE:
+		return "Math result not representable"
+	case ECANCELED:
+		return "Operation canceled"
+	}
+	return fmt.Sprintf("%d", errno)
+}
 
 type ProgressAPI interface {
 	OnProgress(totalCount uint32, doneCount uint32)
@@ -54,15 +131,19 @@ type PathFilterAPI interface {
 }
 
 type AsyncPutStoredBlockAPI interface {
-	OnComplete(err int)
+	OnComplete(errno int)
 }
 
 type AsyncGetStoredBlockAPI interface {
-	OnComplete(stored_block Longtail_StoredBlock, err int)
+	OnComplete(stored_block Longtail_StoredBlock, errno int)
 }
 
 type AsyncGetIndexAPI interface {
-	OnComplete(content_index Longtail_ContentIndex, err int)
+	OnComplete(content_index Longtail_ContentIndex, errno int)
+}
+
+type AsyncRetargetContentAPI interface {
+	OnComplete(content_index Longtail_ContentIndex, errno int)
 }
 
 type Assert interface {
@@ -83,6 +164,10 @@ type Longtail_AsyncPutStoredBlockAPI struct {
 
 type Longtail_AsyncGetIndexAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetIndexAPI
+}
+
+type Longtail_AsyncRetargetContentAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncRetargetContentAPI
 }
 
 type BlockStoreStats struct {
@@ -106,6 +191,7 @@ type BlockStoreAPI interface {
 	PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetIndex(asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
+	RetargetContent(contentIndex Longtail_ContentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int
 	GetStats() (BlockStoreStats, int)
 	Close()
 }
@@ -210,7 +296,7 @@ func UnrefPointer(ptr unsafe.Pointer) {
 }
 
 // ReadFromStorage ...
-func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path string) ([]byte, error) {
+func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path string) ([]byte, int) {
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -221,28 +307,28 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
 	errno := C.Longtail_Storage_OpenReadFile(storageAPI.cStorageAPI, cFullPath, &cOpenFile)
 	if errno != 0 {
-		return nil, fmt.Errorf("ReadFromStorage: Longtail_Storage_OpenReadFile(%s/%s) failed with error %d", rootPath, path, errno)
+		return nil, int(errno)
 	}
 	defer C.Longtail_Storage_CloseFile(storageAPI.cStorageAPI, cOpenFile)
 
 	var cSize C.uint64_t
 	errno = C.Longtail_Storage_GetSize(storageAPI.cStorageAPI, cOpenFile, &cSize)
 	if errno != 0 {
-		return nil, fmt.Errorf("ReadFromStorage: Longtail_Storage_GetSize(%s/%s) failed with error %d", rootPath, path, errno)
+		return nil, int(errno)
 	}
 
 	blockData := make([]byte, int(cSize))
 	if cSize > 0 {
 		errno = C.Longtail_Storage_Read(storageAPI.cStorageAPI, cOpenFile, 0, cSize, unsafe.Pointer(&blockData[0]))
 		if errno != 0 {
-			return nil, fmt.Errorf("ReadFromStorage: Longtail_Storage_Read(%s/%s) failed with error %d", rootPath, path, errno)
+			return nil, int(errno)
 		}
 	}
-	return blockData, nil
+	return blockData, 0
 }
 
 // WriteToStorage ...
-func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path string, blockData []byte) error {
+func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path string, blockData []byte) int {
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -252,7 +338,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 
 	errno := C.EnsureParentPathExists(storageAPI.cStorageAPI, cFullPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteToStorage: C.EnsureParentPathExists(`%s/%s`) failed with error %d", rootPath, path, errno)
+		return int(errno)
 	}
 
 	blockSize := C.uint64_t(len(blockData))
@@ -260,7 +346,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
 	errno = C.Longtail_Storage_OpenWriteFile(storageAPI.cStorageAPI, cFullPath, blockSize, &cOpenFile)
 	if errno != 0 {
-		return fmt.Errorf("ReadFromStorage: Longtail_Storage_OpenWriteFile(%s/%s) failed with error %d", rootPath, path, errno)
+		return int(errno)
 	}
 	defer C.Longtail_Storage_CloseFile(storageAPI.cStorageAPI, cOpenFile)
 
@@ -270,9 +356,9 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	}
 
 	if errno != 0 {
-		return fmt.Errorf("WriteToStorage: C.Longtail_Storage_Write(`%s/%s`) failed with error %d", rootPath, path, errno)
+		return int(errno)
 	}
-	return nil
+	return 0
 }
 
 func (fileInfos *Longtail_FileInfos) Dispose() {
@@ -429,13 +515,13 @@ func (hashRegistry *Longtail_HashRegistryAPI) Dispose() {
 }
 
 // Longtail_HashRegistryAPI ...
-func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (Longtail_HashAPI, error) {
+func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (Longtail_HashAPI, int) {
 	var hash_api *C.struct_Longtail_HashAPI
 	errno := C.Longtail_GetHashRegistry_GetHashAPI(hashRegistry.cHashRegistryAPI, C.uint32_t(hashIdentifier), &hash_api)
 	if errno != 0 {
-		return Longtail_HashAPI{cHashAPI: nil}, fmt.Errorf("GetHashAPI: C.Longtail_GetHashRegistry_GetHashAPI(%d) get hash api failed with error %d", hashIdentifier, errno)
+		return Longtail_HashAPI{cHashAPI: nil}, int(errno)
 	}
-	return Longtail_HashAPI{cHashAPI: hash_api}, nil
+	return Longtail_HashAPI{cHashAPI: hash_api}, 0
 }
 
 // CreateBlake2HashAPI ...
@@ -486,6 +572,11 @@ func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block
 //// Longtail_AsyncGetIndexAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
 	C.Longtail_AsyncGetIndex_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
+}
+
+//// Longtail_AsyncRetargetContentAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
+	C.Longtail_AsyncRetargetContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
 }
 
 // CreateFSBlockStore() ...
@@ -549,6 +640,18 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
 
 	errno := C.Longtail_BlockStore_GetIndex(
 		blockStoreAPI.cBlockStoreAPI,
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
+}
+
+// RetargetContent() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) RetargetContent(
+	contentIndex Longtail_ContentIndex,
+	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
+
+	errno := C.Longtail_BlockStore_RetargetContent(
+		blockStoreAPI.cBlockStoreAPI,
+		contentIndex.cContentIndex,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -621,27 +724,27 @@ func (blockIndex *Longtail_BlockIndex) Dispose() {
 	C.Longtail_Free(unsafe.Pointer(blockIndex.cBlockIndex))
 }
 
-func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, error) {
+func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, int) {
 	var buffer unsafe.Pointer
 	var size C.size_t
 	errno := C.Longtail_WriteStoredBlockToBuffer(storedBlock.cStoredBlock, &buffer, &size)
 	if errno != 0 {
-		return nil, fmt.Errorf("WriteStoredBlockToBuffer: Longtail_WriteStoredBlockToBuffer failed with %d", errno)
+		return nil, int(errno)
 	}
 	defer C.Longtail_Free(buffer)
 	bytes := C.GoBytes(buffer, C.int(size))
-	return bytes, nil
+	return bytes, 0
 }
 
-func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, error) {
+func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, int) {
 	cBuffer := unsafe.Pointer(&buffer[0])
 	size := C.size_t(len(buffer))
 	var stored_block *C.struct_Longtail_StoredBlock
 	errno := C.Longtail_ReadStoredBlockFromBuffer(cBuffer, size, &stored_block)
 	if errno != 0 {
-		return Longtail_StoredBlock{cStoredBlock: nil}, fmt.Errorf("ReadStoredBlockFromBuffer: Longtail_ReadStoredBlockFromBuffer failed with %d", errno)
+		return Longtail_StoredBlock{cStoredBlock: nil}, int(errno)
 	}
-	return Longtail_StoredBlock{cStoredBlock: stored_block}, nil
+	return Longtail_StoredBlock{cStoredBlock: stored_block}, 0
 }
 
 // CreateStoredBlock() ...
@@ -728,8 +831,8 @@ func (compressionAPI *Longtail_CompressionAPI) Dispose() {
 }
 
 // CreateBikeshedJobAPI ...
-func CreateBikeshedJobAPI(workerCount uint32) Longtail_JobAPI {
-	return Longtail_JobAPI{cJobAPI: C.Longtail_CreateBikeshedJobAPI(C.uint32_t(workerCount))}
+func CreateBikeshedJobAPI(workerCount uint32, workerPriority int) Longtail_JobAPI {
+	return Longtail_JobAPI{cJobAPI: C.Longtail_CreateBikeshedJobAPI(C.uint32_t(workerCount), C.int(workerPriority))}
 }
 
 // Longtail_ProgressAPI.Dispose() ...
@@ -823,15 +926,15 @@ func LongtailFree(data unsafe.Pointer) {
 }
 
 // GetFilesRecursively ...
-func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (Longtail_FileInfos, error) {
+func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (Longtail_FileInfos, int) {
 	cFolderPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cFolderPath))
 	var fileInfos *C.struct_Longtail_FileInfos
 	errno := C.Longtail_GetFilesRecursively(storageAPI.cStorageAPI, pathFilter.cPathFilterAPI, nil, nil, cFolderPath, &fileInfos)
 	if errno != 0 {
-		return Longtail_FileInfos{cFileInfos: nil}, fmt.Errorf("GetFilesRecursively: C.Longtail_GetFilesRecursively(`%s`) failed with error %d", rootPath, errno)
+		return Longtail_FileInfos{cFileInfos: nil}, int(errno)
 	}
-	return Longtail_FileInfos{cFileInfos: fileInfos}, nil
+	return Longtail_FileInfos{cFileInfos: fileInfos}, 0
 }
 
 // GetPathCount ...
@@ -846,28 +949,28 @@ func (fileInfos Longtail_FileInfos) GetPath(index uint32) string {
 }
 
 // WriteBlockIndexToBuffer ...
-func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, error) {
+func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, int) {
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
 	errno := C.Longtail_WriteBlockIndexToBuffer(index.cBlockIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, fmt.Errorf("WriteBlockIndexToBuffer: C.Longtail_WriteBlockIndexToBuffer() failed with error %d", errno)
+		return nil, int(errno)
 	}
 	defer C.Longtail_Free(buffer)
 	bytes := C.GoBytes(buffer, C.int(size))
-	return bytes, nil
+	return bytes, 0
 }
 
 // ReadBlockIndexFromBuffer ...
-func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, error) {
+func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, int) {
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var bindex *C.struct_Longtail_BlockIndex
 	errno := C.Longtail_ReadBlockIndexFromBuffer(cBuffer, cSize, &bindex)
 	if errno != 0 {
-		return Longtail_BlockIndex{cBlockIndex: nil}, fmt.Errorf("ReadBlockIndexFromBuffer: C.Longtail_ReadBlockIndexFromBuffer() failed with error %d", errno)
+		return Longtail_BlockIndex{cBlockIndex: nil}, int(errno)
 	}
-	return Longtail_BlockIndex{cBlockIndex: bindex}, nil
+	return Longtail_BlockIndex{cBlockIndex: bindex}, 0
 }
 
 // CreateVersionIndex ...
@@ -879,7 +982,7 @@ func CreateVersionIndex(
 	rootPath string,
 	fileInfos Longtail_FileInfos,
 	assetCompressionTypes []uint32,
-	maxChunkSize uint32) (Longtail_VersionIndex, error) {
+	maxChunkSize uint32) (Longtail_VersionIndex, int) {
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -909,58 +1012,58 @@ func CreateVersionIndex(
 		&vindex)
 
 	if errno != 0 {
-		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("CreateVersionIndex: C.Longtail_CreateVersionIndex(`%s`): failed with error %d", rootPath, errno)
+		return Longtail_VersionIndex{cVersionIndex: nil}, int(errno)
 	}
 
-	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
+	return Longtail_VersionIndex{cVersionIndex: vindex}, 0
 }
 
 // WriteVersionIndexToBuffer ...
-func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
+func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, int) {
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
 	errno := C.Longtail_WriteVersionIndexToBuffer(index.cVersionIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, fmt.Errorf("WriteVersionIndexToBuffer: C.Longtail_WriteVersionIndexToBuffer() failed with error %d", errno)
+		return nil, int(errno)
 	}
 	defer C.Longtail_Free(buffer)
 	bytes := C.GoBytes(buffer, C.int(size))
-	return bytes, nil
+	return bytes, 0
 }
 
 // WriteVersionIndex ...
-func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) error {
+func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) int {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	errno := C.Longtail_WriteVersionIndex(storageAPI.cStorageAPI, index.cVersionIndex, cPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteVersionIndex: C.Longtail_WriteVersionIndex(`%s`) failed with error %d", path, errno)
+		return int(errno)
 	}
-	return nil
+	return 0
 }
 
 // ReadVersionIndexFromBuffer ...
-func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, error) {
+func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, int) {
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var vindex *C.struct_Longtail_VersionIndex
 	errno := C.Longtail_ReadVersionIndexFromBuffer(cBuffer, cSize, &vindex)
 	if errno != 0 {
-		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndexFromBuffer: C.Longtail_ReadVersionIndexFromBuffer() failed with error %d", errno)
+		return Longtail_VersionIndex{cVersionIndex: nil}, int(errno)
 	}
-	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
+	return Longtail_VersionIndex{cVersionIndex: vindex}, 0
 }
 
 // ReadVersionIndex ...
-func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_VersionIndex, error) {
+func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_VersionIndex, int) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var vindex *C.struct_Longtail_VersionIndex
 	errno := C.Longtail_ReadVersionIndex(storageAPI.cStorageAPI, cPath, &vindex)
 	if errno != 0 {
-		return Longtail_VersionIndex{cVersionIndex: nil}, fmt.Errorf("ReadVersionIndex: C.Longtail_ReadVersionIndex(`%s`) failed with error %d", path, errno)
+		return Longtail_VersionIndex{cVersionIndex: nil}, int(errno)
 	}
-	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
+	return Longtail_VersionIndex{cVersionIndex: vindex}, 0
 }
 
 // CreateContentIndex ...
@@ -970,7 +1073,7 @@ func CreateContentIndex(
 	chunkSizes []uint32,
 	compressionTypes []uint32,
 	maxBlockSize uint32,
-	maxChunksPerBlock uint32) (Longtail_ContentIndex, error) {
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
 
 	chunkCount := uint64(len(chunkHashes))
 	var cindex *C.struct_Longtail_ContentIndex
@@ -985,7 +1088,7 @@ func CreateContentIndex(
 			C.uint32_t(maxChunksPerBlock),
 			&cindex)
 		if errno != 0 {
-			return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: C.Longtail_CreateContentIndex(%d) failed with error %d", chunkCount, errno)
+			return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 		}
 	}
 	var cChunkHashes *C.TLongtail_Hash
@@ -1008,16 +1111,16 @@ func CreateContentIndex(
 		&cindex)
 
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndex: C.Longtail_CreateContentIndex(%d) create content index failed with error %d", chunkCount, errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
 
-	return Longtail_ContentIndex{cContentIndex: cindex}, nil
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
 func CreateContentIndexFromBlocks(
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32,
-	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, error) {
+	blockIndexes []Longtail_BlockIndex) (Longtail_ContentIndex, int) {
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
 	blockCount := len(blockIndexes)
 	for index, blockIndex := range blockIndexes {
@@ -1036,57 +1139,57 @@ func CreateContentIndexFromBlocks(
 		(**C.struct_Longtail_BlockIndex)(cBlockIndexes),
 		&cindex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateContentIndexFromBlocks: C.Longtail_CreateContentIndexFromBlocks(%d) create content index failed with error %d", blockCount, errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: cindex}, nil
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
 // WriteContentIndexToBuffer ...
-func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, error) {
+func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, int) {
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
 	errno := C.Longtail_WriteContentIndexToBuffer(index.cContentIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, fmt.Errorf("WriteContentIndexToBuffer: C.Longtail_WriteContentIndexToBuffer() failed with error %d", errno)
+		return nil, int(errno)
 	}
 	defer C.Longtail_Free(buffer)
 	bytes := C.GoBytes(buffer, C.int(size))
-	return bytes, nil
+	return bytes, 0
 }
 
 // WriteContentIndex ...
-func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentIndex, path string) error {
+func WriteContentIndex(storageAPI Longtail_StorageAPI, index Longtail_ContentIndex, path string) int {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	errno := C.Longtail_WriteContentIndex(storageAPI.cStorageAPI, index.cContentIndex, cPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteContentIndex: C.Longtail_WriteContentIndex`%s`) failed with error %d", path, errno)
+		return int(errno)
 	}
-	return nil
+	return 0
 }
 
 // ReadContentIndexFromBuffer ...
-func ReadContentIndexFromBuffer(buffer []byte) (Longtail_ContentIndex, error) {
+func ReadContentIndexFromBuffer(buffer []byte) (Longtail_ContentIndex, int) {
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_ReadContentIndexFromBuffer(cBuffer, cSize, &cindex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndexFromBuffer: C.Longtail_ReadContentIndexFromBuffer() failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: cindex}, nil
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
 // ReadContentIndex ...
-func ReadContentIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_ContentIndex, error) {
+func ReadContentIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_ContentIndex, int) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var cindex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_ReadContentIndex(storageAPI.cStorageAPI, cPath, &cindex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("ReadContentIndex: C.Longtail_ReadContentIndex(`%s`) failed with error %d", path, errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: cindex}, nil
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
 // CreateProgressAPI ...
@@ -1143,10 +1246,10 @@ func CreateAsyncPutStoredBlockAPI(asyncComplete AsyncPutStoredBlockAPI) Longtail
 }
 
 //export AsyncPutStoredBlockAPIProxy_OnComplete
-func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, err C.int) {
+func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, errno C.int) {
 	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
-	asyncComplete.OnComplete(int(err))
+	asyncComplete.OnComplete(int(errno))
 }
 
 //export AsyncPutStoredBlockAPIProxy_Dispose
@@ -1164,10 +1267,10 @@ func CreateAsyncGetStoredBlockAPI(asyncComplete AsyncGetStoredBlockAPI) Longtail
 }
 
 //export AsyncGetStoredBlockAPIProxy_OnComplete
-func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, err C.int) {
+func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, errno C.int) {
 	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
-	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(err))
+	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(errno))
 }
 
 //export AsyncGetStoredBlockAPIProxy_Dispose
@@ -1185,15 +1288,36 @@ func CreateAsyncGetIndexAPI(asyncComplete AsyncGetIndexAPI) Longtail_AsyncGetInd
 }
 
 //export AsyncGetIndexAPIProxy_OnComplete
-func AsyncGetIndexAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetIndexAPI, content_index *C.struct_Longtail_ContentIndex, err C.int) {
+func AsyncGetIndexAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetIndexAPI, content_index *C.struct_Longtail_ContentIndex, errno C.int) {
 	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetIndexAPI)
-	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err))
+	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(errno))
 }
 
 //export AsyncGetIndexAPIProxy_Dispose
 func AsyncGetIndexAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
+}
+
+// CreateAsyncRetargetContentAPI ...
+func CreateAsyncRetargetContentAPI(asyncComplete AsyncRetargetContentAPI) Longtail_AsyncRetargetContentAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncRetargetContentAPI(cContext)
+	return Longtail_AsyncRetargetContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncRetargetContentAPIProxy_OnComplete
+func AsyncRetargetContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncRetargetContentAPI, content_index *C.struct_Longtail_ContentIndex, errno C.int) {
+	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
+	asyncComplete := RestorePointer(context).(AsyncRetargetContentAPI)
+	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(errno))
+}
+
+//export AsyncRetargetContentAPIProxy_Dispose
+func AsyncRetargetContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(api))
 	UnrefPointer(context)
 	C.Longtail_Free(unsafe.Pointer(api))
 }
@@ -1207,7 +1331,7 @@ func WriteContent(
 	block_store_content_index Longtail_ContentIndex,
 	versionContentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
-	versionFolderPath string) error {
+	versionFolderPath string) int {
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -1229,9 +1353,9 @@ func WriteContent(
 		versionIndex.cVersionIndex,
 		cVersionFolderPath)
 	if errno != 0 {
-		return fmt.Errorf("WriteContent: C.Longtail_WriteContent(`%s`) failed with error %d", versionFolderPath, errno)
+		return int(errno)
 	}
-	return nil
+	return 0
 }
 
 // CreateMissingContent ...
@@ -1240,7 +1364,7 @@ func CreateMissingContent(
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	maxBlockSize uint32,
-	maxChunksPerBlock uint32) (Longtail_ContentIndex, error) {
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
 
 	var missingContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_CreateMissingContent(
@@ -1251,45 +1375,45 @@ func CreateMissingContent(
 		C.uint32_t(maxChunksPerBlock),
 		&missingContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("CreateMissingContent: C.Longtail_CreateMissingContent() failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: missingContentIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: missingContentIndex}, 0
 }
 
 // RetargetContent ...
 func RetargetContent(
 	referenceContentIndex Longtail_ContentIndex,
-	contentIndex Longtail_ContentIndex) (Longtail_ContentIndex, error) {
+	contentIndex Longtail_ContentIndex) (Longtail_ContentIndex, int) {
 	var retargetedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_RetargetContent(referenceContentIndex.cContentIndex, contentIndex.cContentIndex, &retargetedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("RetargetContent: C.Longtail_RetargetContent() failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: retargetedContentIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: retargetedContentIndex}, 0
 }
 
 // MergeContentIndex ...
 func MergeContentIndex(
 	localContentIndex Longtail_ContentIndex,
-	remoteContentIndex Longtail_ContentIndex) (Longtail_ContentIndex, error) {
+	remoteContentIndex Longtail_ContentIndex) (Longtail_ContentIndex, int) {
 	var mergedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_MergeContentIndex(localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("MergeContentIndex: C.Longtail_MergeContentIndex() failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, 0
 }
 
 // AddContentIndex ...
 func AddContentIndex(
 	localContentIndex Longtail_ContentIndex,
-	remoteContentIndex Longtail_ContentIndex) (Longtail_ContentIndex, error) {
+	remoteContentIndex Longtail_ContentIndex) (Longtail_ContentIndex, int) {
 	var mergedContentIndex *C.struct_Longtail_ContentIndex
 	errno := C.Longtail_AddContentIndex(localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
 	if errno != 0 {
-		return Longtail_ContentIndex{cContentIndex: nil}, fmt.Errorf("AddContentIndex: C.Longtail_AddContentIndex() failed with error %d", errno)
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
-	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, nil
+	return Longtail_ContentIndex{cContentIndex: mergedContentIndex}, 0
 }
 
 // WriteVersion ...
@@ -1301,7 +1425,7 @@ func WriteVersion(
 	contentIndex Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string,
-	retainPermissions bool) error {
+	retainPermissions bool) int {
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -1328,21 +1452,21 @@ func WriteVersion(
 		cVersionFolderPath,
 		cRetainPermissions)
 	if errno != 0 {
-		return fmt.Errorf("WriteVersion: C.Longtail_WriteVersion(`%s`) failed with error %d", versionFolderPath, errno)
+		return int(errno)
 	}
-	return nil
+	return 0
 }
 
 //CreateVersionDiff do we really need this? Maybe ChangeVersion should create one on the fly?
 func CreateVersionDiff(
 	sourceVersionIndex Longtail_VersionIndex,
-	targetVersionIndex Longtail_VersionIndex) (Longtail_VersionDiff, error) {
+	targetVersionIndex Longtail_VersionIndex) (Longtail_VersionDiff, int) {
 	var versionDiff *C.struct_Longtail_VersionDiff
 	errno := C.Longtail_CreateVersionDiff(sourceVersionIndex.cVersionIndex, targetVersionIndex.cVersionIndex, &versionDiff)
 	if errno != 0 {
-		return Longtail_VersionDiff{cVersionDiff: nil}, fmt.Errorf("CreateVersionDiff: C.Longtail_CreateVersionDiff() failed with error %d", errno)
+		return Longtail_VersionDiff{cVersionDiff: nil}, int(errno)
 	}
-	return Longtail_VersionDiff{cVersionDiff: versionDiff}, nil
+	return Longtail_VersionDiff{cVersionDiff: versionDiff}, 0
 }
 
 //ChangeVersion ...
@@ -1357,7 +1481,7 @@ func ChangeVersion(
 	targetVersionIndex Longtail_VersionIndex,
 	versionDiff Longtail_VersionDiff,
 	versionFolderPath string,
-	retainPermissions bool) error {
+	retainPermissions bool) int {
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -1387,9 +1511,9 @@ func ChangeVersion(
 		cVersionFolderPath,
 		cRetainPermissions)
 	if errno != 0 {
-		return fmt.Errorf("ChangeVersion: C.Longtail_ChangeVersion(`%s`) failed with error %d", versionFolderPath, errno)
+		return int(errno)
 	}
-	return nil
+	return 0
 }
 
 //export LogProxy_Log
@@ -1442,6 +1566,16 @@ func BlockStoreAPIProxy_GetIndex(api *C.struct_Longtail_BlockStoreAPI, async_com
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	errno := blockStore.GetIndex(
 		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
+	return C.int(errno)
+}
+
+//export BlockStoreAPIProxy_RetargetContent
+func BlockStoreAPIProxy_RetargetContent(api *C.struct_Longtail_BlockStoreAPI, content_index *C.struct_Longtail_ContentIndex, async_complete_api *C.struct_Longtail_AsyncRetargetContentAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	errno := blockStore.RetargetContent(
+		Longtail_ContentIndex{cContentIndex: content_index},
+		Longtail_AsyncRetargetContentAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

@@ -50,6 +50,11 @@ type fsGetIndexMessage struct {
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI
 }
 
+type fsRetargetContentMessage struct {
+	contentIndex     longtaillib.Longtail_ContentIndex
+	asyncCompleteAPI longtaillib.Longtail_AsyncRetargetContentAPI
+}
+
 type fsStopMessage struct {
 }
 
@@ -60,10 +65,11 @@ type fsBlockStore struct {
 
 	workerCount int
 
-	putBlockChan chan fsPutBlockMessage
-	getBlockChan chan fsGetBlockMessage
-	getIndexChan chan fsGetIndexMessage
-	stopChan     chan fsStopMessage
+	putBlockChan        chan fsPutBlockMessage
+	getBlockChan        chan fsGetBlockMessage
+	getIndexChan        chan fsGetIndexMessage
+	retargetContentChan chan fsRetargetContentMessage
+	stopChan            chan fsStopMessage
 
 	workerWaitGroup sync.WaitGroup
 
@@ -80,6 +86,7 @@ func fsWorker(
 	fsPutBlockMessages <-chan fsPutBlockMessage,
 	fsGetBlockMessages <-chan fsGetBlockMessage,
 	fsGetIndexMessages <-chan fsGetIndexMessage,
+	fsRetargetContentMessages <-chan fsRetargetContentMessage,
 	fsStopMessages <-chan fsStopMessage) error {
 
 	run := true
@@ -88,17 +95,22 @@ func fsWorker(
 		case putMsg := <-fsPutBlockMessages:
 			errno := s.fsBlockStore.PutStoredBlock(putMsg.storedBlock, putMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: PutStoredBlock returned: %d", errno)
+				putMsg.asyncCompleteAPI.OnComplete(errno)
 			}
 		case getMsg := <-fsGetBlockMessages:
 			errno := s.fsBlockStore.GetStoredBlock(getMsg.blockHash, getMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
+				getMsg.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
 			}
-		case getMsg := <-fsGetIndexMessages:
-			errno := s.fsBlockStore.GetIndex(getMsg.asyncCompleteAPI)
+		case indexMsg := <-fsGetIndexMessages:
+			errno := s.fsBlockStore.GetIndex(indexMsg.asyncCompleteAPI)
 			if errno != 0 {
-				log.Printf("WARNING: GetStoredBlock returned: %d", errno)
+				indexMsg.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
+			}
+		case retargetMsg := <-fsRetargetContentMessages:
+			errno := s.fsBlockStore.RetargetContent(retargetMsg.contentIndex, retargetMsg.asyncCompleteAPI)
+			if errno != 0 {
+				retargetMsg.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 			}
 		case _ = <-fsStopMessages:
 			run = false
@@ -127,10 +139,11 @@ func NewFSBlockStore(path string, jobAPI longtaillib.Longtail_JobAPI, targetBloc
 	s.putBlockChan = make(chan fsPutBlockMessage, s.workerCount*4096)
 	s.getBlockChan = make(chan fsGetBlockMessage, s.workerCount*4096)
 	s.getIndexChan = make(chan fsGetIndexMessage, 16)
+	s.retargetContentChan = make(chan fsRetargetContentMessage, 16)
 	s.stopChan = make(chan fsStopMessage, s.workerCount)
 
 	for i := 0; i < s.workerCount; i++ {
-		go fsWorker(s, s.putBlockChan, s.getBlockChan, s.getIndexChan, s.stopChan)
+		go fsWorker(s, s.putBlockChan, s.getBlockChan, s.getIndexChan, s.retargetContentChan, s.stopChan)
 	}
 	s.workerWaitGroup.Add(s.workerCount)
 
@@ -163,6 +176,14 @@ func (s *fsBlockStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longtai
 // GetIndex ...
 func (s *fsBlockStore) GetIndex(asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
 	s.getIndexChan <- fsGetIndexMessage{asyncCompleteAPI: asyncCompleteAPI}
+	return 0
+}
+
+// RetargetContent ...
+func (s *fsBlockStore) RetargetContent(
+	contentIndex longtaillib.Longtail_ContentIndex,
+	asyncCompleteAPI longtaillib.Longtail_AsyncRetargetContentAPI) int {
+	s.retargetContentChan <- fsRetargetContentMessage{contentIndex: contentIndex, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

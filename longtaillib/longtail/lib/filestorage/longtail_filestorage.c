@@ -1,6 +1,5 @@
 #include "longtail_filestorage.h"
 
-#include "../../src/longtail.h"
 #include "../longtail_platform.h"
 #include <inttypes.h>
 #include <errno.h>
@@ -293,9 +292,15 @@ static int FSStorageAPI_StartFind(struct Longtail_StorageAPI* storage_api, const
     TMP_STR(path)
     Longtail_DenormalizePath(tmp_path);
     int err = Longtail_StartFind((HLongtail_FSIterator)iterator, tmp_path);
+    if (err == ENOENT)
+    {
+        Longtail_Free(iterator);
+        iterator = 0;
+        return err;
+    }
     if (err)
     {
-        LONGTAIL_LOG(err == ENOENT ? LONGTAIL_LOG_LEVEL_WARNING : LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
+        LONGTAIL_LOG(LONGTAIL_LOG_LEVEL_ERROR, "FSStorageAPI_StartFind(%p, %s, %p) failed with %d",
             storage_api, path, out_iterator,
             err)
         Longtail_Free(iterator);

@@ -318,7 +318,7 @@ func upSyncVersion(
 
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
@@ -337,11 +337,11 @@ func upSyncVersion(
 	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
-		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("upSyncVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 	getIndexComplete.wg.Wait()
 	if getIndexComplete.err != 0 {
-		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("upSyncVersion: indexStore.GetIndex: Failed for `%s` failed with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 	remoteContentIndex := getIndexComplete.contentIndex
 
@@ -356,19 +356,19 @@ func upSyncVersion(
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
-	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
-	if err != nil {
-		return err
+	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 
 	var vindex longtaillib.Longtail_VersionIndex
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(
+		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
 			sourceFolderPath)
-		if err != nil {
-			return err
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.GetFilesRecursively() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 		defer fileInfos.Dispose()
 
@@ -380,7 +380,7 @@ func upSyncVersion(
 
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
-		vindex, err = longtaillib.CreateVersionIndex(
+		vindex, errno = longtaillib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
@@ -389,8 +389,8 @@ func upSyncVersion(
 			fileInfos,
 			compressionTypes,
 			targetChunkSize)
-		if err != nil {
-			return err
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	} else {
 		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
@@ -402,28 +402,28 @@ func upSyncVersion(
 		if err != nil {
 			return err
 		}
-		vindex, err = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-		if err != nil {
-			return err
+		vindex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
 	defer vindex.Dispose()
 
-	missingContentIndex, err := longtaillib.CreateMissingContent(
+	missingContentIndex, errno := longtaillib.CreateMissingContent(
 		hash,
 		remoteContentIndex,
 		vindex,
 		targetBlockSize,
 		maxChunksPerBlock)
-	if err != nil {
-		return err
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: longtaillib.CreateMissingContent() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer missingContentIndex.Dispose()
 	if missingContentIndex.GetBlockCount() > 0 {
 		writeContentProgress := longtaillib.CreateProgressAPI(&progressData{task: "Writing content blocks"})
 		defer writeContentProgress.Dispose()
 
-		err = longtaillib.WriteContent(
+		errno = longtaillib.WriteContent(
 			fs,
 			indexStore,
 			jobs,
@@ -432,14 +432,14 @@ func upSyncVersion(
 			missingContentIndex,
 			vindex,
 			sourceFolderPath)
-		if err != nil {
-			return err
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.WriteContent() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
 
-	vbuffer, err := longtaillib.WriteVersionIndexToBuffer(vindex)
-	if err != nil {
-		return err
+	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(vindex)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	fileStorage, err := createFileStorageForURI(targetFilePath)
 	if err != nil {
@@ -490,7 +490,7 @@ func downSyncVersion(
 	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()))
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
@@ -506,9 +506,6 @@ func downSyncVersion(
 	defer localFS.Dispose()
 
 	localIndexStore := longtaillib.CreateFSBlockStore(localFS, localCachePath, 8388608, 1024)
-	if err != nil {
-		return err
-	}
 	defer localIndexStore.Dispose()
 
 	cacheBlockStore := longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
@@ -525,11 +522,11 @@ func downSyncVersion(
 	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
 	if errno != 0 {
 		getIndexComplete.wg.Done()
-		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("downSyncVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 	getIndexComplete.wg.Wait()
 	if getIndexComplete.err != 0 {
-		return fmt.Errorf("indexStore.GetIndex: Failed for `%s` failed with error %d", blobStoreURI, errno)
+		return fmt.Errorf("downSyncVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 	remoteContentIndex := getIndexComplete.contentIndex
 
@@ -545,9 +542,9 @@ func downSyncVersion(
 		if err != nil {
 			return err
 		}
-		remoteVersionIndex, err = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-		if err != nil {
-			return err
+		remoteVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		if errno != 0 {
+			return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
 	defer remoteVersionIndex.Dispose()
@@ -556,25 +553,25 @@ func downSyncVersion(
 	if hashIdentifier == 0 {
 		hashIdentifier = remoteVersionIndex.GetHashIdentifier()
 	} else if remoteVersionIndex.GetHashIdentifier() != hashIdentifier {
-		return fmt.Errorf("Remote store hash algorithm (%d) does not match hash algorithm of version (%d)", remoteVersionIndex.GetHashIdentifier(), hashIdentifier)
+		return fmt.Errorf("downSyncVersion: Remote store hash algorithm (%d) does not match hash algorithm of version (%d)", remoteVersionIndex.GetHashIdentifier(), hashIdentifier)
 	}
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
-	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
-	if err != nil {
-		return err
+	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 
 	var localVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		fileInfos, err := longtaillib.GetFilesRecursively(
+		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
 			targetFolderPath)
-		if err != nil {
-			return err
+		if errno != 0 {
+			return fmt.Errorf("downSyncVersion: longtaillib.GetFilesRecursively() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 		defer fileInfos.Dispose()
 
@@ -582,7 +579,7 @@ func downSyncVersion(
 
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
-		localVersionIndex, err = longtaillib.CreateVersionIndex(
+		localVersionIndex, errno = longtaillib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
@@ -591,8 +588,8 @@ func downSyncVersion(
 			fileInfos,
 			compressionTypes,
 			remoteVersionIndex.GetTargetChunkSize())
-		if err != nil {
-			return err
+		if errno != 0 {
+			return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	} else {
 		fileStorage, err := createFileStorageForURI(*targetIndexPath)
@@ -604,22 +601,22 @@ func downSyncVersion(
 		if err != nil {
 			return err
 		}
-		localVersionIndex, err = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-		if err != nil {
-			return err
+		localVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		if errno != 0 {
+			return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
 	defer localVersionIndex.Dispose()
 
-	versionDiff, err := longtaillib.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
-	if err != nil {
-		return err
+	versionDiff, errno := longtaillib.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionDiff() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer versionDiff.Dispose()
 
 	changeVersionProgress := longtaillib.CreateProgressAPI(&progressData{task: "Updating version"})
 	defer changeVersionProgress.Dispose()
-	err = longtaillib.ChangeVersion(
+	errno = longtaillib.ChangeVersion(
 		indexStore,
 		fs,
 		hash,
@@ -631,8 +628,8 @@ func downSyncVersion(
 		versionDiff,
 		targetFolderPath,
 		retainPermissions)
-	if err != nil {
-		return err
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.ChangeVersion() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	return nil
 }

@@ -44,6 +44,7 @@ int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct
 int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, uint64_t* block_hashes, uint32_t* block_ref_counts);
 int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
+int BlockStoreAPIProxy_RetargetContent(struct Longtail_BlockStoreAPI* api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
 
 static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
@@ -57,6 +58,7 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         (Longtail_BlockStore_PreflightGetFunc)BlockStoreAPIProxy_PreflightGet,
         BlockStoreAPIProxy_GetStoredBlock,
         BlockStoreAPIProxy_GetIndex,
+        BlockStoreAPIProxy_RetargetContent,
         BlockStoreAPIProxy_GetStats);
 }
 
@@ -168,4 +170,26 @@ static struct Longtail_AsyncGetIndexAPI* CreateAsyncGetIndexAPI(void* context)
         api,
         AsyncGetIndexAPIProxy_Dispose,
         AsyncGetIndexAPIProxy_OnComplete);
+}
+
+////////////// Longtail_AsyncRetargetContentAPI
+
+struct AsyncRetargetContentAPIProxy
+{
+    struct Longtail_AsyncRetargetContentAPI m_API;
+    void* m_Context;
+};
+
+static void* AsyncRetargetContentAPIProxy_GetContext(void* api) { return ((struct AsyncRetargetContentAPIProxy*)api)->m_Context; }
+void AsyncRetargetContentAPIProxy_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+void AsyncRetargetContentAPIProxy_Dispose(struct Longtail_API* api);
+
+static struct Longtail_AsyncRetargetContentAPI* CreateAsyncRetargetContentAPI(void* context)
+{
+    struct AsyncRetargetContentAPIProxy* api    = (struct AsyncRetargetContentAPIProxy*)Longtail_Alloc(sizeof(struct AsyncRetargetContentAPIProxy));
+    api->m_Context = context;
+    return Longtail_MakeAsyncRetargetContentAPI(
+        api,
+        AsyncRetargetContentAPIProxy_Dispose,
+        AsyncRetargetContentAPIProxy_OnComplete);
 }

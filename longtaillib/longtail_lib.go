@@ -1,6 +1,6 @@
 package longtaillib
 
-// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -O3
+// #cgo CFLAGS: -g -std=gnu99 -m64 -msse4.1 -pthread -O3
 // #include "longtail/lib/atomiccancel/longtail_atomiccancel.c"
 // #include "longtail/lib/blake2/longtail_blake2.c"
 // #include "longtail/lib/blake3/longtail_blake3.c"

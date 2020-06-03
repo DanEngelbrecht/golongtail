@@ -1,6 +1,6 @@
 package longtaillib
 
-// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -msse4.1 -O3
+// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -O3
 // #cgo LDFLAGS: -lm
 // #include "golongtail.h"
 import "C"

@@ -417,25 +417,37 @@ func contentIndexWorker(
 	var contentIndex longtaillib.Longtail_ContentIndex
 
 	key := s.prefix + "store.lci"
+
 	objHandle := bucket.Object(key)
-	obj, err := objHandle.NewReader(ctx)
-	if err == nil {
-		defer obj.Close()
-		storedContentIndexData, err := ioutil.ReadAll(obj)
-		if err == nil {
-			var errno int
-			contentIndex, errno = longtaillib.ReadContentIndexFromBuffer(storedContentIndexData)
-			if errno != 0 {
-				return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
-			}
+	storedContentIndexData, errno := getBlob(ctx, objHandle)
+	if errno == 0 {
+		log.Printf("Retrying getBlob %s", key)
+		atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+		storedContentIndexData, errno = getBlob(ctx, objHandle)
+	}
+	if errno != 0 {
+		log.Printf("Retrying 500 ms delayed getBlob %s", key)
+		time.Sleep(500 * time.Millisecond)
+		atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+		storedContentIndexData, errno = getBlob(ctx, objHandle)
+	}
+	if errno != 0 {
+		log.Printf("Retrying 2 s delayed getBlob %s", key)
+		time.Sleep(2 * time.Second)
+		atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+		storedContentIndexData, errno = getBlob(ctx, objHandle)
+	}
+	if errno == 0 {
+		contentIndex, errno = longtaillib.ReadContentIndexFromBuffer(storedContentIndexData)
+		if errno != 0 {
+			return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
 
-	if err != nil {
+	if errno != 0 {
 		hashAPI := longtaillib.CreateBlake3HashAPI()
 		defer hashAPI.Dispose()
 
-		var errno int
 		contentIndex, errno = longtaillib.CreateContentIndexFromBlocks(
 			s.maxBlockSize,
 			s.maxChunksPerBlock,

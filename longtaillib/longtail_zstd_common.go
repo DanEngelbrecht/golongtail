@@ -7,5 +7,6 @@ package longtaillib
 // #include "longtail/lib/zstd/ext/common/fse_decompress.c"
 // #include "longtail/lib/zstd/ext/common/pool.c"
 // #include "longtail/lib/zstd/ext/common/threading.c"
+// #include "longtail/lib/zstd/ext/common/xxhash.c"
 // #include "longtail/lib/zstd/ext/common/zstd_common.c"
 import "C"

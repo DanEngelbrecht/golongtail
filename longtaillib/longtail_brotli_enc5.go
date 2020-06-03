@@ -1,6 +1,6 @@
 package longtaillib
 
-// #cgo CFLAGS: -g -std=gnu99 -m64 -pthread -msse4.1 -maes -O3
+// #cgo CFLAGS: -g -std=gnu99 -m64 -msse4.1 -maes -pthread -O3
 // #include "longtail/lib/brotli/ext/enc/encode.c"
 // #include "longtail/lib/brotli/ext/enc/encoder_dict.c"
 // #include "longtail/lib/brotli/ext/enc/entropy_encode.c"

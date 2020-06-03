@@ -86,7 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - Update to longtail v0.0.27
+           - Update to longtail v0.0.33
+           - Added retry logic when fetching store index from gcs
         draft: false
         prerelease: false
     - name: Download Linux artifacts

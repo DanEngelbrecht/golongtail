@@ -1,7 +1,6 @@
 package longtaillib
 
 // #cgo CFLAGS: -g -std=gnu99 -m64 -msse4.1 -maes -pthread -O3
-// #cgo LDFLAGS: -lm
 // #include "golongtail.h"
 import "C"
 import (
@@ -11,6 +10,7 @@ import (
 	"unsafe"
 )
 
+//-llongtail_win32_x64_debug.a
 const EPERM = 1       /* Not super-user */
 const ENOENT = 2      /* No such file or directory */
 const ESRCH = 3       /* No such process */

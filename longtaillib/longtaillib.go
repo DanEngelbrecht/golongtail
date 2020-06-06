@@ -439,6 +439,11 @@ func (contentIndex *Longtail_ContentIndex) GetMaxChunksPerBlock() uint32 {
 	return uint32(*contentIndex.cContentIndex.m_MaxChunksPerBlock)
 }
 
+func (contentIndex *Longtail_ContentIndex) GetChunkSizes() []uint32 {
+	size := int(*contentIndex.cContentIndex.m_ChunkCount)
+	return carray2slice32(contentIndex.cContentIndex.m_ChunkLengths, size)
+}
+
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }

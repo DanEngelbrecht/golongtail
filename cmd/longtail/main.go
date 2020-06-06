@@ -647,7 +647,7 @@ func hashIdentifierToString(hashIdentifier uint32) string {
 	return fmt.Sprintf("%d", hashIdentifier)
 }
 
-func showVersionIndex(versionIndexPath string) error {
+func showVersionIndex(versionIndexPath string, compact bool) error {
 
 	fileStorage, err := createFileStorageForURI(versionIndexPath)
 	if err != nil {
@@ -667,8 +667,10 @@ func showVersionIndex(versionIndexPath string) error {
 	var smallestChunkSize uint32
 	var largestChunkSize uint32
 	var averageChunkSize uint32
-	var totalSize uint64
-	totalSize = 0
+	var totalAssetSize uint64
+	var totalChunkSize uint64
+	totalAssetSize = 0
+	totalChunkSize = 0
 	chunkSizes := versionIndex.GetChunkSizes()
 	if len(chunkSizes) > 0 {
 		smallestChunkSize = uint32(chunkSizes[0])
@@ -685,27 +687,49 @@ func showVersionIndex(versionIndexPath string) error {
 		if chunkSize > largestChunkSize {
 			largestChunkSize = chunkSize
 		}
-		totalSize = totalSize + uint64(chunkSize)
+		totalChunkSize = totalChunkSize + uint64(chunkSize)
 	}
 	if len(chunkSizes) > 0 {
-		averageChunkSize = uint32(totalSize / uint64(len(chunkSizes)))
+		averageChunkSize = uint32(totalChunkSize / uint64(len(chunkSizes)))
 	} else {
 		averageChunkSize = 0
 	}
-	fmt.Printf("Version:             %d\n", versionIndex.GetVersion())
-	fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(versionIndex.GetHashIdentifier()))
-	fmt.Printf("Target Chunk Size:   %d\n", versionIndex.GetTargetChunkSize())
-	fmt.Printf("Asset Count:         %d   (%s)\n", versionIndex.GetAssetCount(), byteCountDecimal(uint64(versionIndex.GetAssetCount())))
-	fmt.Printf("Chunk Count:         %d   (%s)\n", versionIndex.GetChunkCount(), byteCountDecimal(uint64(versionIndex.GetChunkCount())))
-	fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalSize, byteCountBinary(totalSize))
-	fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
-	fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
-	fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+	assetSizes := versionIndex.GetAssetSizes()
+	for i := uint32(0); i < uint32(len(assetSizes)); i++ {
+		assetSize := uint64(assetSizes[i])
+		totalAssetSize = totalAssetSize + uint64(assetSize)
+	}
+
+	if compact {
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+			versionIndexPath,
+			versionIndex.GetVersion(),
+			hashIdentifierToString(versionIndex.GetHashIdentifier()),
+			versionIndex.GetTargetChunkSize(),
+			versionIndex.GetAssetCount(),
+			totalAssetSize,
+			versionIndex.GetChunkCount(),
+			totalChunkSize,
+			averageChunkSize,
+			smallestChunkSize,
+			largestChunkSize)
+	} else {
+		fmt.Printf("Version:             %d\n", versionIndex.GetVersion())
+		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(versionIndex.GetHashIdentifier()))
+		fmt.Printf("Target Chunk Size:   %d\n", versionIndex.GetTargetChunkSize())
+		fmt.Printf("Asset Count:         %d   (%s)\n", versionIndex.GetAssetCount(), byteCountDecimal(uint64(versionIndex.GetAssetCount())))
+		fmt.Printf("Asset Total Size:    %d   (%s)\n", totalAssetSize, byteCountBinary(totalAssetSize))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", versionIndex.GetChunkCount(), byteCountDecimal(uint64(versionIndex.GetChunkCount())))
+		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
+		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
+		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
+		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+	}
 
 	return nil
 }
 
-func showContentIndex(contentIndexPath string) error {
+func showContentIndex(contentIndexPath string, compact bool) error {
 
 	fileStorage, err := createFileStorageForURI(contentIndexPath)
 	if err != nil {
@@ -750,16 +774,31 @@ func showContentIndex(contentIndexPath string) error {
 	} else {
 		averageChunkSize = 0
 	}
-	fmt.Printf("Version:             %d\n", contentIndex.GetVersion())
-	fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(contentIndex.GetHashIdentifier()))
-	fmt.Printf("Max Block Size:      %d\n", contentIndex.GetMaxBlockSize())
-	fmt.Printf("Max Chunks Per Block %d\n", contentIndex.GetMaxChunksPerBlock())
-	fmt.Printf("Block Count:         %d   (%s)\n", contentIndex.GetBlockCount(), byteCountDecimal(uint64(contentIndex.GetBlockCount())))
-	fmt.Printf("Chunk Count:         %d   (%s)\n", contentIndex.GetChunkCount(), byteCountDecimal(uint64(contentIndex.GetChunkCount())))
-	fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
-	fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
-	fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
-	fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+	if compact {
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+			contentIndexPath,
+			contentIndex.GetVersion(),
+			hashIdentifierToString(contentIndex.GetHashIdentifier()),
+			contentIndex.GetMaxBlockSize(),
+			contentIndex.GetMaxChunksPerBlock(),
+			contentIndex.GetBlockCount(),
+			contentIndex.GetChunkCount(),
+			totalChunkSize,
+			averageChunkSize,
+			smallestChunkSize,
+			largestChunkSize)
+	} else {
+		fmt.Printf("Version:             %d\n", contentIndex.GetVersion())
+		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(contentIndex.GetHashIdentifier()))
+		fmt.Printf("Max Block Size:      %d\n", contentIndex.GetMaxBlockSize())
+		fmt.Printf("Max Chunks Per Block %d\n", contentIndex.GetMaxChunksPerBlock())
+		fmt.Printf("Block Count:         %d   (%s)\n", contentIndex.GetBlockCount(), byteCountDecimal(uint64(contentIndex.GetBlockCount())))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", contentIndex.GetChunkCount(), byteCountDecimal(uint64(contentIndex.GetChunkCount())))
+		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
+		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
+		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
+		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+	}
 
 	return nil
 }
@@ -804,11 +843,13 @@ var (
 	sourceFilePath      = commandDownSync.Flag("source-path", "Source file uri").Required().String()
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 
-	printVersionIndex = kingpin.Command("printVersionIndex", "Print info about a file")
-	versionIndexPath  = printVersionIndex.Arg("version-index-path", "Path to a version index file").Required().String()
+	printVersionIndex  = kingpin.Command("printVersionIndex", "Print info about a file")
+	versionIndexPath   = printVersionIndex.Arg("version-index-path", "Path to a version index file").Required().String()
+	compactVersionInfo = printVersionIndex.Flag("compact", "Show info in compact layout").Bool()
 
-	printContentIndex = kingpin.Command("printContentIndex", "Print info about a file")
-	contentIndexPath  = printContentIndex.Arg("content-index-path", "Path to a content index file").Required().String()
+	printContentIndex  = kingpin.Command("printContentIndex", "Print info about a file")
+	contentIndexPath   = printContentIndex.Arg("content-index-path", "Path to a content index file").Required().String()
+	compactContentInfo = printContentIndex.Flag("compact", "Show info in compact layout").Bool()
 )
 
 func main() {
@@ -863,12 +904,12 @@ func main() {
 			log.Fatal(err)
 		}
 	case printVersionIndex.FullCommand():
-		err := showVersionIndex(*versionIndexPath)
+		err := showVersionIndex(*versionIndexPath, *compactVersionInfo)
 		if err != nil {
 			log.Fatal(err)
 		}
 	case printContentIndex.FullCommand():
-		err := showContentIndex(*contentIndexPath)
+		err := showContentIndex(*contentIndexPath, *compactContentInfo)
 		if err != nil {
 			log.Fatal(err)
 		}

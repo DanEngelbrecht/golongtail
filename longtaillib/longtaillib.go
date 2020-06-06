@@ -495,6 +495,11 @@ func (versionIndex *Longtail_VersionIndex) GetChunkSizes() []uint32 {
 	return carray2slice32(versionIndex.cVersionIndex.m_ChunkSizes, size)
 }
 
+func (versionIndex *Longtail_VersionIndex) GetAssetSizes() []uint64 {
+	size := int(*versionIndex.cVersionIndex.m_AssetCount)
+	return carray2slice64(versionIndex.cVersionIndex.m_AssetSizes, size)
+}
+
 func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {
 	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_ChunkTags, size)

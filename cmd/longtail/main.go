@@ -284,6 +284,7 @@ func upSyncVersion(
 	sourceFolderPath string,
 	sourceIndexPath *string,
 	targetFilePath string,
+	localContentIndex *string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -362,6 +363,10 @@ func upSyncVersion(
 	}
 
 	var vindex longtaillib.Longtail_VersionIndex
+	defer vindex.Dispose()
+	var versionContentIndex longtaillib.Longtail_ContentIndex
+	defer versionContentIndex.Dispose()
+
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
@@ -392,6 +397,23 @@ func upSyncVersion(
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
+		if localContentIndex != nil {
+			rawVersionContentIndex, errno := longtaillib.CreateContentIndex(
+				hash,
+				vindex.GetChunkHashes(),
+				vindex.GetChunkSizes(),
+				compressionTypes,
+				targetBlockSize,
+				maxChunksPerBlock)
+			if errno != 0 {
+				return fmt.Errorf("upSyncVersion: longtaillib.CreateContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+			}
+			defer versionContentIndex.Dispose()
+			versionContentIndex, errno = longtaillib.RetargetContent(remoteContentIndex, rawVersionContentIndex)
+			if errno != 0 {
+				return fmt.Errorf("upSyncVersion: longtaillib.RetargetContent() failed with %s", longtaillib.ErrNoToDescription(errno))
+			}
+		}
 	} else {
 		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
 		if err != nil {
@@ -407,7 +429,6 @@ func upSyncVersion(
 			return fmt.Errorf("upSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
-	defer vindex.Dispose()
 
 	missingContentIndex, errno := longtaillib.CreateMissingContent(
 		hash,
@@ -441,15 +462,33 @@ func upSyncVersion(
 	if errno != 0 {
 		return fmt.Errorf("upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
-	fileStorage, err := createFileStorageForURI(targetFilePath)
+	verionIndexFileStorage, err := createFileStorageForURI(targetFilePath)
 	if err != nil {
 		return nil
 	}
-	defer fileStorage.Close()
-	err = fileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
+	defer verionIndexFileStorage.Close()
+	err = verionIndexFileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
 	if err != nil {
 		return err
 	}
+
+	if localContentIndex != nil {
+		cBuffer, errno := longtaillib.WriteContentIndexToBuffer(versionContentIndex)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.WriteContentIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+
+		versionContentIndexFileStorage, err := createFileStorageForURI(*localContentIndex)
+		if err != nil {
+			return nil
+		}
+		defer versionContentIndexFileStorage.Close()
+		err = versionContentIndexFileStorage.WriteToPath(context.Background(), *localContentIndex, cBuffer)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -814,13 +853,14 @@ var (
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
-	targetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	maxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	sourceFolderPath  = commandUpSync.Flag("source-path", "Source folder path").Required().String()
-	sourceIndexPath   = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath    = commandUpSync.Flag("target-path", "Target file uri").Required().String()
-	compression       = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	targetChunkSize        = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetBlockSize        = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	maxChunksPerBlock      = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	sourceFolderPath       = commandUpSync.Flag("source-path", "Source folder path").Required().String()
+	sourceIndexPath        = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	targetFilePath         = commandUpSync.Flag("target-path", "Target file uri").Required().String()
+	localContentTargetPath = commandUpSync.Flag("local-content-target-path", "Version local content index file uri").String()
+	compression            = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -878,6 +918,7 @@ func main() {
 			*sourceFolderPath,
 			sourceIndexPath,
 			*targetFilePath,
+			localContentTargetPath,
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,

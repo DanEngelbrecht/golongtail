@@ -439,6 +439,11 @@ func (contentIndex *Longtail_ContentIndex) GetMaxChunksPerBlock() uint32 {
 	return uint32(*contentIndex.cContentIndex.m_MaxChunksPerBlock)
 }
 
+func (contentIndex *Longtail_ContentIndex) GetChunkSizes() []uint32 {
+	size := int(*contentIndex.cContentIndex.m_ChunkCount)
+	return carray2slice32(contentIndex.cContentIndex.m_ChunkLengths, size)
+}
+
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }
@@ -488,6 +493,11 @@ func (versionIndex *Longtail_VersionIndex) GetChunkHashes() []uint64 {
 func (versionIndex *Longtail_VersionIndex) GetChunkSizes() []uint32 {
 	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_ChunkSizes, size)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetAssetSizes() []uint64 {
+	size := int(*versionIndex.cVersionIndex.m_AssetCount)
+	return carray2slice64(versionIndex.cVersionIndex.m_AssetSizes, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {

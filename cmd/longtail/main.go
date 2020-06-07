@@ -634,14 +634,183 @@ func downSyncVersion(
 	return nil
 }
 
+func hashIdentifierToString(hashIdentifier uint32) string {
+	if hashIdentifier == longtaillib.GetBlake2HashIdentifier() {
+		return "blake2"
+	}
+	if hashIdentifier == longtaillib.GetBlake3HashIdentifier() {
+		return "blake3"
+	}
+	if hashIdentifier == longtaillib.GetMeowHashIdentifier() {
+		return "meow"
+	}
+	return fmt.Sprintf("%d", hashIdentifier)
+}
+
+func showVersionIndex(versionIndexPath string, compact bool) error {
+
+	fileStorage, err := createFileStorageForURI(versionIndexPath)
+	if err != nil {
+		return nil
+	}
+	defer fileStorage.Close()
+	vbuffer, err := fileStorage.ReadFromPath(context.Background(), versionIndexPath)
+	if err != nil {
+		return err
+	}
+	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer versionIndex.Dispose()
+
+	var smallestChunkSize uint32
+	var largestChunkSize uint32
+	var averageChunkSize uint32
+	var totalAssetSize uint64
+	var totalChunkSize uint64
+	totalAssetSize = 0
+	totalChunkSize = 0
+	chunkSizes := versionIndex.GetChunkSizes()
+	if len(chunkSizes) > 0 {
+		smallestChunkSize = uint32(chunkSizes[0])
+		largestChunkSize = uint32(chunkSizes[0])
+	} else {
+		smallestChunkSize = 0
+		largestChunkSize = 0
+	}
+	for i := uint32(0); i < uint32(len(chunkSizes)); i++ {
+		chunkSize := uint32(chunkSizes[i])
+		if chunkSize < smallestChunkSize {
+			smallestChunkSize = chunkSize
+		}
+		if chunkSize > largestChunkSize {
+			largestChunkSize = chunkSize
+		}
+		totalChunkSize = totalChunkSize + uint64(chunkSize)
+	}
+	if len(chunkSizes) > 0 {
+		averageChunkSize = uint32(totalChunkSize / uint64(len(chunkSizes)))
+	} else {
+		averageChunkSize = 0
+	}
+	assetSizes := versionIndex.GetAssetSizes()
+	for i := uint32(0); i < uint32(len(assetSizes)); i++ {
+		assetSize := uint64(assetSizes[i])
+		totalAssetSize = totalAssetSize + uint64(assetSize)
+	}
+
+	if compact {
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+			versionIndexPath,
+			versionIndex.GetVersion(),
+			hashIdentifierToString(versionIndex.GetHashIdentifier()),
+			versionIndex.GetTargetChunkSize(),
+			versionIndex.GetAssetCount(),
+			totalAssetSize,
+			versionIndex.GetChunkCount(),
+			totalChunkSize,
+			averageChunkSize,
+			smallestChunkSize,
+			largestChunkSize)
+	} else {
+		fmt.Printf("Version:             %d\n", versionIndex.GetVersion())
+		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(versionIndex.GetHashIdentifier()))
+		fmt.Printf("Target Chunk Size:   %d\n", versionIndex.GetTargetChunkSize())
+		fmt.Printf("Asset Count:         %d   (%s)\n", versionIndex.GetAssetCount(), byteCountDecimal(uint64(versionIndex.GetAssetCount())))
+		fmt.Printf("Asset Total Size:    %d   (%s)\n", totalAssetSize, byteCountBinary(totalAssetSize))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", versionIndex.GetChunkCount(), byteCountDecimal(uint64(versionIndex.GetChunkCount())))
+		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
+		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
+		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
+		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+	}
+
+	return nil
+}
+
+func showContentIndex(contentIndexPath string, compact bool) error {
+
+	fileStorage, err := createFileStorageForURI(contentIndexPath)
+	if err != nil {
+		return nil
+	}
+	defer fileStorage.Close()
+	vbuffer, err := fileStorage.ReadFromPath(context.Background(), contentIndexPath)
+	if err != nil {
+		return err
+	}
+	contentIndex, errno := longtaillib.ReadContentIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer contentIndex.Dispose()
+
+	var smallestChunkSize uint32
+	var largestChunkSize uint32
+	var averageChunkSize uint32
+	var totalChunkSize uint64
+	totalChunkSize = 0
+	chunkSizes := contentIndex.GetChunkSizes()
+	if len(chunkSizes) > 0 {
+		smallestChunkSize = uint32(chunkSizes[0])
+		largestChunkSize = uint32(chunkSizes[0])
+	} else {
+		smallestChunkSize = 0
+		largestChunkSize = 0
+	}
+	for i := uint32(0); i < uint32(len(chunkSizes)); i++ {
+		chunkSize := uint32(chunkSizes[i])
+		if chunkSize < smallestChunkSize {
+			smallestChunkSize = chunkSize
+		}
+		if chunkSize > largestChunkSize {
+			largestChunkSize = chunkSize
+		}
+		totalChunkSize = totalChunkSize + uint64(chunkSize)
+	}
+	if len(chunkSizes) > 0 {
+		averageChunkSize = uint32(totalChunkSize / uint64(len(chunkSizes)))
+	} else {
+		averageChunkSize = 0
+	}
+	if compact {
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+			contentIndexPath,
+			contentIndex.GetVersion(),
+			hashIdentifierToString(contentIndex.GetHashIdentifier()),
+			contentIndex.GetMaxBlockSize(),
+			contentIndex.GetMaxChunksPerBlock(),
+			contentIndex.GetBlockCount(),
+			contentIndex.GetChunkCount(),
+			totalChunkSize,
+			averageChunkSize,
+			smallestChunkSize,
+			largestChunkSize)
+	} else {
+		fmt.Printf("Version:             %d\n", contentIndex.GetVersion())
+		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(contentIndex.GetHashIdentifier()))
+		fmt.Printf("Max Block Size:      %d\n", contentIndex.GetMaxBlockSize())
+		fmt.Printf("Max Chunks Per Block %d\n", contentIndex.GetMaxChunksPerBlock())
+		fmt.Printf("Block Count:         %d   (%s)\n", contentIndex.GetBlockCount(), byteCountDecimal(uint64(contentIndex.GetBlockCount())))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", contentIndex.GetChunkCount(), byteCountDecimal(uint64(contentIndex.GetChunkCount())))
+		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
+		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
+		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
+		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+	}
+
+	return nil
+}
+
 var (
 	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	storageURI         = kingpin.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
 	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 
 	commandUpSync = kingpin.Command("upsync", "Upload a folder")
+	upStorageURI  = commandUpSync.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
@@ -667,11 +836,20 @@ var (
 			"zstd_max")
 
 	commandDownSync     = kingpin.Command("downsync", "Download a folder")
+	downStorageURI      = commandDownSync.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
 	localCachePath      = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
 	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").Required().String()
 	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	sourceFilePath      = commandDownSync.Flag("source-path", "Source file uri").Required().String()
 	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
+
+	printVersionIndex  = kingpin.Command("printVersionIndex", "Print info about a file")
+	versionIndexPath   = printVersionIndex.Arg("version-index-path", "Path to a version index file").Required().String()
+	compactVersionInfo = printVersionIndex.Flag("compact", "Show info in compact layout").Bool()
+
+	printContentIndex  = kingpin.Command("printContentIndex", "Print info about a file")
+	contentIndexPath   = printContentIndex.Arg("content-index-path", "Path to a content index file").Required().String()
+	compactContentInfo = printContentIndex.Flag("compact", "Show info in compact layout").Bool()
 )
 
 func main() {
@@ -696,7 +874,7 @@ func main() {
 	switch kingpin.Parse() {
 	case commandUpSync.FullCommand():
 		err := upSyncVersion(
-			*storageURI,
+			*upStorageURI,
 			*sourceFolderPath,
 			sourceIndexPath,
 			*targetFilePath,
@@ -713,7 +891,7 @@ func main() {
 		}
 	case commandDownSync.FullCommand():
 		err := downSyncVersion(
-			*storageURI,
+			*downStorageURI,
 			*sourceFilePath,
 			*targetFolderPath,
 			targetIndexPath,
@@ -722,6 +900,16 @@ func main() {
 			includeFilterRegEx,
 			excludeFilterRegEx,
 			&stats)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case printVersionIndex.FullCommand():
+		err := showVersionIndex(*versionIndexPath, *compactVersionInfo)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case printContentIndex.FullCommand():
+		err := showContentIndex(*contentIndexPath, *compactContentInfo)
 		if err != nil {
 			log.Fatal(err)
 		}

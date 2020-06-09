@@ -10,7 +10,6 @@ import (
 	"unsafe"
 )
 
-//-llongtail_win32_x64_debug.a
 const EPERM = 1       /* Not super-user */
 const ENOENT = 2      /* No such file or directory */
 const ESRCH = 3       /* No such process */

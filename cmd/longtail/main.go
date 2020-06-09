@@ -97,6 +97,18 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_Con
 	a.wg.Done()
 }
 
+type retargetContentIndexCompletionAPI struct {
+	wg           sync.WaitGroup
+	contentIndex longtaillib.Longtail_ContentIndex
+	err          int
+}
+
+func (a *retargetContentIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_ContentIndex, err int) {
+	a.err = err
+	a.contentIndex = contentIndex
+	a.wg.Done()
+}
+
 func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
@@ -284,7 +296,7 @@ func upSyncVersion(
 	sourceFolderPath string,
 	sourceIndexPath *string,
 	targetFilePath string,
-	localContentIndex *string,
+	localContentIndexPath *string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -397,7 +409,7 @@ func upSyncVersion(
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
-		if localContentIndex != nil {
+		if localContentIndexPath != nil {
 			rawVersionContentIndex, errno := longtaillib.CreateContentIndex(
 				hash,
 				vindex.GetChunkHashes(),
@@ -409,10 +421,19 @@ func upSyncVersion(
 				return fmt.Errorf("upSyncVersion: longtaillib.CreateContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 			defer versionContentIndex.Dispose()
-			versionContentIndex, errno = longtaillib.RetargetContent(remoteContentIndex, rawVersionContentIndex)
+
+			retargetContentComplete := &retargetContentIndexCompletionAPI{}
+			retargetContentComplete.wg.Add(1)
+			errno = indexStore.RetargetContent(rawVersionContentIndex, longtaillib.CreateAsyncRetargetContentAPI(retargetContentComplete))
 			if errno != 0 {
-				return fmt.Errorf("upSyncVersion: longtaillib.RetargetContent() failed with %s", longtaillib.ErrNoToDescription(errno))
+				retargetContentComplete.wg.Done()
+				return fmt.Errorf("upSyncVersion: indexStore.RetargetContent: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 			}
+			retargetContentComplete.wg.Wait()
+			if retargetContentComplete.err != 0 {
+				return fmt.Errorf("upSyncVersion: indexStore.RetargetContent: Failed for `%s` failed with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+			}
+			versionContentIndex = retargetContentComplete.contentIndex
 		}
 	} else {
 		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
@@ -472,18 +493,18 @@ func upSyncVersion(
 		return err
 	}
 
-	if localContentIndex != nil {
+	if localContentIndexPath != nil {
 		cBuffer, errno := longtaillib.WriteContentIndexToBuffer(versionContentIndex)
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.WriteContentIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 
-		versionContentIndexFileStorage, err := createFileStorageForURI(*localContentIndex)
+		versionContentIndexFileStorage, err := createFileStorageForURI(*localContentIndexPath)
 		if err != nil {
 			return nil
 		}
 		defer versionContentIndexFileStorage.Close()
-		err = versionContentIndexFileStorage.WriteToPath(context.Background(), *localContentIndex, cBuffer)
+		err = versionContentIndexFileStorage.WriteToPath(context.Background(), *localContentIndexPath, cBuffer)
 		if err != nil {
 			return err
 		}

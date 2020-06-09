@@ -1,4 +1,4 @@
 package longtaillib
 
-// #cgo LDFLAGS: -L${SRCDIR} -l:longtail/longtail_darwin_x64.a -lm
+// #cgo LDFLAGS: -lm -L${SRCDIR}/longtail -llongtail_darwin_x64
 import "C"

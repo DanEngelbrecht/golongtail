@@ -420,7 +420,7 @@ func contentIndexWorker(
 
 	objHandle := bucket.Object(key)
 	storedContentIndexData, errno := getBlob(ctx, objHandle)
-	if errno == 0 {
+	if errno != 0 {
 		log.Printf("Retrying getBlob %s", key)
 		atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
 		storedContentIndexData, errno = getBlob(ctx, objHandle)

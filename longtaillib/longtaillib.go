@@ -1075,8 +1075,29 @@ func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Ver
 	return Longtail_VersionIndex{cVersionIndex: vindex}, 0
 }
 
-// CreateContentIndex ...
+// CreateContentIndex
 func CreateContentIndex(
+	hashAPI Longtail_HashAPI,
+	versionIndex Longtail_VersionIndex,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
+
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_CreateContentIndex(
+		hashAPI.cHashAPI,
+		versionIndex.cVersionIndex,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
+		&cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
+	}
+
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
+// CreateContentIndexRaw ...
+func CreateContentIndexRaw(
 	hashAPI Longtail_HashAPI,
 	chunkHashes []uint64,
 	chunkSizes []uint32,

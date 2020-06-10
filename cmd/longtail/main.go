@@ -109,6 +109,18 @@ func (a *retargetContentIndexCompletionAPI) OnComplete(contentIndex longtaillib.
 	a.wg.Done()
 }
 
+func retargetContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, contentIndex longtaillib.Longtail_ContentIndex) (longtaillib.Longtail_ContentIndex, int) {
+	retargetContentComplete := &retargetContentIndexCompletionAPI{}
+	retargetContentComplete.wg.Add(1)
+	errno := indexStore.RetargetContent(contentIndex, longtaillib.CreateAsyncRetargetContentAPI(retargetContentComplete))
+	if errno != 0 {
+		retargetContentComplete.wg.Done()
+		return longtaillib.Longtail_ContentIndex{}, errno
+	}
+	retargetContentComplete.wg.Wait()
+	return retargetContentComplete.contentIndex, retargetContentComplete.err
+}
+
 func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
@@ -296,7 +308,7 @@ func upSyncVersion(
 	sourceFolderPath string,
 	sourceIndexPath *string,
 	targetFilePath string,
-	localContentIndexPath *string,
+	versionContentIndexPath *string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -335,6 +347,8 @@ func upSyncVersion(
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
 
 	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, outFinalStats)
 	if err != nil {
@@ -345,34 +359,7 @@ func upSyncVersion(
 	indexStore := longtaillib.CreateCompressBlockStore(remoteStore, creg)
 	defer indexStore.Dispose()
 
-	getIndexComplete := &getIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
-	if errno != 0 {
-		getIndexComplete.wg.Done()
-		return fmt.Errorf("upSyncVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-	}
-	getIndexComplete.wg.Wait()
-	if getIndexComplete.err != 0 {
-		return fmt.Errorf("upSyncVersion: indexStore.GetIndex: Failed for `%s` failed with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-	}
-	remoteContentIndex := getIndexComplete.contentIndex
-
-	hashIdentifier := remoteContentIndex.GetHashIdentifier()
-	if hashIdentifier == 0 {
-		hashIdentifier, err = getHashIdentifier(hashAlgorithm)
-		if err != nil {
-			return err
-		}
-	}
-
-	hashRegistry := longtaillib.CreateFullHashRegistry()
-	defer hashRegistry.Dispose()
-
-	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
-	if errno != 0 {
-		return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
-	}
+	var hash longtaillib.Longtail_HashAPI
 
 	var vindex longtaillib.Longtail_VersionIndex
 	defer vindex.Dispose()
@@ -395,6 +382,16 @@ func upSyncVersion(
 		}
 		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
+		hashIdentifier, err := getHashIdentifier(hashAlgorithm)
+		if err != nil {
+			return err
+		}
+
+		hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
 		vindex, errno = longtaillib.CreateVersionIndex(
@@ -409,12 +406,10 @@ func upSyncVersion(
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
-		if localContentIndexPath != nil {
+		if versionContentIndexPath != nil {
 			rawVersionContentIndex, errno := longtaillib.CreateContentIndex(
 				hash,
-				vindex.GetChunkHashes(),
-				vindex.GetChunkSizes(),
-				compressionTypes,
+				vindex,
 				targetBlockSize,
 				maxChunksPerBlock)
 			if errno != 0 {
@@ -422,18 +417,10 @@ func upSyncVersion(
 			}
 			defer versionContentIndex.Dispose()
 
-			retargetContentComplete := &retargetContentIndexCompletionAPI{}
-			retargetContentComplete.wg.Add(1)
-			errno = indexStore.RetargetContent(rawVersionContentIndex, longtaillib.CreateAsyncRetargetContentAPI(retargetContentComplete))
+			versionContentIndex, errno = retargetContentIndexSync(indexStore, rawVersionContentIndex)
 			if errno != 0 {
-				retargetContentComplete.wg.Done()
-				return fmt.Errorf("upSyncVersion: indexStore.RetargetContent: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+				return fmt.Errorf("upSyncVersion: longtaillib.RetargetContent() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
-			retargetContentComplete.wg.Wait()
-			if retargetContentComplete.err != 0 {
-				return fmt.Errorf("upSyncVersion: indexStore.RetargetContent: Failed for `%s` failed with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-			}
-			versionContentIndex = retargetContentComplete.contentIndex
 		}
 	} else {
 		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
@@ -445,23 +432,43 @@ func upSyncVersion(
 		if err != nil {
 			return err
 		}
-		vindex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
+
+		hashIdentifier := vindex.GetHashIdentifier()
+
+		hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
 	}
 
-	missingContentIndex, errno := longtaillib.CreateMissingContent(
+	versionContentIndex, errno := longtaillib.CreateContentIndex(
 		hash,
-		remoteContentIndex,
+		vindex,
+		targetBlockSize,
+		maxChunksPerBlock)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.CreateContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer versionContentIndex.Dispose()
+
+	existingRemoteContentIndex, errno := retargetContentIndexSync(indexStore, versionContentIndex)
+
+	versionMissingContentIndex, errno := longtaillib.CreateMissingContent(
+		hash,
+		existingRemoteContentIndex,
 		vindex,
 		targetBlockSize,
 		maxChunksPerBlock)
 	if errno != 0 {
 		return fmt.Errorf("upSyncVersion: longtaillib.CreateMissingContent() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
-	defer missingContentIndex.Dispose()
-	if missingContentIndex.GetBlockCount() > 0 {
+	defer versionMissingContentIndex.Dispose()
+
+	if versionMissingContentIndex.GetBlockCount() > 0 {
 		writeContentProgress := longtaillib.CreateProgressAPI(&progressData{task: "Writing content blocks"})
 		defer writeContentProgress.Dispose()
 
@@ -470,8 +477,8 @@ func upSyncVersion(
 			indexStore,
 			jobs,
 			&writeContentProgress,
-			remoteContentIndex,
-			missingContentIndex,
+			existingRemoteContentIndex,
+			versionMissingContentIndex,
 			vindex,
 			sourceFolderPath)
 		if errno != 0 {
@@ -479,35 +486,42 @@ func upSyncVersion(
 		}
 	}
 
+	if versionContentIndexPath != nil {
+		versionLocalContentIndex, errno := longtaillib.MergeContentIndex(
+			existingRemoteContentIndex,
+			versionMissingContentIndex)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.MergeContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+		defer versionLocalContentIndex.Dispose()
+
+		versionContentIndexStorage, err := createFileStorageForURI(*versionContentIndexPath)
+		if err != nil {
+			return nil
+		}
+		defer versionContentIndexStorage.Close()
+		cbuffer, errno := longtaillib.WriteContentIndexToBuffer(versionLocalContentIndex)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: longtaillib.WriteContentIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+		err = versionContentIndexStorage.WriteToPath(context.Background(), *versionContentIndexPath, cbuffer)
+		if err != nil {
+			return err
+		}
+	}
+
 	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(vindex)
 	if errno != 0 {
 		return fmt.Errorf("upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
-	verionIndexFileStorage, err := createFileStorageForURI(targetFilePath)
+	versionIndexFileStorage, err := createFileStorageForURI(targetFilePath)
 	if err != nil {
 		return nil
 	}
-	defer verionIndexFileStorage.Close()
-	err = verionIndexFileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
+	defer versionIndexFileStorage.Close()
+	err = versionIndexFileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
 	if err != nil {
 		return err
-	}
-
-	if localContentIndexPath != nil {
-		cBuffer, errno := longtaillib.WriteContentIndexToBuffer(versionContentIndex)
-		if errno != 0 {
-			return fmt.Errorf("upSyncVersion: longtaillib.WriteContentIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
-		}
-
-		versionContentIndexFileStorage, err := createFileStorageForURI(*localContentIndexPath)
-		if err != nil {
-			return nil
-		}
-		defer versionContentIndexFileStorage.Close()
-		err = versionContentIndexFileStorage.WriteToPath(context.Background(), *localContentIndexPath, cBuffer)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -874,14 +888,14 @@ var (
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
-	targetChunkSize        = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize        = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	maxChunksPerBlock      = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	sourceFolderPath       = commandUpSync.Flag("source-path", "Source folder path").Required().String()
-	sourceIndexPath        = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath         = commandUpSync.Flag("target-path", "Target file uri").Required().String()
-	localContentTargetPath = commandUpSync.Flag("local-content-target-path", "Version local content index file uri").String()
-	compression            = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	targetChunkSize         = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	targetBlockSize         = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	maxChunksPerBlock       = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	sourceFolderPath        = commandUpSync.Flag("source-path", "Source folder path").Required().String()
+	sourceIndexPath         = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	targetFilePath          = commandUpSync.Flag("target-path", "Target file uri").Required().String()
+	versionContentIndexPath = commandUpSync.Flag("version-content-index-path", "Version local content index file uri").String()
+	compression             = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 				Default("zstd").
 				Enum(
 			"none",
@@ -939,7 +953,7 @@ func main() {
 			*sourceFolderPath,
 			sourceIndexPath,
 			*targetFilePath,
-			localContentTargetPath,
+			versionContentIndexPath,
 			*targetChunkSize,
 			*targetBlockSize,
 			*maxChunksPerBlock,

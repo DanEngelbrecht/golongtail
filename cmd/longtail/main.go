@@ -363,8 +363,6 @@ func upSyncVersion(
 
 	var vindex longtaillib.Longtail_VersionIndex
 	defer vindex.Dispose()
-	var versionContentIndex longtaillib.Longtail_ContentIndex
-	defer versionContentIndex.Dispose()
 
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
 		fileInfos, errno := longtaillib.GetFilesRecursively(
@@ -405,22 +403,6 @@ func upSyncVersion(
 			targetChunkSize)
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
-		}
-		if versionContentIndexPath != nil {
-			rawVersionContentIndex, errno := longtaillib.CreateContentIndex(
-				hash,
-				vindex,
-				targetBlockSize,
-				maxChunksPerBlock)
-			if errno != 0 {
-				return fmt.Errorf("upSyncVersion: longtaillib.CreateContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
-			}
-			defer versionContentIndex.Dispose()
-
-			versionContentIndex, errno = retargetContentIndexSync(indexStore, rawVersionContentIndex)
-			if errno != 0 {
-				return fmt.Errorf("upSyncVersion: longtaillib.RetargetContent() failed with %s", longtaillib.ErrNoToDescription(errno))
-			}
 		}
 	} else {
 		fileStorage, err := createFileStorageForURI(*sourceIndexPath)

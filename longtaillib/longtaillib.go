@@ -756,6 +756,11 @@ func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, int) {
 	return Longtail_StoredBlock{cStoredBlock: stored_block}, 0
 }
 
+func ValidateContent(contentIndex Longtail_ContentIndex, versionIndex Longtail_VersionIndex) int {
+	errno := C.Longtail_ValidateContent(contentIndex.cContentIndex, versionIndex.cVersionIndex)
+	return int(errno)
+}
+
 // CreateStoredBlock() ...
 func CreateStoredBlock(
 	blockHash uint64,

@@ -515,6 +515,9 @@ func downSyncVersion(
 	targetFolderPath string,
 	targetIndexPath *string,
 	localCachePath string,
+	targetChunkSize uint32,
+	targetBlockSize uint32,
+	maxChunksPerBlock uint32,
 	retainPermissions bool,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
@@ -573,20 +576,8 @@ func downSyncVersion(
 	indexStore := longtaillib.CreateShareBlockStore(compressBlockStore)
 	defer indexStore.Dispose()
 
-	getIndexComplete := &getIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
-	if errno != 0 {
-		getIndexComplete.wg.Done()
-		return fmt.Errorf("downSyncVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-	}
-	getIndexComplete.wg.Wait()
-	if getIndexComplete.err != 0 {
-		return fmt.Errorf("downSyncVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-	}
-	remoteContentIndex := getIndexComplete.contentIndex
-
-	var remoteVersionIndex longtaillib.Longtail_VersionIndex
+	errno := 0
+	var sourceVersionIndex longtaillib.Longtail_VersionIndex
 
 	{
 		fileStorage, err := createFileStorageForURI(sourceFilePath)
@@ -598,19 +589,14 @@ func downSyncVersion(
 		if err != nil {
 			return err
 		}
-		remoteVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		sourceVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 		if errno != 0 {
 			return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
-	defer remoteVersionIndex.Dispose()
+	defer sourceVersionIndex.Dispose()
 
-	hashIdentifier := remoteContentIndex.GetHashIdentifier()
-	if hashIdentifier == 0 {
-		hashIdentifier = remoteVersionIndex.GetHashIdentifier()
-	} else if remoteVersionIndex.GetHashIdentifier() != hashIdentifier {
-		return fmt.Errorf("downSyncVersion: Remote store hash algorithm (%d) does not match hash algorithm of version (%d)", remoteVersionIndex.GetHashIdentifier(), hashIdentifier)
-	}
+	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
@@ -620,7 +606,7 @@ func downSyncVersion(
 		return fmt.Errorf("downSyncVersion: longtaillib.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 
-	var localVersionIndex longtaillib.Longtail_VersionIndex
+	var targetVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
@@ -635,7 +621,7 @@ func downSyncVersion(
 
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
-		localVersionIndex, errno = longtaillib.CreateVersionIndex(
+		targetVersionIndex, errno = longtaillib.CreateVersionIndex(
 			fs,
 			hash,
 			jobs,
@@ -643,7 +629,7 @@ func downSyncVersion(
 			targetFolderPath,
 			fileInfos,
 			compressionTypes,
-			remoteVersionIndex.GetTargetChunkSize())
+			targetChunkSize)
 		if errno != 0 {
 			return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
@@ -657,18 +643,39 @@ func downSyncVersion(
 		if err != nil {
 			return err
 		}
-		localVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		targetVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 		if errno != 0 {
 			return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
-	defer localVersionIndex.Dispose()
+	defer targetVersionIndex.Dispose()
 
-	versionDiff, errno := longtaillib.CreateVersionDiff(localVersionIndex, remoteVersionIndex)
+	versionDiff, errno := longtaillib.CreateVersionDiff(targetVersionIndex, sourceVersionIndex)
 	if errno != 0 {
 		return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionDiff() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer versionDiff.Dispose()
+
+	sourceVersionContentIndex, errno := longtaillib.CreateContentIndex(
+		hash,
+		sourceVersionIndex,
+		targetBlockSize,
+		maxChunksPerBlock)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.CreateContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer sourceVersionContentIndex.Dispose()
+
+	retargettedVersionContentIndex, errno := retargetContentIndexSync(indexStore, sourceVersionContentIndex)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: indexStore.RetargetContent() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer retargettedVersionContentIndex.Dispose()
+
+	errno = longtaillib.ValidateContent(retargettedVersionContentIndex, sourceVersionIndex)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: indexStore.ValidateContent() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
 
 	changeVersionProgress := longtaillib.CreateProgressAPI(&progressData{task: "Updating version"})
 	defer changeVersionProgress.Dispose()
@@ -678,9 +685,9 @@ func downSyncVersion(
 		hash,
 		jobs,
 		&changeVersionProgress,
-		remoteContentIndex,
-		localVersionIndex,
-		remoteVersionIndex,
+		retargettedVersionContentIndex,
+		targetVersionIndex,
+		sourceVersionIndex,
 		versionDiff,
 		targetFolderPath,
 		retainPermissions)
@@ -701,6 +708,58 @@ func hashIdentifierToString(hashIdentifier uint32) string {
 		return "meow"
 	}
 	return fmt.Sprintf("%d", hashIdentifier)
+}
+
+func validateVersion(
+	blobStoreURI string,
+	versionIndexPath string) error {
+
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobs.Dispose()
+
+	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
+	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, nil)
+	if err != nil {
+		return err
+	}
+	defer indexStore.Dispose()
+
+	getIndexComplete := &getIndexCompletionAPI{}
+	getIndexComplete.wg.Add(1)
+	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
+	if errno != 0 {
+		getIndexComplete.wg.Done()
+		return fmt.Errorf("validateVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+	getIndexComplete.wg.Wait()
+	if getIndexComplete.err != 0 {
+		return fmt.Errorf("validateVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+	remoteContentIndex := getIndexComplete.contentIndex
+	defer remoteContentIndex.Dispose()
+
+	fileStorage, err := createFileStorageForURI(versionIndexPath)
+	if err != nil {
+		return nil
+	}
+	defer fileStorage.Close()
+	vbuffer, err := fileStorage.ReadFromPath(context.Background(), versionIndexPath)
+	if err != nil {
+		return err
+	}
+	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return fmt.Errorf("validateVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer versionIndex.Dispose()
+
+	errno = longtaillib.ValidateContent(remoteContentIndex, versionIndex)
+
+	if errno != 0 {
+		return fmt.Errorf("validateVersion: longtaillib.ValidateContent() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+
+	return nil
 }
 
 func showVersionIndex(versionIndexPath string, compact bool) error {
@@ -758,7 +817,7 @@ func showVersionIndex(versionIndexPath string, compact bool) error {
 
 	if compact {
 		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
-			versionIndexPath,
+			printVersionVersionIndexPath,
 			versionIndex.GetVersion(),
 			hashIdentifierToString(versionIndex.GetHashIdentifier()),
 			versionIndex.GetTargetChunkSize(),
@@ -866,13 +925,13 @@ var (
 	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 
 	commandUpSync = kingpin.Command("upsync", "Upload a folder")
-	upStorageURI  = commandUpSync.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
+	upStorageURI  = commandUpSync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
 	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
 			Default("blake3").
 			Enum("meow", "blake2", "blake3")
-	targetChunkSize         = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	targetBlockSize         = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	maxChunksPerBlock       = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	upSyncTargetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	upSyncTargetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	upSyncMaxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	sourceFolderPath        = commandUpSync.Flag("source-path", "Source folder path").Required().String()
 	sourceIndexPath         = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
 	targetFilePath          = commandUpSync.Flag("target-path", "Target file uri").Required().String()
@@ -892,20 +951,27 @@ var (
 			"zstd_min",
 			"zstd_max")
 
-	commandDownSync     = kingpin.Command("downsync", "Download a folder")
-	downStorageURI      = commandDownSync.Flag("storage-uri", "Storage URI (only GCS bucket URI supported)").Required().String()
-	localCachePath      = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
-	targetFolderPath    = commandDownSync.Flag("target-path", "Target folder path").Required().String()
-	targetIndexPath     = commandUpSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	sourceFilePath      = commandDownSync.Flag("source-path", "Source file uri").Required().String()
-	noRetainPermissions = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
+	commandDownSync           = kingpin.Command("downsync", "Download a folder")
+	downStorageURI            = commandDownSync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	localCachePath            = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
+	targetFolderPath          = commandDownSync.Flag("target-path", "Target folder path").Required().String()
+	targetIndexPath           = commandDownSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
+	sourceFilePath            = commandDownSync.Flag("source-path", "Source file uri").Required().String()
+	downSyncTargetChunkSize   = commandDownSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	downSyncTargetBlockSize   = commandDownSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	downSyncMaxChunksPerBlock = commandDownSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	noRetainPermissions       = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 
-	printVersionIndex  = kingpin.Command("printVersionIndex", "Print info about a file")
-	versionIndexPath   = printVersionIndex.Arg("version-index-path", "Path to a version index file").Required().String()
-	compactVersionInfo = printVersionIndex.Flag("compact", "Show info in compact layout").Bool()
+	commandValidate                 = kingpin.Command("validate", "Validate a version index against a content store")
+	validateVersionStorageURI       = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	validateVersionVersionIndexPath = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
+
+	printVersionIndex            = kingpin.Command("printVersionIndex", "Print info about a file")
+	printVersionVersionIndexPath = printVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
+	compactVersionInfo           = printVersionIndex.Flag("compact", "Show info in compact layout").Bool()
 
 	printContentIndex  = kingpin.Command("printContentIndex", "Print info about a file")
-	contentIndexPath   = printContentIndex.Arg("content-index-path", "Path to a content index file").Required().String()
+	contentIndexPath   = printContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
 	compactContentInfo = printContentIndex.Flag("compact", "Show info in compact layout").Bool()
 )
 
@@ -936,9 +1002,9 @@ func main() {
 			sourceIndexPath,
 			*targetFilePath,
 			versionContentIndexPath,
-			*targetChunkSize,
-			*targetBlockSize,
-			*maxChunksPerBlock,
+			*upSyncTargetChunkSize,
+			*upSyncTargetBlockSize,
+			*upSyncMaxChunksPerBlock,
 			compression,
 			hashing,
 			includeFilterRegEx,
@@ -954,6 +1020,9 @@ func main() {
 			*targetFolderPath,
 			targetIndexPath,
 			*localCachePath,
+			*downSyncTargetChunkSize,
+			*downSyncTargetBlockSize,
+			*downSyncMaxChunksPerBlock,
 			!(*noRetainPermissions),
 			includeFilterRegEx,
 			excludeFilterRegEx,
@@ -961,8 +1030,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+	case commandValidate.FullCommand():
+		err := validateVersion(*validateVersionStorageURI, *validateVersionVersionIndexPath)
+		if err != nil {
+			log.Fatal(err)
+		}
 	case printVersionIndex.FullCommand():
-		err := showVersionIndex(*versionIndexPath, *compactVersionInfo)
+		err := showVersionIndex(*printVersionVersionIndexPath, *compactVersionInfo)
 		if err != nil {
 			log.Fatal(err)
 		}

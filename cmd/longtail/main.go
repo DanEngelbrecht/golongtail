@@ -468,7 +468,11 @@ func upSyncVersion(
 		}
 	}
 
-	if versionContentIndexPath != nil {
+	// Explicitly close the block stores so they flush their index
+	indexStore.Dispose()
+	remoteStore.Dispose()
+
+	if versionContentIndexPath != nil && len(*versionContentIndexPath) > 0 {
 		versionLocalContentIndex, errno := longtaillib.MergeContentIndex(
 			existingRemoteContentIndex,
 			versionMissingContentIndex)

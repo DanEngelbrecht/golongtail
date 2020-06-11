@@ -361,7 +361,10 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 }
 
 func (fileInfos *Longtail_FileInfos) Dispose() {
-	C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
+	if fileInfos.cFileInfos != nil {
+		C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
+		fileInfos.cFileInfos = nil
+	}
 }
 
 func carray2slice64(array *C.uint64_t, len int) []uint64 {
@@ -419,7 +422,10 @@ func (contentIndex *Longtail_ContentIndex) IsValid() bool {
 }
 
 func (contentIndex *Longtail_ContentIndex) Dispose() {
-	C.Longtail_Free(unsafe.Pointer(contentIndex.cContentIndex))
+	if contentIndex.cContentIndex != nil {
+		C.Longtail_Free(unsafe.Pointer(contentIndex.cContentIndex))
+		contentIndex.cContentIndex = nil
+	}
 }
 
 func (contentIndex *Longtail_ContentIndex) GetVersion() uint32 {
@@ -461,7 +467,10 @@ func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
 }
 
 func (versionIndex *Longtail_VersionIndex) Dispose() {
-	C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))
+	if versionIndex.cVersionIndex != nil {
+		C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))
+		versionIndex.cVersionIndex = nil
+	}
 }
 
 func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
@@ -505,7 +514,10 @@ func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {
 }
 
 func (versionDiff *Longtail_VersionDiff) Dispose() {
-	C.Longtail_Free(unsafe.Pointer(versionDiff.cVersionDiff))
+	if versionDiff.cVersionDiff != nil {
+		C.Longtail_Free(unsafe.Pointer(versionDiff.cVersionDiff))
+		versionDiff.cVersionDiff = nil
+	}
 }
 
 // CreateFullHashRegistry ...
@@ -520,7 +532,10 @@ func CreateBlake3HashRegistry() Longtail_HashRegistryAPI {
 
 // Longtail_HashRegistryAPI ...
 func (hashRegistry *Longtail_HashRegistryAPI) Dispose() {
-	C.Longtail_DisposeAPI(&hashRegistry.cHashRegistryAPI.m_API)
+	if hashRegistry.cHashRegistryAPI != nil {
+		C.Longtail_DisposeAPI(&hashRegistry.cHashRegistryAPI.m_API)
+		hashRegistry.cHashRegistryAPI = nil
+	}
 }
 
 // Longtail_HashRegistryAPI ...
@@ -550,7 +565,10 @@ func CreateMeowHashAPI() Longtail_HashAPI {
 
 // Longtail_HashAPI.Dispose() ...
 func (hashAPI *Longtail_HashAPI) Dispose() {
-	C.Longtail_DisposeAPI(&hashAPI.cHashAPI.m_API)
+	if hashAPI.cHashAPI != nil {
+		C.Longtail_DisposeAPI(&hashAPI.cHashAPI.m_API)
+		hashAPI.cHashAPI = nil
+	}
 }
 
 // GetBlake2HashIdentifier() ...
@@ -617,7 +635,10 @@ func CreateShareBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_Bl
 
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
-	C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)
+	if blockStoreAPI.cBlockStoreAPI != nil {
+		C.Longtail_DisposeAPI(&blockStoreAPI.cBlockStoreAPI.m_API)
+		blockStoreAPI.cBlockStoreAPI = nil
+	}
 }
 
 //// PutStoredBlock() ...
@@ -726,11 +747,17 @@ func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
 }
 
 func (storedBlock *Longtail_StoredBlock) Dispose() {
-	C.Longtail_StoredBlock_Dispose(storedBlock.cStoredBlock)
+	if storedBlock.cStoredBlock != nil {
+		C.Longtail_StoredBlock_Dispose(storedBlock.cStoredBlock)
+		storedBlock.cStoredBlock = nil
+	}
 }
 
 func (blockIndex *Longtail_BlockIndex) Dispose() {
-	C.Longtail_Free(unsafe.Pointer(blockIndex.cBlockIndex))
+	if blockIndex.cBlockIndex != nil {
+		C.Longtail_Free(unsafe.Pointer(blockIndex.cBlockIndex))
+		blockIndex.cBlockIndex = nil
+	}
 }
 
 func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, int) {
@@ -821,7 +848,10 @@ func CreateInMemStorageAPI() Longtail_StorageAPI {
 
 // Longtail_StorageAPI.Dispose() ...
 func (storageAPI *Longtail_StorageAPI) Dispose() {
-	C.Longtail_DisposeAPI(&storageAPI.cStorageAPI.m_API)
+	if storageAPI.cStorageAPI != nil {
+		C.Longtail_DisposeAPI(&storageAPI.cStorageAPI.m_API)
+		storageAPI.cStorageAPI = nil
+	}
 }
 
 // CreateBrotliCompressionAPI ...
@@ -841,7 +871,10 @@ func CreateZStdCompressionAPI() Longtail_CompressionAPI {
 
 // Longtail_CompressionAPI.Dispose() ...
 func (compressionAPI *Longtail_CompressionAPI) Dispose() {
-	C.Longtail_DisposeAPI(&compressionAPI.cCompressionAPI.m_API)
+	if compressionAPI.cCompressionAPI != nil {
+		C.Longtail_DisposeAPI(&compressionAPI.cCompressionAPI.m_API)
+		compressionAPI.cCompressionAPI = nil
+	}
 }
 
 // CreateBikeshedJobAPI ...
@@ -851,12 +884,18 @@ func CreateBikeshedJobAPI(workerCount uint32, workerPriority int) Longtail_JobAP
 
 // Longtail_ProgressAPI.Dispose() ...
 func (progressAPI *Longtail_ProgressAPI) Dispose() {
-	C.Longtail_DisposeAPI(&progressAPI.cProgressAPI.m_API)
+	if progressAPI.cProgressAPI != nil {
+		C.Longtail_DisposeAPI(&progressAPI.cProgressAPI.m_API)
+		progressAPI.cProgressAPI = nil
+	}
 }
 
 // Longtail_JobAPI.Dispose() ...
 func (jobAPI *Longtail_JobAPI) Dispose() {
-	C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
+	if jobAPI.cJobAPI != nil {
+		C.Longtail_DisposeAPI(&jobAPI.cJobAPI.m_API)
+		jobAPI.cJobAPI = nil
+	}
 }
 
 // CreateFullCompressionRegistry ...
@@ -871,7 +910,10 @@ func CreateZStdCompressionRegistry() Longtail_CompressionRegistryAPI {
 
 // Longtail_CompressionRegistryAPI ...
 func (compressionRegistry *Longtail_CompressionRegistryAPI) Dispose() {
-	C.Longtail_DisposeAPI(&compressionRegistry.cCompressionRegistryAPI.m_API)
+	if compressionRegistry.cCompressionRegistryAPI != nil {
+		C.Longtail_DisposeAPI(&compressionRegistry.cCompressionRegistryAPI.m_API)
+		compressionRegistry.cCompressionRegistryAPI = nil
+	}
 }
 
 // GetNoCompressionType ...

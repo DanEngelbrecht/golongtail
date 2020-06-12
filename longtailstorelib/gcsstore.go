@@ -151,13 +151,11 @@ func putBlob(ctx context.Context, objHandle *storage.ObjectHandle, blob []byte) 
 	_, err := objWriter.Write(blob)
 	if err != nil {
 		objWriter.Close()
-		//		return errors.Wrap(err, s.String()+"/"+key)
 		return longtaillib.EIO
 	}
 
 	err = objWriter.Close()
 	if err != nil {
-		//		return errors.Wrap(err, s.String()+"/"+key)
 		return longtaillib.EIO
 	}
 

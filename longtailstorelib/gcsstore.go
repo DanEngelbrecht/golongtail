@@ -326,10 +326,6 @@ func updateRemoteContentIndex(
 	bucket *storage.BucketHandle,
 	prefix string,
 	addedContentIndex longtaillib.Longtail_ContentIndex) error {
-	storeBlob, errno := longtaillib.WriteContentIndexToBuffer(addedContentIndex)
-	if errno != 0 {
-		return fmt.Errorf("updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer() failed with error %s", longtaillib.ErrNoToDescription(errno))
-	}
 	key := prefix + "store.lci"
 	objHandle := bucket.Object(key)
 	for {
@@ -357,22 +353,50 @@ func updateRemoteContentIndex(
 				return fmt.Errorf("updateRemoteContentIndex: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 			defer remoteContentIndex.Dispose()
+
 			mergedContentIndex, errno := longtaillib.MergeContentIndex(remoteContentIndex, addedContentIndex)
 			if errno != 0 {
 				return fmt.Errorf("updateRemoteContentIndex: longtaillib.MergeContentIndex() failed with error %s", longtaillib.ErrNoToDescription(errno))
 			}
 			defer mergedContentIndex.Dispose()
 
-			storeBlob, errno = longtaillib.WriteContentIndexToBuffer(mergedContentIndex)
+			storeBlob, errno := longtaillib.WriteContentIndexToBuffer(mergedContentIndex)
 			if errno != 0 {
 				return fmt.Errorf("updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer() failed with error %s", longtaillib.ErrNoToDescription(errno))
 			}
+			writer := objHandle.If(writeCondition).NewWriter(ctx)
+			if writer == nil {
+				log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewWriter(ctx) returned nil, retrying")
+				continue
+			}
+
+			_, err = writer.Write(storeBlob)
+			if err != nil {
+				log.Printf("updateRemoteContentIndex: writer.Write(storeBlob) failed with %q", err)
+				writer.CloseWithError(err)
+				return err
+			}
+			writer.Close()
+
+			_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
+			if err != nil {
+				log.Printf("updateRemoteContentIndex: objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: \"application/octet-stream\"}) failed with %q", err)
+				return err
+			}
+			return nil
 		}
+
+		storeBlob, errno := longtaillib.WriteContentIndexToBuffer(addedContentIndex)
+		if errno != 0 {
+			return fmt.Errorf("updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer() failed with error %s", longtaillib.ErrNoToDescription(errno))
+		}
+
 		writer := objHandle.If(writeCondition).NewWriter(ctx)
 		if writer == nil {
 			log.Printf("updateRemoteContentIndex: objHandle.If(writeCondition).NewWriter(ctx) returned nil, retrying")
 			continue
 		}
+
 		_, err := writer.Write(storeBlob)
 		if err != nil {
 			log.Printf("updateRemoteContentIndex: writer.Write(storeBlob) failed with %q", err)
@@ -380,12 +404,13 @@ func updateRemoteContentIndex(
 			return err
 		}
 		writer.Close()
+
 		_, err = objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 		if err != nil {
 			log.Printf("updateRemoteContentIndex: objHandle.Update(ctx, storage.ObjectAttrsToUpdate{ContentType: \"application/octet-stream\"}) failed with %q", err)
 			return err
 		}
-		break
+		return nil
 	}
 	return nil
 }
@@ -518,6 +543,24 @@ func contentIndexWorker(
 
 	if addedContentIndex.GetBlockCount() > 0 {
 		err := updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+		if err != nil {
+			log.Printf("Retrying store index to %s", s.prefix)
+			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			err = updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+		}
+		if err != nil {
+			log.Printf("Retrying 500 ms delayed store index to %s", s.prefix)
+			time.Sleep(500 * time.Millisecond)
+			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			err = updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+		}
+		if err != nil {
+			log.Printf("Retrying 2 s delayed store index to %s", s.prefix)
+			time.Sleep(2 * time.Second)
+			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			err = updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+		}
+
 		if err != nil {
 			return fmt.Errorf("WARNING: Failed to write store content index failed with %q", err)
 		}

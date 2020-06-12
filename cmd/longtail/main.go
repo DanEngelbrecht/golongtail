@@ -438,6 +438,7 @@ func upSyncVersion(
 	defer versionContentIndex.Dispose()
 
 	existingRemoteContentIndex, errno := retargetContentIndexSync(indexStore, versionContentIndex)
+	defer existingRemoteContentIndex.Dispose()
 
 	versionMissingContentIndex, errno := longtaillib.CreateMissingContent(
 		hash,

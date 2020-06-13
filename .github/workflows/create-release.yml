@@ -87,10 +87,11 @@ jobs:
         body: |
           Changes in this Release
            - *UPDATED* Update to longtail v0.0.37.
+           - *CHANGED* Using pre-build static library from longtail release (AVX2 and AVX512 enabled in Blake3)
            - *CHANGED* upsync now uses RetargetContent on block store for better block organization for new blocks
            - *CHANGED* explictly flush block stores before writing version index
            - *CHANGED* added retry logic when storing GCS content index
-           - *ADDED*  printVersionIndex` command line function to print info about a version index
+           - *ADDED* `printVersionIndex` command line function to print info about a version index
            - *ADDED* `printContentIndex` command line function to print info about a content index
            - *ADDED* `--version-content-index-path` option for upsync to create a content index covering just the version
            - *ADDED* `validate` command to verify that a version index can find all its content in a store

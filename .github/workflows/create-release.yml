@@ -87,7 +87,6 @@ jobs:
         body: |
           Changes in this Release
            - *UPDATED* Update to longtail v0.0.37.
-           - *CHANGED* longtail is now linked statically with no .c files to compile. This enables AVX2 and AVX512 blake3 path.
            - *CHANGED* upsync now uses RetargetContent on block store for better block organization for new blocks
            - *CHANGED* explictly flush block stores before writing version index
            - *CHANGED* added retry logic when storing GCS content index
@@ -96,7 +95,7 @@ jobs:
            - *ADDED* `--version-content-index-path` option for upsync to create a content index covering just the version
            - *ADDED* `validate` command to verify that a version index can find all its content in a store
            - *FIXED* removed redundant retry logic for GCS index fetch
-           - *FIXED* errors in GCS block store now propagates properly instead of just log and silence
+           - *FIXED* errors in GCS block store now propagates properly instead of just log and silence pass
            - *FIXED* better logic for bundling missing content into blocks to reduce duplication of block data
         draft: false
         prerelease: false

@@ -72,8 +72,6 @@ type fsBlockStore struct {
 	stopChan            chan fsStopMessage
 
 	workerWaitGroup sync.WaitGroup
-
-	stats longtaillib.BlockStoreStats
 }
 
 // String() ...

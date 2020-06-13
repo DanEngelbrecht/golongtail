@@ -72,8 +72,6 @@ type fsBlockStore struct {
 	stopChan            chan fsStopMessage
 
 	workerWaitGroup sync.WaitGroup
-
-	stats longtaillib.BlockStoreStats
 }
 
 // String() ...
@@ -189,7 +187,7 @@ func (s *fsBlockStore) RetargetContent(
 
 // GetStats ...
 func (s *fsBlockStore) GetStats() (longtaillib.BlockStoreStats, int) {
-	return s.stats, 0
+	return s.fsBlockStore.GetStats()
 }
 
 // Close ...

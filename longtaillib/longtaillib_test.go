@@ -704,9 +704,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	defer versionIndex.Dispose()
 	contentIndex, errno := CreateContentIndex(
 		hashAPI,
-		versionIndex.GetChunkHashes(),
-		versionIndex.GetChunkSizes(),
-		versionIndex.GetChunkTags(),
+		versionIndex,
 		32768*2,
 		8)
 	if errno != 0 {
@@ -829,7 +827,7 @@ func TestCreateContentIndex(t *testing.T) {
 	compressionTypes := make([]uint32, 2)
 	compressionTypes[0] = GetZStdDefaultCompressionType()
 	compressionTypes[1] = GetZStdDefaultCompressionType()
-	contentIndex, errno := CreateContentIndex(
+	contentIndex, errno := CreateContentIndexRaw(
 		hashAPI,
 		chunkHashes,
 		chunkSizes,
@@ -877,9 +875,7 @@ func TestRewriteVersion(t *testing.T) {
 
 	contentIndex, errno := CreateContentIndex(
 		hashAPI,
-		versionIndex.GetChunkHashes(),
-		versionIndex.GetChunkSizes(),
-		versionIndex.GetChunkTags(),
+		versionIndex,
 		65536,
 		4096)
 	if errno != 0 {

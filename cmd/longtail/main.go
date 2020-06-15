@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/url"
 	"os"
-	"path"
 	"regexp"
 	"runtime"
 	"strings"
@@ -520,7 +519,7 @@ func downSyncVersion(
 	sourceFilePath string,
 	targetFolderPath string,
 	targetIndexPath *string,
-	localCachePath string,
+	localCachePath *string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -570,16 +569,26 @@ func downSyncVersion(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	localIndexStore := longtaillib.CreateFSBlockStore(localFS, localCachePath, 8388608, 1024)
-	defer localIndexStore.Dispose()
+	var localIndexStore longtaillib.Longtail_BlockStoreAPI
+	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
+	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
+	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	cacheBlockStore := longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
+	if localCachePath != nil {
+		localIndexStore = longtaillib.CreateFSBlockStore(localFS, *localCachePath, 8388608, 1024)
+
+		cacheBlockStore = longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
+
+		compressBlockStore = longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
+	} else {
+		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
+	}
+
 	defer cacheBlockStore.Dispose()
-
-	compressBlockStore := longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
+	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	indexStore := longtaillib.CreateShareBlockStore(compressBlockStore)
+	indexStore = longtaillib.CreateShareBlockStore(compressBlockStore)
 	defer indexStore.Dispose()
 
 	errno := 0
@@ -823,7 +832,7 @@ func showVersionIndex(versionIndexPath string, compact bool) error {
 
 	if compact {
 		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
-			printVersionVersionIndexPath,
+			versionIndexPath,
 			versionIndex.GetVersion(),
 			hashIdentifierToString(versionIndex.GetHashIdentifier()),
 			versionIndex.GetTargetChunkSize(),
@@ -924,27 +933,31 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
+func listVersionIndex(commandListVersionIndexPath string) error {
+	return nil
+}
+
 var (
 	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
 	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 
-	commandUpSync = kingpin.Command("upsync", "Upload a folder")
-	upStorageURI  = commandUpSync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
-	hashing       = commandUpSync.Flag("hash-algorithm", "Hashing algorithm: blake2, blake3, meow").
-			Default("blake3").
-			Enum("meow", "blake2", "blake3")
-	upSyncTargetChunkSize   = commandUpSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	upSyncTargetBlockSize   = commandUpSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	upSyncMaxChunksPerBlock = commandUpSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	sourceFolderPath        = commandUpSync.Flag("source-path", "Source folder path").Required().String()
-	sourceIndexPath         = commandUpSync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	targetFilePath          = commandUpSync.Flag("target-path", "Target file uri").Required().String()
-	versionContentIndexPath = commandUpSync.Flag("version-content-index-path", "Version local content index file uri").String()
-	compression             = commandUpSync.Flag("compression-algorithm", "Compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
-				Default("zstd").
-				Enum(
+	commandUpsync           = kingpin.Command("upsync", "Upload a folder")
+	commandUpsyncStorageURI = commandUpsync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandUpsyncHashing    = commandUpsync.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
+				Default("blake3").
+				Enum("meow", "blake2", "blake3")
+	commandUpsyncTargetChunkSize         = commandUpsync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	commandUpsyncTargetBlockSize         = commandUpsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	commandUpsyncMaxChunksPerBlock       = commandUpsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	commandUpsyncSourcePath              = commandUpsync.Flag("source-path", "Source folder path").Required().String()
+	commandUpsyncSourceIndexPath         = commandUpsync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	commandUpsyncTargetPath              = commandUpsync.Flag("target-path", "Target file uri").Required().String()
+	commandUpsyncVersionContentIndexPath = commandUpsync.Flag("version-content-index-path", "Version local content index file uri").String()
+	commandUpsyncCompression             = commandUpsync.Flag("commandUpsyncCompression-algorithm", "commandUpsyncCompression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+						Default("zstd").
+						Enum(
 			"none",
 			"brotli",
 			"brotli_min",
@@ -957,28 +970,31 @@ var (
 			"zstd_min",
 			"zstd_max")
 
-	commandDownSync           = kingpin.Command("downsync", "Download a folder")
-	downStorageURI            = commandDownSync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
-	localCachePath            = commandDownSync.Flag("cache-path", "Location for cached blocks").Default(path.Join(os.TempDir(), "longtail_block_store")).String()
-	targetFolderPath          = commandDownSync.Flag("target-path", "Target folder path").Required().String()
-	targetIndexPath           = commandDownSync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	sourceFilePath            = commandDownSync.Flag("source-path", "Source file uri").Required().String()
-	downSyncTargetChunkSize   = commandDownSync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	downSyncTargetBlockSize   = commandDownSync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	downSyncMaxChunksPerBlock = commandDownSync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	noRetainPermissions       = commandDownSync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
+	commandDownsync                    = kingpin.Command("downsync", "Download a folder")
+	commandDownsyncStorageURI          = commandDownsync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandDownsyncCachePath           = commandDownsync.Flag("cache-path", "Location for cached blocks").String()
+	commandDownsyncTargetPath          = commandDownsync.Flag("target-path", "Target folder path").Required().String()
+	commandDownsyncTargetIndexPath     = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
+	commandDownsyncSourcePath          = commandDownsync.Flag("source-path", "Source file uri").Required().String()
+	commandDownsyncTargetChunkSize     = commandDownsync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	commandDownsyncTargetBlockSize     = commandDownsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	commandDownsyncMaxChunksPerBlock   = commandDownsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	commandDownsyncNoRetainPermissions = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 
 	commandValidate                 = kingpin.Command("validate", "Validate a version index against a content store")
-	validateVersionStorageURI       = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
-	validateVersionVersionIndexPath = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandValidateStorageURI       = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandValidateVersionIndexPath = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
 
-	printVersionIndex            = kingpin.Command("printVersionIndex", "Print info about a file")
-	printVersionVersionIndexPath = printVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
-	compactVersionInfo           = printVersionIndex.Flag("compact", "Show info in compact layout").Bool()
+	commandPrintVersionIndex        = kingpin.Command("commandPrintVersionIndex", "Print info about a file")
+	commandPrintVersionIndexPath    = commandPrintVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandPrintVersionIndexCompact = commandPrintVersionIndex.Flag("compact", "Show info in compact layout").Bool()
 
-	printContentIndex  = kingpin.Command("printContentIndex", "Print info about a file")
-	contentIndexPath   = printContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
-	compactContentInfo = printContentIndex.Flag("compact", "Show info in compact layout").Bool()
+	commandPrintContentIndex        = kingpin.Command("commandPrintContentIndex", "Print info about a file")
+	commandPrintContentIndexPath    = commandPrintContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
+	commandPrintContentIndexCompact = commandPrintContentIndex.Flag("compact", "Show info in compact layout").Bool()
+
+	commandList                 = kingpin.Command("ls", "List the asset paths inside a version index")
+	commandListVersionIndexPath = commandList.Flag("version-index-path", "Path to a version index file").Required().String()
 )
 
 func main() {
@@ -1001,35 +1017,35 @@ func main() {
 	var stats longtaillib.BlockStoreStats
 
 	switch kingpin.Parse() {
-	case commandUpSync.FullCommand():
+	case commandUpsync.FullCommand():
 		err := upSyncVersion(
-			*upStorageURI,
-			*sourceFolderPath,
-			sourceIndexPath,
-			*targetFilePath,
-			versionContentIndexPath,
-			*upSyncTargetChunkSize,
-			*upSyncTargetBlockSize,
-			*upSyncMaxChunksPerBlock,
-			compression,
-			hashing,
+			*commandUpsyncStorageURI,
+			*commandUpsyncSourcePath,
+			commandUpsyncSourceIndexPath,
+			*commandUpsyncTargetPath,
+			commandUpsyncVersionContentIndexPath,
+			*commandUpsyncTargetChunkSize,
+			*commandUpsyncTargetBlockSize,
+			*commandUpsyncMaxChunksPerBlock,
+			commandUpsyncCompression,
+			commandUpsyncHashing,
 			includeFilterRegEx,
 			excludeFilterRegEx,
 			&stats)
 		if err != nil {
 			log.Fatal(err)
 		}
-	case commandDownSync.FullCommand():
+	case commandDownsync.FullCommand():
 		err := downSyncVersion(
-			*downStorageURI,
-			*sourceFilePath,
-			*targetFolderPath,
-			targetIndexPath,
-			*localCachePath,
-			*downSyncTargetChunkSize,
-			*downSyncTargetBlockSize,
-			*downSyncMaxChunksPerBlock,
-			!(*noRetainPermissions),
+			*commandDownsyncStorageURI,
+			*commandDownsyncSourcePath,
+			*commandDownsyncTargetPath,
+			commandDownsyncTargetIndexPath,
+			commandDownsyncCachePath,
+			*commandDownsyncTargetChunkSize,
+			*commandDownsyncTargetBlockSize,
+			*commandDownsyncMaxChunksPerBlock,
+			!(*commandDownsyncNoRetainPermissions),
 			includeFilterRegEx,
 			excludeFilterRegEx,
 			&stats)
@@ -1037,17 +1053,22 @@ func main() {
 			log.Fatal(err)
 		}
 	case commandValidate.FullCommand():
-		err := validateVersion(*validateVersionStorageURI, *validateVersionVersionIndexPath)
+		err := validateVersion(*commandValidateStorageURI, *commandValidateVersionIndexPath)
 		if err != nil {
 			log.Fatal(err)
 		}
-	case printVersionIndex.FullCommand():
-		err := showVersionIndex(*printVersionVersionIndexPath, *compactVersionInfo)
+	case commandPrintVersionIndex.FullCommand():
+		err := showVersionIndex(*commandPrintVersionIndexPath, *commandPrintVersionIndexCompact)
 		if err != nil {
 			log.Fatal(err)
 		}
-	case printContentIndex.FullCommand():
-		err := showContentIndex(*contentIndexPath, *compactContentInfo)
+	case commandPrintContentIndex.FullCommand():
+		err := showContentIndex(*commandPrintContentIndexPath, *commandPrintContentIndexCompact)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandList.FullCommand():
+		err := listVersionIndex(*commandListVersionIndexPath)
 		if err != nil {
 			log.Fatal(err)
 		}

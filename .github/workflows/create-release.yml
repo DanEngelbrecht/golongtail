@@ -87,6 +87,7 @@ jobs:
         body: |
           Changes in this Release
            - *UPDATED* Update to longtail v0.0.38.
+           - *FIXED* `downsync --source-index-path` now reads version index correctly
         draft: false
         prerelease: false
     - name: Download Linux artifacts

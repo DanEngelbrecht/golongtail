@@ -86,18 +86,10 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATED* Update to longtail v0.0.37.
-           - *CHANGED* Using pre-build static library from longtail release (AVX2 and AVX512 enabled in Blake3)
-           - *CHANGED* upsync now uses RetargetContent on block store for better block organization for new blocks
-           - *CHANGED* explictly flush block stores before writing version index
-           - *CHANGED* added retry logic when storing GCS content index
-           - *ADDED* `printVersionIndex` command line function to print info about a version index
-           - *ADDED* `printContentIndex` command line function to print info about a content index
-           - *ADDED* `--version-content-index-path` option for upsync to create a content index covering just the version
-           - *ADDED* `validate` command to verify that a version index can find all its content in a store
-           - *FIXED* removed redundant retry logic for GCS index fetch
-           - *FIXED* errors in GCS block store now propagates properly instead of just log and silence pass
-           - *FIXED* better logic for bundling missing content into blocks to reduce duplication of block data
+           - *CHANGED* Excluding `--cache-path` with downsync will not disable local cache
+           - *UPDATED* Update to longtail v0.0.38.
+           - *FIXED* `downsync --source-index-path` now reads version index correctly
+           - *ADDED* `ls` command to list assets in version index
         draft: false
         prerelease: false
     - name: Download Linux artifacts

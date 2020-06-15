@@ -414,7 +414,8 @@ func upSyncVersion(
 		if err != nil {
 			return err
 		}
-		vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		var errno int
+		vindex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}

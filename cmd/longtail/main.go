@@ -933,7 +933,29 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
-func listVersionIndex(commandListVersionIndexPath string) error {
+func listVersionIndex(versionIndexPath string) error {
+	fileStorage, err := createFileStorageForURI(versionIndexPath)
+	if err != nil {
+		return nil
+	}
+	defer fileStorage.Close()
+	vbuffer, err := fileStorage.ReadFromPath(context.Background(), versionIndexPath)
+	if err != nil {
+		return err
+	}
+	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer versionIndex.Dispose()
+
+	assetCount := versionIndex.GetAssetCount()
+
+	for i := uint32(0); i < assetCount; i++ {
+		path := versionIndex.GetAssetPath(i)
+		fmt.Printf("%s\n", path)
+	}
+
 	return nil
 }
 

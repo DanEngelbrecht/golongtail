@@ -193,3 +193,8 @@ static struct Longtail_AsyncRetargetContentAPI* CreateAsyncRetargetContentAPI(vo
         AsyncRetargetContentAPIProxy_Dispose,
         AsyncRetargetContentAPIProxy_OnComplete);
 }
+
+static const char* GetVersionIndexPath(struct Longtail_VersionIndex* version_index, uint32_t asset_index)
+{
+    return &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];
+}

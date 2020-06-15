@@ -86,8 +86,10 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+           - *CHANGED* Excluding `--cache-path` with downsync will not disable local cache
            - *UPDATED* Update to longtail v0.0.38.
            - *FIXED* `downsync --source-index-path` now reads version index correctly
+           - *ADDED* `ls` command to list assets in version index
         draft: false
         prerelease: false
     - name: Download Linux artifacts

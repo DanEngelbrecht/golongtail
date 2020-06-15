@@ -494,6 +494,16 @@ func (versionIndex *Longtail_VersionIndex) GetAssetPath(assetIndex uint32) strin
 	return C.GoString(cPath)
 }
 
+func (versionIndex *Longtail_VersionIndex) GetAssetSize(assetIndex uint32) uint64 {
+	cSize := C.GetVersionAssetSize(versionIndex.cVersionIndex, C.uint32_t(assetIndex))
+	return uint64(cSize)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetAssetPermissions(assetIndex uint32) uint16 {
+	cPermissions := C.GetVersionAssetPermissions(versionIndex.cVersionIndex, C.uint32_t(assetIndex))
+	return uint16(cPermissions)
+}
+
 func (versionIndex *Longtail_VersionIndex) GetChunkCount() uint32 {
 	return uint32(*versionIndex.cVersionIndex.m_ChunkCount)
 }

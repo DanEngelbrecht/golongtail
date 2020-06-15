@@ -933,7 +933,7 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
-func listVersionIndex(versionIndexPath string) error {
+func listVersionIndex(versionIndexPath string, showDetails bool) error {
 	fileStorage, err := createFileStorageForURI(versionIndexPath)
 	if err != nil {
 		return nil
@@ -951,9 +951,83 @@ func listVersionIndex(versionIndexPath string) error {
 
 	assetCount := versionIndex.GetAssetCount()
 
+	var biggestAsset uint64
+	biggestAsset = 0
+	for i := uint32(0); i < assetCount; i++ {
+		assetSize := versionIndex.GetAssetSize(i)
+		if assetSize > biggestAsset {
+			biggestAsset = assetSize
+		}
+	}
+
+	sizePadding := len(fmt.Sprintf("%d", biggestAsset))
+
 	for i := uint32(0); i < assetCount; i++ {
 		path := versionIndex.GetAssetPath(i)
-		fmt.Printf("%s\n", path)
+		if showDetails {
+			assetSize := versionIndex.GetAssetSize(i)
+			sizeString := fmt.Sprintf("%d", assetSize)
+			sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
+			permissions := versionIndex.GetAssetPermissions(i)
+			bits := ""
+			if strings.HasSuffix(path, "/") {
+				bits += "d"
+				path = strings.TrimRight(path, "/")
+			} else {
+				bits += "-"
+			}
+			if (permissions & 0400) == 0 {
+				bits += "-"
+			} else {
+				bits += "r"
+			}
+			if (permissions & 0200) == 0 {
+				bits += "-"
+			} else {
+				bits += "w"
+			}
+			if (permissions & 0100) == 0 {
+				bits += "-"
+			} else {
+				bits += "x"
+			}
+
+			if (permissions & 0040) == 0 {
+				bits += "-"
+			} else {
+				bits += "r"
+			}
+			if (permissions & 0020) == 0 {
+				bits += "-"
+			} else {
+				bits += "w"
+			}
+			if (permissions & 0010) == 0 {
+				bits += "-"
+			} else {
+				bits += "x"
+			}
+
+			if (permissions & 0004) == 0 {
+				bits += "-"
+			} else {
+				bits += "r"
+			}
+			if (permissions & 0002) == 0 {
+				bits += "-"
+			} else {
+				bits += "w"
+			}
+			if (permissions & 0001) == 0 {
+				bits += "-"
+			} else {
+				bits += "x"
+			}
+
+			fmt.Printf("%s %s %s\n", bits, sizeString, path)
+		} else {
+			fmt.Printf("%s\n", path)
+		}
 	}
 
 	return nil
@@ -1017,6 +1091,7 @@ var (
 
 	commandList                 = kingpin.Command("ls", "List the asset paths inside a version index")
 	commandListVersionIndexPath = commandList.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandListDetails          = commandList.Flag("details", "Show details about assets").Bool()
 )
 
 func main() {
@@ -1090,7 +1165,7 @@ func main() {
 			log.Fatal(err)
 		}
 	case commandList.FullCommand():
-		err := listVersionIndex(*commandListVersionIndexPath)
+		err := listVersionIndex(*commandListVersionIndexPath, *commandListDetails)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -104,6 +104,12 @@ jobs:
       with:
         name: dist-win32-x64
         path: dist-win32-x64
+
+    - name: rename artifacts
+      run: |
+        mv dist-linux-x64/longtail longtail-linux-x64
+        mv dist-macos-x64/longtail longtail-macos-x64
+        mv dist-win32-x64/longtail.exe longtail-win32-x64.exe
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:
@@ -123,8 +129,8 @@ jobs:
           win32-x64.zip
           linux-x64.zip
           macos-x64.zip
-          dist-win32-x64/longtail.exe
-          dist-macos-x64/longtail
-          dist-linux-x64/longtail
+          longtail-linux-x64
+          longtail-macos-x64
+          longtail-win32-x64.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -32,7 +32,7 @@ Build the command line and run it for a breif description of commands/options.
 `longtail.exe upsync --source-path "my_folder" --target-path "local_store/index/my_folder.lvi" --storage-uri "local_store"`
 
 ### Download from GCS
-`longtail.exe downsync --source-path "gs://test_block_storage/store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "gs://test_block_storage/store"`
+`longtail.exe downsync --source-path "gs://test_block_storage/store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "gs://test_block_storage/store" --cache-path "cache"`
 
 ### Download from a local folder
 `longtail.exe downsync --source-path "local_store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "local_store"`

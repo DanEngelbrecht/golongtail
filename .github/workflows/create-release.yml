@@ -123,5 +123,8 @@ jobs:
           win32-x64.zip
           linux-x64.zip
           macos-x64.zip
+          dist-win32-x64/longtail.exe
+          dist-macos-x64/longtail
+          dist-linux-x64/longtail
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

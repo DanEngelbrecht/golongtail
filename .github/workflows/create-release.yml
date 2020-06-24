@@ -107,9 +107,9 @@ jobs:
 
     - name: rename artifacts
       run: |
-        mv dist-linux-x64/longtail longtail-linux-x64
-        mv dist-macos-x64/longtail longtail-macos-x64
-        mv dist-win32-x64/longtail.exe longtail-win32-x64.exe
+        cp dist-linux-x64/longtail longtail-linux-x64
+        cp dist-macos-x64/longtail longtail-macos-x64
+        cp dist-win32-x64/longtail.exe longtail-win32-x64.exe
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:

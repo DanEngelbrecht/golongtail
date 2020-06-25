@@ -752,6 +752,10 @@ func (blockIndex *Longtail_BlockIndex) GetChunkSizes() []uint32 {
 	return carray2slice32(blockIndex.cBlockIndex.m_ChunkSizes, size)
 }
 
+func (blockIndex *Longtail_BlockIndex) IsValid() bool {
+	return blockIndex.cBlockIndex != nil
+}
+
 func (storedBlock *Longtail_StoredBlock) GetBlockIndex() Longtail_BlockIndex {
 	return Longtail_BlockIndex{cBlockIndex: storedBlock.cStoredBlock.m_BlockIndex}
 }

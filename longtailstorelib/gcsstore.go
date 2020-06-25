@@ -9,12 +9,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"cloud.google.com/go/storage"
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
+	"google.golang.org/api/iterator"
 )
 
 type gcsFileStorage struct {
@@ -415,6 +417,105 @@ func updateRemoteContentIndex(
 	return nil
 }
 
+func buildContentIndexFromBlocks(
+	ctx context.Context,
+	s *gcsBlockStore,
+	u *url.URL,
+	client *storage.Client,
+	bucketName string,
+	bucket *storage.BucketHandle) (longtaillib.Longtail_ContentIndex, int) {
+	var items []string
+	it := bucket.Objects(ctx, &storage.Query{
+		Prefix: s.prefix,
+	})
+
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			break
+		}
+		if attrs.Size == 0 {
+			continue
+		}
+		if strings.HasSuffix(attrs.Name, ".lsb") {
+			items = append(items, attrs.Name)
+		}
+	}
+
+	contentIndex, errno := longtaillib.CreateContentIndexFromBlocks(
+		s.maxBlockSize,
+		s.maxChunksPerBlock,
+		[]longtaillib.Longtail_BlockIndex{})
+
+	batchCount := 32
+	batchStart := 0
+
+	var wg sync.WaitGroup
+
+	for batchStart < len(items) {
+		batchLength := batchCount
+		if batchStart+batchLength > len(items) {
+			batchLength = len(items) - batchStart
+		}
+		blockIndexes := make([]longtaillib.Longtail_BlockIndex, batchLength)
+		wg.Add(batchLength)
+		for batchPos := 0; batchPos < batchLength; batchPos++ {
+			i := batchStart + batchPos
+			blockKey := items[i]
+			go func(batchPos int, blockKey string) {
+				client, _ := storage.NewClient(ctx)
+				bucketName := u.Host
+				bucket := client.Bucket(bucketName)
+				objHandle := bucket.Object(blockKey)
+				storedBlockData, errno := getBlob(ctx, objHandle)
+				if errno != 0 {
+					wg.Done()
+					return
+				}
+				blockIndex, errno := longtaillib.ReadBlockIndexFromBuffer(storedBlockData)
+				if errno != 0 {
+					wg.Done()
+					return
+				}
+
+				blockIndexes[batchPos] = blockIndex
+				wg.Done()
+			}(batchPos, blockKey)
+		}
+		wg.Wait()
+		writeIndex := 0
+		for i, blockIndex := range blockIndexes {
+			if !blockIndex.IsValid() {
+				continue
+			}
+			if i > writeIndex {
+				blockIndexes[writeIndex] = blockIndex
+			}
+			writeIndex++
+		}
+		addedContentIndex, errno := longtaillib.CreateContentIndexFromBlocks(s.maxBlockSize, s.maxChunksPerBlock, blockIndexes[:writeIndex])
+		if errno == 0 {
+			newContentIndex, errno := longtaillib.AddContentIndex(contentIndex, addedContentIndex)
+			if errno == 0 {
+				addedContentIndex.Dispose()
+				contentIndex.Dispose()
+				contentIndex = newContentIndex
+			} else {
+				addedContentIndex.Dispose()
+			}
+		}
+		for _, blockIndex := range blockIndexes {
+			blockIndex.Dispose()
+		}
+		batchStart += batchLength
+	}
+
+	return contentIndex, errno
+}
+
 func contentIndexWorker(
 	ctx context.Context,
 	s *gcsBlockStore,
@@ -438,11 +539,40 @@ func contentIndexWorker(
 
 	objHandle := bucket.Object(key)
 
-	_, err = objHandle.Attrs(ctx)
-	if err == storage.ErrObjectNotExist {
-		hashAPI := longtaillib.CreateBlake3HashAPI()
-		defer hashAPI.Dispose()
+	if !contentIndex.IsValid() {
+		_, err = objHandle.Attrs(ctx)
+		if err != storage.ErrObjectNotExist {
+			storedContentIndexData, errno := getBlob(ctx, objHandle)
+			if errno != 0 {
+				log.Printf("Retrying getBlob %s", key)
+				atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+				storedContentIndexData, errno = getBlob(ctx, objHandle)
+			}
+			if errno != 0 {
+				log.Printf("Retrying 500 ms delayed getBlob %s", key)
+				time.Sleep(500 * time.Millisecond)
+				atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+				storedContentIndexData, errno = getBlob(ctx, objHandle)
+			}
+			if errno != 0 {
+				log.Printf("Retrying 2 s delayed getBlob %s", key)
+				time.Sleep(2 * time.Second)
+				atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+				storedContentIndexData, errno = getBlob(ctx, objHandle)
+			}
+			if errno == 0 {
+				contentIndex, errno = longtaillib.ReadContentIndexFromBuffer(storedContentIndexData)
+				if errno != 0 {
+					return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+				}
+			}
+		}
+	}
+	defer contentIndex.Dispose()
 
+	var addedContentIndex longtaillib.Longtail_ContentIndex
+
+	if !contentIndex.IsValid() {
 		contentIndex, errno = longtaillib.CreateContentIndexFromBlocks(
 			s.maxBlockSize,
 			s.maxChunksPerBlock,
@@ -450,29 +580,22 @@ func contentIndexWorker(
 		if errno != 0 {
 			return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
-	} else {
-		storedContentIndexData, errno := getBlob(ctx, objHandle)
+
+		addedContentIndex, errno = buildContentIndexFromBlocks(
+			ctx,
+			s,
+			u,
+			client,
+			bucketName,
+			bucket)
+
 		if errno != 0 {
-			log.Printf("Retrying getBlob %s", key)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
-			storedContentIndexData, errno = getBlob(ctx, objHandle)
-		}
-		if errno != 0 {
-			log.Printf("Retrying 500 ms delayed getBlob %s", key)
-			time.Sleep(500 * time.Millisecond)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
-			storedContentIndexData, errno = getBlob(ctx, objHandle)
-		}
-		if errno != 0 {
-			log.Printf("Retrying 2 s delayed getBlob %s", key)
-			time.Sleep(2 * time.Second)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
-			storedContentIndexData, errno = getBlob(ctx, objHandle)
-		}
-		if errno == 0 {
-			contentIndex, errno = longtaillib.ReadContentIndexFromBuffer(storedContentIndexData)
+			addedContentIndex, errno = longtaillib.CreateContentIndexFromBlocks(
+				s.maxBlockSize,
+				s.maxChunksPerBlock,
+				[]longtaillib.Longtail_BlockIndex{})
 			if errno != 0 {
-				return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+				return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 		}
 	}
@@ -481,15 +604,6 @@ func contentIndexWorker(
 	s.maxBlockSize = contentIndex.GetMaxBlockSize()
 	s.maxChunksPerBlock = contentIndex.GetMaxChunksPerBlock()
 
-	addedContentIndex, errno := longtaillib.CreateContentIndexFromBlocks(
-		s.maxBlockSize,
-		s.maxChunksPerBlock,
-		[]longtaillib.Longtail_BlockIndex{})
-	if errno != 0 {
-		return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
-	}
-
-	defer contentIndex.Dispose()
 	defer addedContentIndex.Dispose()
 
 	run := true

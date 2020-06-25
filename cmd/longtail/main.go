@@ -611,6 +611,8 @@ func downSyncVersion(
 	}
 	defer sourceVersionIndex.Dispose()
 
+	targetChunkSize = sourceVersionIndex.GetTargetChunkSize()
+
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()

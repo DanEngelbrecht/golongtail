@@ -86,7 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATED* Update to longtail v0.0.40.
+           - *UPDATED* Update to longtail v0.0.42.
+           - *FIXED* downsync: Use target chunk size from source version index when indexing target folder
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -86,8 +86,10 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *ADDED* GCS block store can now reconstruct a missing store index from blocks
            - *UPDATE* Update to longtail v0.0.43
+           - *FIXED* Fixed error when `--cache-path` was not given in `downsync` command
+           - *ADDED* GCS block store can now reconstruct a missing store index from blocks
+           - *CHANGED* `showContentIndex` no longer shows chunk size information since it is no longer present in content index
         draft: false
         prerelease: false
     - name: Download Linux artifacts

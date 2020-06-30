@@ -574,7 +574,7 @@ func downSyncVersion(
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	if localCachePath != nil {
+	if localCachePath != nil && len(*localCachePath) > 0 {
 		localIndexStore = longtaillib.CreateFSBlockStore(localFS, *localCachePath, 8388608, 1024)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)

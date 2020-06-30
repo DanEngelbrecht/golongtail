@@ -444,11 +444,6 @@ func (contentIndex *Longtail_ContentIndex) GetMaxChunksPerBlock() uint32 {
 	return uint32(*contentIndex.cContentIndex.m_MaxChunksPerBlock)
 }
 
-func (contentIndex *Longtail_ContentIndex) GetChunkSizes() []uint32 {
-	size := int(*contentIndex.cContentIndex.m_ChunkCount)
-	return carray2slice32(contentIndex.cContentIndex.m_ChunkLengths, size)
-}
-
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }
@@ -625,7 +620,7 @@ func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_ind
 func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string, defaultMaxBlockSize uint32, defaultMaxChunksPerBlock uint32) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath, C.uint32_t(defaultMaxBlockSize), C.uint32_t(defaultMaxChunksPerBlock))}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath, C.uint32_t(defaultMaxBlockSize), C.uint32_t(defaultMaxChunksPerBlock), nil)}
 }
 
 // CreateCacheBlockStore() ...

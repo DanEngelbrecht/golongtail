@@ -241,7 +241,7 @@ func byteCountBinary(b uint64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 //Include(rootPath string, assetFolder string, assetName string, isDir bool, size uint64, permissions uint16) bool
@@ -574,7 +574,7 @@ func downSyncVersion(
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	if localCachePath != nil {
+	if localCachePath != nil && len(*localCachePath) > 0 {
 		localIndexStore = longtaillib.CreateFSBlockStore(localFS, *localCachePath, 8388608, 1024)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
@@ -878,34 +878,6 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	}
 	defer contentIndex.Dispose()
 
-	var smallestChunkSize uint32
-	var largestChunkSize uint32
-	var averageChunkSize uint32
-	var totalChunkSize uint64
-	totalChunkSize = 0
-	chunkSizes := contentIndex.GetChunkSizes()
-	if len(chunkSizes) > 0 {
-		smallestChunkSize = uint32(chunkSizes[0])
-		largestChunkSize = uint32(chunkSizes[0])
-	} else {
-		smallestChunkSize = 0
-		largestChunkSize = 0
-	}
-	for i := uint32(0); i < uint32(len(chunkSizes)); i++ {
-		chunkSize := uint32(chunkSizes[i])
-		if chunkSize < smallestChunkSize {
-			smallestChunkSize = chunkSize
-		}
-		if chunkSize > largestChunkSize {
-			largestChunkSize = chunkSize
-		}
-		totalChunkSize = totalChunkSize + uint64(chunkSize)
-	}
-	if len(chunkSizes) > 0 {
-		averageChunkSize = uint32(totalChunkSize / uint64(len(chunkSizes)))
-	} else {
-		averageChunkSize = 0
-	}
 	if compact {
 		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
 			contentIndexPath,
@@ -914,11 +886,7 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 			contentIndex.GetMaxBlockSize(),
 			contentIndex.GetMaxChunksPerBlock(),
 			contentIndex.GetBlockCount(),
-			contentIndex.GetChunkCount(),
-			totalChunkSize,
-			averageChunkSize,
-			smallestChunkSize,
-			largestChunkSize)
+			contentIndex.GetChunkCount())
 	} else {
 		fmt.Printf("Version:             %d\n", contentIndex.GetVersion())
 		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(contentIndex.GetHashIdentifier()))
@@ -926,10 +894,6 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 		fmt.Printf("Max Chunks Per Block %d\n", contentIndex.GetMaxChunksPerBlock())
 		fmt.Printf("Block Count:         %d   (%s)\n", contentIndex.GetBlockCount(), byteCountDecimal(uint64(contentIndex.GetBlockCount())))
 		fmt.Printf("Chunk Count:         %d   (%s)\n", contentIndex.GetChunkCount(), byteCountDecimal(uint64(contentIndex.GetChunkCount())))
-		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
-		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
-		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
-		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
 	}
 
 	return nil

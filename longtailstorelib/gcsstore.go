@@ -568,6 +568,10 @@ func contentIndexWorker(
 			}
 		}
 	}
+	if contentIndex.IsValid() {
+		s.maxBlockSize = contentIndex.GetMaxBlockSize()
+		s.maxChunksPerBlock = contentIndex.GetMaxChunksPerBlock()
+	}
 	defer contentIndex.Dispose()
 
 	var addedContentIndex longtaillib.Longtail_ContentIndex
@@ -598,12 +602,15 @@ func contentIndexWorker(
 				return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 		}
+	} else {
+		addedContentIndex, errno = longtaillib.CreateContentIndexFromBlocks(
+			s.maxBlockSize,
+			s.maxChunksPerBlock,
+			[]longtaillib.Longtail_BlockIndex{})
+		if errno != 0 {
+			return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
 	}
-
-	// TODO: Might need safer update of these two fields?
-	s.maxBlockSize = contentIndex.GetMaxBlockSize()
-	s.maxChunksPerBlock = contentIndex.GetMaxChunksPerBlock()
-
 	defer addedContentIndex.Dispose()
 
 	run := true

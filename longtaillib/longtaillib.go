@@ -617,15 +617,15 @@ func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_ind
 }
 
 // CreateFSBlockStore() ...
-func CreateFSBlockStore(storageAPI Longtail_StorageAPI, contentPath string, defaultMaxBlockSize uint32, defaultMaxChunksPerBlock uint32) Longtail_BlockStoreAPI {
+func CreateFSBlockStore(jobAPI Longtail_JobAPI, storageAPI Longtail_StorageAPI, contentPath string, defaultMaxBlockSize uint32, defaultMaxChunksPerBlock uint32) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(storageAPI.cStorageAPI, cContentPath, C.uint32_t(defaultMaxBlockSize), C.uint32_t(defaultMaxChunksPerBlock), nil)}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(jobAPI.cJobAPI, storageAPI.cStorageAPI, cContentPath, C.uint32_t(defaultMaxBlockSize), C.uint32_t(defaultMaxChunksPerBlock), nil)}
 }
 
 // CreateCacheBlockStore() ...
-func CreateCacheBlockStore(cacheBlockStore Longtail_BlockStoreAPI, persistentBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCacheBlockStoreAPI(cacheBlockStore.cBlockStoreAPI, persistentBlockStore.cBlockStoreAPI)}
+func CreateCacheBlockStore(jobAPI Longtail_JobAPI, cacheBlockStore Longtail_BlockStoreAPI, persistentBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCacheBlockStoreAPI(jobAPI.cJobAPI, cacheBlockStore.cBlockStoreAPI, persistentBlockStore.cBlockStoreAPI)}
 }
 
 // CreateCompressBlockStore() ...
@@ -1485,10 +1485,11 @@ func RetargetContent(
 
 // MergeContentIndex ...
 func MergeContentIndex(
+	jobAPI Longtail_JobAPI,
 	localContentIndex Longtail_ContentIndex,
 	remoteContentIndex Longtail_ContentIndex) (Longtail_ContentIndex, int) {
 	var mergedContentIndex *C.struct_Longtail_ContentIndex
-	errno := C.Longtail_MergeContentIndex(localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
+	errno := C.Longtail_MergeContentIndex(jobAPI.cJobAPI, localContentIndex.cContentIndex, remoteContentIndex.cContentIndex, &mergedContentIndex)
 	if errno != 0 {
 		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}

@@ -125,7 +125,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(blobStoreURL, targetBlockSize, maxChunksPerBlock, outFinalStats)
+			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(jobAPI, blobStoreURL, targetBlockSize, maxChunksPerBlock, outFinalStats)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -144,7 +144,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 			return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
 		}
 	}
-	return longtaillib.CreateFSBlockStore(longtaillib.CreateFSStorageAPI(), uri, targetBlockSize, maxChunksPerBlock), nil
+	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, targetBlockSize, maxChunksPerBlock), nil
 }
 
 func createFileStorageForURI(uri string) (longtailstorelib.FileStorage, error) {
@@ -475,6 +475,7 @@ func upSyncVersion(
 
 	if versionContentIndexPath != nil && len(*versionContentIndexPath) > 0 {
 		versionLocalContentIndex, errno := longtaillib.MergeContentIndex(
+			jobs,
 			existingRemoteContentIndex,
 			versionMissingContentIndex)
 		if errno != 0 {
@@ -575,9 +576,9 @@ func downSyncVersion(
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(localFS, *localCachePath, 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, *localCachePath, 8388608, 1024)
 
-		cacheBlockStore = longtaillib.CreateCacheBlockStore(localIndexStore, remoteIndexStore)
+		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
 		compressBlockStore = longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
 	} else {

@@ -120,6 +120,7 @@ type stopMessage struct {
 }
 
 type gcsBlockStore struct {
+	jobAPI            longtaillib.Longtail_JobAPI
 	url               *url.URL
 	Location          string
 	prefix            string
@@ -327,6 +328,7 @@ func updateRemoteContentIndex(
 	ctx context.Context,
 	bucket *storage.BucketHandle,
 	prefix string,
+	jobAPI longtaillib.Longtail_JobAPI,
 	addedContentIndex longtaillib.Longtail_ContentIndex) error {
 	key := prefix + "store.lci"
 	objHandle := bucket.Object(key)
@@ -356,7 +358,7 @@ func updateRemoteContentIndex(
 			}
 			defer remoteContentIndex.Dispose()
 
-			mergedContentIndex, errno := longtaillib.MergeContentIndex(remoteContentIndex, addedContentIndex)
+			mergedContentIndex, errno := longtaillib.MergeContentIndex(jobAPI, remoteContentIndex, addedContentIndex)
 			if errno != 0 {
 				return fmt.Errorf("updateRemoteContentIndex: longtaillib.MergeContentIndex() failed with error %s", longtaillib.ErrNoToDescription(errno))
 			}
@@ -625,7 +627,7 @@ func contentIndexWorker(
 			addedContentIndex = newAddedContentIndex
 			contentIndexMsg.contentIndex.Dispose()
 		case getIndexMessage := <-getIndexMessages:
-			contentIndexCopy, errno := longtaillib.MergeContentIndex(contentIndex, addedContentIndex)
+			contentIndexCopy, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
 			if errno != 0 {
 				getIndexMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 				continue
@@ -633,7 +635,7 @@ func contentIndexWorker(
 			getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
 			atomic.AddUint64(&s.stats.IndexGetCount, 1)
 		case retargetContentMessage := <-fsRetargetContentMessages:
-			fullContentIndex, errno := longtaillib.MergeContentIndex(contentIndex, addedContentIndex)
+			fullContentIndex, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
 			if errno != 0 {
 				retargetContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 				continue
@@ -663,23 +665,23 @@ func contentIndexWorker(
 	}
 
 	if addedContentIndex.GetBlockCount() > 0 {
-		err := updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+		err := updateRemoteContentIndex(ctx, bucket, s.prefix, s.jobAPI, addedContentIndex)
 		if err != nil {
 			log.Printf("Retrying store index to %s", s.prefix)
 			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
-			err = updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+			err = updateRemoteContentIndex(ctx, bucket, s.prefix, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed store index to %s", s.prefix)
 			time.Sleep(500 * time.Millisecond)
 			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
-			err = updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+			err = updateRemoteContentIndex(ctx, bucket, s.prefix, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed store index to %s", s.prefix)
 			time.Sleep(2 * time.Second)
 			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
-			err = updateRemoteContentIndex(ctx, bucket, s.prefix, addedContentIndex)
+			err = updateRemoteContentIndex(ctx, bucket, s.prefix, s.jobAPI, addedContentIndex)
 		}
 
 		if err != nil {
@@ -690,7 +692,7 @@ func contentIndexWorker(
 }
 
 // NewGCSBlockStore ...
-func NewGCSBlockStore(u *url.URL, maxBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
+func NewGCSBlockStore(jobAPI longtaillib.Longtail_JobAPI, u *url.URL, maxBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
 	if u.Scheme != "gs" {
 		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
 	}
@@ -712,7 +714,7 @@ func NewGCSBlockStore(u *url.URL, maxBlockSize uint32, maxChunksPerBlock uint32,
 	bucketName := u.Host
 	defaultBucket := defaultClient.Bucket(bucketName)
 
-	s := &gcsBlockStore{url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, outFinalStats: outFinalStats}
+	s := &gcsBlockStore{jobAPI: jobAPI, url: u, Location: u.String(), prefix: prefix, maxBlockSize: maxBlockSize, maxChunksPerBlock: maxChunksPerBlock, defaultClient: defaultClient, defaultBucket: defaultBucket, outFinalStats: outFinalStats}
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)

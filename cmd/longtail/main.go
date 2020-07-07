@@ -140,7 +140,20 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 			}
 			return longtaillib.CreateBlockStoreAPI(gcsBlockStore), nil
 		case "s3":
-			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("AWS storage not yet implemented")
+			s3BlobStore, err := longtailstorelib.NewS3BlobStore(blobStoreURL)
+			if err != nil {
+				return longtaillib.Longtail_BlockStoreAPI{}, err
+			}
+			s3BlockStore, err := longtailstorelib.NewRemoteBlockStore(
+				jobAPI,
+				s3BlobStore,
+				targetBlockSize,
+				maxChunksPerBlock,
+				outFinalStats)
+			if err != nil {
+				return longtaillib.Longtail_BlockStoreAPI{}, err
+			}
+			return longtaillib.CreateBlockStoreAPI(s3BlockStore), nil
 		case "abfs":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen1 storage not yet implemented")
 		case "abfss":
@@ -159,7 +172,7 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 		case "gs":
 			return longtailstorelib.NewGCSBlobStore(blobStoreURL)
 		case "s3":
-			return nil, fmt.Errorf("AWS storage not yet implemented")
+			return longtailstorelib.NewS3BlobStore(blobStoreURL)
 		case "abfs":
 			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
 		case "abfss":

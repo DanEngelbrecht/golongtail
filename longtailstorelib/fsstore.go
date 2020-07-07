@@ -12,28 +12,44 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
-type fsFileStorage struct {
+type fsBlobObject struct {
+	path string
 }
 
-func (fileStorage *fsFileStorage) ReadFromPath(ctx context.Context, path string) ([]byte, error) {
-	return ioutil.ReadFile(path)
+type fsBlobClient struct {
 }
 
-func (fileStorage *fsFileStorage) WriteToPath(ctx context.Context, path string, data []byte) error {
-	err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
+type fsBlobStore struct {
+}
+
+// NewFSBlobStore ...
+func NewFSBlobStore() (BlobStore, error) {
+	s := &fsBlobStore{}
+	return s, nil
+}
+
+func (blobStore *fsBlobStore) OpenClient(bucketPath string, ctx context.Context) (BlobClient, error) {
+	return &fsBlobClient{}, nil
+}
+
+func (blobClient *fsBlobClient) NewObject(path string) (BlobObject, error) {
+	return &fsBlobObject{path: path}, nil
+}
+
+func (blobObject *fsBlobObject) Read() ([]byte, error) {
+	return ioutil.ReadFile(blobObject.path)
+}
+
+func (blobObject *fsBlobObject) LockState() error {
+	return nil
+}
+
+func (blobObject *fsBlobObject) Write(data []byte) error {
+	err := os.MkdirAll(filepath.Dir(blobObject.path), os.ModePerm)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path, data, 0644)
-}
-
-func (fileStorage *fsFileStorage) Close() {
-}
-
-// NewFSFileStorage ...
-func NewFSFileStorage() (FileStorage, error) {
-	s := &fsFileStorage{}
-	return s, nil
+	return ioutil.WriteFile(blobObject.path, data, 0644)
 }
 
 type fsPutBlockMessage struct {

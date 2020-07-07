@@ -1,9 +1,7 @@
 package longtailstorelib
 
-import "context"
-
-type FileStorage interface {
-	ReadFromPath(ctx context.Context, path string) ([]byte, error)
-	WriteToPath(ctx context.Context, path string, data []byte) error
-	Close()
-}
+//type FileStorage interface {
+//	ReadFromPath(ctx context.Context, path string) ([]byte, error)
+//	WriteToPath(ctx context.Context, path string, data []byte) error
+//	Close()
+//}

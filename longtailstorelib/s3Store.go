@@ -6,6 +6,8 @@ import (
 	"net/url"
 )
 
+// TODO: Not yet implemented, shell here to show how what it would require to support S3
+
 type s3BlobStore struct {
 }
 

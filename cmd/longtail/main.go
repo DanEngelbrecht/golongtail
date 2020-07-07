@@ -125,46 +125,122 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(jobAPI, blobStoreURL, targetBlockSize, maxChunksPerBlock, outFinalStats)
+			gcsBlobStore, err := longtailstorelib.NewGCSBlobStore(blobStoreURL)
+			if err != nil {
+				return longtaillib.Longtail_BlockStoreAPI{}, err
+			}
+			gcsBlockStore, err := longtailstorelib.NewRemoteBlockStore(
+				jobAPI,
+				gcsBlobStore,
+				targetBlockSize,
+				maxChunksPerBlock,
+				outFinalStats)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
 			return longtaillib.CreateBlockStoreAPI(gcsBlockStore), nil
 		case "s3":
-			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("AWS storage not yet implemented")
+			s3BlobStore, err := longtailstorelib.NewS3BlobStore(blobStoreURL)
+			if err != nil {
+				return longtaillib.Longtail_BlockStoreAPI{}, err
+			}
+			s3BlockStore, err := longtailstorelib.NewRemoteBlockStore(
+				jobAPI,
+				s3BlobStore,
+				targetBlockSize,
+				maxChunksPerBlock,
+				outFinalStats)
+			if err != nil {
+				return longtaillib.Longtail_BlockStoreAPI{}, err
+			}
+			return longtaillib.CreateBlockStoreAPI(s3BlockStore), nil
 		case "abfs":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen1 storage not yet implemented")
 		case "abfss":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], jobAPI, targetBlockSize, maxChunksPerBlock)
-			if err != nil {
-				return longtaillib.Longtail_BlockStoreAPI{}, err
-			}
-			return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
+			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], targetBlockSize, maxChunksPerBlock), nil
 		}
 	}
 	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, targetBlockSize, maxChunksPerBlock), nil
 }
 
-func createFileStorageForURI(uri string) (longtailstorelib.FileStorage, error) {
+func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			return longtailstorelib.NewGCSFileStorage(blobStoreURL)
+			return longtailstorelib.NewGCSBlobStore(blobStoreURL)
 		case "s3":
-			return nil, fmt.Errorf("AWS storage not yet implemented")
+			return longtailstorelib.NewS3BlobStore(blobStoreURL)
 		case "abfs":
 			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
 		case "abfss":
 			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			return longtailstorelib.NewFSFileStorage()
+			return longtailstorelib.NewFSBlobStore(blobStoreURL.Path[1:])
 		}
 	}
 
-	return longtailstorelib.NewFSFileStorage()
+	return longtailstorelib.NewFSBlobStore(uri)
+}
+
+func readFromPath(path string) ([]byte, error) {
+	i := strings.LastIndex(path, "/")
+	if i == -1 {
+		i = strings.LastIndex(path, "\\")
+	}
+	if i == -1 {
+		return nil, fmt.Errorf("Invalid path %s", path)
+	}
+	pathParent := path[:i]
+	pathName := path[i+1:]
+	blobStore, err := createBlobStoreForURI(pathParent)
+	if err != nil {
+		return nil, err
+	}
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	object, err := client.NewObject(pathName)
+	if err != nil {
+		return nil, err
+	}
+	vbuffer, err := object.Read()
+	if err != nil {
+		return nil, err
+	}
+	return vbuffer, nil
+}
+
+func writeToPath(path string, data []byte) error {
+	i := strings.LastIndex(path, "/")
+	if i == -1 {
+		i = strings.LastIndex(path, "\\")
+	}
+	if i == -1 {
+		return fmt.Errorf("Invalid path %s", path)
+	}
+	pathParent := path[:i]
+	pathName := path[i+1:]
+	blobStore, err := createBlobStoreForURI(pathParent)
+	if err != nil {
+		return err
+	}
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		return err
+	}
+	object, err := client.NewObject(pathName)
+	if err != nil {
+		return err
+	}
+	_, err = object.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 const noCompressionType = uint32(0)
@@ -404,12 +480,7 @@ func upSyncVersion(
 			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	} else {
-		fileStorage, err := createFileStorageForURI(*sourceIndexPath)
-		if err != nil {
-			return nil
-		}
-		defer fileStorage.Close()
-		vbuffer, err := fileStorage.ReadFromPath(context.Background(), *sourceIndexPath)
+		vbuffer, err := readFromPath(*sourceIndexPath)
 		if err != nil {
 			return err
 		}
@@ -487,16 +558,12 @@ func upSyncVersion(
 		}
 		defer versionLocalContentIndex.Dispose()
 
-		versionContentIndexStorage, err := createFileStorageForURI(*versionContentIndexPath)
-		if err != nil {
-			return nil
-		}
-		defer versionContentIndexStorage.Close()
 		cbuffer, errno := longtaillib.WriteContentIndexToBuffer(versionLocalContentIndex)
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.WriteContentIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
-		err = versionContentIndexStorage.WriteToPath(context.Background(), *versionContentIndexPath, cbuffer)
+
+		err = writeToPath(*versionContentIndexPath, cbuffer)
 		if err != nil {
 			return err
 		}
@@ -506,15 +573,7 @@ func upSyncVersion(
 	if errno != 0 {
 		return fmt.Errorf("upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
-	versionIndexFileStorage, err := createFileStorageForURI(targetFilePath)
-	if err != nil {
-		return nil
-	}
-	defer versionIndexFileStorage.Close()
-	err = versionIndexFileStorage.WriteToPath(context.Background(), targetFilePath, vbuffer)
-	if err != nil {
-		return err
-	}
+	err = writeToPath(targetFilePath, vbuffer)
 
 	return nil
 }
@@ -599,20 +658,13 @@ func downSyncVersion(
 	errno := 0
 	var sourceVersionIndex longtaillib.Longtail_VersionIndex
 
-	{
-		fileStorage, err := createFileStorageForURI(sourceFilePath)
-		if err != nil {
-			return nil
-		}
-		defer fileStorage.Close()
-		vbuffer, err := fileStorage.ReadFromPath(context.Background(), sourceFilePath)
-		if err != nil {
-			return err
-		}
-		sourceVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-		if errno != 0 {
-			return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
-		}
+	vbuffer, err := readFromPath(sourceFilePath)
+	if err != nil {
+		return err
+	}
+	sourceVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer sourceVersionIndex.Dispose()
 
@@ -656,12 +708,7 @@ func downSyncVersion(
 			return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	} else {
-		fileStorage, err := createFileStorageForURI(*targetIndexPath)
-		if err != nil {
-			return nil
-		}
-		defer fileStorage.Close()
-		vbuffer, err := fileStorage.ReadFromPath(context.Background(), *targetIndexPath)
+		vbuffer, err := readFromPath(*targetIndexPath)
 		if err != nil {
 			return err
 		}
@@ -760,12 +807,7 @@ func validateVersion(
 	remoteContentIndex := getIndexComplete.contentIndex
 	defer remoteContentIndex.Dispose()
 
-	fileStorage, err := createFileStorageForURI(versionIndexPath)
-	if err != nil {
-		return nil
-	}
-	defer fileStorage.Close()
-	vbuffer, err := fileStorage.ReadFromPath(context.Background(), versionIndexPath)
+	vbuffer, err := readFromPath(versionIndexPath)
 	if err != nil {
 		return err
 	}
@@ -785,13 +827,7 @@ func validateVersion(
 }
 
 func showVersionIndex(versionIndexPath string, compact bool) error {
-
-	fileStorage, err := createFileStorageForURI(versionIndexPath)
-	if err != nil {
-		return nil
-	}
-	defer fileStorage.Close()
-	vbuffer, err := fileStorage.ReadFromPath(context.Background(), versionIndexPath)
+	vbuffer, err := readFromPath(versionIndexPath)
 	if err != nil {
 		return err
 	}
@@ -867,13 +903,7 @@ func showVersionIndex(versionIndexPath string, compact bool) error {
 }
 
 func showContentIndex(contentIndexPath string, compact bool) error {
-
-	fileStorage, err := createFileStorageForURI(contentIndexPath)
-	if err != nil {
-		return nil
-	}
-	defer fileStorage.Close()
-	vbuffer, err := fileStorage.ReadFromPath(context.Background(), contentIndexPath)
+	vbuffer, err := readFromPath(contentIndexPath)
 	if err != nil {
 		return err
 	}
@@ -905,12 +935,7 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 }
 
 func listVersionIndex(versionIndexPath string, showDetails bool) error {
-	fileStorage, err := createFileStorageForURI(versionIndexPath)
-	if err != nil {
-		return nil
-	}
-	defer fileStorage.Close()
-	vbuffer, err := fileStorage.ReadFromPath(context.Background(), versionIndexPath)
+	vbuffer, err := readFromPath(versionIndexPath)
 	if err != nil {
 		return err
 	}

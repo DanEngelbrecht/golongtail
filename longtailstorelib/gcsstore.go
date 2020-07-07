@@ -518,6 +518,25 @@ func buildContentIndexFromBlocks(
 	return contentIndex, errno
 }
 
+func contentIndexWorkerReplyErrorState(
+	contentIndexMessages <-chan contentIndexMessage,
+	getIndexMessages <-chan getIndexMessage,
+	fsRetargetContentMessages <-chan fsRetargetContentMessage,
+	stopMessages <-chan stopMessage) {
+	run := true
+	for run {
+		select {
+		case _ = <-contentIndexMessages:
+		case getIndexMessage := <-getIndexMessages:
+			getIndexMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
+		case retargetContentMessage := <-fsRetargetContentMessages:
+			retargetContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
+		case _ = <-stopMessages:
+			run = false
+		}
+	}
+}
+
 func contentIndexWorker(
 	ctx context.Context,
 	s *gcsBlockStore,
@@ -529,6 +548,7 @@ func contentIndexWorker(
 
 	client, err := storage.NewClient(ctx)
 	if err != nil {
+		contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, fsRetargetContentMessages, stopMessages)
 		return errors.Wrap(err, u.String())
 	}
 	bucketName := u.Host
@@ -565,6 +585,7 @@ func contentIndexWorker(
 			if errno == 0 {
 				contentIndex, errno = longtaillib.ReadContentIndexFromBuffer(storedContentIndexData)
 				if errno != 0 {
+					contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, fsRetargetContentMessages, stopMessages)
 					return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 				}
 			}
@@ -584,6 +605,7 @@ func contentIndexWorker(
 			s.maxChunksPerBlock,
 			[]longtaillib.Longtail_BlockIndex{})
 		if errno != 0 {
+			contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, fsRetargetContentMessages, stopMessages)
 			return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 
@@ -601,6 +623,7 @@ func contentIndexWorker(
 				s.maxChunksPerBlock,
 				[]longtaillib.Longtail_BlockIndex{})
 			if errno != 0 {
+				contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, fsRetargetContentMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 		}
@@ -610,6 +633,7 @@ func contentIndexWorker(
 			s.maxChunksPerBlock,
 			[]longtaillib.Longtail_BlockIndex{})
 		if errno != 0 {
+			contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, fsRetargetContentMessages, stopMessages)
 			return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
@@ -621,6 +645,7 @@ func contentIndexWorker(
 		case contentIndexMsg := <-contentIndexMessages:
 			newAddedContentIndex, errno := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 			if errno != 0 {
+				contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, fsRetargetContentMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.AddContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 			addedContentIndex.Dispose()

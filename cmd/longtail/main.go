@@ -125,7 +125,14 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlockStore, err := longtailstorelib.NewGCSBlockStore(jobAPI, blobStoreURL, targetBlockSize, maxChunksPerBlock, outFinalStats)
+			gcsBlobStore, err := longtailstorelib.NewGCSBlobStore(blobStoreURL)
+
+			gcsBlockStore, err := longtailstorelib.NewRemoteBlockStore(
+				jobAPI,
+				gcsBlobStore,
+				targetBlockSize,
+				maxChunksPerBlock,
+				outFinalStats)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -137,11 +144,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 		case "abfss":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			fsBlockStore, err := longtailstorelib.NewFSBlockStore(blobStoreURL.Path[1:], jobAPI, targetBlockSize, maxChunksPerBlock)
-			if err != nil {
-				return longtaillib.Longtail_BlockStoreAPI{}, err
-			}
-			return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
+			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], targetBlockSize, maxChunksPerBlock), nil
 		}
 	}
 	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, targetBlockSize, maxChunksPerBlock), nil
@@ -152,7 +155,7 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			return longtailstorelib.NewGCSBlobStore()
+			return longtailstorelib.NewGCSBlobStore(blobStoreURL)
 		case "s3":
 			return nil, fmt.Errorf("AWS storage not yet implemented")
 		case "abfs":
@@ -160,23 +163,32 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 		case "abfss":
 			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
 		case "file":
-			return longtailstorelib.NewFSBlobStore()
+			return longtailstorelib.NewFSBlobStore(blobStoreURL.Path[1:])
 		}
 	}
 
-	return longtailstorelib.NewFSBlobStore()
+	return longtailstorelib.NewFSBlobStore(uri)
 }
 
 func readFromPath(path string) ([]byte, error) {
-	blobStore, err := createBlobStoreForURI(path)
+	i := strings.LastIndex(path, "/")
+	if i == -1 {
+		i = strings.LastIndex(path, "\\")
+	}
+	if i == -1 {
+		return nil, fmt.Errorf("Invalid path %s", path)
+	}
+	pathParent := path[:i]
+	pathName := path[i+1:]
+	blobStore, err := createBlobStoreForURI(pathParent)
 	if err != nil {
 		return nil, err
 	}
-	client, err := blobStore.OpenClient(path, context.Background())
+	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	object, err := client.NewObject(path)
+	object, err := client.NewObject(pathName)
 	if err != nil {
 		return nil, err
 	}
@@ -188,19 +200,28 @@ func readFromPath(path string) ([]byte, error) {
 }
 
 func writeToPath(path string, data []byte) error {
-	blobStore, err := createBlobStoreForURI(path)
+	i := strings.LastIndex(path, "/")
+	if i == -1 {
+		i = strings.LastIndex(path, "\\")
+	}
+	if i == -1 {
+		return fmt.Errorf("Invalid path %s", path)
+	}
+	pathParent := path[:i]
+	pathName := path[i+1:]
+	blobStore, err := createBlobStoreForURI(pathParent)
 	if err != nil {
 		return err
 	}
-	client, err := blobStore.OpenClient(path, context.Background())
+	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
 		return err
 	}
-	object, err := client.NewObject(path)
+	object, err := client.NewObject(pathName)
 	if err != nil {
 		return err
 	}
-	err = object.Write(data)
+	_, err = object.Write(data)
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,124 @@ import (
 	"google.golang.org/api/iterator"
 )
 
+// RemoteObject
+type RemoteObject interface {
+	LockState() error
+	Read() ([]byte, error)
+	Write(data []byte) error
+}
+
+// RemoteClient
+type RemoteClient interface {
+	NewObject(path string) (RemoteObject, error)
+}
+
+// RemoteStore
+type RemoteStore interface {
+	OpenClient(path string, ctx context.Context) (RemoteClient, error)
+}
+
+type gcsRemoteObject struct {
+	objHandle      *storage.ObjectHandle
+	ctx            context.Context
+	path           string
+	writeCondition *storage.Conditions
+}
+
+type gcsRemoteClient struct {
+	client     *storage.Client
+	ctx        context.Context
+	bucketName string
+	bucket     *storage.BucketHandle
+}
+
+type gcsRemoteStore struct {
+}
+
+// NewGCSFileStorage ...
+func NewGCSRemoteStore() (RemoteStore, error) {
+	s := &gcsRemoteStore{}
+	return s, nil
+}
+
+func (remoteStore *gcsRemoteStore) OpenClient(bucketPath string, ctx context.Context) (RemoteClient, error) {
+	u, err := url.Parse(bucketPath)
+	if u.Scheme != "gs" {
+		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+	}
+
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, bucketPath)
+	}
+
+	bucketName := u.Host
+	bucket := client.Bucket(bucketName)
+	return &gcsRemoteClient{client: client, ctx: ctx, bucketName: bucketName, bucket: bucket}, nil
+}
+
+func (remoteClient *gcsRemoteClient) NewObject(path string) (RemoteObject, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, err
+	}
+	if u.Scheme != "gs" {
+		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+	}
+	if u.Host != remoteClient.bucketName {
+		return nil, fmt.Errorf("invalid bucket '%s', expected '%s'", u.Hostname, remoteClient.bucket)
+	}
+
+	objHandle := remoteClient.bucket.Object(u.Path[1:])
+	return &gcsRemoteObject{objHandle: objHandle, ctx: remoteClient.ctx, path: u.Path[1:], writeCondition: nil}, nil
+}
+
+func (remoteObject *gcsRemoteObject) Read() ([]byte, error) {
+	var reader *storage.Reader
+	var err error
+	if remoteObject.writeCondition == nil {
+		reader, err = remoteObject.objHandle.NewReader(remoteObject.ctx)
+	} else {
+		reader, err = remoteObject.objHandle.If(*remoteObject.writeCondition).NewReader(remoteObject.ctx)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, remoteObject.path)
+	}
+	defer reader.Close()
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, errors.Wrap(err, remoteObject.path)
+	}
+	return data, nil
+}
+
+func (remoteObject *gcsRemoteObject) LockState() error {
+	remoteObject.writeCondition = &storage.Conditions{DoesNotExist: true}
+	objAttrs, _ := remoteObject.objHandle.Attrs(remoteObject.ctx)
+	if objAttrs != nil {
+		remoteObject.writeCondition = &storage.Conditions{GenerationMatch: objAttrs.Generation}
+	}
+	return nil
+}
+
+func (remoteObject *gcsRemoteObject) Write(data []byte) error {
+	var writer *storage.Writer
+	if remoteObject.writeCondition == nil {
+		writer = remoteObject.objHandle.NewWriter(remoteObject.ctx)
+	} else {
+		writer = remoteObject.objHandle.If(*remoteObject.writeCondition).NewWriter(remoteObject.ctx)
+	}
+	if writer == nil {
+		return fmt.Errorf("Failed to create writer for `%s`", remoteObject.path)
+	}
+	defer writer.Close()
+	_, err := writer.Write(data)
+	if err != nil {
+		return errors.Wrap(err, remoteObject.path)
+	}
+	return nil
+}
+
 type gcsFileStorage struct {
 }
 

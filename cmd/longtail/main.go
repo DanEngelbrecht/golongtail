@@ -185,17 +185,20 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 	return longtailstorelib.NewFSBlobStore(uri)
 }
 
-func readFromPath(path string) ([]byte, error) {
-	i := strings.LastIndex(path, "/")
+func splitURI(uri string) (string, string) {
+	i := strings.LastIndex(uri, "/")
 	if i == -1 {
-		i = strings.LastIndex(path, "\\")
+		i = strings.LastIndex(uri, "\\")
 	}
 	if i == -1 {
-		return nil, fmt.Errorf("Invalid path %s", path)
+		return "", uri
 	}
-	pathParent := path[:i]
-	pathName := path[i+1:]
-	blobStore, err := createBlobStoreForURI(pathParent)
+	return uri[:i], uri[i+1:]
+}
+
+func readFromURI(uri string) ([]byte, error) {
+	uriParent, uriName := splitURI(uri)
+	blobStore, err := createBlobStoreForURI(uriParent)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +206,7 @@ func readFromPath(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	object, err := client.NewObject(pathName)
+	object, err := client.NewObject(uriName)
 	if err != nil {
 		return nil, err
 	}
@@ -214,17 +217,9 @@ func readFromPath(path string) ([]byte, error) {
 	return vbuffer, nil
 }
 
-func writeToPath(path string, data []byte) error {
-	i := strings.LastIndex(path, "/")
-	if i == -1 {
-		i = strings.LastIndex(path, "\\")
-	}
-	if i == -1 {
-		return fmt.Errorf("Invalid path %s", path)
-	}
-	pathParent := path[:i]
-	pathName := path[i+1:]
-	blobStore, err := createBlobStoreForURI(pathParent)
+func writeToURI(uri string, data []byte) error {
+	uriParent, uriName := splitURI(uri)
+	blobStore, err := createBlobStoreForURI(uriParent)
 	if err != nil {
 		return err
 	}
@@ -232,7 +227,7 @@ func writeToPath(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	object, err := client.NewObject(pathName)
+	object, err := client.NewObject(uriName)
 	if err != nil {
 		return err
 	}
@@ -480,7 +475,7 @@ func upSyncVersion(
 			return fmt.Errorf("upSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	} else {
-		vbuffer, err := readFromPath(*sourceIndexPath)
+		vbuffer, err := readFromURI(*sourceIndexPath)
 		if err != nil {
 			return err
 		}
@@ -563,7 +558,7 @@ func upSyncVersion(
 			return fmt.Errorf("upSyncVersion: longtaillib.WriteContentIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 
-		err = writeToPath(*versionContentIndexPath, cbuffer)
+		err = writeToURI(*versionContentIndexPath, cbuffer)
 		if err != nil {
 			return err
 		}
@@ -573,7 +568,7 @@ func upSyncVersion(
 	if errno != 0 {
 		return fmt.Errorf("upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
-	err = writeToPath(targetFilePath, vbuffer)
+	err = writeToURI(targetFilePath, vbuffer)
 
 	return nil
 }
@@ -658,7 +653,7 @@ func downSyncVersion(
 	errno := 0
 	var sourceVersionIndex longtaillib.Longtail_VersionIndex
 
-	vbuffer, err := readFromPath(sourceFilePath)
+	vbuffer, err := readFromURI(sourceFilePath)
 	if err != nil {
 		return err
 	}
@@ -708,7 +703,7 @@ func downSyncVersion(
 			return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	} else {
-		vbuffer, err := readFromPath(*targetIndexPath)
+		vbuffer, err := readFromURI(*targetIndexPath)
 		if err != nil {
 			return err
 		}
@@ -807,7 +802,7 @@ func validateVersion(
 	remoteContentIndex := getIndexComplete.contentIndex
 	defer remoteContentIndex.Dispose()
 
-	vbuffer, err := readFromPath(versionIndexPath)
+	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
 		return err
 	}
@@ -827,7 +822,7 @@ func validateVersion(
 }
 
 func showVersionIndex(versionIndexPath string, compact bool) error {
-	vbuffer, err := readFromPath(versionIndexPath)
+	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
 		return err
 	}
@@ -903,7 +898,7 @@ func showVersionIndex(versionIndexPath string, compact bool) error {
 }
 
 func showContentIndex(contentIndexPath string, compact bool) error {
-	vbuffer, err := readFromPath(contentIndexPath)
+	vbuffer, err := readFromURI(contentIndexPath)
 	if err != nil {
 		return err
 	}
@@ -935,7 +930,7 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 }
 
 func listVersionIndex(versionIndexPath string, showDetails bool) error {
-	vbuffer, err := readFromPath(versionIndexPath)
+	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
 		return err
 	}

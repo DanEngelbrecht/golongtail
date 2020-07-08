@@ -25,6 +25,10 @@ type getBlockMessage struct {
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetStoredBlockAPI
 }
 
+type prefetchBlockMessage struct {
+	blockHash uint64
+}
+
 type getIndexMessage struct {
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI
 }
@@ -52,12 +56,16 @@ type remoteStore struct {
 
 	putBlockChan        chan putBlockMessage
 	getBlockChan        chan getBlockMessage
+	prefetchBlockChan   chan prefetchBlockMessage
 	contentIndexChan    chan contentIndexMessage
 	getIndexChan        chan getIndexMessage
 	retargetContentChan chan retargetContentMessage
 	workerStopChan      chan stopMessage
 	indexStopChan       chan stopMessage
 	workerErrorChan     chan error
+
+	fetchedBlocksSync sync.Mutex
+	fetchedBlocks     map[uint64]longtaillib.Longtail_StoredBlock
 
 	stats         longtaillib.BlockStoreStats
 	outFinalStats *longtaillib.BlockStoreStats
@@ -181,6 +189,7 @@ func remoteWorker(
 	s *remoteStore,
 	putBlockMessages <-chan putBlockMessage,
 	getBlockMessages <-chan getBlockMessage,
+	prefetchBlockChan <-chan prefetchBlockMessage,
 	contentIndexMessages chan<- contentIndexMessage,
 	stopMessages <-chan stopMessage) error {
 	client, err := s.blobStore.NewClient(ctx)
@@ -194,8 +203,51 @@ func remoteWorker(
 			errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
 			putMsg.asyncCompleteAPI.OnComplete(errno)
 		case getMsg := <-getBlockMessages:
-			storedBlock, errno := getStoredBlock(ctx, s, client, getMsg.blockHash)
-			getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
+			s.fetchedBlocksSync.Lock()
+			prefetchedBlock, _ := s.fetchedBlocks[getMsg.blockHash]
+			s.fetchedBlocks[getMsg.blockHash] = longtaillib.Longtail_StoredBlock{}
+			s.fetchedBlocksSync.Unlock()
+			if prefetchedBlock.IsValid() {
+				getMsg.asyncCompleteAPI.OnComplete(prefetchedBlock, 0)
+			} else {
+				storedBlock, errno := getStoredBlock(ctx, s, client, getMsg.blockHash)
+				getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
+			}
+		default:
+		}
+		select {
+		case putMsg := <-putBlockMessages:
+			errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
+			putMsg.asyncCompleteAPI.OnComplete(errno)
+		case getMsg := <-getBlockMessages:
+			s.fetchedBlocksSync.Lock()
+			prefetchedBlock, _ := s.fetchedBlocks[getMsg.blockHash]
+			s.fetchedBlocks[getMsg.blockHash] = longtaillib.Longtail_StoredBlock{}
+			s.fetchedBlocksSync.Unlock()
+			if prefetchedBlock.IsValid() {
+				getMsg.asyncCompleteAPI.OnComplete(prefetchedBlock, 0)
+			} else {
+				storedBlock, errno := getStoredBlock(ctx, s, client, getMsg.blockHash)
+				getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
+			}
+		case prefetchMsg := <-prefetchBlockChan:
+			s.fetchedBlocksSync.Lock()
+			_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
+			s.fetchedBlocksSync.Unlock()
+			if !exists {
+				storedBlock, errno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+				if errno == 0 {
+					s.fetchedBlocksSync.Lock()
+					_, exists = s.fetchedBlocks[prefetchMsg.blockHash]
+					if !exists {
+						s.fetchedBlocks[prefetchMsg.blockHash] = storedBlock
+					}
+					s.fetchedBlocksSync.Unlock()
+					if exists {
+						storedBlock.Dispose()
+					}
+				}
+			}
 		case _ = <-stopMessages:
 			run = false
 		}
@@ -586,12 +638,14 @@ func NewRemoteBlockStore(
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
+	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*2048)
 	s.getIndexChan = make(chan getIndexMessage)
 	s.retargetContentChan = make(chan retargetContentMessage, 16)
 	s.workerStopChan = make(chan stopMessage, s.workerCount)
 	s.indexStopChan = make(chan stopMessage, 1)
 	s.workerErrorChan = make(chan error, 1+s.workerCount)
+	s.fetchedBlocks = map[uint64]longtaillib.Longtail_StoredBlock{}
 
 	go func() {
 		err := contentIndexWorker(ctx, s, s.contentIndexChan, s.getIndexChan, s.retargetContentChan, s.indexStopChan)
@@ -600,7 +654,7 @@ func NewRemoteBlockStore(
 
 	for i := 0; i < s.workerCount; i++ {
 		go func() {
-			err := remoteWorker(ctx, s, s.putBlockChan, s.getBlockChan, s.contentIndexChan, s.workerStopChan)
+			err := remoteWorker(ctx, s, s.putBlockChan, s.getBlockChan, s.prefetchBlockChan, s.contentIndexChan, s.workerStopChan)
 			s.workerErrorChan <- err
 		}()
 	}
@@ -624,6 +678,9 @@ func (s *remoteStore) PutStoredBlock(storedBlock longtaillib.Longtail_StoredBloc
 
 // PreflightGet ...
 func (s *remoteStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
+	for b := uint64(0); b < blockCount; b++ {
+		s.prefetchBlockChan <- prefetchBlockMessage{blockHash: hashes[b]}
+	}
 	return 0
 }
 

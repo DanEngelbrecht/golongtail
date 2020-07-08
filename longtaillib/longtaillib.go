@@ -751,6 +751,10 @@ func (blockIndex *Longtail_BlockIndex) IsValid() bool {
 	return blockIndex.cBlockIndex != nil
 }
 
+func (storedBlock *Longtail_StoredBlock) IsValid() bool {
+	return storedBlock.cStoredBlock != nil
+}
+
 func (storedBlock *Longtail_StoredBlock) GetBlockIndex() Longtail_BlockIndex {
 	return Longtail_BlockIndex{cBlockIndex: storedBlock.cStoredBlock.m_BlockIndex}
 }

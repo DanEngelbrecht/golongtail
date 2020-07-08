@@ -32,7 +32,7 @@ Intel Xeon W-2155 CPU @ 3.3 GHz, 10 Cores w hyper threading enabled, 64 Gb RAM, 
 
 \* Ideal time is how fast the data can be downloaded on a 1Gb connection in theory. It does not take into account the time to write data to disk.
 
-\** Longtail uses an (optional) cache to primarily speed up incremental downloads but it also helps with full downloads. The cache size contains the downloaded data so it will in this case end up ad 32.1 Gb in size.
+\** Longtail uses an (optional) cache to primarily speed up incremental downloads but it also helps with full downloads. The cache size contains the downloaded data so it will in this case end up at 32.1 Gb in size.
 - *Longtail w/o cache* = no local cache of downloaded blocks
 - *Longtail w/ cache* = local cache of downloaded blocks, starting from empty cache
 - *Longtail w/ primed cache* = local cache of downloaded blocks with all block already cached

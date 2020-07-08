@@ -19,14 +19,16 @@ Intel Xeon W-2155 CPU @ 3.3 GHz, 10 Cores w hyper threading enabled, 64 Gb RAM, 
 
 **Time** is the time to download and write the final data to disk, including validation of written data (applicable for *Game Store* and *Longtail*).
 
+The Longtail examples accesses data directly from a GCS storage bucket.
+
 |                           |Download Size     |Time     |
 |---------------------------|------------------|---------|
 |Ideal* Uncompressed        | 80.6 Gb          | 11m 32s |
-|Ideal* Game Store          | 39.6 Gb          | 05m 42s |
-|Ideal* Longtail            | 32.1 Gb          | 04m 35s |
+|Ideal* Game Store          | 39.6 Gb          | 05m 40s |
+|Ideal* Longtail            | 33.6 Gb          | 04m 48s |
 |Game Store                 | 39.6 Gb          | 15m 45s |
-|Longtail w/o cache**       | 32.1 Gb          | 07m 05s |
-|Longtail w/ cache**        | 32.1 Gb          | 05m 57s |
+|Longtail w/o cache**       | 33.6 Gb          | 07m 05s |
+|Longtail w/ cache**        | 33.6 Gb          | 05m 57s |
 |Longtail w/ primed cache** | 0 Gb             | 03m 00s |
 |Local copy***              | 0 Gb             | 02m 59s |
 
@@ -38,6 +40,13 @@ Intel Xeon W-2155 CPU @ 3.3 GHz, 10 Cores w hyper threading enabled, 64 Gb RAM, 
 - *Longtail w/ primed cache* = local cache of downloaded blocks with all block already cached
 
 \*** *Local copy* is the time it takes to copy the installed 80.6 Gb from one location on local disk to a new location.
+
+### Other numbers
+Indexing and chunking (finding out chunks and blocks) of the 80.6 Gb takes 35s - this is the time it would take to validate an installation against source data.
+
+Compressing the 80.6 Gb of original data into 32.1 Gb and save to local storage using longtail on listed hardware specifications takes 29m 41s.
+
+Compressing the 80.6 Gb of original data into 32.1 Gb and upload to a GCS storage bucket using longtail on listed hardware specifications takes 30m 8s.
 
 ## Cloning
 git clone https://github.com/DanEngelbrecht/golongtail.git

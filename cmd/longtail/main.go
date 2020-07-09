@@ -583,6 +583,7 @@ func downSyncVersion(
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	retainPermissions bool,
+	validate bool,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
 	outFinalStats *longtaillib.BlockStoreStats) error {
@@ -758,6 +759,75 @@ func downSyncVersion(
 	if errno != 0 {
 		return fmt.Errorf("downSyncVersion: longtaillib.ChangeVersion() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
+
+	if validate {
+		validateFileInfos, errno := longtaillib.GetFilesRecursively(
+			fs,
+			pathFilter,
+			targetFolderPath)
+		if errno != 0 {
+			return fmt.Errorf("downSyncVersion: longtaillib.GetFilesRecursively() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+		defer validateFileInfos.Dispose()
+
+		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Validating version"})
+		defer createVersionIndexProgress.Dispose()
+		validateVersionIndex, errno := longtaillib.CreateVersionIndex(
+			fs,
+			hash,
+			jobs,
+			&createVersionIndexProgress,
+			targetFolderPath,
+			validateFileInfos,
+			nil,
+			targetChunkSize)
+		if errno != 0 {
+			return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+		defer validateVersionIndex.Dispose()
+		if validateVersionIndex.GetAssetCount() != sourceVersionIndex.GetAssetCount() {
+			return fmt.Errorf("downSyncVersion: failed validation: asset count mismatch")
+		}
+		validateAssetSizes := validateVersionIndex.GetAssetSizes()
+		validateAssetHashes := validateVersionIndex.GetAssetHashes()
+
+		sourceAssetSizes := sourceVersionIndex.GetAssetSizes()
+		sourceAssetHashes := sourceVersionIndex.GetAssetHashes()
+
+		assetSizeLookup := map[string]uint64{}
+		assetHashLookup := map[string]uint64{}
+		assetPermissionLookup := map[string]uint16{}
+
+		for i, s := range sourceAssetSizes {
+			path := sourceVersionIndex.GetAssetPath(uint32(i))
+			assetSizeLookup[path] = s
+			assetHashLookup[path] = sourceAssetHashes[i]
+			assetPermissionLookup[path] = sourceVersionIndex.GetAssetPermissions(uint32(i))
+		}
+		for i, validateSize := range validateAssetSizes {
+			validatePath := validateVersionIndex.GetAssetPath(uint32(i))
+			validateHash := validateAssetHashes[i]
+			size, exists := assetSizeLookup[validatePath]
+			hash, _ := assetHashLookup[validatePath]
+			if !exists {
+				return fmt.Errorf("downSyncVersion: failed validation: invalid path %s", validatePath)
+			}
+			if size != validateSize {
+				return fmt.Errorf("downSyncVersion: failed validation: asset %d size mismatch", i)
+			}
+			if hash != validateHash {
+				return fmt.Errorf("downSyncVersion: failed validation: asset %d hash mismatch", i)
+			}
+			if retainPermissions {
+				validatePermissions := validateVersionIndex.GetAssetPermissions(uint32(i))
+				permissions := assetPermissionLookup[validatePath]
+				if permissions != validatePermissions {
+					return fmt.Errorf("downSyncVersion: failed validation: asset %d permission mismatch", i)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -1067,6 +1137,7 @@ var (
 	commandDownsyncTargetBlockSize     = commandDownsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandDownsyncMaxChunksPerBlock   = commandDownsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	commandDownsyncNoRetainPermissions = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
+	commandDownsyncValidate            = commandDownsync.Flag("validate", "Validate target path once completed").Bool()
 
 	commandValidate                 = kingpin.Command("validate", "Validate a version index against a content store")
 	commandValidateStorageURI       = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
@@ -1134,6 +1205,7 @@ func main() {
 			*commandDownsyncTargetBlockSize,
 			*commandDownsyncMaxChunksPerBlock,
 			!(*commandDownsyncNoRetainPermissions),
+			*commandDownsyncValidate,
 			includeFilterRegEx,
 			excludeFilterRegEx,
 			&stats)

@@ -489,6 +489,11 @@ func (versionIndex *Longtail_VersionIndex) GetAssetPath(assetIndex uint32) strin
 	return C.GoString(cPath)
 }
 
+func (versionIndex *Longtail_VersionIndex) GetAssetHashes() []uint64 {
+	size := int(*versionIndex.cVersionIndex.m_AssetCount)
+	return carray2slice64(versionIndex.cVersionIndex.m_ContentHashes, size)
+}
+
 func (versionIndex *Longtail_VersionIndex) GetAssetSize(assetIndex uint32) uint64 {
 	cSize := C.GetVersionAssetSize(versionIndex.cVersionIndex, C.uint32_t(assetIndex))
 	return uint64(cSize)

@@ -90,6 +90,7 @@ jobs:
            - *CHANGED* Refactored GCS store into remote block store and gcs blob store
               This makes it much simpler to add more remote stores such as S3 and Azure
            - *ADDED* Remote store prefetch of blocks - reducing downsync time ~5%
+           - *ADDED* `downsync` now has `--validate` option to verify written version after completion
         draft: false
         prerelease: false
     - name: Download Linux artifacts

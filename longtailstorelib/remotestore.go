@@ -45,6 +45,12 @@ type retargetContentMessage struct {
 type stopMessage struct {
 }
 
+type pendingPrefetchedBlock struct {
+	storedBlock         longtaillib.Longtail_StoredBlock
+	completeCallbacks   []longtaillib.Longtail_AsyncGetStoredBlockAPI
+	workerPrefetchCount *int64
+}
+
 type remoteStore struct {
 	jobAPI            longtaillib.Longtail_JobAPI
 	maxBlockSize      uint32
@@ -65,7 +71,8 @@ type remoteStore struct {
 	workerErrorChan     chan error
 
 	fetchedBlocksSync sync.Mutex
-	fetchedBlocks     map[uint64]longtaillib.Longtail_StoredBlock
+	fetchedBlocks     map[uint64]bool
+	prefetchBlocks    map[uint64]*pendingPrefetchedBlock
 
 	stats         longtaillib.BlockStoreStats
 	outFinalStats *longtaillib.BlockStoreStats
@@ -184,6 +191,55 @@ func getStoredBlock(
 	return storedBlock, 0
 }
 
+func fetchBlock(
+	ctx context.Context,
+	s *remoteStore,
+	client BlobClient,
+	getMsg getBlockMessage) {
+	s.fetchedBlocksSync.Lock()
+	prefetchedBlock, exists := s.prefetchBlocks[getMsg.blockHash]
+	if exists {
+		storedBlock := prefetchedBlock.storedBlock
+		if storedBlock.IsValid() {
+			delete(s.prefetchBlocks, getMsg.blockHash)
+			atomic.AddInt64(prefetchedBlock.workerPrefetchCount, -1)
+			s.fetchedBlocksSync.Unlock()
+			getMsg.asyncCompleteAPI.OnComplete(storedBlock, 0)
+			return
+		}
+		prefetchedBlock.completeCallbacks = append(prefetchedBlock.completeCallbacks, getMsg.asyncCompleteAPI)
+		s.fetchedBlocksSync.Unlock()
+		return
+	}
+	prefetchedBlock = &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
+	s.prefetchBlocks[getMsg.blockHash] = prefetchedBlock
+	s.fetchedBlocks[getMsg.blockHash] = true
+	s.fetchedBlocksSync.Unlock()
+	storedBlock, getStoredBlockErrno := getStoredBlock(ctx, s, client, getMsg.blockHash)
+	s.fetchedBlocksSync.Lock()
+	completeCallbacks := prefetchedBlock.completeCallbacks
+	delete(s.prefetchBlocks, getMsg.blockHash)
+	s.fetchedBlocksSync.Unlock()
+	for _, c := range completeCallbacks {
+		if getStoredBlockErrno != 0 {
+			c.OnComplete(longtaillib.Longtail_StoredBlock{}, getStoredBlockErrno)
+			continue
+		}
+		buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+		if errno != 0 {
+			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+			continue
+		}
+		blockCopy, errno := longtaillib.ReadStoredBlockFromBuffer(buf)
+		if errno != 0 {
+			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+			continue
+		}
+		c.OnComplete(blockCopy, 0)
+	}
+	getMsg.asyncCompleteAPI.OnComplete(storedBlock, getStoredBlockErrno)
+}
+
 func remoteWorker(
 	ctx context.Context,
 	s *remoteStore,
@@ -196,6 +252,7 @@ func remoteWorker(
 	if err != nil {
 		return errors.Wrap(err, s.blobStore.String())
 	}
+	workerPrefetchCount := int64(0)
 	run := true
 	for run {
 		select {
@@ -203,53 +260,75 @@ func remoteWorker(
 			errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
 			putMsg.asyncCompleteAPI.OnComplete(errno)
 		case getMsg := <-getBlockMessages:
-			s.fetchedBlocksSync.Lock()
-			prefetchedBlock, _ := s.fetchedBlocks[getMsg.blockHash]
-			s.fetchedBlocks[getMsg.blockHash] = longtaillib.Longtail_StoredBlock{}
-			s.fetchedBlocksSync.Unlock()
-			if prefetchedBlock.IsValid() {
-				getMsg.asyncCompleteAPI.OnComplete(prefetchedBlock, 0)
-			} else {
-				storedBlock, errno := getStoredBlock(ctx, s, client, getMsg.blockHash)
-				getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
-			}
+			fetchBlock(ctx, s, client, getMsg)
 		default:
 		}
-		select {
-		case putMsg := <-putBlockMessages:
-			errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
-			putMsg.asyncCompleteAPI.OnComplete(errno)
-		case getMsg := <-getBlockMessages:
-			s.fetchedBlocksSync.Lock()
-			prefetchedBlock, _ := s.fetchedBlocks[getMsg.blockHash]
-			s.fetchedBlocks[getMsg.blockHash] = longtaillib.Longtail_StoredBlock{}
-			s.fetchedBlocksSync.Unlock()
-			if prefetchedBlock.IsValid() {
-				getMsg.asyncCompleteAPI.OnComplete(prefetchedBlock, 0)
-			} else {
-				storedBlock, errno := getStoredBlock(ctx, s, client, getMsg.blockHash)
-				getMsg.asyncCompleteAPI.OnComplete(storedBlock, errno)
+		if workerPrefetchCount > 2 {
+			select {
+			case putMsg := <-putBlockMessages:
+				errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
+				putMsg.asyncCompleteAPI.OnComplete(errno)
+			case getMsg := <-getBlockMessages:
+				fetchBlock(ctx, s, client, getMsg)
+			case _ = <-stopMessages:
+				run = false
 			}
-		case prefetchMsg := <-prefetchBlockChan:
-			s.fetchedBlocksSync.Lock()
-			_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
-			s.fetchedBlocksSync.Unlock()
-			if !exists {
-				storedBlock, errno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
-				if errno == 0 {
-					s.fetchedBlocksSync.Lock()
-					_, exists = s.fetchedBlocks[prefetchMsg.blockHash]
-					if !exists {
-						s.fetchedBlocks[prefetchMsg.blockHash] = storedBlock
-					}
+		} else {
+			select {
+			case putMsg := <-putBlockMessages:
+				errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
+				putMsg.asyncCompleteAPI.OnComplete(errno)
+			case getMsg := <-getBlockMessages:
+				fetchBlock(ctx, s, client, getMsg)
+			case prefetchMsg := <-prefetchBlockChan:
+				s.fetchedBlocksSync.Lock()
+				_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
+				if exists {
+					// Already fetched
 					s.fetchedBlocksSync.Unlock()
-					if exists {
-						storedBlock.Dispose()
-					}
+					continue
 				}
+				s.fetchedBlocks[prefetchMsg.blockHash] = true
+				prefetchedBlock := &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
+				s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
+				s.fetchedBlocksSync.Unlock()
+
+				storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+
+				s.fetchedBlocksSync.Lock()
+				prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
+				completeCallbacks := prefetchedBlock.completeCallbacks
+				if len(completeCallbacks) == 0 {
+					prefetchedBlock.storedBlock = storedBlock
+					prefetchedBlock.workerPrefetchCount = &workerPrefetchCount
+					atomic.AddInt64(&workerPrefetchCount, 1)
+					s.fetchedBlocksSync.Unlock()
+					continue
+				}
+				delete(s.prefetchBlocks, prefetchMsg.blockHash)
+				s.fetchedBlocksSync.Unlock()
+				for i := 1; i < len(completeCallbacks)-1; i++ {
+					c := completeCallbacks[i]
+					if getErrno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, getErrno)
+						continue
+					}
+					buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+					if errno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+						continue
+					}
+					blockCopy, errno := longtaillib.ReadStoredBlockFromBuffer(buf)
+					if errno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+						continue
+					}
+					c.OnComplete(blockCopy, 0)
+				}
+				completeCallbacks[0].OnComplete(storedBlock, getErrno)
+			case _ = <-stopMessages:
+				run = false
 			}
-		case _ = <-stopMessages:
-			run = false
 		}
 	}
 
@@ -645,7 +724,8 @@ func NewRemoteBlockStore(
 	s.workerStopChan = make(chan stopMessage, s.workerCount)
 	s.indexStopChan = make(chan stopMessage, 1)
 	s.workerErrorChan = make(chan error, 1+s.workerCount)
-	s.fetchedBlocks = map[uint64]longtaillib.Longtail_StoredBlock{}
+	s.fetchedBlocks = map[uint64]bool{}
+	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 
 	go func() {
 		err := contentIndexWorker(ctx, s, s.contentIndexChan, s.getIndexChan, s.retargetContentChan, s.indexStopChan)
@@ -679,7 +759,7 @@ func (s *remoteStore) PutStoredBlock(storedBlock longtaillib.Longtail_StoredBloc
 // PreflightGet ...
 func (s *remoteStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
 	for b := uint64(0); b < blockCount; b++ {
-		s.prefetchBlockChan <- prefetchBlockMessage{blockHash: hashes[b]}
+		s.prefetchBlockChan <- prefetchBlockMessage{blockHash: hashes[blockCount-1-b]}
 	}
 	return 0
 }

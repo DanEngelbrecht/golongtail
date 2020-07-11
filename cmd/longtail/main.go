@@ -259,7 +259,7 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	case "lz4":
 		return longtaillib.GetLZ4DefaultCompressionType(), nil
 	case "zstd":
-		return longtaillib.GetZStdMaxCompressionType(), nil
+		return longtaillib.GetZStdDefaultCompressionType(), nil
 	case "zstd_min":
 		return longtaillib.GetZStdMinCompressionType(), nil
 	case "zstd_max":

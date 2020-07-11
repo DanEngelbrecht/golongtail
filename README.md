@@ -44,9 +44,9 @@ The Longtail examples accesses data directly from a GCS storage bucket.
 ### Other numbers
 Indexing and chunking (finding out chunks and blocks) of the 80.6 Gb takes 35s - this is the time it would take to validate an installation against source data.
 
-Compressing the 80.6 Gb of original data into 32.1 Gb and save to local storage using longtail on listed hardware specifications takes 29m 41s.
+Compressing the 80.6 Gb of original data into 32.1 Gb and save to local storage using longtail on listed hardware specifications takes 2m 39s.
 
-Compressing the 80.6 Gb of original data into 32.1 Gb and upload to a GCS storage bucket using longtail on listed hardware specifications takes 30m 8s.
+Compressing the 80.6 Gb of original data into 32.1 Gb and upload to a GCS storage bucket using longtail on listed hardware specifications takes 6m 50s.
 
 ## Cloning
 git clone https://github.com/DanEngelbrecht/golongtail.git

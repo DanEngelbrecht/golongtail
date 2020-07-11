@@ -715,7 +715,7 @@ func NewRemoteBlockStore(
 		defaultClient:     defaultClient}
 
 	s.workerCount = runtime.NumCPU()
-	s.putBlockChan = make(chan putBlockMessage, s.workerCount*2048)
+	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*2048)

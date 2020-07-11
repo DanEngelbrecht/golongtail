@@ -1112,7 +1112,7 @@ var (
 	commandUpsyncSourceIndexPath         = commandUpsync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
 	commandUpsyncTargetPath              = commandUpsync.Flag("target-path", "Target file uri").Required().String()
 	commandUpsyncVersionContentIndexPath = commandUpsync.Flag("version-content-index-path", "Version local content index file uri").String()
-	commandUpsyncCompression             = commandUpsync.Flag("commandUpsyncCompression-algorithm", "commandUpsyncCompression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+	commandUpsyncCompression             = commandUpsync.Flag("compression-algorithm", "compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
 						Default("zstd").
 						Enum(
 			"none",

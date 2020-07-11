@@ -90,6 +90,10 @@ jobs:
            - *CHANGED* block store prefetch now limited to two blocks per worker thread
            - *FIX* removed double fetch of blocks that happened in some cases (prefetch logic)
            - *UPDATE* updated to longtail v0.0.45
+           - *FIX* fixed name of `--compression-algorithm` option
+           - *FIX* reduce remotestore putblock queue size to fix excessive memory usage
+           - *FIX* Fixed "zstd" compression using max instead of default
+           - *UPDATE* New numbers for `upsync` time in README.md
         draft: false
         prerelease: false
     - name: Download Linux artifacts

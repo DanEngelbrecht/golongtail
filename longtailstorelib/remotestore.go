@@ -332,11 +332,13 @@ func remoteWorker(
 		}
 	}
 
-	select {
-	case putMsg := <-putBlockMessages:
-		errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
-		putMsg.asyncCompleteAPI.OnComplete(errno)
-	default:
+	for len(putBlockMessages) > 0 {
+		select {
+		case putMsg := <-putBlockMessages:
+			errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
+			putMsg.asyncCompleteAPI.OnComplete(errno)
+		default:
+		}
 	}
 
 	return nil
@@ -655,16 +657,18 @@ func contentIndexWorker(
 		}
 	}
 
-	select {
-	case contentIndexMsg := <-contentIndexMessages:
-		newAddedContentIndex, errno := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
-		if errno != 0 {
-			return fmt.Errorf("contentIndexWorker: longtaillib.AddContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+	for len(contentIndexMessages) > 0 {
+		select {
+		case contentIndexMsg := <-contentIndexMessages:
+			newAddedContentIndex, errno := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
+			if errno != 0 {
+				return fmt.Errorf("contentIndexWorker: longtaillib.AddContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
+			}
+			addedContentIndex.Dispose()
+			addedContentIndex = newAddedContentIndex
+			contentIndexMsg.contentIndex.Dispose()
+		default:
 		}
-		addedContentIndex.Dispose()
-		addedContentIndex = newAddedContentIndex
-		contentIndexMsg.contentIndex.Dispose()
-	default:
 	}
 
 	if addedContentIndex.GetBlockCount() > 0 {

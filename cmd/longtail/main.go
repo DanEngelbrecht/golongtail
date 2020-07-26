@@ -648,7 +648,9 @@ func downSyncVersion(
 	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	indexStore = longtaillib.CreateShareBlockStore(compressBlockStore)
+	shareBlockStore := longtaillib.CreateShareBlockStore(compressBlockStore)
+	defer shareBlockStore.Dispose()
+	indexStore = longtaillib.CreateLRUBlockStoreAPI(shareBlockStore, 32)
 	defer indexStore.Dispose()
 
 	errno := 0

@@ -87,6 +87,10 @@ jobs:
         body: |
           Changes in this Release
            - *UPDATE* updated to longtail v0.0.48
+           - *ADDED* Exposed BlockStoreStorageAPI in longtaillib
+           - *ADDED* Exposed LRUBlockStoreAPI
+           - *ADDED* `ls` command to list content if version indexes
+           - *ADDED* `cp` command to copy file out from version index/store
         draft: false
         prerelease: false
     - name: Download Linux artifacts

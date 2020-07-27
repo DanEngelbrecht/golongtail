@@ -1001,6 +1001,67 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
+func getDetailsString(path string, size uint64, permissions uint16, isDir bool, sizePadding int) string {
+	sizeString := fmt.Sprintf("%d", size)
+	sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
+	bits := ""
+	if strings.HasSuffix(path, "/") {
+		bits += "d"
+		path = strings.TrimRight(path, "/")
+	} else {
+		bits += "-"
+	}
+	if (permissions & 0400) == 0 {
+		bits += "-"
+	} else {
+		bits += "r"
+	}
+	if (permissions & 0200) == 0 {
+		bits += "-"
+	} else {
+		bits += "w"
+	}
+	if (permissions & 0100) == 0 {
+		bits += "-"
+	} else {
+		bits += "x"
+	}
+
+	if (permissions & 0040) == 0 {
+		bits += "-"
+	} else {
+		bits += "r"
+	}
+	if (permissions & 0020) == 0 {
+		bits += "-"
+	} else {
+		bits += "w"
+	}
+	if (permissions & 0010) == 0 {
+		bits += "-"
+	} else {
+		bits += "x"
+	}
+
+	if (permissions & 0004) == 0 {
+		bits += "-"
+	} else {
+		bits += "r"
+	}
+	if (permissions & 0002) == 0 {
+		bits += "-"
+	} else {
+		bits += "w"
+	}
+	if (permissions & 0001) == 0 {
+		bits += "-"
+	} else {
+		bits += "x"
+	}
+
+	return fmt.Sprintf("%s %s %s\n", bits, sizeString, path)
+}
+
 func dumpVersionIndex(versionIndexPath string, showDetails bool) error {
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
@@ -1028,66 +1089,13 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) error {
 	for i := uint32(0); i < assetCount; i++ {
 		path := versionIndex.GetAssetPath(i)
 		if showDetails {
+			isDir := strings.HasSuffix(path, "/")
 			assetSize := versionIndex.GetAssetSize(i)
+			permissions := versionIndex.GetAssetPermissions(i)
+			detailsString := getDetailsString(path, assetSize, permissions, isDir, sizePadding)
 			sizeString := fmt.Sprintf("%d", assetSize)
 			sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
-			permissions := versionIndex.GetAssetPermissions(i)
-			bits := ""
-			if strings.HasSuffix(path, "/") {
-				bits += "d"
-				path = strings.TrimRight(path, "/")
-			} else {
-				bits += "-"
-			}
-			if (permissions & 0400) == 0 {
-				bits += "-"
-			} else {
-				bits += "r"
-			}
-			if (permissions & 0200) == 0 {
-				bits += "-"
-			} else {
-				bits += "w"
-			}
-			if (permissions & 0100) == 0 {
-				bits += "-"
-			} else {
-				bits += "x"
-			}
-
-			if (permissions & 0040) == 0 {
-				bits += "-"
-			} else {
-				bits += "r"
-			}
-			if (permissions & 0020) == 0 {
-				bits += "-"
-			} else {
-				bits += "w"
-			}
-			if (permissions & 0010) == 0 {
-				bits += "-"
-			} else {
-				bits += "x"
-			}
-
-			if (permissions & 0004) == 0 {
-				bits += "-"
-			} else {
-				bits += "r"
-			}
-			if (permissions & 0002) == 0 {
-				bits += "-"
-			} else {
-				bits += "w"
-			}
-			if (permissions & 0001) == 0 {
-				bits += "-"
-			} else {
-				bits += "x"
-			}
-
-			fmt.Printf("%s %s %s\n", bits, sizeString, path)
+			fmt.Printf("%s\n", detailsString)
 		} else {
 			fmt.Printf("%s\n", path)
 		}
@@ -1098,44 +1106,44 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) error {
 
 func lsVersionIndex(
 	commandLSVersionIndexPath string,
-	commandLSVersionDir *string) {
+	commandLSVersionDir *string) error {
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
+	vbuffer, err := readFromURI(commandLSVersionIndexPath)
+	if err != nil {
+		return err
+	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
 		return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer versionIndex.Dispose()
 
-	hashIdentifier := vindex.GetHashIdentifier()
+	hashIdentifier := versionIndex.GetHashIdentifier()
 
-	hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
+	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
 		return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 
-	fakeBlockStoreFS, errno := longtaillib.CreateInMemStorageAPI()
-	if errno != 0 {
-		return fmt.Errorf("upSyncVersion: hashRegistry.CreateInMemStorageAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
-	}
+	fakeBlockStoreFS := longtaillib.CreateInMemStorageAPI()
 	defer fakeBlockStoreFS.Dispose()
 
-	fakeBlockStore, errno := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store", 1024*1024*1024, 1024)
-	if errno != 0 {
-		return fmt.Errorf("upSyncVersion: hashRegistry.CreateFSBlockStore() failed with %s", longtaillib.ErrNoToDescription(errno))
-	}
+	fakeBlockStore := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store", 1024*1024*1024, 1024)
 	defer fakeBlockStoreFS.Dispose()
 
 	contentIndex, errno := longtaillib.CreateContentIndex(
 		hash,
 		versionIndex,
 		1024*1024*1024,
-		1024))
-	
-	blockStoreFS, errno := longtaillib.CreateBlockStoreStorageAPI(
+		1024)
+
+	longtaillib.SetLogLevel(0)
+
+	blockStoreFS := longtaillib.CreateBlockStoreStorageAPI(
 		hash,
 		jobs,
 		fakeBlockStore,
@@ -1146,10 +1154,29 @@ func lsVersionIndex(
 	}
 	defer blockStoreFS.Dispose()
 
-	// TODO:
-	// Longtail_StorageAPI.StartFind
-	// Longtail_StorageAPI.GetEntryProperties
-	// Longtail_StorageAPI.CloseFind
+	searchDir := ""
+	if commandLSVersionDir != nil && *commandLSVersionDir != "." {
+		searchDir = *commandLSVersionDir
+	}
+	iterator, errno := blockStoreFS.StartFind(searchDir)
+	if errno != 0 && errno != longtaillib.ENOENT {
+		return fmt.Errorf("upSyncVersion: hashRegistry.StartFind() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer blockStoreFS.CloseFind(iterator)
+	for errno != longtaillib.ENOENT {
+		properties, errno := blockStoreFS.GetEntryProperties(iterator)
+		if errno != 0 {
+			return fmt.Errorf("upSyncVersion: GetEntryProperties.GetEntryProperties() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+		detailsString := getDetailsString(properties.Name, properties.Size, properties.Permissions, properties.IsDir, 16)
+		fmt.Printf("%s\n", detailsString)
+
+		errno = blockStoreFS.FindNext(iterator)
+		if errno != 0 && errno != longtaillib.ENOENT {
+			return fmt.Errorf("upSyncVersion: GetEntryProperties.FindNext() failed with %s", longtaillib.ErrNoToDescription(errno))
+		}
+	}
+	return nil
 }
 
 var (

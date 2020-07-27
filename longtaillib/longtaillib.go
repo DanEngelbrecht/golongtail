@@ -251,6 +251,10 @@ type Longtail_StorageAPI struct {
 	cStorageAPI *C.struct_Longtail_StorageAPI
 }
 
+type Longtail_StorageAPI_HOpenFile struct {
+	cOpenFile C.Longtail_StorageAPI_HOpenFile
+}
+
 type Longtail_StorageAPI_Iterator struct {
 	cIterator C.Longtail_StorageAPI_HIterator
 }
@@ -369,6 +373,39 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 		return int(errno)
 	}
 	return 0
+}
+
+func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_StorageAPI_HOpenFile, int) {
+	cPath := C.CString(path)
+	var cOpenFile C.Longtail_StorageAPI_HOpenFile
+	errno := C.Longtail_Storage_OpenReadFile(storageAPI.cStorageAPI, cPath, &cOpenFile)
+	if errno != 0 {
+		return Longtail_StorageAPI_HOpenFile{}, int(errno)
+	}
+	return Longtail_StorageAPI_HOpenFile{cOpenFile: cOpenFile}, 0
+}
+
+func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) (uint64, int) {
+	var size C.uint64_t
+	errno := C.Longtail_Storage_GetSize(storageAPI.cStorageAPI, f.cOpenFile, &size)
+	if errno != 0 {
+		return 0, int(errno)
+	}
+	return uint64(size), 0
+}
+
+func (storageAPI *Longtail_StorageAPI) Read(f Longtail_StorageAPI_HOpenFile, offset uint64, size uint64) ([]byte, int) {
+
+	blockData := make([]byte, size)
+	errno := C.Longtail_Storage_Read(storageAPI.cStorageAPI, f.cOpenFile, C.uint64_t(offset), C.uint64_t(size), unsafe.Pointer(&blockData[0]))
+	if errno != 0 {
+		return nil, int(errno)
+	}
+	return blockData, 0
+}
+
+func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile) {
+	C.Longtail_Storage_CloseFile(storageAPI.cStorageAPI, f.cOpenFile)
 }
 
 func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, int) {

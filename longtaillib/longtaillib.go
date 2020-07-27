@@ -251,6 +251,17 @@ type Longtail_StorageAPI struct {
 	cStorageAPI *C.struct_Longtail_StorageAPI
 }
 
+type Longtail_StorageAPI_Iterator struct {
+	cIterator C.Longtail_StorageAPI_HIterator
+}
+
+type Longtail_StorageAPI_EntryProperties struct {
+	Name        string
+	Size        uint64
+	Permissions uint16
+	IsDir       bool
+}
+
 type Longtail_HashAPI struct {
 	cHashAPI *C.struct_Longtail_HashAPI
 }
@@ -358,6 +369,39 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 		return int(errno)
 	}
 	return 0
+}
+
+func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, int) {
+	cPath := C.CString(path)
+	var cIterator C.Longtail_StorageAPI_HIterator
+	errno := C.Longtail_Storage_StartFind(storageAPI.cStorageAPI, cPath, &cIterator)
+	if errno != 0 {
+		return Longtail_StorageAPI_Iterator{}, int(errno)
+	}
+	return Longtail_StorageAPI_Iterator{cIterator: cIterator}, 0
+}
+
+func (storageAPI *Longtail_StorageAPI) FindNext(iterator Longtail_StorageAPI_Iterator) int {
+	errno := C.Longtail_Storage_FindNext(storageAPI.cStorageAPI, iterator.cIterator)
+	return int(errno)
+}
+
+func (storageAPI *Longtail_StorageAPI) CloseFind(iterator Longtail_StorageAPI_Iterator) {
+	C.Longtail_Storage_CloseFind(storageAPI.cStorageAPI, iterator.cIterator)
+	iterator.cIterator = nil
+}
+
+func (storageAPI *Longtail_StorageAPI) GetEntryProperties(iterator Longtail_StorageAPI_Iterator) (Longtail_StorageAPI_EntryProperties, int) {
+	var cProperties C.struct_Longtail_StorageAPI_EntryProperties
+	errno := C.Longtail_Storage_GetEntryProperties(storageAPI.cStorageAPI, iterator.cIterator, &cProperties)
+	if errno != 0 {
+		return Longtail_StorageAPI_EntryProperties{}, int(errno)
+	}
+	return Longtail_StorageAPI_EntryProperties{
+		Name:        C.GoString(cProperties.m_Name),
+		Size:        uint64(cProperties.m_Size),
+		Permissions: uint16(cProperties.m_Permissions),
+		IsDir:       cProperties.m_IsDir != 0}, 0
 }
 
 func (fileInfos *Longtail_FileInfos) Dispose() {
@@ -649,8 +693,8 @@ func CreateShareBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_Bl
 }
 
 // CreateLRUBlockStoreAPI() ...
-func CreateLRUBlockStoreAPI(backingBlockStore Longtail_BlockStoreAPI, cache_block_count uint) Longtail_BlockStoreAPI {
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateLRUBlockStoreAPI(backingBlockStore.cBlockStoreAPI, C.uint32_t(cache_block_count))}
+func CreateLRUBlockStoreAPI(blockStore Longtail_BlockStoreAPI, cache_block_count uint) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateLRUBlockStoreAPI(blockStore.cBlockStoreAPI, (C.uint32_t)(cache_block_count))}
 }
 
 // CreateBlockStoreStorageAPI() ...
@@ -659,10 +703,11 @@ func CreateBlockStoreStorageAPI(
 	jobAPI Longtail_JobAPI,
 	blockStore Longtail_BlockStoreAPI,
 	contentIndex Longtail_ContentIndex,
-	versionIndex Longtail_VersionIndex) Longtail_BlockStoreAPI {
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateBlockStoreStorageAPI(
+	versionIndex Longtail_VersionIndex) Longtail_StorageAPI {
+	return Longtail_StorageAPI{cStorageAPI: C.Longtail_CreateBlockStoreStorageAPI(
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
+		blockStore.cBlockStoreAPI,
 		contentIndex.cContentIndex,
 		versionIndex.cVersionIndex)}
 }

@@ -1001,7 +1001,7 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
-func listVersionIndex(versionIndexPath string, showDetails bool) error {
+func dumpVersionIndex(versionIndexPath string, showDetails bool) error {
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
 		return err
@@ -1096,6 +1096,62 @@ func listVersionIndex(versionIndexPath string, showDetails bool) error {
 	return nil
 }
 
+func lsVersionIndex(
+	commandLSVersionIndexPath string,
+	commandLSVersionDir *string) {
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobs.Dispose()
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer versionIndex.Dispose()
+
+	hashIdentifier := vindex.GetHashIdentifier()
+
+	hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+
+	fakeBlockStoreFS, errno := longtaillib.CreateInMemStorageAPI()
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.CreateInMemStorageAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer fakeBlockStoreFS.Dispose()
+
+	fakeBlockStore, errno := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store", 1024*1024*1024, 1024)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.CreateFSBlockStore() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer fakeBlockStoreFS.Dispose()
+
+	contentIndex, errno := longtaillib.CreateContentIndex(
+		hash,
+		versionIndex,
+		1024*1024*1024,
+		1024))
+	
+	blockStoreFS, errno := longtaillib.CreateBlockStoreStorageAPI(
+		hash,
+		jobs,
+		fakeBlockStore,
+		contentIndex,
+		versionIndex)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.CreateBlockStoreStorageAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer blockStoreFS.Dispose()
+
+	// TODO:
+	// Longtail_StorageAPI.StartFind
+	// Longtail_StorageAPI.GetEntryProperties
+	// Longtail_StorageAPI.CloseFind
+}
+
 var (
 	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
@@ -1153,9 +1209,13 @@ var (
 	commandPrintContentIndexPath    = commandPrintContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
 	commandPrintContentIndexCompact = commandPrintContentIndex.Flag("compact", "Show info in compact layout").Bool()
 
-	commandList                 = kingpin.Command("ls", "List the asset paths inside a version index")
-	commandListVersionIndexPath = commandList.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandListDetails          = commandList.Flag("details", "Show details about assets").Bool()
+	commandDump                 = kingpin.Command("dump", "Dump the asset paths inside a version index")
+	commandDumpVersionIndexPath = commandDump.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandDumpDetails          = commandDump.Flag("details", "Show details about assets").Bool()
+
+	commandLSVersion          = kingpin.Command("ls", "list the content of a path inside a version index")
+	commandLSVersionIndexPath = commandLSVersion.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandLSVersionDir       = commandLSVersion.Arg("path", "path inside the version index to list").String()
 )
 
 func main() {
@@ -1229,8 +1289,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-	case commandList.FullCommand():
-		err := listVersionIndex(*commandListVersionIndexPath, *commandListDetails)
+	case commandDump.FullCommand():
+		err := dumpVersionIndex(*commandDumpVersionIndexPath, *commandDumpDetails)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandLSVersion.FullCommand():
+		err := lsVersionIndex(*commandLSVersionIndexPath, commandLSVersionDir)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -653,6 +653,20 @@ func CreateLRUBlockStoreAPI(backingBlockStore Longtail_BlockStoreAPI, cache_bloc
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateLRUBlockStoreAPI(backingBlockStore.cBlockStoreAPI, C.uint32_t(cache_block_count))}
 }
 
+// CreateBlockStoreStorageAPI() ...
+func CreateBlockStoreStorageAPI(
+	hashAPI Longtail_HashAPI,
+	jobAPI Longtail_JobAPI,
+	blockStore Longtail_BlockStoreAPI,
+	contentIndex Longtail_ContentIndex,
+	versionIndex Longtail_VersionIndex) Longtail_BlockStoreAPI {
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateBlockStoreStorageAPI(
+		hashAPI.cHashAPI,
+		jobAPI.cJobAPI,
+		contentIndex.cContentIndex,
+		versionIndex.cVersionIndex)}
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	if blockStoreAPI.cBlockStoreAPI != nil {

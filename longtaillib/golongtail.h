@@ -5,6 +5,7 @@
 #include "longtail/include/lib/bikeshed/longtail_bikeshed.h"
 #include "longtail/include/lib/blake2/longtail_blake2.h"
 #include "longtail/include/lib/blake3/longtail_blake3.h"
+#include "longtail/include/lib/blockstorestorage/longtail_blockstorestorage.h"
 #include "longtail/include/lib/brotli/longtail_brotli.h"
 #include "longtail/include/lib/cacheblockstore/longtail_cacheblockstore.h"
 #include "longtail/include/lib/compressblockstore/longtail_compressblockstore.h"

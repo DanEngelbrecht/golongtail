@@ -89,6 +89,9 @@ func putStoredBlock(
 	blobClient BlobClient,
 	contentIndexMessages chan<- contentIndexMessage,
 	storedBlock longtaillib.Longtail_StoredBlock) int {
+
+	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1)
+
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath("chunks", blockHash)
@@ -105,30 +108,29 @@ func putStoredBlock(
 		ok, err := objHandle.Write(blob)
 		if err != nil || !ok {
 			log.Printf("Retrying putBlob %s", key)
-			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 			ok, err = objHandle.Write(blob)
 		}
 		if err != nil || !ok {
 			log.Printf("Retrying 500 ms delayed putBlob %s", key)
 			time.Sleep(500 * time.Millisecond)
-			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 			ok, err = objHandle.Write(blob)
 		}
 		if err != nil || !ok {
 			log.Printf("Retrying 2 s delayed putBlob %s", key)
 			time.Sleep(2 * time.Second)
-			atomic.AddUint64(&s.stats.BlockPutRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 			ok, err = objHandle.Write(blob)
 		}
 
 		if err != nil || !ok {
-			atomic.AddUint64(&s.stats.BlockPutFailCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1)
 			return longtaillib.EIO
 		}
 
-		atomic.AddUint64(&s.stats.BlocksPutCount, 1)
-		atomic.AddUint64(&s.stats.BytesPutCount, (uint64)(len(blob)))
-		atomic.AddUint64(&s.stats.ChunksPutCount, (uint64)(blockIndex.GetChunkCount()))
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], (uint64)(len(blob)))
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	}
 
 	newBlocks := []longtaillib.Longtail_BlockIndex{blockIndex}
@@ -146,6 +148,8 @@ func getStoredBlock(
 	blobClient BlobClient,
 	blockHash uint64) (longtaillib.Longtail_StoredBlock, int) {
 
+	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1)
+
 	key := getBlockPath("chunks", blockHash)
 	objHandle, err := blobClient.NewObject(key)
 	if err != nil {
@@ -158,24 +162,24 @@ func getStoredBlock(
 			return longtaillib.Longtail_StoredBlock{}, longtaillib.ENOENT
 		}
 		log.Printf("Retrying getBlob %s", key)
-		atomic.AddUint64(&s.stats.BlockGetRetryCount, 1)
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], 1)
 		storedBlockData, err = objHandle.Read()
 	}
 	if err != nil {
 		log.Printf("Retrying 500 ms delayed getBlob %s", key)
 		time.Sleep(500 * time.Millisecond)
-		atomic.AddUint64(&s.stats.BlockGetRetryCount, 1)
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], 1)
 		storedBlockData, err = objHandle.Read()
 	}
 	if err != nil {
 		log.Printf("Retrying 2 s delayed getBlob %s", key)
 		time.Sleep(2 * time.Second)
-		atomic.AddUint64(&s.stats.BlockGetRetryCount, 1)
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], 1)
 		storedBlockData, err = objHandle.Read()
 	}
 
 	if err != nil {
-		atomic.AddUint64(&s.stats.BlockGetFailCount, 1)
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1)
 		return longtaillib.Longtail_StoredBlock{}, longtaillib.EIO
 	}
 
@@ -184,10 +188,9 @@ func getStoredBlock(
 		return longtaillib.Longtail_StoredBlock{}, errno
 	}
 
-	atomic.AddUint64(&s.stats.BlocksGetCount, 1)
-	atomic.AddUint64(&s.stats.BytesGetCount, (uint64)(len(storedBlockData)))
+	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], (uint64)(len(storedBlockData)))
 	blockIndex := storedBlock.GetBlockIndex()
-	atomic.AddUint64(&s.stats.ChunksGetCount, (uint64)(blockIndex.GetChunkCount()))
+	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	return storedBlock, 0
 }
 
@@ -551,17 +554,17 @@ func contentIndexWorker(
 		storedContentIndexData, err := objHandle.Read()
 		if err != nil {
 			log.Printf("Retrying getBlob %s", key)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed getBlob %s", key)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed getBlob %s", key)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			storedContentIndexData, err = objHandle.Read()
 		}
 
@@ -571,6 +574,8 @@ func contentIndexWorker(
 				contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
+		} else {
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1)
 		}
 	}
 
@@ -632,13 +637,13 @@ func contentIndexWorker(
 			addedContentIndex = newAddedContentIndex
 			contentIndexMsg.contentIndex.Dispose()
 		case getIndexMessage := <-getIndexMessages:
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
 			contentIndexCopy, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
 			if errno != 0 {
 				getIndexMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 				continue
 			}
 			getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
-			atomic.AddUint64(&s.stats.IndexGetCount, 1)
 		case retargetContentMessage := <-retargetContentMessages:
 			fullContentIndex, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
 			if errno != 0 {
@@ -675,23 +680,24 @@ func contentIndexWorker(
 		err := updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		if err != nil {
 			log.Printf("Retrying store index")
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed store index")
 			time.Sleep(500 * time.Millisecond)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed store index")
 			time.Sleep(2 * time.Second)
-			atomic.AddUint64(&s.stats.IndexGetRetryCount, 1)
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 
 		if err != nil {
+			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1)
 			return fmt.Errorf("WARNING: Failed to write store content index failed with %q", err)
 		}
 	}
@@ -716,7 +722,8 @@ func NewRemoteBlockStore(
 		maxBlockSize:      maxBlockSize,
 		maxChunksPerBlock: maxChunksPerBlock,
 		blobStore:         blobStore,
-		defaultClient:     defaultClient}
+		defaultClient:     defaultClient,
+		outFinalStats:     outFinalStats}
 
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)

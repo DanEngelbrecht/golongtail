@@ -477,6 +477,7 @@ type TestBlockStore struct {
 	getIndexCount     uint64
 	putBlockCount     uint64
 	getBlockCount     uint64
+	didClose          bool
 }
 
 func (b *TestBlockStore) PutStoredBlock(
@@ -585,11 +586,16 @@ func (b *TestBlockStore) RetargetContent(
 }
 
 func (b *TestBlockStore) Close() {
+	b.didClose = true
 }
 
 // GetStats ...
 func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
-	return BlockStoreStats{IndexGetCount: b.getIndexCount, BlocksGetCount: b.getBlockCount, BlocksPutCount: b.putBlockCount}, 0
+	var stats BlockStoreStats
+	stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count] = b.getIndexCount
+	stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] = b.getBlockCount
+	stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] = b.putBlockCount
+	return stats, 0
 }
 
 func TestBlockStoreProxy(t *testing.T) {
@@ -599,7 +605,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024, didClose: false}
 	blockStoreProxy := CreateBlockStoreAPI(blockStore)
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
@@ -652,17 +658,19 @@ func TestBlockStoreProxy(t *testing.T) {
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() GetStats() %d != %d", errno, 0)
 	}
-	if stats.IndexGetCount != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.IndexGetCount, 1)
+	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count] != 1 {
+		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
 	}
-	if stats.BlocksGetCount != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.BlocksGetCount, 1)
+	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] != 1 {
+		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
 	}
-	if stats.BlocksPutCount != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksPutCount %d != %d", stats.BlocksPutCount, 1)
+	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] != 1 {
+		t.Errorf("TestBlockStoreProxy() stats.BlocksPutCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
 	}
 	contentIndex := getIndexComplete.contentIndex
 	defer contentIndex.Dispose()
+
+	blockStoreProxy.Dispose()
 }
 
 type testPathFilter struct {

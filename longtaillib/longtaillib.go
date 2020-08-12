@@ -169,20 +169,37 @@ type Longtail_AsyncRetargetContentAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncRetargetContentAPI
 }
 
+const (
+	Longtail_BlockStoreAPI_StatU64_GetIndex_Count      = 0
+	Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount = 1
+	Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount  = 2
+
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count       = 3
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount  = 4
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount   = 5
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count = 6
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count  = 7
+
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count       = 8
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount  = 9
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount   = 10
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count = 11
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count  = 12
+
+	Longtail_BlockStoreAPI_StatU64_RetargetContent_Count      = 13
+	Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount = 14
+	Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount  = 15
+
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_Count      = 16
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount = 17
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount  = 18
+
+	Longtail_BlockStoreAPI_StatU64_GetStats_Count = 19
+	Longtail_BlockStoreAPI_StatU64_Count          = 20
+)
+
 type BlockStoreStats struct {
-	IndexGetCount      uint64
-	BlocksGetCount     uint64
-	BlocksPutCount     uint64
-	ChunksGetCount     uint64
-	ChunksPutCount     uint64
-	BytesGetCount      uint64
-	BytesPutCount      uint64
-	IndexGetRetryCount uint64
-	BlockGetRetryCount uint64
-	BlockPutRetryCount uint64
-	IndexGetFailCount  uint64
-	BlockGetFailCount  uint64
-	BlockPutFailCount  uint64
+	StatU64 [Longtail_BlockStoreAPI_StatU64_Count]uint64
 }
 
 type BlockStoreAPI interface {
@@ -809,20 +826,9 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
 		blockStoreAPI.cBlockStoreAPI,
 		&cStats)
 
-	stats := BlockStoreStats{
-		IndexGetCount:      (uint64)(cStats.m_IndexGetCount),
-		BlocksGetCount:     (uint64)(cStats.m_BlocksGetCount),
-		BlocksPutCount:     (uint64)(cStats.m_BlocksPutCount),
-		ChunksGetCount:     (uint64)(cStats.m_ChunksGetCount),
-		ChunksPutCount:     (uint64)(cStats.m_ChunksPutCount),
-		BytesGetCount:      (uint64)(cStats.m_BytesGetCount),
-		BytesPutCount:      (uint64)(cStats.m_BytesPutCount),
-		IndexGetRetryCount: (uint64)(cStats.m_IndexGetRetryCount),
-		BlockGetRetryCount: (uint64)(cStats.m_BlockGetRetryCount),
-		BlockPutRetryCount: (uint64)(cStats.m_BlockPutRetryCount),
-		IndexGetFailCount:  (uint64)(cStats.m_IndexGetFailCount),
-		BlockGetFailCount:  (uint64)(cStats.m_BlockGetFailCount),
-		BlockPutFailCount:  (uint64)(cStats.m_BlockPutFailCount),
+	stats := BlockStoreStats{}
+	for s := 0; s < Longtail_BlockStoreAPI_StatU64_Count; s++ {
+		stats.StatU64[s] = uint64(cStats.m_StatU64[s])
 	}
 	return stats, int(errno)
 }
@@ -1787,19 +1793,9 @@ func BlockStoreAPIProxy_GetStats(api *C.struct_Longtail_BlockStoreAPI, out_stats
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	stats, errno := blockStore.GetStats()
 	if errno == 0 {
-		out_stats.m_IndexGetCount = C.uint64_t(stats.IndexGetCount)
-		out_stats.m_BlocksGetCount = C.uint64_t(stats.BlocksGetCount)
-		out_stats.m_BlocksPutCount = C.uint64_t(stats.BlocksPutCount)
-		out_stats.m_ChunksGetCount = C.uint64_t(stats.ChunksGetCount)
-		out_stats.m_ChunksPutCount = C.uint64_t(stats.ChunksPutCount)
-		out_stats.m_BytesGetCount = C.uint64_t(stats.BytesGetCount)
-		out_stats.m_BytesPutCount = C.uint64_t(stats.BytesPutCount)
-		out_stats.m_IndexGetRetryCount = C.uint64_t(stats.IndexGetRetryCount)
-		out_stats.m_BlockGetRetryCount = C.uint64_t(stats.BlockGetRetryCount)
-		out_stats.m_BlockPutRetryCount = C.uint64_t(stats.BlockPutRetryCount)
-		out_stats.m_IndexGetFailCount = C.uint64_t(stats.IndexGetFailCount)
-		out_stats.m_BlockGetFailCount = C.uint64_t(stats.BlockGetFailCount)
-		out_stats.m_BlockPutFailCount = C.uint64_t(stats.BlockPutFailCount)
+		for s := 0; s < Longtail_BlockStoreAPI_StatU64_Count; s++ {
+			out_stats.m_StatU64[s] = C.uint64_t(stats.StatU64[s])
+		}
 	}
 	return C.int(errno)
 }

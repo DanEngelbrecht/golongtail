@@ -585,10 +585,6 @@ func (b *TestBlockStore) RetargetContent(
 	return 0
 }
 
-func (b *TestBlockStore) Close() {
-	b.didClose = true
-}
-
 // GetStats ...
 func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
 	var stats BlockStoreStats
@@ -596,6 +592,15 @@ func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
 	stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] = b.getBlockCount
 	stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] = b.putBlockCount
 	return stats, 0
+}
+
+func (b *TestBlockStore) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int {
+	asyncCompleteAPI.OnComplete(0)
+	return 0
+}
+
+func (b *TestBlockStore) Close() {
+	b.didClose = true
 }
 
 func TestBlockStoreProxy(t *testing.T) {

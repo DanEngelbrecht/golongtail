@@ -800,6 +800,11 @@ func (s *remoteStore) GetStats() (longtaillib.BlockStoreStats, int) {
 	return s.stats, 0
 }
 
+func (s *remoteStore) Flush(asyncCompleteAPI longtaillib.Longtail_AsyncFlushAPI) int {
+	asyncCompleteAPI.OnComplete(0)
+	return 0
+}
+
 // Close ...
 func (s *remoteStore) Close() {
 	for i := 0; i < s.workerCount; i++ {

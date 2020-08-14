@@ -48,6 +48,7 @@ int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64
 int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 int BlockStoreAPIProxy_RetargetContent(struct Longtail_BlockStoreAPI* api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
+int BlockStoreAPIProxy_Flush(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
 static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
 {
@@ -61,7 +62,8 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         BlockStoreAPIProxy_GetStoredBlock,
         BlockStoreAPIProxy_GetIndex,
         BlockStoreAPIProxy_RetargetContent,
-        BlockStoreAPIProxy_GetStats);
+        BlockStoreAPIProxy_GetStats,
+        BlockStoreAPIProxy_Flush);
 }
 
 ////////////// Longtail_PathFilterAPI

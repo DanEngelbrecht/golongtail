@@ -169,6 +169,10 @@ type Longtail_AsyncRetargetContentAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncRetargetContentAPI
 }
 
+type Longtail_AsyncFlushAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncFlushAPI
+}
+
 const (
 	Longtail_BlockStoreAPI_StatU64_GetIndex_Count      = 0
 	Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount = 1
@@ -209,6 +213,7 @@ type BlockStoreAPI interface {
 	GetIndex(asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
 	RetargetContent(contentIndex Longtail_ContentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int
 	GetStats() (BlockStoreStats, int)
+	Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int
 	Close()
 }
 
@@ -719,6 +724,11 @@ func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_ind
 	C.Longtail_AsyncRetargetContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
 }
 
+//// Longtail_AsyncFlushAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncFlushAPI) OnComplete(errno int) {
+	C.Longtail_AsyncFlush_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.int(errno))
+}
+
 // CreateFSBlockStore() ...
 func CreateFSBlockStore(jobAPI Longtail_JobAPI, storageAPI Longtail_StorageAPI, contentPath string, defaultMaxBlockSize uint32, defaultMaxChunksPerBlock uint32) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
@@ -831,6 +841,15 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
 		stats.StatU64[s] = uint64(cStats.m_StatU64[s])
 	}
 	return stats, int(errno)
+}
+
+// Flush() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int {
+	errno := C.Longtail_BlockStore_Flush(
+		blockStoreAPI.cBlockStoreAPI,
+		asyncCompleteAPI.cAsyncCompleteAPI)
+
+	return int(errno)
 }
 
 func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
@@ -1797,6 +1816,14 @@ func BlockStoreAPIProxy_GetStats(api *C.struct_Longtail_BlockStoreAPI, out_stats
 			out_stats.m_StatU64[s] = C.uint64_t(stats.StatU64[s])
 		}
 	}
+	return C.int(errno)
+}
+
+//export BlockStoreAPIProxy_Flush
+func BlockStoreAPIProxy_Flush(api *C.struct_Longtail_BlockStoreAPI, async_complete_api *C.struct_Longtail_AsyncFlushAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	errno := blockStore.Flush(Longtail_AsyncFlushAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

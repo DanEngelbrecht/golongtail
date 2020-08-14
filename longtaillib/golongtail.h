@@ -198,6 +198,28 @@ static struct Longtail_AsyncRetargetContentAPI* CreateAsyncRetargetContentAPI(vo
         AsyncRetargetContentAPIProxy_OnComplete);
 }
 
+////////////// Longtail_AsyncFlushAPI
+
+struct AsyncFlushAPIProxy
+{
+    struct Longtail_AsyncFlushAPI m_API;
+    void* m_Context;
+};
+
+static void* AsyncFlushAPIProxy_GetContext(void* api) { return ((struct AsyncFlushAPIProxy*)api)->m_Context; }
+void AsyncFlushAPIProxy_OnComplete(struct Longtail_AsyncFlushAPI* async_complete_api, int err);
+void AsyncFlushAPIProxy_Dispose(struct Longtail_API* api);
+
+static struct Longtail_AsyncFlushAPI* CreateAsyncFlushAPI(void* context)
+{
+    struct AsyncFlushAPIProxy* api    = (struct AsyncFlushAPIProxy*)Longtail_Alloc(sizeof(struct AsyncFlushAPIProxy));
+    api->m_Context = context;
+    return Longtail_MakeAsyncFlushAPI(
+        api,
+        AsyncFlushAPIProxy_Dispose,
+        AsyncFlushAPIProxy_OnComplete);
+}
+
 static const char* GetVersionIndexPath(struct Longtail_VersionIndex* version_index, uint32_t asset_index)
 {
     return &version_index->m_NameData[version_index->m_NameOffsets[asset_index]];

@@ -78,8 +78,7 @@ type remoteStore struct {
 	fetchedBlocks     map[uint64]bool
 	prefetchBlocks    map[uint64]*pendingPrefetchedBlock
 
-	stats         longtaillib.BlockStoreStats
-	outFinalStats *longtaillib.BlockStoreStats
+	stats longtaillib.BlockStoreStats
 }
 
 // String() ...
@@ -682,6 +681,7 @@ func contentIndexWorker(
 				continue
 			}
 			retargetContentMessage.asyncCompleteAPI.OnComplete(retargetedIndex, 0)
+		default:
 		}
 
 		if received == 0 {
@@ -771,8 +771,7 @@ func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore BlobStore,
 	maxBlockSize uint32,
-	maxChunksPerBlock uint32,
-	outFinalStats *longtaillib.BlockStoreStats) (longtaillib.BlockStoreAPI, error) {
+	maxChunksPerBlock uint32) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
 	defaultClient, err := blobStore.NewClient(ctx)
 	if err != nil {
@@ -784,8 +783,7 @@ func NewRemoteBlockStore(
 		maxBlockSize:      maxBlockSize,
 		maxChunksPerBlock: maxChunksPerBlock,
 		blobStore:         blobStore,
-		defaultClient:     defaultClient,
-		outFinalStats:     outFinalStats}
+		defaultClient:     defaultClient}
 
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
@@ -911,8 +909,5 @@ func (s *remoteStore) Close() {
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
-	if s.outFinalStats != nil {
-		*s.outFinalStats = s.stats
 	}
 }

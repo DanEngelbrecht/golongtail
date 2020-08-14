@@ -108,6 +108,42 @@ func (a *retargetContentIndexCompletionAPI) OnComplete(contentIndex longtaillib.
 	a.wg.Done()
 }
 
+type flushCompletionAPI struct {
+	wg  sync.WaitGroup
+	err int
+}
+
+func (a *flushCompletionAPI) OnComplete(err int) {
+	a.err = err
+	a.wg.Done()
+}
+
+func printStats(name string, stats longtaillib.BlockStoreStats) {
+	log.Printf("%s:\n", name)
+	log.Printf("------------------\n")
+	log.Printf("GetIndex_Count:             %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_Count]))
+	log.Printf("GetIndex_RetryCount:        %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount]))
+	log.Printf("GetIndex_FailCount:         %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount]))
+	log.Printf("GetStoredBlock_Count:       %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]))
+	log.Printf("GetStoredBlock_RetryCount:  %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount]))
+	log.Printf("GetStoredBlock_FailCount:   %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount]))
+	log.Printf("GetStoredBlock_Chunk_Count: %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]))
+	log.Printf("GetStoredBlock_Byte_Count:  %s\n", byteCountBinary(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]))
+	log.Printf("PutStoredBlock_Count:       %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]))
+	log.Printf("PutStoredBlock_RetryCount:  %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount]))
+	log.Printf("PutStoredBlock_FailCount:   %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount]))
+	log.Printf("PutStoredBlock_Chunk_Count: %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]))
+	log.Printf("PutStoredBlock_Byte_Count:  %s\n", byteCountBinary(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]))
+	log.Printf("RetargetContent_Count:      %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_RetargetContent_Count]))
+	log.Printf("RetargetContent_RetryCount: %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount]))
+	log.Printf("RetargetContent_FailCount:  %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount]))
+	log.Printf("PreflightGet_Count:         %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_Count]))
+	log.Printf("PreflightGet_RetryCount:    %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount]))
+	log.Printf("PreflightGet_FailCount:     %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount]))
+	log.Printf("GetStats_Count:             %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStats_Count]))
+	log.Printf("------------------\n")
+}
+
 func retargetContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, contentIndex longtaillib.Longtail_ContentIndex) (longtaillib.Longtail_ContentIndex, int) {
 	retargetContentComplete := &retargetContentIndexCompletionAPI{}
 	retargetContentComplete.wg.Add(1)
@@ -120,7 +156,7 @@ func retargetContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, con
 	return retargetContentComplete.contentIndex, retargetContentComplete.err
 }
 
-func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, outFinalStats *longtaillib.BlockStoreStats) (longtaillib.Longtail_BlockStoreAPI, error) {
+func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -133,8 +169,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				jobAPI,
 				gcsBlobStore,
 				targetBlockSize,
-				maxChunksPerBlock,
-				outFinalStats)
+				maxChunksPerBlock)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -148,8 +183,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				jobAPI,
 				s3BlobStore,
 				targetBlockSize,
-				maxChunksPerBlock,
-				outFinalStats)
+				maxChunksPerBlock)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -386,7 +420,7 @@ func upSyncVersion(
 	hashAlgorithm *string,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
-	outFinalStats *longtaillib.BlockStoreStats) error {
+	showStats bool) error {
 
 	var pathFilter longtaillib.Longtail_PathFilterAPI
 
@@ -420,7 +454,7 @@ func upSyncVersion(
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
-	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, outFinalStats)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock)
 	if err != nil {
 		return err
 	}
@@ -539,9 +573,33 @@ func upSyncVersion(
 		}
 	}
 
-	// Explicitly close the block stores so they flush their index
-	indexStore.Dispose()
-	remoteStore.Dispose()
+	indexStoreFlushComplete := &flushCompletionAPI{}
+	indexStoreFlushComplete.wg.Add(1)
+	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
+	if errno != 0 {
+		indexStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	errno = remoteStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	if errno != 0 {
+		remoteStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	indexStoreFlushComplete.wg.Wait()
+	if indexStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(indexStoreFlushComplete.err))
+	}
+	remoteStoreFlushComplete.wg.Wait()
+	if remoteStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(remoteStoreFlushComplete.err))
+	}
+
+	indexStoreStats, errno := indexStore.GetStats()
+	remoteStoreStats, errno := remoteStore.GetStats()
 
 	if versionContentIndexPath != nil && len(*versionContentIndexPath) > 0 {
 		versionLocalContentIndex, errno := longtaillib.MergeContentIndex(
@@ -570,6 +628,11 @@ func upSyncVersion(
 	}
 	err = writeToURI(targetFilePath, vbuffer)
 
+	if showStats {
+		printStats("Compress", indexStoreStats)
+		printStats("Remote", remoteStoreStats)
+	}
+
 	return nil
 }
 
@@ -586,7 +649,7 @@ func downSyncVersion(
 	validate bool,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
-	outFinalStats *longtaillib.BlockStoreStats) error {
+	showStats bool) error {
 
 	var pathFilter longtaillib.Longtail_PathFilterAPI
 
@@ -620,7 +683,7 @@ func downSyncVersion(
 	defer creg.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, outFinalStats)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
 	if err != nil {
 		return err
 	}
@@ -762,6 +825,91 @@ func downSyncVersion(
 		return fmt.Errorf("downSyncVersion: longtaillib.ChangeVersion() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 
+	indexStoreFlushComplete := &flushCompletionAPI{}
+	indexStoreFlushComplete.wg.Add(1)
+	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
+	if errno != 0 {
+		indexStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	sharedStoreFlushComplete := &flushCompletionAPI{}
+	sharedStoreFlushComplete.wg.Add(1)
+	errno = shareBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(sharedStoreFlushComplete))
+	if errno != 0 {
+		sharedStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	compressStoreFlushComplete := &flushCompletionAPI{}
+	compressStoreFlushComplete.wg.Add(1)
+	errno = compressBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(compressStoreFlushComplete))
+	if errno != 0 {
+		compressStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: compressStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	cacheStoreFlushComplete := &flushCompletionAPI{}
+	cacheStoreFlushComplete.wg.Add(1)
+	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
+	if errno != 0 {
+		cacheStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: cacheStore.Flush: Failed for `%s` failed with with %s", localCachePath, longtaillib.ErrNoToDescription(errno))
+	}
+
+	localStoreFlushComplete := &flushCompletionAPI{}
+	localStoreFlushComplete.wg.Add(1)
+	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
+	if errno != 0 {
+		localStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: localStore.Flush: Failed for `%s` failed with with %s", localCachePath, longtaillib.ErrNoToDescription(errno))
+	}
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	if errno != 0 {
+		remoteStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	indexStoreFlushComplete.wg.Wait()
+	if indexStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(indexStoreFlushComplete.err))
+	}
+
+	sharedStoreFlushComplete.wg.Wait()
+	if sharedStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(sharedStoreFlushComplete.err))
+	}
+
+	compressStoreFlushComplete.wg.Wait()
+	if compressStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: compressStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(compressStoreFlushComplete.err))
+	}
+
+	cacheStoreFlushComplete.wg.Wait()
+	if cacheStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: cacheStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(cacheStoreFlushComplete.err))
+	}
+
+	localStoreFlushComplete.wg.Wait()
+	if localStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: localStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(localStoreFlushComplete.err))
+	}
+
+	remoteStoreFlushComplete.wg.Wait()
+	if remoteStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(remoteStoreFlushComplete.err))
+	}
+
+	lruStoreStats, lruStoreStatsErrno := indexStore.GetStats()
+	shareStoreStats, shareStoreStatsErrno := shareBlockStore.GetStats()
+	compressStoreStats, compressStoreStatsErrno := compressBlockStore.GetStats()
+	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
+	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
+	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
+
 	if validate {
 		validateFileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
@@ -830,6 +978,27 @@ func downSyncVersion(
 		}
 	}
 
+	if showStats {
+		if lruStoreStatsErrno == 0 {
+			printStats("LRU", lruStoreStats)
+		}
+		if shareStoreStatsErrno == 0 {
+			printStats("Share", shareStoreStats)
+		}
+		if compressStoreStatsErrno == 0 {
+			printStats("Compress", compressStoreStats)
+		}
+		if cacheStoreStatsErrno == 0 {
+			printStats("Cache", cacheStoreStats)
+		}
+		if localStoreStatsErrno == 0 {
+			printStats("Local", localStoreStats)
+		}
+		if remoteStoreStatsErrno == 0 {
+			printStats("Remote", remoteStoreStats)
+		}
+	}
+
 	return nil
 }
 
@@ -854,7 +1023,7 @@ func validateVersion(
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, nil)
+	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
 	if err != nil {
 		return err
 	}
@@ -1112,7 +1281,7 @@ func cpVersionIndex(
 	maxChunksPerBlock uint32,
 	sourcePath string,
 	targetPath string,
-	outFinalStats *longtaillib.BlockStoreStats) error {
+	showStats bool) error {
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
@@ -1121,7 +1290,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, outFinalStats)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
 	if err != nil {
 		return err
 	}
@@ -1398,8 +1567,6 @@ func main() {
 	longtaillib.SetAssert(&assertData{})
 	defer longtaillib.SetAssert(nil)
 
-	var stats longtaillib.BlockStoreStats
-
 	switch kingpin.Parse() {
 	case commandUpsync.FullCommand():
 		err := upSyncVersion(
@@ -1415,7 +1582,7 @@ func main() {
 			commandUpsyncHashing,
 			includeFilterRegEx,
 			excludeFilterRegEx,
-			&stats)
+			*showStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1433,7 +1600,7 @@ func main() {
 			*commandDownsyncValidate,
 			includeFilterRegEx,
 			excludeFilterRegEx,
-			&stats)
+			*showStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -1471,28 +1638,9 @@ func main() {
 			*commandCPMaxChunksPerBlock,
 			*commandCPSourcePath,
 			*commandCPTargetPath,
-			&stats)
+			*showStats)
 		if err != nil {
 			log.Fatal(err)
 		}
-	}
-
-	if *showStats {
-		log.Printf("STATS:\n")
-		log.Printf("------------------\n")
-		log.Printf("IndexGetCount:      %s\n", byteCountDecimal(stats.IndexGetCount))
-		log.Printf("BlocksGetCount:     %s\n", byteCountDecimal(stats.BlocksGetCount))
-		log.Printf("BlocksPutCount:     %s\n", byteCountDecimal(stats.BlocksPutCount))
-		log.Printf("ChunksGetCount:     %s\n", byteCountDecimal(stats.ChunksGetCount))
-		log.Printf("ChunksPutCount:     %s\n", byteCountDecimal(stats.ChunksPutCount))
-		log.Printf("BytesGetCount:      %s\n", byteCountBinary(stats.BytesGetCount))
-		log.Printf("BytesPutCount:      %s\n", byteCountBinary(stats.BytesPutCount))
-		log.Printf("IndexGetRetryCount: %s\n", byteCountDecimal(stats.IndexGetRetryCount))
-		log.Printf("BlockGetRetryCount: %s\n", byteCountDecimal(stats.BlockGetRetryCount))
-		log.Printf("BlockPutRetryCount: %s\n", byteCountDecimal(stats.BlockPutRetryCount))
-		log.Printf("IndexGetFailCount:  %s\n", byteCountDecimal(stats.IndexGetFailCount))
-		log.Printf("BlockGetFailCount:  %s\n", byteCountDecimal(stats.BlockGetFailCount))
-		log.Printf("BlockPutFailCount:  %s\n", byteCountDecimal(stats.BlockPutFailCount))
-		log.Printf("------------------\n")
 	}
 }

@@ -145,6 +145,10 @@ type AsyncRetargetContentAPI interface {
 	OnComplete(content_index Longtail_ContentIndex, errno int)
 }
 
+type AsyncFlushAPI interface {
+	OnComplete(errno int)
+}
+
 type Assert interface {
 	OnAssert(expression string, file string, line int)
 }
@@ -831,6 +835,9 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) RetargetContent(
 
 // GetStats() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
+	if blockStoreAPI.cBlockStoreAPI == nil {
+		return BlockStoreStats{}, EINVAL
+	}
 	var cStats C.struct_Longtail_BlockStore_Stats
 	errno := C.Longtail_BlockStore_GetStats(
 		blockStoreAPI.cBlockStoreAPI,
@@ -845,6 +852,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
 
 // Flush() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int {
+	if blockStoreAPI.cBlockStoreAPI == nil {
+		asyncCompleteAPI.OnComplete(0)
+		return 0
+	}
 	errno := C.Longtail_BlockStore_Flush(
 		blockStoreAPI.cBlockStoreAPI,
 		asyncCompleteAPI.cAsyncCompleteAPI)
@@ -1544,6 +1555,27 @@ func AsyncRetargetContentAPIProxy_OnComplete(async_complete_api *C.struct_Longta
 //export AsyncRetargetContentAPIProxy_Dispose
 func AsyncRetargetContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
+}
+
+// CreateAsyncFlushAPI ...
+func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncFlushAPI(cContext)
+	return Longtail_AsyncFlushAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncFlushAPIProxy_OnComplete
+func AsyncFlushAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncFlushAPI, errno C.int) {
+	context := C.AsyncFlushAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
+	asyncComplete := RestorePointer(context).(AsyncFlushAPI)
+	asyncComplete.OnComplete(int(errno))
+}
+
+//export AsyncFlushAPIProxy_Dispose
+func AsyncFlushAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncFlushAPIProxy_GetContext(unsafe.Pointer(api))
 	UnrefPointer(context)
 	C.Longtail_Free(unsafe.Pointer(api))
 }

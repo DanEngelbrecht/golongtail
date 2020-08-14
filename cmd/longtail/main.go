@@ -1392,6 +1392,113 @@ func cpVersionIndex(
 		outFile.Write(data)
 		offset += left
 	}
+
+	indexStoreFlushComplete := &flushCompletionAPI{}
+	indexStoreFlushComplete.wg.Add(1)
+	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
+	if errno != 0 {
+		indexStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	sharedStoreFlushComplete := &flushCompletionAPI{}
+	sharedStoreFlushComplete.wg.Add(1)
+	errno = shareBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(sharedStoreFlushComplete))
+	if errno != 0 {
+		sharedStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	compressStoreFlushComplete := &flushCompletionAPI{}
+	compressStoreFlushComplete.wg.Add(1)
+	errno = compressBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(compressStoreFlushComplete))
+	if errno != 0 {
+		compressStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: compressStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	cacheStoreFlushComplete := &flushCompletionAPI{}
+	cacheStoreFlushComplete.wg.Add(1)
+	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
+	if errno != 0 {
+		cacheStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: cacheStore.Flush: Failed for `%s` failed with with %s", localCachePath, longtaillib.ErrNoToDescription(errno))
+	}
+
+	localStoreFlushComplete := &flushCompletionAPI{}
+	localStoreFlushComplete.wg.Add(1)
+	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
+	if errno != 0 {
+		localStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: localStore.Flush: Failed for `%s` failed with with %s", localCachePath, longtaillib.ErrNoToDescription(errno))
+	}
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	if errno != 0 {
+		remoteStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	indexStoreFlushComplete.wg.Wait()
+	if indexStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(indexStoreFlushComplete.err))
+	}
+
+	sharedStoreFlushComplete.wg.Wait()
+	if sharedStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(sharedStoreFlushComplete.err))
+	}
+
+	compressStoreFlushComplete.wg.Wait()
+	if compressStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: compressStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(compressStoreFlushComplete.err))
+	}
+
+	cacheStoreFlushComplete.wg.Wait()
+	if cacheStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: cacheStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(cacheStoreFlushComplete.err))
+	}
+
+	localStoreFlushComplete.wg.Wait()
+	if localStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: localStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(localStoreFlushComplete.err))
+	}
+
+	remoteStoreFlushComplete.wg.Wait()
+	if remoteStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(remoteStoreFlushComplete.err))
+	}
+
+	lruStoreStats, lruStoreStatsErrno := indexStore.GetStats()
+	shareStoreStats, shareStoreStatsErrno := shareBlockStore.GetStats()
+	compressStoreStats, compressStoreStatsErrno := compressBlockStore.GetStats()
+	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
+	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
+	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
+
+	if showStats {
+		if lruStoreStatsErrno == 0 {
+			printStats("LRU", lruStoreStats)
+		}
+		if shareStoreStatsErrno == 0 {
+			printStats("Share", shareStoreStats)
+		}
+		if compressStoreStatsErrno == 0 {
+			printStats("Compress", compressStoreStats)
+		}
+		if cacheStoreStatsErrno == 0 {
+			printStats("Cache", cacheStoreStats)
+		}
+		if localStoreStatsErrno == 0 {
+			printStats("Local", localStoreStats)
+		}
+		if remoteStoreStatsErrno == 0 {
+			printStats("Remote", remoteStoreStats)
+		}
+	}
+
 	return nil
 }
 

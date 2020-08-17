@@ -86,7 +86,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATE* updated to longtail v0.0.52
+           - *UPDATE* updated to longtail v0.0.53
            - *CHANGED* `--show-stats` now show stats of each blockstore used
            - *ADDED* Use explicit Flush of blockstores before fetching stats
            - *ADDED* `--show-stats` option for `cp` command now shows all stats

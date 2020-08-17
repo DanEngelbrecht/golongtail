@@ -29,10 +29,6 @@ type prefetchBlockMessage struct {
 	blockHash uint64
 }
 
-type getIndexMessage struct {
-	asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI
-}
-
 type contentIndexMessage struct {
 	contentIndex longtaillib.Longtail_ContentIndex
 }
@@ -64,7 +60,6 @@ type remoteStore struct {
 	getBlockChan         chan getBlockMessage
 	prefetchBlockChan    chan prefetchBlockMessage
 	contentIndexChan     chan contentIndexMessage
-	getIndexChan         chan getIndexMessage
 	retargetContentChan  chan retargetContentMessage
 	workerFlushChan      chan int
 	workerFlushReplyChan chan int
@@ -526,7 +521,6 @@ func buildContentIndexFromBlocks(
 
 func contentIndexWorkerReplyErrorState(
 	contentIndexMessages <-chan contentIndexMessage,
-	getIndexMessages <-chan getIndexMessage,
 	retargetContentMessages <-chan retargetContentMessage,
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int,
@@ -537,8 +531,6 @@ func contentIndexWorkerReplyErrorState(
 		case _ = <-flushMessages:
 			flushReplyMessages <- 0
 		case _ = <-contentIndexMessages:
-		case getIndexMessage := <-getIndexMessages:
-			getIndexMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
 		case retargetContentMessage := <-retargetContentMessages:
 			retargetContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
 		case _ = <-stopMessages:
@@ -551,7 +543,6 @@ func contentIndexWorker(
 	ctx context.Context,
 	s *remoteStore,
 	contentIndexMessages <-chan contentIndexMessage,
-	getIndexMessages <-chan getIndexMessage,
 	retargetContentMessages <-chan retargetContentMessage,
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int,
@@ -559,7 +550,7 @@ func contentIndexWorker(
 
 	client, err := s.blobStore.NewClient(ctx)
 	if err != nil {
-		contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+		contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 		return errors.Wrap(err, s.blobStore.String())
 	}
 
@@ -574,28 +565,23 @@ func contentIndexWorker(
 		storedContentIndexData, err := objHandle.Read()
 		if err != nil {
 			log.Printf("Retrying getBlob %s", key)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed getBlob %s", key)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed getBlob %s", key)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			storedContentIndexData, err = objHandle.Read()
 		}
 
 		if err == nil {
 			contentIndex, errno = longtaillib.ReadContentIndexFromBuffer(storedContentIndexData)
 			if errno != 0 {
-				contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+				contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.ReadContentIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
-		} else {
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1)
 		}
 	}
 
@@ -613,7 +599,7 @@ func contentIndexWorker(
 			s.maxChunksPerBlock,
 			[]longtaillib.Longtail_BlockIndex{})
 		if errno != 0 {
-			contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+			contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 			return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 
@@ -628,7 +614,7 @@ func contentIndexWorker(
 				s.maxChunksPerBlock,
 				[]longtaillib.Longtail_BlockIndex{})
 			if errno != 0 {
-				contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+				contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 		}
@@ -638,7 +624,7 @@ func contentIndexWorker(
 			s.maxChunksPerBlock,
 			[]longtaillib.Longtail_BlockIndex{})
 		if errno != 0 {
-			contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+			contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 			return fmt.Errorf("contentIndexWorker: longtaillib.CreateContentIndexFromBlocks() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 	}
@@ -652,21 +638,12 @@ func contentIndexWorker(
 			received += 1
 			newAddedContentIndex, errno := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 			if errno != 0 {
-				contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+				contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.AddContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 			}
 			addedContentIndex.Dispose()
 			addedContentIndex = newAddedContentIndex
 			contentIndexMsg.contentIndex.Dispose()
-		case getIndexMessage := <-getIndexMessages:
-			received += 1
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
-			contentIndexCopy, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
-			if errno != 0 {
-				getIndexMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
-				continue
-			}
-			getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
 		case retargetContentMessage := <-retargetContentMessages:
 			received += 1
 			fullContentIndex, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
@@ -691,20 +668,12 @@ func contentIndexWorker(
 			case contentIndexMsg := <-contentIndexMessages:
 				newAddedContentIndex, errno := longtaillib.AddContentIndex(addedContentIndex, contentIndexMsg.contentIndex)
 				if errno != 0 {
-					contentIndexWorkerReplyErrorState(contentIndexMessages, getIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
+					contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 					return fmt.Errorf("contentIndexWorker: longtaillib.AddContentIndex() failed with %s", longtaillib.ErrNoToDescription(errno))
 				}
 				addedContentIndex.Dispose()
 				addedContentIndex = newAddedContentIndex
 				contentIndexMsg.contentIndex.Dispose()
-			case getIndexMessage := <-getIndexMessages:
-				atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
-				contentIndexCopy, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
-				if errno != 0 {
-					getIndexMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
-					continue
-				}
-				getIndexMessage.asyncCompleteAPI.OnComplete(contentIndexCopy, 0)
 			case retargetContentMessage := <-retargetContentMessages:
 				fullContentIndex, errno := longtaillib.MergeContentIndex(s.jobAPI, contentIndex, addedContentIndex)
 				if errno != 0 {
@@ -742,24 +711,20 @@ func contentIndexWorker(
 		err := updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		if err != nil {
 			log.Printf("Retrying store index")
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed store index")
 			time.Sleep(500 * time.Millisecond)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed store index")
 			time.Sleep(2 * time.Second)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount], 1)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 
 		if err != nil {
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount], 1)
 			return fmt.Errorf("WARNING: Failed to write store content index failed with %q", err)
 		}
 	}
@@ -790,7 +755,6 @@ func NewRemoteBlockStore(
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)
 	s.contentIndexChan = make(chan contentIndexMessage, s.workerCount*2048)
-	s.getIndexChan = make(chan getIndexMessage)
 	s.retargetContentChan = make(chan retargetContentMessage, 16)
 	s.workerFlushChan = make(chan int, s.workerCount)
 	s.workerFlushReplyChan = make(chan int, s.workerCount)
@@ -803,7 +767,7 @@ func NewRemoteBlockStore(
 	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 
 	go func() {
-		err := contentIndexWorker(ctx, s, s.contentIndexChan, s.getIndexChan, s.retargetContentChan, s.indexFlushChan, s.indexFlushReplyChan, s.indexStopChan)
+		err := contentIndexWorker(ctx, s, s.contentIndexChan, s.retargetContentChan, s.indexFlushChan, s.indexFlushReplyChan, s.indexStopChan)
 		s.workerErrorChan <- err
 	}()
 
@@ -832,9 +796,11 @@ func (s *remoteStore) PutStoredBlock(storedBlock longtaillib.Longtail_StoredBloc
 }
 
 // PreflightGet ...
-func (s *remoteStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
+func (s *remoteStore) PreflightGet(contentIndex longtaillib.Longtail_ContentIndex) int {
+	blockHashes := contentIndex.GetBlockHashes()
+	blockCount := uint64(len(blockHashes))
 	for b := uint64(0); b < blockCount; b++ {
-		s.prefetchBlockChan <- prefetchBlockMessage{blockHash: hashes[blockCount-1-b]}
+		s.prefetchBlockChan <- prefetchBlockMessage{blockHash: blockHashes[blockCount-1-b]}
 	}
 	return 0
 }
@@ -842,12 +808,6 @@ func (s *remoteStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts
 // GetStoredBlock ...
 func (s *remoteStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longtaillib.Longtail_AsyncGetStoredBlockAPI) int {
 	s.getBlockChan <- getBlockMessage{blockHash: blockHash, asyncCompleteAPI: asyncCompleteAPI}
-	return 0
-}
-
-// GetIndex ...
-func (s *remoteStore) GetIndex(asyncCompleteAPI longtaillib.Longtail_AsyncGetIndexAPI) int {
-	s.getIndexChan <- getIndexMessage{asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

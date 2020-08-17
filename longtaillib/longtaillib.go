@@ -137,10 +137,6 @@ type AsyncGetStoredBlockAPI interface {
 	OnComplete(stored_block Longtail_StoredBlock, errno int)
 }
 
-type AsyncGetIndexAPI interface {
-	OnComplete(content_index Longtail_ContentIndex, errno int)
-}
-
 type AsyncRetargetContentAPI interface {
 	OnComplete(content_index Longtail_ContentIndex, errno int)
 }
@@ -165,10 +161,6 @@ type Longtail_AsyncPutStoredBlockAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncPutStoredBlockAPI
 }
 
-type Longtail_AsyncGetIndexAPI struct {
-	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetIndexAPI
-}
-
 type Longtail_AsyncRetargetContentAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncRetargetContentAPI
 }
@@ -178,32 +170,31 @@ type Longtail_AsyncFlushAPI struct {
 }
 
 const (
-	Longtail_BlockStoreAPI_StatU64_GetIndex_Count      = 0
-	Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount = 1
-	Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount  = 2
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count       = 0
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount  = 1
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount   = 2
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count = 3
+	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count  = 4
 
-	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count       = 3
-	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount  = 4
-	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount   = 5
-	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count = 6
-	Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count  = 7
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count       = 5
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount  = 6
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount   = 7
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count = 8
+	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count  = 9
 
-	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count       = 8
-	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount  = 9
-	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount   = 10
-	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count = 11
-	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count  = 12
+	Longtail_BlockStoreAPI_StatU64_RetargetContent_Count      = 10
+	Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount = 11
+	Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount  = 12
 
-	Longtail_BlockStoreAPI_StatU64_RetargetContent_Count      = 13
-	Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount = 14
-	Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount  = 15
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_Count      = 13
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount = 14
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount  = 15
 
-	Longtail_BlockStoreAPI_StatU64_PreflightGet_Count      = 16
-	Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount = 17
-	Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount  = 18
+	Longtail_BlockStoreAPI_StatU64_Flush_Count     = 16
+	Longtail_BlockStoreAPI_StatU64_Flush_FailCount = 17
 
-	Longtail_BlockStoreAPI_StatU64_GetStats_Count = 19
-	Longtail_BlockStoreAPI_StatU64_Count          = 20
+	Longtail_BlockStoreAPI_StatU64_GetStats_Count = 18
+	Longtail_BlockStoreAPI_StatU64_Count          = 19
 )
 
 type BlockStoreStats struct {
@@ -212,9 +203,8 @@ type BlockStoreStats struct {
 
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
-	PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int
+	PreflightGet(contentIndex Longtail_ContentIndex) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
-	GetIndex(asyncCompleteAPI Longtail_AsyncGetIndexAPI) int
 	RetargetContent(contentIndex Longtail_ContentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int
 	GetStats() (BlockStoreStats, int)
 	Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int
@@ -718,11 +708,6 @@ func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block
 	C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, C.int(errno))
 }
 
-//// Longtail_AsyncGetIndexAPI::OnComplete() ...
-func (asyncCompleteAPI *Longtail_AsyncGetIndexAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
-	C.Longtail_AsyncGetIndex_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
-}
-
 //// Longtail_AsyncRetargetContentAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
 	C.Longtail_AsyncRetargetContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
@@ -748,11 +733,6 @@ func CreateCacheBlockStore(jobAPI Longtail_JobAPI, cacheBlockStore Longtail_Bloc
 // CreateCompressBlockStore() ...
 func CreateCompressBlockStore(backingBlockStore Longtail_BlockStoreAPI, compressionRegistry Longtail_CompressionRegistryAPI) Longtail_BlockStoreAPI {
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateCompressBlockStoreAPI(backingBlockStore.cBlockStoreAPI, compressionRegistry.cCompressionRegistryAPI)}
-}
-
-// CreateRetainingBlockStore() ...
-func CreateRetainingBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_BlockStoreAPI {
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateRetainingBlockStoreAPI(backingBlockStore.cBlockStoreAPI)}
 }
 
 // CreateShareBlockStore() ...
@@ -807,16 +787,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	errno := C.Longtail_BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
-		asyncCompleteAPI.cAsyncCompleteAPI)
-	return int(errno)
-}
-
-// GetIndex() ...
-func (blockStoreAPI *Longtail_BlockStoreAPI) GetIndex(
-	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
-
-	errno := C.Longtail_BlockStore_GetIndex(
-		blockStoreAPI.cBlockStoreAPI,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -1517,27 +1487,6 @@ func AsyncGetStoredBlockAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	C.Longtail_Free(unsafe.Pointer(api))
 }
 
-// CreateAsyncGetIndexAPI ...
-func CreateAsyncGetIndexAPI(asyncComplete AsyncGetIndexAPI) Longtail_AsyncGetIndexAPI {
-	cContext := SavePointer(asyncComplete)
-	asyncCompleteAPIProxy := C.CreateAsyncGetIndexAPI(cContext)
-	return Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
-}
-
-//export AsyncGetIndexAPIProxy_OnComplete
-func AsyncGetIndexAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetIndexAPI, content_index *C.struct_Longtail_ContentIndex, errno C.int) {
-	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
-	asyncComplete := RestorePointer(context).(AsyncGetIndexAPI)
-	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(errno))
-}
-
-//export AsyncGetIndexAPIProxy_Dispose
-func AsyncGetIndexAPIProxy_Dispose(api *C.struct_Longtail_API) {
-	context := C.AsyncGetIndexAPIProxy_GetContext(unsafe.Pointer(api))
-	UnrefPointer(context)
-	C.Longtail_Free(unsafe.Pointer(api))
-}
-
 // CreateAsyncRetargetContentAPI ...
 func CreateAsyncRetargetContentAPI(asyncComplete AsyncRetargetContentAPI) Longtail_AsyncRetargetContentAPI {
 	cContext := SavePointer(asyncComplete)
@@ -1807,24 +1756,11 @@ func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blo
 }
 
 //export BlockStoreAPIProxy_PreflightGet
-func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, blockCount C.uint64_t, blockHashes *C.uint64_t, blockRefCounts *C.uint32_t) C.int {
+func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, content_index *C.struct_Longtail_ContentIndex) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-
-	size := int(blockCount)
-	hashes := carray2slice64(blockHashes, size)
-	refCounts := carray2slice32(blockRefCounts, size)
-
-	errno := blockStore.PreflightGet(uint64(blockCount), hashes, refCounts)
-	return C.int(errno)
-}
-
-//export BlockStoreAPIProxy_GetIndex
-func BlockStoreAPIProxy_GetIndex(api *C.struct_Longtail_BlockStoreAPI, async_complete_api *C.struct_Longtail_AsyncGetIndexAPI) C.int {
-	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
-	blockStore := RestorePointer(context).(BlockStoreAPI)
-	errno := blockStore.GetIndex(
-		Longtail_AsyncGetIndexAPI{cAsyncCompleteAPI: async_complete_api})
+	errno := blockStore.PreflightGet(
+		Longtail_ContentIndex{cContentIndex: content_index})
 	return C.int(errno)
 }
 

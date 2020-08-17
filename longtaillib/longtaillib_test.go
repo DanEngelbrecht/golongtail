@@ -58,18 +58,6 @@ func (a *testGetBlockCompletionAPI) OnComplete(storedBlock Longtail_StoredBlock,
 	a.wg.Done()
 }
 
-type testGetIndexCompletionAPI struct {
-	wg           sync.WaitGroup
-	contentIndex Longtail_ContentIndex
-	errno        int
-}
-
-func (a *testGetIndexCompletionAPI) OnComplete(contentIndex Longtail_ContentIndex, errno int) {
-	a.errno = errno
-	a.contentIndex = contentIndex
-	a.wg.Done()
-}
-
 type testRetargetContentCompletionAPI struct {
 	wg           sync.WaitGroup
 	contentIndex Longtail_ContentIndex
@@ -296,17 +284,6 @@ func TestFSBlockStore(t *testing.T) {
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	getIndexComplete := &testGetIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno := blockStoreAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
-	if errno != 0 {
-		t.Errorf("TestFSBlockStore() GetIndex () %d != %d", errno, 0)
-		getIndexComplete.wg.Done()
-	}
-	getIndexComplete.wg.Wait()
-	contentIndex := getIndexComplete.contentIndex
-	defer contentIndex.Dispose()
-
 	block1, errno := createStoredBlock(1, blake3.GetIdentifier())
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
@@ -449,23 +426,6 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	defer storedBlock2Again.Dispose()
 	validateStoredBlock(t, storedBlock2Again, blake3.GetIdentifier())
-
-	getIndexComplete.wg.Add(1)
-	errno = blockStoreAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
-	if errno != 0 {
-		t.Errorf("TestFSBlockStore() GetIndex () %d != %d", errno, 0)
-		getIndexComplete.wg.Done()
-	}
-	getIndexComplete.wg.Wait()
-	contentIndex2 := getIndexComplete.contentIndex
-	defer contentIndex2.Dispose()
-	// FSBlockStore does not use "MergeContentIndex" only "AddContentIndex" so the index will contain redunant blocks due way this test is written
-	if contentIndex2.GetBlockCount() != uint64(3) {
-		t.Errorf("TestFSBlockStore() contentIndex2.GetBlockCount() %q != %q", contentIndex2.GetBlockCount(), uint64(1))
-	}
-	if contentIndex2.GetChunkCount() != uint64(15) {
-		t.Errorf("TestFSBlockStore() contentIndex2.GetChunkCount() %q != %q", contentIndex2.GetChunkCount(), uint64(9))
-	}
 }
 
 type TestBlockStore struct {
@@ -474,9 +434,7 @@ type TestBlockStore struct {
 	maxChunksPerBlock uint32
 	blockStoreAPI     Longtail_BlockStoreAPI
 	lock              sync.Mutex
-	getIndexCount     uint64
-	putBlockCount     uint64
-	getBlockCount     uint64
+	stats             [Longtail_BlockStoreAPI_StatU64_Count]uint64
 	didClose          bool
 }
 
@@ -484,6 +442,7 @@ func (b *TestBlockStore) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
 	asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int {
 	b.lock.Lock()
+	b.stats[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] += 1
 	defer b.lock.Unlock()
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
@@ -500,7 +459,6 @@ func (b *TestBlockStore) PutStoredBlock(
 		false)
 	if errno == 0 {
 		b.blocks[blockHash] = blockCopy
-		b.putBlockCount = b.putBlockCount + 1
 		asyncCompleteAPI.OnComplete(0)
 		return 0
 	}
@@ -508,7 +466,8 @@ func (b *TestBlockStore) PutStoredBlock(
 	return 0
 }
 
-func (b *TestBlockStore) PreflightGet(blockCount uint64, hashes []uint64, refCounts []uint32) int {
+func (b *TestBlockStore) PreflightGet(contentIndex Longtail_ContentIndex) int {
+	b.stats[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count] += 1
 	return 0
 }
 
@@ -516,6 +475,7 @@ func (b *TestBlockStore) GetStoredBlock(
 	blockHash uint64,
 	asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int {
 	b.lock.Lock()
+	b.stats[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] += 1
 	defer b.lock.Unlock()
 	if storedBlock, ok := b.blocks[blockHash]; ok {
 		blockIndex := storedBlock.GetBlockIndex()
@@ -527,25 +487,12 @@ func (b *TestBlockStore) GetStoredBlock(
 			blockIndex.GetChunkSizes(),
 			storedBlock.GetChunksBlockData(),
 			false)
-		b.getBlockCount = b.getBlockCount + 1
 		if errno == 0 {
 			asyncCompleteAPI.OnComplete(blockCopy, errno)
 			return 0
 		}
 	}
 	asyncCompleteAPI.OnComplete(Longtail_StoredBlock{}, ENOENT)
-	return 0
-}
-
-func (b *TestBlockStore) GetIndex(
-	asyncCompleteAPI Longtail_AsyncGetIndexAPI) int {
-	cIndex, errno := b.GetIndexSync()
-	if errno != 0 {
-		asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, errno)
-		return 0
-	}
-	b.getIndexCount = b.getIndexCount + 1
-	asyncCompleteAPI.OnComplete(cIndex, 0)
 	return 0
 }
 
@@ -569,6 +516,7 @@ func (b *TestBlockStore) GetIndexSync() (Longtail_ContentIndex, int) {
 func (b *TestBlockStore) RetargetContent(
 	contentIndex Longtail_ContentIndex,
 	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
+	b.stats[Longtail_BlockStoreAPI_StatU64_RetargetContent_Count] += 1
 	cIndex, errno := b.GetIndexSync()
 	if errno != 0 {
 		asyncCompleteAPI.OnComplete(Longtail_ContentIndex{}, errno)
@@ -587,14 +535,16 @@ func (b *TestBlockStore) RetargetContent(
 
 // GetStats ...
 func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
+	b.stats[Longtail_BlockStoreAPI_StatU64_GetStats_Count] += 1
 	var stats BlockStoreStats
-	stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count] = b.getIndexCount
-	stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] = b.getBlockCount
-	stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] = b.putBlockCount
+	for i := 0; i < Longtail_BlockStoreAPI_StatU64_Count; i++ {
+		stats.StatU64[i] = b.stats[i]
+	}
 	return stats, 0
 }
 
 func (b *TestBlockStore) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int {
+	b.stats[Longtail_BlockStoreAPI_StatU64_Flush_Count] += 1
 	asyncCompleteAPI.OnComplete(0)
 	return 0
 }
@@ -650,30 +600,16 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer getBlock.Dispose()
 	validateStoredBlock(t, getBlock, 0xdeadbeef)
 
-	getIndexComplete := &testGetIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno = blockStoreProxy.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
-	if errno != 0 {
-		t.Errorf("TestBlockStoreProxy() GetIndex() %d != %d", errno, 0)
-		getIndexComplete.wg.Done()
-	}
-	getIndexComplete.wg.Wait()
-
 	stats, errno := blockStoreProxy.GetStats()
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() GetStats() %d != %d", errno, 0)
 	}
-	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count] != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
-	}
 	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
+		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1)
 	}
 	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksPutCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetIndex_Count], 1)
+		t.Errorf("TestBlockStoreProxy() stats.BlocksPutCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1)
 	}
-	contentIndex := getIndexComplete.contentIndex
-	defer contentIndex.Dispose()
 
 	blockStoreProxy.Dispose()
 }
@@ -727,15 +663,15 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	}
 	defer contentIndex.Dispose()
 
-	getIndexComplete := &testGetIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno = blockStoreAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
+	retargetContentComplete := &testRetargetContentCompletionAPI{}
+	retargetContentComplete.wg.Add(1)
+	errno = blockStoreAPI.RetargetContent(contentIndex, CreateAsyncRetargetContentAPI(retargetContentComplete))
 	if errno != 0 {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetIndex() %d != %d", errno, 0)
-		getIndexComplete.wg.Done()
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.RetargetContent() %d != %d", errno, 0)
+		retargetContentComplete.wg.Done()
 	}
-	getIndexComplete.wg.Wait()
-	blockStoreContentIndex := getIndexComplete.contentIndex
+	retargetContentComplete.wg.Wait()
+	blockStoreContentIndex := retargetContentComplete.contentIndex
 	defer blockStoreContentIndex.Dispose()
 	errno = WriteContent(
 		storageAPI,
@@ -904,15 +840,15 @@ func TestRewriteVersion(t *testing.T) {
 	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
 
-	getIndexComplete := &testGetIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno = blockStorageAPI.GetIndex(CreateAsyncGetIndexAPI(getIndexComplete))
+	retargetContentComplete := &testRetargetContentCompletionAPI{}
+	retargetContentComplete.wg.Add(1)
+	errno = blockStorageAPI.RetargetContent(contentIndex, CreateAsyncRetargetContentAPI(retargetContentComplete))
 	if errno != 0 {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetIndex() %d != %d", errno, 0)
-		getIndexComplete.wg.Done()
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.RetargetContent() %d != %d", errno, 0)
+		retargetContentComplete.wg.Done()
 	}
-	getIndexComplete.wg.Wait()
-	blockStoreContentIndex := getIndexComplete.contentIndex
+	retargetContentComplete.wg.Wait()
+	blockStoreContentIndex := retargetContentComplete.contentIndex
 	defer blockStoreContentIndex.Dispose()
 
 	errno = WriteContent(
@@ -928,7 +864,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() WriteContent() %d != %d", errno, 0)
 	}
 
-	retargetContentComplete := &testRetargetContentCompletionAPI{}
+	retargetContentComplete = &testRetargetContentCompletionAPI{}
 	retargetContentComplete.wg.Add(1)
 	errno = blockStorageAPI.RetargetContent(contentIndex, CreateAsyncRetargetContentAPI(retargetContentComplete))
 	if errno != 0 {

@@ -16,7 +16,6 @@
 #include "longtail/include/lib/hashregistry/longtail_full_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_blake3_hash_registry.h"
 #include "longtail/include/lib/lrublockstore/longtail_lrublockstore.h"
-#include "longtail/include/lib/retainingblockstore/longtail_retainingblockstore.h"
 #include "longtail/include/lib/shareblockstore/longtail_shareblockstore.h"
 #include "longtail/include/lib/filestorage/longtail_filestorage.h"
 #include "longtail/include/lib/fsblockstore/longtail_fsblockstore.h"
@@ -43,9 +42,8 @@ struct BlockStoreAPIProxy
 static void* BlockStoreAPIProxy_GetContext(void* api) { return ((struct BlockStoreAPIProxy*)api)->m_Context; }
 void BlockStoreAPIProxy_Dispose(struct Longtail_API* api);
 int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t block_count, uint64_t* block_hashes, uint32_t* block_ref_counts);
+int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index);
 int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-int BlockStoreAPIProxy_GetIndex(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncGetIndexAPI* async_complete_api);
 int BlockStoreAPIProxy_RetargetContent(struct Longtail_BlockStoreAPI* api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
 int BlockStoreAPIProxy_Flush(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncFlushAPI* async_complete_api);
@@ -60,8 +58,7 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         BlockStoreAPIProxy_PutStoredBlock,
         (Longtail_BlockStore_PreflightGetFunc)BlockStoreAPIProxy_PreflightGet,
         BlockStoreAPIProxy_GetStoredBlock,
-        BlockStoreAPIProxy_GetIndex,
-        BlockStoreAPIProxy_RetargetContent,
+        (Longtail_BlockStore_RetargetContentFunc)BlockStoreAPIProxy_RetargetContent,
         BlockStoreAPIProxy_GetStats,
         BlockStoreAPIProxy_Flush);
 }
@@ -152,28 +149,6 @@ static struct Longtail_AsyncGetStoredBlockAPI* CreateAsyncGetStoredBlockAPI(void
         api,
         AsyncGetStoredBlockAPIProxy_Dispose,
         AsyncGetStoredBlockAPIProxy_OnComplete);
-}
-
-////////////// Longtail_AsyncGetIndexAPI
-
-struct AsyncGetIndexAPIProxy
-{
-    struct Longtail_AsyncGetIndexAPI m_API;
-    void* m_Context;
-};
-
-static void* AsyncGetIndexAPIProxy_GetContext(void* api) { return ((struct AsyncGetIndexAPIProxy*)api)->m_Context; }
-void AsyncGetIndexAPIProxy_OnComplete(struct Longtail_AsyncGetIndexAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
-void AsyncGetIndexAPIProxy_Dispose(struct Longtail_API* api);
-
-static struct Longtail_AsyncGetIndexAPI* CreateAsyncGetIndexAPI(void* context)
-{
-    struct AsyncGetIndexAPIProxy* api    = (struct AsyncGetIndexAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetIndexAPIProxy));
-    api->m_Context = context;
-    return Longtail_MakeAsyncGetIndexAPI(
-        api,
-        AsyncGetIndexAPIProxy_Dispose,
-        AsyncGetIndexAPIProxy_OnComplete);
 }
 
 ////////////// Longtail_AsyncRetargetContentAPI

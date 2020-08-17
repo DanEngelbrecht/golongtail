@@ -96,13 +96,13 @@ func (a *getIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_Con
 	a.wg.Done()
 }
 
-type retargetContentIndexCompletionAPI struct {
+type retargetContentCompletionAPI struct {
 	wg           sync.WaitGroup
 	contentIndex longtaillib.Longtail_ContentIndex
 	err          int
 }
 
-func (a *retargetContentIndexCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_ContentIndex, err int) {
+func (a *retargetContentCompletionAPI) OnComplete(contentIndex longtaillib.Longtail_ContentIndex, err int) {
 	a.err = err
 	a.contentIndex = contentIndex
 	a.wg.Done()
@@ -121,9 +121,6 @@ func (a *flushCompletionAPI) OnComplete(err int) {
 func printStats(name string, stats longtaillib.BlockStoreStats) {
 	log.Printf("%s:\n", name)
 	log.Printf("------------------\n")
-	log.Printf("GetIndex_Count:             %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_Count]))
-	log.Printf("GetIndex_RetryCount:        %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_RetryCount]))
-	log.Printf("GetIndex_FailCount:         %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetIndex_FailCount]))
 	log.Printf("GetStoredBlock_Count:       %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]))
 	log.Printf("GetStoredBlock_RetryCount:  %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount]))
 	log.Printf("GetStoredBlock_FailCount:   %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount]))
@@ -140,12 +137,14 @@ func printStats(name string, stats longtaillib.BlockStoreStats) {
 	log.Printf("PreflightGet_Count:         %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_Count]))
 	log.Printf("PreflightGet_RetryCount:    %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount]))
 	log.Printf("PreflightGet_FailCount:     %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount]))
+	log.Printf("Flush_Count:                %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_Flush_Count]))
+	log.Printf("Flush_FailCount:            %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_Flush_FailCount]))
 	log.Printf("GetStats_Count:             %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStats_Count]))
 	log.Printf("------------------\n")
 }
 
 func retargetContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, contentIndex longtaillib.Longtail_ContentIndex) (longtaillib.Longtail_ContentIndex, int) {
-	retargetContentComplete := &retargetContentIndexCompletionAPI{}
+	retargetContentComplete := &retargetContentCompletionAPI{}
 	retargetContentComplete.wg.Add(1)
 	errno := indexStore.RetargetContent(contentIndex, longtaillib.CreateAsyncRetargetContentAPI(retargetContentComplete))
 	if errno != 0 {
@@ -1017,7 +1016,9 @@ func hashIdentifierToString(hashIdentifier uint32) string {
 
 func validateVersion(
 	blobStoreURI string,
-	versionIndexPath string) error {
+	versionIndexPath string,
+	targetBlockSize uint32,
+	maxChunksPerBlock uint32) error {
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
@@ -1029,20 +1030,6 @@ func validateVersion(
 	}
 	defer indexStore.Dispose()
 
-	getIndexComplete := &getIndexCompletionAPI{}
-	getIndexComplete.wg.Add(1)
-	errno := indexStore.GetIndex(longtaillib.CreateAsyncGetIndexAPI(getIndexComplete))
-	if errno != 0 {
-		getIndexComplete.wg.Done()
-		return fmt.Errorf("validateVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-	}
-	getIndexComplete.wg.Wait()
-	if getIndexComplete.err != 0 {
-		return fmt.Errorf("validateVersion: indexStore.GetIndex: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
-	}
-	remoteContentIndex := getIndexComplete.contentIndex
-	defer remoteContentIndex.Dispose()
-
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
 		return err
@@ -1052,6 +1039,37 @@ func validateVersion(
 		return fmt.Errorf("validateVersion: longtaillib.ReadVersionIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer versionIndex.Dispose()
+
+	hashIdentifier := versionIndex.GetHashIdentifier()
+
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
+	if errno != 0 {
+		return fmt.Errorf("downSyncVersion: longtaillib.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+
+	contentIndex, errno := longtaillib.CreateContentIndex(
+		hash,
+		versionIndex,
+		targetBlockSize,
+		maxChunksPerBlock)
+	defer contentIndex.Dispose()
+
+	retargetContentComplete := &retargetContentCompletionAPI{}
+	retargetContentComplete.wg.Add(1)
+	errno = indexStore.RetargetContent(contentIndex, longtaillib.CreateAsyncRetargetContentAPI(retargetContentComplete))
+	if errno != 0 {
+		retargetContentComplete.wg.Done()
+		return fmt.Errorf("validateVersion: indexStore.RetargetContent: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+	retargetContentComplete.wg.Wait()
+	if retargetContentComplete.err != 0 {
+		return fmt.Errorf("validateVersion: indexStore.RetargetContent: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+	remoteContentIndex := retargetContentComplete.contentIndex
+	defer remoteContentIndex.Dispose()
 
 	errno = longtaillib.ValidateContent(remoteContentIndex, versionIndex)
 
@@ -1627,9 +1645,11 @@ var (
 	commandDownsyncNoRetainPermissions = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 	commandDownsyncValidate            = commandDownsync.Flag("validate", "Validate target path once completed").Bool()
 
-	commandValidate                 = kingpin.Command("validate", "Validate a version index against a content store")
-	commandValidateStorageURI       = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
-	commandValidateVersionIndexPath = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandValidate                         = kingpin.Command("validate", "Validate a version index against a content store")
+	commandValidateStorageURI               = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandValidateVersionIndexPath         = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandValidateVersionTargetBlockSize   = commandValidate.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	commandValidateVersionMaxChunksPerBlock = commandValidate.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 
 	commandPrintVersionIndex        = kingpin.Command("commandPrintVersionIndex", "Print info about a file")
 	commandPrintVersionIndexPath    = commandPrintVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
@@ -1712,7 +1732,11 @@ func main() {
 			log.Fatal(err)
 		}
 	case commandValidate.FullCommand():
-		err := validateVersion(*commandValidateStorageURI, *commandValidateVersionIndexPath)
+		err := validateVersion(
+			*commandValidateStorageURI,
+			*commandValidateVersionIndexPath,
+			*commandValidateVersionTargetBlockSize,
+			*commandValidateVersionMaxChunksPerBlock)
 		if err != nil {
 			log.Fatal(err)
 		}

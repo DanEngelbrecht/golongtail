@@ -694,7 +694,6 @@ func downSyncVersion(
 	var localIndexStore longtaillib.Longtail_BlockStoreAPI
 	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
-	var indexStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
 		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, *localCachePath, 8388608, 1024)
@@ -712,7 +711,7 @@ func downSyncVersion(
 
 	shareBlockStore := longtaillib.CreateShareBlockStore(compressBlockStore)
 	defer shareBlockStore.Dispose()
-	indexStore = longtaillib.CreateLRUBlockStoreAPI(shareBlockStore, 32)
+	indexStore := longtaillib.CreateLRUBlockStoreAPI(shareBlockStore, 32)
 	defer indexStore.Dispose()
 
 	errno := 0
@@ -779,7 +778,10 @@ func downSyncVersion(
 	}
 	defer targetVersionIndex.Dispose()
 
-	versionDiff, errno := longtaillib.CreateVersionDiff(targetVersionIndex, sourceVersionIndex)
+	versionDiff, errno := longtaillib.CreateVersionDiff(
+		hash,
+		targetVersionIndex,
+		sourceVersionIndex)
 	if errno != 0 {
 		return fmt.Errorf("downSyncVersion: longtaillib.CreateVersionDiff() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}

@@ -1667,10 +1667,15 @@ func WriteVersion(
 
 //CreateVersionDiff do we really need this? Maybe ChangeVersion should create one on the fly?
 func CreateVersionDiff(
+	hashAPI Longtail_HashAPI,
 	sourceVersionIndex Longtail_VersionIndex,
 	targetVersionIndex Longtail_VersionIndex) (Longtail_VersionDiff, int) {
 	var versionDiff *C.struct_Longtail_VersionDiff
-	errno := C.Longtail_CreateVersionDiff(sourceVersionIndex.cVersionIndex, targetVersionIndex.cVersionIndex, &versionDiff)
+	errno := C.Longtail_CreateVersionDiff(
+		hashAPI.cHashAPI,
+		sourceVersionIndex.cVersionIndex,
+		targetVersionIndex.cVersionIndex,
+		&versionDiff)
 	if errno != 0 {
 		return Longtail_VersionDiff{cVersionDiff: nil}, int(errno)
 	}

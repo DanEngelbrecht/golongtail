@@ -563,7 +563,6 @@ func upSyncVersion(
 			indexStore,
 			jobs,
 			&writeContentProgress,
-			existingRemoteContentIndex,
 			versionMissingContentIndex,
 			vindex,
 			sourceFolderPath)
@@ -601,8 +600,7 @@ func upSyncVersion(
 	remoteStoreStats, errno := remoteStore.GetStats()
 
 	if versionContentIndexPath != nil && len(*versionContentIndexPath) > 0 {
-		versionLocalContentIndex, errno := longtaillib.MergeContentIndex(
-			jobs,
+		versionLocalContentIndex, errno := longtaillib.AddContentIndex(
 			existingRemoteContentIndex,
 			versionMissingContentIndex)
 		if errno != 0 {
@@ -787,9 +785,10 @@ func downSyncVersion(
 	}
 	defer versionDiff.Dispose()
 
-	sourceVersionContentIndex, errno := longtaillib.CreateContentIndex(
+	sourceVersionContentIndex, errno := longtaillib.CreateContentIndexFromDiff(
 		hash,
 		sourceVersionIndex,
+		versionDiff,
 		targetBlockSize,
 		maxChunksPerBlock)
 	if errno != 0 {
@@ -802,11 +801,6 @@ func downSyncVersion(
 		return fmt.Errorf("downSyncVersion: indexStore.RetargetContent() failed with %s", longtaillib.ErrNoToDescription(errno))
 	}
 	defer retargettedVersionContentIndex.Dispose()
-
-	errno = longtaillib.ValidateContent(retargettedVersionContentIndex, sourceVersionIndex)
-	if errno != 0 {
-		return fmt.Errorf("downSyncVersion: indexStore.ValidateContent() failed with %s", longtaillib.ErrNoToDescription(errno))
-	}
 
 	changeVersionProgress := longtaillib.CreateProgressAPI(&progressData{task: "Updating version"})
 	defer changeVersionProgress.Dispose()

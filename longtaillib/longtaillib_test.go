@@ -673,13 +673,25 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	retargetContentComplete.wg.Wait()
 	blockStoreContentIndex := retargetContentComplete.contentIndex
 	defer blockStoreContentIndex.Dispose()
+
+	missingContentIndex, errno := CreateMissingContent(
+		hashAPI,
+		blockStoreContentIndex,
+		versionIndex,
+		32768*2,
+		8)
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxyFull() CreateMissingContent() %d != %d", errno, 0)
+		retargetContentComplete.wg.Done()
+	}
+	defer missingContentIndex.Dispose()
+
 	errno = WriteContent(
 		storageAPI,
 		blockStoreAPI,
 		jobAPI,
 		nil,
-		blockStoreContentIndex,
-		contentIndex,
+		missingContentIndex,
 		versionIndex,
 		"content")
 	if errno != 0 {
@@ -840,23 +852,11 @@ func TestRewriteVersion(t *testing.T) {
 	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
 	defer writeContentProgress.Dispose()
 
-	retargetContentComplete := &testRetargetContentCompletionAPI{}
-	retargetContentComplete.wg.Add(1)
-	errno = blockStorageAPI.RetargetContent(contentIndex, CreateAsyncRetargetContentAPI(retargetContentComplete))
-	if errno != 0 {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.RetargetContent() %d != %d", errno, 0)
-		retargetContentComplete.wg.Done()
-	}
-	retargetContentComplete.wg.Wait()
-	blockStoreContentIndex := retargetContentComplete.contentIndex
-	defer blockStoreContentIndex.Dispose()
-
 	errno = WriteContent(
 		storageAPI,
 		blockStorageAPI,
 		jobAPI,
 		&writeContentProgress,
-		blockStoreContentIndex,
 		contentIndex,
 		versionIndex,
 		"content")
@@ -864,7 +864,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() WriteContent() %d != %d", errno, 0)
 	}
 
-	retargetContentComplete = &testRetargetContentCompletionAPI{}
+	retargetContentComplete := &testRetargetContentCompletionAPI{}
 	retargetContentComplete.wg.Add(1)
 	errno = blockStorageAPI.RetargetContent(contentIndex, CreateAsyncRetargetContentAPI(retargetContentComplete))
 	if errno != 0 {
@@ -881,7 +881,7 @@ func TestRewriteVersion(t *testing.T) {
 		storageAPI,
 		jobAPI,
 		&writeVersionProgress2,
-		contentIndex,
+		retargetedContentIndex,
 		versionIndex,
 		"content_copy",
 		true)

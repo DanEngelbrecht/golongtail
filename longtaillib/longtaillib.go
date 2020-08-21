@@ -871,6 +871,14 @@ func (storedBlock *Longtail_StoredBlock) GetBlockIndex() Longtail_BlockIndex {
 	return Longtail_BlockIndex{cBlockIndex: storedBlock.cStoredBlock.m_BlockIndex}
 }
 
+func (storedBlock *Longtail_StoredBlock) GetBlockSize() int {
+	blockIndex := storedBlock.GetBlockIndex()
+	chunkCount := C.uint32_t(blockIndex.GetChunkCount())
+	blockIndexSize := int(C.Longtail_GetBlockIndexSize(chunkCount))
+	blockDataSize := int(storedBlock.cStoredBlock.m_BlockChunksDataSize)
+	return blockIndexSize + blockDataSize
+}
+
 func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
 	size := int(storedBlock.cStoredBlock.m_BlockChunksDataSize)
 	return carray2sliceByte((*C.char)(storedBlock.cStoredBlock.m_BlockData), size)

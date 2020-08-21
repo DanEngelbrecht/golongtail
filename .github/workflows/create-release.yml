@@ -87,7 +87,7 @@ jobs:
         body: |
           Changes in this Release
            - *FIX* Switched order of LRU and Shared block store
-           - *FIX* Better prefetch logic
+           - *FIX* Better prefetch logic, now limits prefetch amount based on memory footprint
         draft: false
         prerelease: false
     - name: Download Linux artifacts

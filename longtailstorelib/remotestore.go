@@ -42,9 +42,8 @@ type stopMessage struct {
 }
 
 type pendingPrefetchedBlock struct {
-	storedBlock         longtaillib.Longtail_StoredBlock
-	completeCallbacks   []longtaillib.Longtail_AsyncGetStoredBlockAPI
-	workerPrefetchCount *int64
+	storedBlock       longtaillib.Longtail_StoredBlock
+	completeCallbacks []longtaillib.Longtail_AsyncGetStoredBlockAPI
 }
 
 type remoteStore struct {
@@ -68,6 +67,8 @@ type remoteStore struct {
 	indexFlushReplyChan  chan int
 	indexStopChan        chan stopMessage
 	workerErrorChan      chan error
+	prefetchMemory       int64
+	maxPrefetchMemory    int64
 
 	fetchedBlocksSync sync.Mutex
 	fetchedBlocks     map[uint64]bool
@@ -203,7 +204,8 @@ func fetchBlock(
 		storedBlock := prefetchedBlock.storedBlock
 		if storedBlock.IsValid() {
 			delete(s.prefetchBlocks, getMsg.blockHash)
-			atomic.AddInt64(prefetchedBlock.workerPrefetchCount, -1)
+			blockSize := -int64(storedBlock.GetBlockSize())
+			atomic.AddInt64(&s.prefetchMemory, blockSize)
 			s.fetchedBlocksSync.Unlock()
 			getMsg.asyncCompleteAPI.OnComplete(storedBlock, 0)
 			return
@@ -255,7 +257,6 @@ func remoteWorker(
 	if err != nil {
 		return errors.Wrap(err, s.blobStore.String())
 	}
-	workerPrefetchCount := int64(0)
 	run := true
 	for run {
 		received := 0
@@ -270,76 +271,70 @@ func remoteWorker(
 		default:
 		}
 		if received == 0 {
-			if workerPrefetchCount > 2 {
-				select {
-				case _ = <-flushMessages:
-					flushReplyMessages <- 0
-				case putMsg := <-putBlockMessages:
-					errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
-					putMsg.asyncCompleteAPI.OnComplete(errno)
-				case getMsg := <-getBlockMessages:
-					fetchBlock(ctx, s, client, getMsg)
-				case _ = <-stopMessages:
-					run = false
-				}
-			} else {
-				select {
-				case _ = <-flushMessages:
-					flushReplyMessages <- 0
-				case putMsg := <-putBlockMessages:
-					errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
-					putMsg.asyncCompleteAPI.OnComplete(errno)
-				case getMsg := <-getBlockMessages:
-					fetchBlock(ctx, s, client, getMsg)
-				case prefetchMsg := <-prefetchBlockChan:
-					s.fetchedBlocksSync.Lock()
-					_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
-					if exists {
-						// Already fetched
-						s.fetchedBlocksSync.Unlock()
-						continue
-					}
-					s.fetchedBlocks[prefetchMsg.blockHash] = true
-					prefetchedBlock := &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
-					s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
+			select {
+			case _ = <-flushMessages:
+				flushReplyMessages <- 0
+			case putMsg := <-putBlockMessages:
+				errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
+				putMsg.asyncCompleteAPI.OnComplete(errno)
+			case getMsg := <-getBlockMessages:
+				fetchBlock(ctx, s, client, getMsg)
+			case prefetchMsg := <-prefetchBlockChan:
+				s.fetchedBlocksSync.Lock()
+				_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
+				if exists {
+					// Already fetched
 					s.fetchedBlocksSync.Unlock()
+					continue
+				}
+				s.fetchedBlocks[prefetchMsg.blockHash] = true
+				prefetchedBlock := &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
+				s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
+				s.fetchedBlocksSync.Unlock()
 
-					storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+				storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
 
-					s.fetchedBlocksSync.Lock()
-					prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
-					completeCallbacks := prefetchedBlock.completeCallbacks
-					if len(completeCallbacks) == 0 {
+				s.fetchedBlocksSync.Lock()
+				prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
+				completeCallbacks := prefetchedBlock.completeCallbacks
+				if len(completeCallbacks) == 0 {
+					// Nobody is actively waiting for the block
+					blockSize := int64(storedBlock.GetBlockSize())
+					if s.prefetchMemory+blockSize < s.maxPrefetchMemory {
+						// Each worker may have up to 2 pending blocks in memory at one time
 						prefetchedBlock.storedBlock = storedBlock
-						prefetchedBlock.workerPrefetchCount = &workerPrefetchCount
-						atomic.AddInt64(&workerPrefetchCount, 1)
-						s.fetchedBlocksSync.Unlock()
+						atomic.AddInt64(&s.prefetchMemory, blockSize)
+					} else {
+						// Don't keep the prefetched block around, just drop it, it will be added to local cache
+						delete(s.prefetchBlocks, prefetchMsg.blockHash)
+						storedBlock.Dispose()
+					}
+					s.fetchedBlocksSync.Unlock()
+					continue
+				}
+				delete(s.prefetchBlocks, prefetchMsg.blockHash)
+				s.fetchedBlocksSync.Unlock()
+				for i := 1; i < len(completeCallbacks)-1; i++ {
+					c := completeCallbacks[i]
+					if getErrno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, getErrno)
 						continue
 					}
-					delete(s.prefetchBlocks, prefetchMsg.blockHash)
-					s.fetchedBlocksSync.Unlock()
-					for i := 1; i < len(completeCallbacks)-1; i++ {
-						c := completeCallbacks[i]
-						if getErrno != 0 {
-							c.OnComplete(longtaillib.Longtail_StoredBlock{}, getErrno)
-							continue
-						}
-						buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
-						if errno != 0 {
-							c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
-							continue
-						}
-						blockCopy, errno := longtaillib.ReadStoredBlockFromBuffer(buf)
-						if errno != 0 {
-							c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
-							continue
-						}
-						c.OnComplete(blockCopy, 0)
+					buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+					if errno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+						continue
 					}
-					completeCallbacks[0].OnComplete(storedBlock, getErrno)
-				case _ = <-stopMessages:
-					run = false
+					blockCopy, errno := longtaillib.ReadStoredBlockFromBuffer(buf)
+					if errno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+						continue
+					}
+					c.OnComplete(blockCopy, 0)
 				}
+				completeCallbacks[0].OnComplete(storedBlock, getErrno)
+			case _ = <-stopMessages:
+				run = false
 			}
 		}
 	}
@@ -763,6 +758,10 @@ func NewRemoteBlockStore(
 	s.indexFlushReplyChan = make(chan int, 1)
 	s.indexStopChan = make(chan stopMessage, 1)
 	s.workerErrorChan = make(chan error, 1+s.workerCount)
+
+	s.prefetchMemory = 0
+	s.maxPrefetchMemory = 512 * 1024 * 1024
+
 	s.fetchedBlocks = map[uint64]bool{}
 	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 

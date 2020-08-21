@@ -707,9 +707,9 @@ func downSyncVersion(
 	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	shareBlockStore := longtaillib.CreateShareBlockStore(compressBlockStore)
-	defer shareBlockStore.Dispose()
-	indexStore := longtaillib.CreateLRUBlockStoreAPI(shareBlockStore, 32)
+	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
+	defer lruBlockStore.Dispose()
+	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
 	errno := 0
@@ -828,12 +828,12 @@ func downSyncVersion(
 		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 
-	sharedStoreFlushComplete := &flushCompletionAPI{}
-	sharedStoreFlushComplete.wg.Add(1)
-	errno = shareBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(sharedStoreFlushComplete))
+	lruStoreFlushComplete := &flushCompletionAPI{}
+	lruStoreFlushComplete.wg.Add(1)
+	errno = lruBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(lruStoreFlushComplete))
 	if errno != 0 {
-		sharedStoreFlushComplete.wg.Done()
-		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+		lruStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: lruBlockStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 
 	compressStoreFlushComplete := &flushCompletionAPI{}
@@ -873,9 +873,9 @@ func downSyncVersion(
 		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(indexStoreFlushComplete.err))
 	}
 
-	sharedStoreFlushComplete.wg.Wait()
-	if sharedStoreFlushComplete.err != 0 {
-		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(sharedStoreFlushComplete.err))
+	lruStoreFlushComplete.wg.Wait()
+	if lruStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: lruStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(lruStoreFlushComplete.err))
 	}
 
 	compressStoreFlushComplete.wg.Wait()
@@ -898,8 +898,8 @@ func downSyncVersion(
 		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(remoteStoreFlushComplete.err))
 	}
 
-	lruStoreStats, lruStoreStatsErrno := indexStore.GetStats()
-	shareStoreStats, shareStoreStatsErrno := shareBlockStore.GetStats()
+	shareStoreStats, shareStoreStatsErrno := indexStore.GetStats()
+	lruStoreStats, lruStoreStatsErrno := lruBlockStore.GetStats()
 	compressStoreStats, compressStoreStatsErrno := compressBlockStore.GetStats()
 	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
 	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
@@ -974,11 +974,11 @@ func downSyncVersion(
 	}
 
 	if showStats {
-		if lruStoreStatsErrno == 0 {
-			printStats("LRU", lruStoreStats)
-		}
 		if shareStoreStatsErrno == 0 {
 			printStats("Share", shareStoreStats)
+		}
+		if lruStoreStatsErrno == 0 {
+			printStats("LRU", lruStoreStats)
 		}
 		if compressStoreStatsErrno == 0 {
 			printStats("Compress", compressStoreStats)
@@ -1316,7 +1316,6 @@ func cpVersionIndex(
 	var localIndexStore longtaillib.Longtail_BlockStoreAPI
 	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
-	var indexStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
 		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, *localCachePath, 8388608, 1024)
@@ -1332,9 +1331,9 @@ func cpVersionIndex(
 	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	shareBlockStore := longtaillib.CreateShareBlockStore(compressBlockStore)
-	defer shareBlockStore.Dispose()
-	indexStore = longtaillib.CreateLRUBlockStoreAPI(shareBlockStore, 32)
+	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
+	defer lruBlockStore.Dispose()
+	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
 	vbuffer, err := readFromURI(versionIndexPath)
@@ -1415,12 +1414,12 @@ func cpVersionIndex(
 		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 
-	sharedStoreFlushComplete := &flushCompletionAPI{}
-	sharedStoreFlushComplete.wg.Add(1)
-	errno = shareBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(sharedStoreFlushComplete))
+	lruStoreFlushComplete := &flushCompletionAPI{}
+	lruStoreFlushComplete.wg.Add(1)
+	errno = lruBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(lruStoreFlushComplete))
 	if errno != 0 {
-		sharedStoreFlushComplete.wg.Done()
-		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+		lruStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: lruStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
 	}
 
 	compressStoreFlushComplete := &flushCompletionAPI{}
@@ -1460,9 +1459,9 @@ func cpVersionIndex(
 		return fmt.Errorf("validateVersion: indexStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(indexStoreFlushComplete.err))
 	}
 
-	sharedStoreFlushComplete.wg.Wait()
-	if sharedStoreFlushComplete.err != 0 {
-		return fmt.Errorf("validateVersion: sharedStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(sharedStoreFlushComplete.err))
+	lruStoreFlushComplete.wg.Wait()
+	if lruStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: lruStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(lruStoreFlushComplete.err))
 	}
 
 	compressStoreFlushComplete.wg.Wait()
@@ -1485,19 +1484,19 @@ func cpVersionIndex(
 		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(remoteStoreFlushComplete.err))
 	}
 
-	lruStoreStats, lruStoreStatsErrno := indexStore.GetStats()
-	shareStoreStats, shareStoreStatsErrno := shareBlockStore.GetStats()
+	shareStoreStats, shareStoreStatsErrno := indexStore.GetStats()
+	lruStoreStats, lruStoreStatsErrno := lruBlockStore.GetStats()
 	compressStoreStats, compressStoreStatsErrno := compressBlockStore.GetStats()
 	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
 	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
 	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
 
 	if showStats {
-		if lruStoreStatsErrno == 0 {
-			printStats("LRU", lruStoreStats)
-		}
 		if shareStoreStatsErrno == 0 {
 			printStats("Share", shareStoreStats)
+		}
+		if lruStoreStatsErrno == 0 {
+			printStats("LRU", lruStoreStats)
 		}
 		if compressStoreStatsErrno == 0 {
 			printStats("Compress", compressStoreStats)

@@ -974,11 +974,11 @@ func downSyncVersion(
 	}
 
 	if showStats {
-		if lruStoreStatsErrno == 0 {
-			printStats("LRU", lruStoreStats)
-		}
 		if shareStoreStatsErrno == 0 {
 			printStats("Share", shareStoreStats)
+		}
+		if lruStoreStatsErrno == 0 {
+			printStats("LRU", lruStoreStats)
 		}
 		if compressStoreStatsErrno == 0 {
 			printStats("Compress", compressStoreStats)
@@ -1492,11 +1492,11 @@ func cpVersionIndex(
 	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
 
 	if showStats {
-		if lruStoreStatsErrno == 0 {
-			printStats("LRU", lruStoreStats)
-		}
 		if shareStoreStatsErrno == 0 {
 			printStats("Share", shareStoreStats)
+		}
+		if lruStoreStatsErrno == 0 {
+			printStats("LRU", lruStoreStats)
 		}
 		if compressStoreStatsErrno == 0 {
 			printStats("Compress", compressStoreStats)

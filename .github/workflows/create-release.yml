@@ -86,7 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATE* updated to longtail v0.0.55
+           - *UPDATE* updated to longtail v0.0.58
+           - *FIX* Use VersionDiff for finding content to upload
         draft: false
         prerelease: false
     - name: Download Linux artifacts

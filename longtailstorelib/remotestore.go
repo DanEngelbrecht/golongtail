@@ -652,7 +652,7 @@ func contentIndexWorker(
 				continue
 			}
 			defer fullContentIndex.Dispose()
-			retargetedIndex, errno := longtaillib.RetargetContent(fullContentIndex, contentIndex)
+			retargetedIndex, errno := longtaillib.RetargetContent(fullContentIndex, retargetContentMessage.contentIndex)
 			if errno != 0 {
 				retargetContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 				continue
@@ -681,7 +681,7 @@ func contentIndexWorker(
 					continue
 				}
 				defer fullContentIndex.Dispose()
-				retargetedIndex, errno := longtaillib.RetargetContent(fullContentIndex, contentIndex)
+				retargetedIndex, errno := longtaillib.RetargetContent(fullContentIndex, retargetContentMessage.contentIndex)
 				if errno != 0 {
 					retargetContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 					continue

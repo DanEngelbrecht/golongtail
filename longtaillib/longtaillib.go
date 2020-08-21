@@ -1273,6 +1273,29 @@ func CreateContentIndex(
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
+// CreateContentIndexFromDiff
+func CreateContentIndexFromDiff(
+	hashAPI Longtail_HashAPI,
+	versionIndex Longtail_VersionIndex,
+	versionDiff Longtail_VersionDiff,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
+
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_CreateContentIndexFromDiff(
+		hashAPI.cHashAPI,
+		versionIndex.cVersionIndex,
+		versionDiff.cVersionDiff,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
+		&cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
+	}
+
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
 // CreateContentIndexRaw ...
 func CreateContentIndexRaw(
 	hashAPI Longtail_HashAPI,
@@ -1535,8 +1558,7 @@ func WriteContent(
 	targetBlockStoreAPI Longtail_BlockStoreAPI,
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
-	block_store_content_index Longtail_ContentIndex,
-	versionContentIndex Longtail_ContentIndex,
+	content_index Longtail_ContentIndex,
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string) int {
 
@@ -1555,8 +1577,7 @@ func WriteContent(
 		cProgressAPI,
 		nil,
 		nil,
-		block_store_content_index.cContentIndex,
-		versionContentIndex.cContentIndex,
+		content_index.cContentIndex,
 		versionIndex.cVersionIndex,
 		cVersionFolderPath)
 	if errno != 0 {

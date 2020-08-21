@@ -270,76 +270,70 @@ func remoteWorker(
 		default:
 		}
 		if received == 0 {
-			if workerPrefetchCount > 2 {
-				select {
-				case _ = <-flushMessages:
-					flushReplyMessages <- 0
-				case putMsg := <-putBlockMessages:
-					errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
-					putMsg.asyncCompleteAPI.OnComplete(errno)
-				case getMsg := <-getBlockMessages:
-					fetchBlock(ctx, s, client, getMsg)
-				case _ = <-stopMessages:
-					run = false
-				}
-			} else {
-				select {
-				case _ = <-flushMessages:
-					flushReplyMessages <- 0
-				case putMsg := <-putBlockMessages:
-					errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
-					putMsg.asyncCompleteAPI.OnComplete(errno)
-				case getMsg := <-getBlockMessages:
-					fetchBlock(ctx, s, client, getMsg)
-				case prefetchMsg := <-prefetchBlockChan:
-					s.fetchedBlocksSync.Lock()
-					_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
-					if exists {
-						// Already fetched
-						s.fetchedBlocksSync.Unlock()
-						continue
-					}
-					s.fetchedBlocks[prefetchMsg.blockHash] = true
-					prefetchedBlock := &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
-					s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
+			select {
+			case _ = <-flushMessages:
+				flushReplyMessages <- 0
+			case putMsg := <-putBlockMessages:
+				errno := putStoredBlock(ctx, s, client, contentIndexMessages, putMsg.storedBlock)
+				putMsg.asyncCompleteAPI.OnComplete(errno)
+			case getMsg := <-getBlockMessages:
+				fetchBlock(ctx, s, client, getMsg)
+			case prefetchMsg := <-prefetchBlockChan:
+				s.fetchedBlocksSync.Lock()
+				_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
+				if exists {
+					// Already fetched
 					s.fetchedBlocksSync.Unlock()
+					continue
+				}
+				s.fetchedBlocks[prefetchMsg.blockHash] = true
+				prefetchedBlock := &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
+				s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
+				s.fetchedBlocksSync.Unlock()
 
-					storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+				storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
 
-					s.fetchedBlocksSync.Lock()
-					prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
-					completeCallbacks := prefetchedBlock.completeCallbacks
-					if len(completeCallbacks) == 0 {
+				s.fetchedBlocksSync.Lock()
+				prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
+				completeCallbacks := prefetchedBlock.completeCallbacks
+				if len(completeCallbacks) == 0 {
+					// Nobody is actively waiting for the block
+					if workerPrefetchCount < 2 {
+						// Each worker may have up to 2 pending blocks in memory at one time
 						prefetchedBlock.storedBlock = storedBlock
 						prefetchedBlock.workerPrefetchCount = &workerPrefetchCount
 						atomic.AddInt64(&workerPrefetchCount, 1)
-						s.fetchedBlocksSync.Unlock()
+					} else {
+						// Don't keep the prefetched block around, just drop it, it will be added to local cache
+						delete(s.prefetchBlocks, prefetchMsg.blockHash)
+						storedBlock.Dispose()
+					}
+					s.fetchedBlocksSync.Unlock()
+					continue
+				}
+				delete(s.prefetchBlocks, prefetchMsg.blockHash)
+				s.fetchedBlocksSync.Unlock()
+				for i := 1; i < len(completeCallbacks)-1; i++ {
+					c := completeCallbacks[i]
+					if getErrno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, getErrno)
 						continue
 					}
-					delete(s.prefetchBlocks, prefetchMsg.blockHash)
-					s.fetchedBlocksSync.Unlock()
-					for i := 1; i < len(completeCallbacks)-1; i++ {
-						c := completeCallbacks[i]
-						if getErrno != 0 {
-							c.OnComplete(longtaillib.Longtail_StoredBlock{}, getErrno)
-							continue
-						}
-						buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
-						if errno != 0 {
-							c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
-							continue
-						}
-						blockCopy, errno := longtaillib.ReadStoredBlockFromBuffer(buf)
-						if errno != 0 {
-							c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
-							continue
-						}
-						c.OnComplete(blockCopy, 0)
+					buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+					if errno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+						continue
 					}
-					completeCallbacks[0].OnComplete(storedBlock, getErrno)
-				case _ = <-stopMessages:
-					run = false
+					blockCopy, errno := longtaillib.ReadStoredBlockFromBuffer(buf)
+					if errno != 0 {
+						c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
+						continue
+					}
+					c.OnComplete(blockCopy, 0)
 				}
+				completeCallbacks[0].OnComplete(storedBlock, getErrno)
+			case _ = <-stopMessages:
+				run = false
 			}
 		}
 	}

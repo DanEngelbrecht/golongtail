@@ -86,8 +86,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATE* updated to longtail v0.0.58
-           - *FIX* Use VersionDiff for finding content to upload
+           - *FIX* Switched order of LRU and Shared block store
+           - *FIX* Better prefetch logic
         draft: false
         prerelease: false
     - name: Download Linux artifacts

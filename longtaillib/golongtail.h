@@ -15,6 +15,7 @@
 #include "longtail/include/lib/hashregistry/longtail_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_full_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_blake3_hash_registry.h"
+#include "longtail/include/lib/hpcdcchunker/longtail_hpcdcchunker.h"
 #include "longtail/include/lib/lrublockstore/longtail_lrublockstore.h"
 #include "longtail/include/lib/shareblockstore/longtail_shareblockstore.h"
 #include "longtail/include/lib/filestorage/longtail_filestorage.h"
@@ -26,6 +27,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void LogProxy_Log(void* context, int level, char* str);
 
@@ -209,3 +214,7 @@ static uint16_t GetVersionAssetPermissions(struct Longtail_VersionIndex* version
 {
     return version_index->m_Permissions[asset_index];
 }
+
+#ifdef __cplusplus
+}
+#endif

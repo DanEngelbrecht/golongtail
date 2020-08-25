@@ -286,6 +286,10 @@ type Longtail_HashAPI struct {
 	cHashAPI *C.struct_Longtail_HashAPI
 }
 
+type Longtail_ChunkerAPI struct {
+	cChunkerAPI *C.struct_Longtail_ChunkerAPI
+}
+
 var pointerIndex uint32
 var pointerStore [512]interface{}
 var pointerIndexer = (*[1 << 30]C.uint32_t)(C.malloc(4 * 512))
@@ -680,6 +684,19 @@ func (hashAPI *Longtail_HashAPI) Dispose() {
 	if hashAPI.cHashAPI != nil {
 		C.Longtail_DisposeAPI(&hashAPI.cHashAPI.m_API)
 		hashAPI.cHashAPI = nil
+	}
+}
+
+// CreateHPCDCChunkerAPI ...
+func CreateHPCDCChunkerAPI() Longtail_ChunkerAPI {
+	return Longtail_ChunkerAPI{cChunkerAPI: C.Longtail_CreateHPCDCChunkerAPI()}
+}
+
+// Longtail_ChunkerAPI.Dispose() ...
+func (chunkerAPI *Longtail_ChunkerAPI) Dispose() {
+	if chunkerAPI.cChunkerAPI != nil {
+		C.Longtail_DisposeAPI(&chunkerAPI.cChunkerAPI.m_API)
+		chunkerAPI.cChunkerAPI = nil
 	}
 }
 
@@ -1171,6 +1188,7 @@ func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, int) {
 func CreateVersionIndex(
 	storageAPI Longtail_StorageAPI,
 	hashAPI Longtail_HashAPI,
+	chunkerAPI Longtail_ChunkerAPI,
 	jobAPI Longtail_JobAPI,
 	progressAPI *Longtail_ProgressAPI,
 	rootPath string,
@@ -1195,6 +1213,7 @@ func CreateVersionIndex(
 	errno := C.Longtail_CreateVersionIndex(
 		storageAPI.cStorageAPI,
 		hashAPI.cHashAPI,
+		chunkerAPI.cChunkerAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,
 		nil,

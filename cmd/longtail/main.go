@@ -493,11 +493,15 @@ func upSyncVersion(
 			return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
 
+		chunker := longtaillib.CreateHPCDCChunkerAPI()
+		defer chunker.Dispose()
+
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
 		vindex, errno = longtaillib.CreateVersionIndex(
 			fs,
 			hash,
+			chunker,
 			jobs,
 			&createVersionIndexProgress,
 			sourceFolderPath,
@@ -750,11 +754,15 @@ func downSyncVersion(
 
 		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
+		chunker := longtaillib.CreateHPCDCChunkerAPI()
+		defer chunker.Dispose()
+
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
 		defer createVersionIndexProgress.Dispose()
 		targetVersionIndex, errno = longtaillib.CreateVersionIndex(
 			fs,
 			hash,
+			chunker,
 			jobs,
 			&createVersionIndexProgress,
 			targetFolderPath,
@@ -915,11 +923,15 @@ func downSyncVersion(
 		}
 		defer validateFileInfos.Dispose()
 
+		chunker := longtaillib.CreateHPCDCChunkerAPI()
+		defer chunker.Dispose()
+
 		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Validating version"})
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, errno := longtaillib.CreateVersionIndex(
 			fs,
 			hash,
+			chunker,
 			jobs,
 			&createVersionIndexProgress,
 			targetFolderPath,

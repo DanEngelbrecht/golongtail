@@ -28,6 +28,10 @@
 #include <string.h>
 #include <errno.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void LogProxy_Log(void* context, int level, char* str);
 
 void AssertProxy_Assert(char* expression, char* file, int line);
@@ -210,3 +214,7 @@ static uint16_t GetVersionAssetPermissions(struct Longtail_VersionIndex* version
 {
     return version_index->m_Permissions[asset_index];
 }
+
+#ifdef __cplusplus
+}
+#endif

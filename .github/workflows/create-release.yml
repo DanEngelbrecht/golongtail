@@ -12,60 +12,90 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: build cmd
-      run: |
-        pushd ./cmd/longtail
-        go build -ldflags="-s -w" .
-        popd
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./cmd/longtail/longtail dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-linux-x64
-        path: dist
+      - name: Set up Go 1.14.7
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.14.7
+
+      - name: Check out source code
+        uses: actions/checkout@v2
+
+      - name: build cmd
+        run: |
+          pushd ./cmd/longtail
+          go build -ldflags="-s -w" .
+          popd
+
+      - name: build dist
+        run: |
+          mkdir dist
+          cp ./cmd/longtail/longtail dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: dist-linux-x64
+          path: dist
 
   build-macos:
 
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: build cmd
-      run: |
-        pushd ./cmd/longtail
-        go build -ldflags="-s -w" .
-        popd
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./cmd/longtail/longtail dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-macos-x64
-        path: dist
+      - name: Set up Go 1.14.7
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.14.7
+
+      - name: Check out source code
+        uses: actions/checkout@v2
+
+      - name: build cmd
+        run: |
+          pushd ./cmd/longtail
+          go build -ldflags="-s -w" .
+          popd
+
+      - name: build dist
+        run: |
+          mkdir dist
+          cp ./cmd/longtail/longtail dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: dist-macos-x64
+          path: dist
 
   build-win32:
 
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: build cmd
-      run: |
-        pushd ./cmd/longtail
-        go build -ldflags="-s -w" .
-        popd
-    - name: build dist
-      run: |
-        mkdir dist
-        cp ./cmd/longtail/longtail.exe dist/
-    - uses: actions/upload-artifact@master
-      with:
-        name: dist-win32-x64
-        path: dist
+      - name: Set up Go 1.14.7
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.14.7
+
+      - name: Check out source code
+        uses: actions/checkout@v2
+
+      - name: build cmd
+        run: |
+          pushd ./cmd/longtail
+          go build -ldflags="-s -w" .
+          popd
+
+      - name: build dist
+        run: |
+          mkdir dist
+          cp ./cmd/longtail/longtail.exe dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: dist-win32-x64
+          path: dist
 
   create-release:
 

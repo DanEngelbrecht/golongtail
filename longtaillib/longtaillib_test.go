@@ -626,6 +626,8 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	defer storageAPI.Dispose()
 	hashAPI := CreateBlake3HashAPI()
 	defer hashAPI.Dispose()
+	chunkerAPI := CreateHPCDCChunkerAPI()
+	defer chunkerAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
@@ -643,6 +645,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	versionIndex, errno := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
+		chunkerAPI,
 		jobAPI,
 		nil,
 		"content",
@@ -751,6 +754,8 @@ func TestCreateVersionIndex(t *testing.T) {
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
+	chunkerAPI := CreateHPCDCChunkerAPI()
+	defer chunkerAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 
@@ -759,6 +764,7 @@ func TestCreateVersionIndex(t *testing.T) {
 	versionIndex, errno := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
+		chunkerAPI,
 		jobAPI,
 		nil,
 		"content",
@@ -817,6 +823,8 @@ func TestRewriteVersion(t *testing.T) {
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
+	chunkerAPI := CreateHPCDCChunkerAPI()
+	defer chunkerAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
 
@@ -826,6 +834,7 @@ func TestRewriteVersion(t *testing.T) {
 	versionIndex, errno := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
+		chunkerAPI,
 		jobAPI,
 		&createVersionProgress,
 		"content",

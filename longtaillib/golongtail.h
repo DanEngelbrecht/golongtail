@@ -15,6 +15,7 @@
 #include "longtail/include/lib/hashregistry/longtail_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_full_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_blake3_hash_registry.h"
+#include "longtail/include/lib/hpcdcchunker/longtail_hpcdcchunker.h"
 #include "longtail/include/lib/lrublockstore/longtail_lrublockstore.h"
 #include "longtail/include/lib/shareblockstore/longtail_shareblockstore.h"
 #include "longtail/include/lib/filestorage/longtail_filestorage.h"

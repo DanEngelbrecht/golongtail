@@ -61,7 +61,7 @@ func (blobStore *gcsBlobStore) NewClient(ctx context.Context) (BlobClient, error
 }
 
 func (blobStore *gcsBlobStore) String() string {
-	return blobStore.prefix
+	return "gs://" + blobStore.bucketName + "/" + blobStore.prefix
 }
 
 func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {

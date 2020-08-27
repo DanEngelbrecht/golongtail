@@ -116,7 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATE* Update to longtail 0.0.59
+           - *FIX* Bad GCS store path now gives better error messages and no longer crashes
         draft: false
         prerelease: false
     - name: Download Linux artifacts

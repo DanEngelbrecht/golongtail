@@ -87,6 +87,9 @@ func (blobClient *gcsBlobClient) GetObjects() ([]BlobProperties, error) {
 		if err == iterator.Done {
 			break
 		}
+		if err != nil {
+			return nil, err
+		}
 		items = append(items, BlobProperties{Size: attrs.Size, Name: attrs.Name})
 	}
 	return items, nil

@@ -106,18 +106,18 @@ func putStoredBlock(
 
 		ok, err := objHandle.Write(blob)
 		if err != nil || !ok {
-			log.Printf("Retrying putBlob %s", key)
+			log.Printf("Retrying putBlob %s in store %s\n", key, s.String())
 			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 			ok, err = objHandle.Write(blob)
 		}
 		if err != nil || !ok {
-			log.Printf("Retrying 500 ms delayed putBlob %s", key)
+			log.Printf("Retrying 500 ms delayed putBlob %s in store %s\n", key, s.String())
 			time.Sleep(500 * time.Millisecond)
 			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 			ok, err = objHandle.Write(blob)
 		}
 		if err != nil || !ok {
-			log.Printf("Retrying 2 s delayed putBlob %s", key)
+			log.Printf("Retrying 2 s delayed putBlob %s in store %s\n", key, s.String())
 			time.Sleep(2 * time.Second)
 			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 			ok, err = objHandle.Write(blob)
@@ -160,18 +160,18 @@ func getStoredBlock(
 		if exists, err := objHandle.Exists(); err == nil && !exists {
 			return longtaillib.Longtail_StoredBlock{}, longtaillib.ENOENT
 		}
-		log.Printf("Retrying getBlob %s", key)
+		log.Printf("Retrying getBlob %s in store %s\n", key, s.String())
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], 1)
 		storedBlockData, err = objHandle.Read()
 	}
 	if err != nil {
-		log.Printf("Retrying 500 ms delayed getBlob %s", key)
+		log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", key, s.String())
 		time.Sleep(500 * time.Millisecond)
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], 1)
 		storedBlockData, err = objHandle.Read()
 	}
 	if err != nil {
-		log.Printf("Retrying 2 s delayed getBlob %s", key)
+		log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", key, s.String())
 		time.Sleep(2 * time.Second)
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], 1)
 		storedBlockData, err = objHandle.Read()
@@ -385,7 +385,7 @@ func updateRemoteContentIndex(
 		if exists {
 			blob, err := objHandle.Read()
 			if err != nil {
-				log.Printf("updateRemoteContentIndex: objHandle.Read() failed with %q", err)
+				log.Printf("updateRemoteContentIndex: objHandle.Read() failed with %q\n", err)
 				return err
 			}
 
@@ -574,15 +574,15 @@ func contentIndexWorker(
 	if exists, err := objHandle.Exists(); err == nil && exists {
 		storedContentIndexData, err := objHandle.Read()
 		if err != nil {
-			log.Printf("Retrying getBlob %s", key)
+			log.Printf("Retrying getBlob %s in store %s\n", key, s.String())
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
-			log.Printf("Retrying 500 ms delayed getBlob %s", key)
+			log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", key, s.String())
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
-			log.Printf("Retrying 2 s delayed getBlob %s", key)
+			log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", key, s.String())
 			storedContentIndexData, err = objHandle.Read()
 		}
 
@@ -720,16 +720,16 @@ func contentIndexWorker(
 	if addedContentIndex.GetBlockCount() > 0 {
 		err := updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		if err != nil {
-			log.Printf("Retrying store index")
+			log.Printf("Retrying store index %s in store %s\n", key, s.String())
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
-			log.Printf("Retrying 500 ms delayed store index")
+			log.Printf("Retrying 500 ms delayed store index %s in store %s\n", key, s.String())
 			time.Sleep(500 * time.Millisecond)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}
 		if err != nil {
-			log.Printf("Retrying 2 s delayed store index")
+			log.Printf("Retrying 2 s delayed store index %s in store %s\n", key, s.String())
 			time.Sleep(2 * time.Second)
 			err = updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		}

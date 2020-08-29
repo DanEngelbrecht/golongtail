@@ -61,7 +61,7 @@ func (blobStore *gcsBlobStore) NewClient(ctx context.Context) (BlobClient, error
 }
 
 func (blobStore *gcsBlobStore) String() string {
-	return blobStore.prefix
+	return "gs://" + blobStore.bucketName + "/" + blobStore.prefix
 }
 
 func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {
@@ -86,6 +86,9 @@ func (blobClient *gcsBlobClient) GetObjects() ([]BlobProperties, error) {
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
+		}
+		if err != nil {
+			return nil, err
 		}
 		items = append(items, BlobProperties{Size: attrs.Size, Name: attrs.Name})
 	}

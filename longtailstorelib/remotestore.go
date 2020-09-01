@@ -461,19 +461,19 @@ func buildContentIndexFromBlocks(
 		s.maxChunksPerBlock,
 		[]longtaillib.Longtail_BlockIndex{})
 
-	batchCount := 32
+	batchCount := runtime.NumCPU()
 	batchStart := 0
 
-	var clients []BlobClient
 	if batchCount > len(items) {
 		batchCount = len(items)
 	}
+	clients := make([]BlobClient, batchCount)
 	for c := 0; c < batchCount; c++ {
 		client, err := s.blobStore.NewClient(ctx)
 		if err != nil {
 			return longtaillib.Longtail_ContentIndex{}, longtaillib.EIO
 		}
-		clients = append(clients, client)
+		clients[c] = client
 	}
 
 	var wg sync.WaitGroup

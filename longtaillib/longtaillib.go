@@ -935,6 +935,9 @@ func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, int) {
 	if errno != 0 {
 		return Longtail_StoredBlock{cStoredBlock: nil}, int(errno)
 	}
+	if stored_block == nil {
+		return Longtail_StoredBlock{cStoredBlock: nil}, EBADF
+	}
 	return Longtail_StoredBlock{cStoredBlock: stored_block}, 0
 }
 

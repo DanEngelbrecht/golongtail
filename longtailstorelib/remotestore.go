@@ -158,6 +158,7 @@ func getStoredBlock(
 	storedBlockData, err := objHandle.Read()
 	if err != nil {
 		if exists, err := objHandle.Exists(); err == nil && !exists {
+			log.Printf("Block %s is not in store %s\n", key, s.String())
 			return longtaillib.Longtail_StoredBlock{}, longtaillib.ENOENT
 		}
 		log.Printf("Retrying getBlob %s in store %s\n", key, s.String())
@@ -261,6 +262,9 @@ func prefetchBlock(
 	s.fetchedBlocksSync.Unlock()
 
 	storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+	if getErrno != 0 {
+		return 
+	}
 
 	s.fetchedBlocksSync.Lock()
 	prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
@@ -618,6 +622,10 @@ func contentIndexWorker(
 			s,
 			client)
 
+		if errno == 0 {
+			fmt.Printf("Rebuild remote index with %d blocks\n", addedContentIndex.GetBlockCount())
+		}
+
 		if errno != 0 {
 			addedContentIndex, errno = longtaillib.CreateContentIndexFromBlocks(
 				s.maxBlockSize,
@@ -718,6 +726,7 @@ func contentIndexWorker(
 	}
 
 	if addedContentIndex.GetBlockCount() > 0 {
+		fmt.Printf("Updating remote index with %d blocks\n", addedContentIndex.GetBlockCount())
 		err := updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		if err != nil {
 			log.Printf("Retrying store index %s in store %s\n", key, s.String())

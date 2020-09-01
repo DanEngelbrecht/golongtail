@@ -21,6 +21,7 @@ type BlobClient interface {
 	NewObject(path string) (BlobObject, error)
 	GetObjects() ([]BlobProperties, error)
 	String() string
+	Close()
 }
 
 // BlobStore

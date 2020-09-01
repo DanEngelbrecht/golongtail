@@ -239,6 +239,7 @@ func readFromURI(uri string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
 		return nil, err
@@ -260,6 +261,7 @@ func writeToURI(uri string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
 		return err
@@ -1530,7 +1532,7 @@ func cpVersionIndex(
 func initRemoteStore(
 	blobStoreURI string,
 	hashAlgorithm *string,
-	showStats bool ) error {
+	showStats bool) error {
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 
@@ -1752,8 +1754,8 @@ var (
 	commandInitRemoteStore           = kingpin.Command("init", "open a remote store triggering reindexing of store index is missing")
 	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
 	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
-				Default("blake3").
-				Enum("meow", "blake2", "blake3")
+						Default("blake3").
+						Enum("meow", "blake2", "blake3")
 )
 
 func main() {

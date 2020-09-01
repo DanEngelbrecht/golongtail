@@ -263,7 +263,7 @@ func prefetchBlock(
 
 	storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
 	if getErrno != 0 {
-		return 
+		return
 	}
 
 	s.fetchedBlocksSync.Lock()
@@ -314,6 +314,7 @@ func remoteWorker(
 	if err != nil {
 		return errors.Wrap(err, s.blobStore.String())
 	}
+	defer client.Close()
 	run := true
 	for run {
 		received := 0
@@ -481,6 +482,7 @@ func buildContentIndexFromBlocks(
 					wg.Done()
 					return
 				}
+				defer client.Close()
 
 				objHandle, err := client.NewObject(blockKey)
 				if err != nil {
@@ -528,6 +530,7 @@ func buildContentIndexFromBlocks(
 			blockIndex.Dispose()
 		}
 		batchStart += batchLength
+		fmt.Printf("Scanned %d/%d blocks in %s\n", batchStart, len(items), blobClient.String())
 	}
 
 	return contentIndex, errno
@@ -567,6 +570,7 @@ func contentIndexWorker(
 		contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 		return errors.Wrap(err, s.blobStore.String())
 	}
+	defer client.Close()
 
 	var errno int
 	var contentIndex longtaillib.Longtail_ContentIndex
@@ -574,7 +578,6 @@ func contentIndexWorker(
 	key := "store.lci"
 
 	objHandle, err := client.NewObject(key)
-
 	if exists, err := objHandle.Exists(); err == nil && exists {
 		storedContentIndexData, err := objHandle.Read()
 		if err != nil {
@@ -623,7 +626,7 @@ func contentIndexWorker(
 			client)
 
 		if errno == 0 {
-			fmt.Printf("Rebuild remote index with %d blocks\n", addedContentIndex.GetBlockCount())
+			fmt.Printf("Rebuilt remote index with %d blocks\n", addedContentIndex.GetBlockCount())
 		}
 
 		if errno != 0 {
@@ -726,7 +729,6 @@ func contentIndexWorker(
 	}
 
 	if addedContentIndex.GetBlockCount() > 0 {
-		fmt.Printf("Updating remote index with %d blocks\n", addedContentIndex.GetBlockCount())
 		err := updateRemoteContentIndex(ctx, client, s.jobAPI, addedContentIndex)
 		if err != nil {
 			log.Printf("Retrying store index %s in store %s\n", key, s.String())
@@ -893,4 +895,5 @@ func (s *remoteStore) Close() {
 			log.Fatal(err)
 		}
 	}
+	s.defaultClient.Close()
 }

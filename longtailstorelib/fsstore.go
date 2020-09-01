@@ -44,6 +44,9 @@ func (blobClient *fsBlobClient) GetObjects() ([]BlobProperties, error) {
 	return make([]BlobProperties, 0), nil
 }
 
+func (blobClient *fsBlobClient) Close() {
+}
+
 func (blobClient *fsBlobClient) String() string {
 	return "fsstore"
 }

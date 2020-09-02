@@ -239,6 +239,7 @@ func readFromURI(uri string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
 		return nil, err
@@ -260,6 +261,7 @@ func writeToURI(uri string, data []byte) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
 		return err
@@ -1527,6 +1529,72 @@ func cpVersionIndex(
 	return nil
 }
 
+func initRemoteStore(
+	blobStoreURI string,
+	hashAlgorithm *string,
+	showStats bool) error {
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobs.Dispose()
+
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
+	if err != nil {
+		return err
+	}
+
+	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
+	if errno != 0 {
+		return fmt.Errorf("upSyncVersion: hashRegistry.GetHashAPI() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	if err != nil {
+		return err
+	}
+	defer remoteIndexStore.Dispose()
+
+	contentIndex, errno := longtaillib.CreateContentIndexRaw(
+		hash,
+		nil,
+		nil,
+		nil,
+		8388608, 1024)
+	if errno != 0 {
+		return fmt.Errorf("initRemoteStore: CreateContentIndexRaw() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer contentIndex.Dispose()
+
+	retargetContentIndex, errno := retargetContentIndexSync(remoteIndexStore, contentIndex)
+	if errno != 0 {
+		return fmt.Errorf("initRemoteStore: retargetContentIndexSync() failed with %s", longtaillib.ErrNoToDescription(errno))
+	}
+	defer retargetContentIndex.Dispose()
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	if errno != 0 {
+		remoteStoreFlushComplete.wg.Done()
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(errno))
+	}
+
+	remoteStoreFlushComplete.wg.Wait()
+	if remoteStoreFlushComplete.err != 0 {
+		return fmt.Errorf("validateVersion: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI, longtaillib.ErrNoToDescription(remoteStoreFlushComplete.err))
+	}
+	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
+
+	if showStats {
+		if remoteStoreStatsErrno == 0 {
+			printStats("Remote", remoteStoreStats)
+		}
+	}
+
+	return nil
+}
+
 func lsVersionIndex(
 	versionIndexPath string,
 	commandLSVersionDir *string) error {
@@ -1682,6 +1750,12 @@ var (
 	commandCPTargetPath        = commandCPVersion.Arg("target path", "target uri path").String()
 	commandCPTargetBlockSize   = commandCPVersion.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandCPMaxChunksPerBlock = commandCPVersion.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+
+	commandInitRemoteStore           = kingpin.Command("init", "open a remote store triggering reindexing of store index is missing")
+	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
+						Default("blake3").
+						Enum("meow", "blake2", "blake3")
 )
 
 func main() {
@@ -1776,6 +1850,14 @@ func main() {
 			*commandCPMaxChunksPerBlock,
 			*commandCPSourcePath,
 			*commandCPTargetPath,
+			*showStats)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandInitRemoteStore.FullCommand():
+		err := initRemoteStore(
+			*commandInitRemoteStoreStorageURI,
+			commandInitRemoteStoreHashing,
 			*showStats)
 		if err != nil {
 			log.Fatal(err)

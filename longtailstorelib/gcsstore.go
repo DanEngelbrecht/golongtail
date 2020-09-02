@@ -90,9 +90,14 @@ func (blobClient *gcsBlobClient) GetObjects() ([]BlobProperties, error) {
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, BlobProperties{Size: attrs.Size, Name: attrs.Name})
+		itemName := attrs.Name[len(blobClient.store.prefix):]
+		items = append(items, BlobProperties{Size: attrs.Size, Name: itemName})
 	}
 	return items, nil
+}
+
+func (blobClient *gcsBlobClient) Close() {
+	blobClient.client.Close()
 }
 
 func (blobClient *gcsBlobClient) String() string {

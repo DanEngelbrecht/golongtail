@@ -49,6 +49,9 @@ func (blobClient *s3BlobClient) GetObjects() ([]BlobProperties, error) {
 	return nil, fmt.Errorf("S3 storage not yet implemented")
 }
 
+func (blobClient *s3BlobClient) Close() {
+}
+
 func (blobClient *s3BlobClient) String() string {
 	return blobClient.store.String()
 }

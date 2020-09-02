@@ -261,6 +261,9 @@ func prefetchBlock(
 	s.fetchedBlocksSync.Unlock()
 
 	storedBlock, getErrno := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+	if getErrno != 0 {
+		return
+	}
 
 	s.fetchedBlocksSync.Lock()
 	prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
@@ -310,6 +313,7 @@ func remoteWorker(
 	if err != nil {
 		return errors.Wrap(err, s.blobStore.String())
 	}
+	defer client.Close()
 	run := true
 	for run {
 		received := 0
@@ -456,8 +460,20 @@ func buildContentIndexFromBlocks(
 		s.maxChunksPerBlock,
 		[]longtaillib.Longtail_BlockIndex{})
 
-	batchCount := 32
+	batchCount := runtime.NumCPU()
 	batchStart := 0
+
+	if batchCount > len(items) {
+		batchCount = len(items)
+	}
+	clients := make([]BlobClient, batchCount)
+	for c := 0; c < batchCount; c++ {
+		client, err := s.blobStore.NewClient(ctx)
+		if err != nil {
+			return longtaillib.Longtail_ContentIndex{}, longtaillib.EIO
+		}
+		clients[c] = client
+	}
 
 	var wg sync.WaitGroup
 
@@ -471,13 +487,7 @@ func buildContentIndexFromBlocks(
 		for batchPos := 0; batchPos < batchLength; batchPos++ {
 			i := batchStart + batchPos
 			blockKey := items[i]
-			go func(batchPos int, blockKey string) {
-				client, err := s.blobStore.NewClient(ctx)
-				if err != nil {
-					wg.Done()
-					return
-				}
-
+			go func(client BlobClient, batchPos int, blockKey string) {
 				objHandle, err := client.NewObject(blockKey)
 				if err != nil {
 					wg.Done()
@@ -485,8 +495,25 @@ func buildContentIndexFromBlocks(
 				}
 				storedBlockData, err := objHandle.Read()
 				if err != nil {
-					wg.Done()
-					return
+					if err != nil {
+						log.Printf("Retrying getBlob %s in store %s\n", blockKey, s.String())
+						storedBlockData, err = objHandle.Read()
+					}
+					if err != nil {
+						log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", blockKey, s.String())
+						time.Sleep(500 * time.Millisecond)
+						storedBlockData, err = objHandle.Read()
+					}
+					if err != nil {
+						log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", blockKey, s.String())
+						time.Sleep(2 * time.Second)
+						storedBlockData, err = objHandle.Read()
+					}
+
+					if err != nil {
+						wg.Done()
+						return
+					}
 				}
 				blockIndex, errno := longtaillib.ReadBlockIndexFromBuffer(storedBlockData)
 				if errno != 0 {
@@ -496,7 +523,7 @@ func buildContentIndexFromBlocks(
 
 				blockIndexes[batchPos] = blockIndex
 				wg.Done()
-			}(batchPos, blockKey)
+			}(clients[batchPos], batchPos, blockKey)
 		}
 		wg.Wait()
 		writeIndex := 0
@@ -524,6 +551,11 @@ func buildContentIndexFromBlocks(
 			blockIndex.Dispose()
 		}
 		batchStart += batchLength
+		fmt.Printf("Scanned %d/%d blocks in %s\n", batchStart, len(items), blobClient.String())
+	}
+
+	for c := 0; c < batchCount; c++ {
+		clients[c].Close()
 	}
 
 	return contentIndex, errno
@@ -563,6 +595,7 @@ func contentIndexWorker(
 		contentIndexWorkerReplyErrorState(contentIndexMessages, retargetContentMessages, flushMessages, flushReplyMessages, stopMessages)
 		return errors.Wrap(err, s.blobStore.String())
 	}
+	defer client.Close()
 
 	var errno int
 	var contentIndex longtaillib.Longtail_ContentIndex
@@ -570,7 +603,6 @@ func contentIndexWorker(
 	key := "store.lci"
 
 	objHandle, err := client.NewObject(key)
-
 	if exists, err := objHandle.Exists(); err == nil && exists {
 		storedContentIndexData, err := objHandle.Read()
 		if err != nil {
@@ -579,10 +611,12 @@ func contentIndexWorker(
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", key, s.String())
+			time.Sleep(500 * time.Millisecond)
 			storedContentIndexData, err = objHandle.Read()
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", key, s.String())
+			time.Sleep(2 * time.Second)
 			storedContentIndexData, err = objHandle.Read()
 		}
 
@@ -617,6 +651,10 @@ func contentIndexWorker(
 			ctx,
 			s,
 			client)
+
+		if errno == 0 {
+			fmt.Printf("Rebuilt remote index with %d blocks\n", addedContentIndex.GetBlockCount())
+		}
 
 		if errno != 0 {
 			addedContentIndex, errno = longtaillib.CreateContentIndexFromBlocks(
@@ -884,4 +922,5 @@ func (s *remoteStore) Close() {
 			log.Fatal(err)
 		}
 	}
+	s.defaultClient.Close()
 }

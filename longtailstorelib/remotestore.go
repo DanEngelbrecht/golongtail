@@ -158,7 +158,6 @@ func getStoredBlock(
 	storedBlockData, err := objHandle.Read()
 	if err != nil {
 		if exists, err := objHandle.Exists(); err == nil && !exists {
-			log.Printf("Block %s is not in store %s\n", key, s.String())
 			return longtaillib.Longtail_StoredBlock{}, longtaillib.ENOENT
 		}
 		log.Printf("Retrying getBlob %s in store %s\n", key, s.String())

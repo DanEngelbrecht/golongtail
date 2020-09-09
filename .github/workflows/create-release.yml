@@ -116,9 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *FEATURE* New `init` command that opens a remote store and recreates the store.lci if it does not exist
-           - *FIXED* Scanning block store for blocks when `store.lci` is missing now work properly
-           - *FIXED* gcsBlobStore now closes gcs store clients properly
+           - *FIXED* Workaround for local folder paths on Windows
         draft: false
         prerelease: false
     - name: Download Linux artifacts

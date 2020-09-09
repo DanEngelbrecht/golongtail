@@ -480,7 +480,7 @@ func upSyncVersion(
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			sourceFolderPath)
+			normalizePath(sourceFolderPath))
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.GetFilesRecursively() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
@@ -513,7 +513,7 @@ func upSyncVersion(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			sourceFolderPath,
+			normalizePath(sourceFolderPath),
 			fileInfos,
 			compressionTypes,
 			targetChunkSize)
@@ -578,7 +578,7 @@ func upSyncVersion(
 			&writeContentProgress,
 			versionMissingContentIndex,
 			vindex,
-			sourceFolderPath)
+			normalizePath(sourceFolderPath))
 		if errno != 0 {
 			return fmt.Errorf("upSyncVersion: longtaillib.WriteContent() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
@@ -707,7 +707,7 @@ func downSyncVersion(
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, *localCachePath, 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath), 8388608, 1024)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -755,7 +755,7 @@ func downSyncVersion(
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			targetFolderPath)
+			normalizePath(targetFolderPath))
 		if errno != 0 {
 			return fmt.Errorf("downSyncVersion: longtaillib.GetFilesRecursively() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
@@ -774,7 +774,7 @@ func downSyncVersion(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			targetFolderPath,
+			normalizePath(targetFolderPath),
 			fileInfos,
 			compressionTypes,
 			targetChunkSize)
@@ -926,7 +926,7 @@ func downSyncVersion(
 		validateFileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			targetFolderPath)
+			normalizePath(targetFolderPath))
 		if errno != 0 {
 			return fmt.Errorf("downSyncVersion: longtaillib.GetFilesRecursively() failed with %s", longtaillib.ErrNoToDescription(errno))
 		}
@@ -943,7 +943,7 @@ func downSyncVersion(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			targetFolderPath,
+			normalizePath(targetFolderPath),
 			validateFileInfos,
 			nil,
 			targetChunkSize)
@@ -1339,7 +1339,7 @@ func cpVersionIndex(
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, *localCachePath, 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath), 8388608, 1024)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 

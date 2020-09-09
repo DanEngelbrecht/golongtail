@@ -116,7 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *FIXED* Workaround for target windows paths in downsync
+           - *FIXED* Workaround for local folder paths on Windows
         draft: false
         prerelease: false
     - name: Download Linux artifacts

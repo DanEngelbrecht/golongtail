@@ -50,6 +50,13 @@ func parseLevel(lvl string) (int, error) {
 	return -1, fmt.Errorf("not a valid log Level: %q", lvl)
 }
 
+func normalizePath(path string) string {
+	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
+	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
+	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
+	return backwardRemoved
+}
+
 type assertData struct {
 }
 
@@ -824,7 +831,7 @@ func downSyncVersion(
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		targetFolderPath,
+		normalizePath(targetFolderPath),
 		retainPermissions)
 	if errno != 0 {
 		return fmt.Errorf("downSyncVersion: longtaillib.ChangeVersion() failed with %s", longtaillib.ErrNoToDescription(errno))

@@ -47,9 +47,9 @@ struct BlockStoreAPIProxy
 static void* BlockStoreAPIProxy_GetContext(void* api) { return ((struct BlockStoreAPIProxy*)api)->m_Context; }
 void BlockStoreAPIProxy_Dispose(struct Longtail_API* api);
 int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
-int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, struct Longtail_ContentIndex* content_index);
+int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, TLongtail_Hash* chunk_hashes);
 int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-int BlockStoreAPIProxy_RetargetContent(struct Longtail_BlockStoreAPI* api, struct Longtail_ContentIndex* content_index, struct Longtail_AsyncRetargetContentAPI* async_complete_api);
+int BlockStoreAPIProxy_GetExistingContent(struct Longtail_BlockStoreAPI* api, uint64_t chunk_count, TLongtail_Hash* chunk_hashes, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
 int BlockStoreAPIProxy_Flush(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -63,7 +63,7 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         BlockStoreAPIProxy_PutStoredBlock,
         (Longtail_BlockStore_PreflightGetFunc)BlockStoreAPIProxy_PreflightGet,
         BlockStoreAPIProxy_GetStoredBlock,
-        (Longtail_BlockStore_RetargetContentFunc)BlockStoreAPIProxy_RetargetContent,
+        (Longtail_BlockStore_GetExistingContentFunc)BlockStoreAPIProxy_GetExistingContent,
         BlockStoreAPIProxy_GetStats,
         BlockStoreAPIProxy_Flush);
 }
@@ -156,26 +156,26 @@ static struct Longtail_AsyncGetStoredBlockAPI* CreateAsyncGetStoredBlockAPI(void
         AsyncGetStoredBlockAPIProxy_OnComplete);
 }
 
-////////////// Longtail_AsyncRetargetContentAPI
+////////////// Longtail_AsyncGetExistingContentAPI
 
-struct AsyncRetargetContentAPIProxy
+struct AsyncGetExistingContentAPIProxy
 {
-    struct Longtail_AsyncRetargetContentAPI m_API;
+    struct Longtail_AsyncGetExistingContentAPI m_API;
     void* m_Context;
 };
 
-static void* AsyncRetargetContentAPIProxy_GetContext(void* api) { return ((struct AsyncRetargetContentAPIProxy*)api)->m_Context; }
-void AsyncRetargetContentAPIProxy_OnComplete(struct Longtail_AsyncRetargetContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
-void AsyncRetargetContentAPIProxy_Dispose(struct Longtail_API* api);
+static void* AsyncGetExistingContentAPIProxy_GetContext(void* api) { return ((struct AsyncGetExistingContentAPIProxy*)api)->m_Context; }
+void AsyncGetExistingContentAPIProxy_OnComplete(struct Longtail_AsyncGetExistingContentAPI* async_complete_api, struct Longtail_ContentIndex* content_index, int err);
+void AsyncGetExistingContentAPIProxy_Dispose(struct Longtail_API* api);
 
-static struct Longtail_AsyncRetargetContentAPI* CreateAsyncRetargetContentAPI(void* context)
+static struct Longtail_AsyncGetExistingContentAPI* CreateAsyncGetExistingContentAPI(void* context)
 {
-    struct AsyncRetargetContentAPIProxy* api    = (struct AsyncRetargetContentAPIProxy*)Longtail_Alloc(sizeof(struct AsyncRetargetContentAPIProxy));
+    struct AsyncGetExistingContentAPIProxy* api    = (struct AsyncGetExistingContentAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetExistingContentAPIProxy));
     api->m_Context = context;
-    return Longtail_MakeAsyncRetargetContentAPI(
+    return Longtail_MakeAsyncGetExistingContentAPI(
         api,
-        AsyncRetargetContentAPIProxy_Dispose,
-        AsyncRetargetContentAPIProxy_OnComplete);
+        AsyncGetExistingContentAPIProxy_Dispose,
+        AsyncGetExistingContentAPIProxy_OnComplete);
 }
 
 ////////////// Longtail_AsyncFlushAPI

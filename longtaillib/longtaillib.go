@@ -1470,7 +1470,11 @@ func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (Longtail_St
 	return Longtail_StoreIndex{cStoreIndex: sindex}, 0
 }
 
-func GetExistingContentIndex(storeIndex Longtail_StoreIndex, chunkHashes []uint64, maxBlockSize uint32, maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
+func GetExistingContentIndex(
+	storeIndex Longtail_StoreIndex,
+	chunkHashes []uint64,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
 	chunkCount := uint64(len(chunkHashes))
 	var cChunkHashes *C.TLongtail_Hash
 	if chunkCount > 0 {
@@ -1488,6 +1492,18 @@ func GetExistingContentIndex(storeIndex Longtail_StoreIndex, chunkHashes []uint6
 		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
+func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index Longtail_StoreIndex) (Longtail_StoreIndex, int) {
+	var sIndex *C.struct_Longtail_StoreIndex
+	errno := C.Longtail_MergeStoreIndex(
+		local_store_index.cStoreIndex,
+		remote_store_index.cStoreIndex,
+		&sIndex)
+	if errno != 0 {
+		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
+	}
+	return Longtail_StoreIndex{cStoreIndex: sIndex}, 0
 }
 
 // WriteContentIndexToBuffer ...

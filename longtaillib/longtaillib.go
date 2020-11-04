@@ -2067,7 +2067,8 @@ func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, chunk
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	chunkCount := int(chunk_count)
 	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
-	errno := blockStore.PreflightGet(chunkHashes)
+	copyChunkHashes := append([]uint64{}, chunkHashes...)
+	errno := blockStore.PreflightGet(copyChunkHashes)
 	return C.int(errno)
 }
 
@@ -2077,8 +2078,9 @@ func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI,
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	chunkCount := int(chunk_count)
 	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
+	copyChunkHashes := append([]uint64{}, chunkHashes...)
 	errno := blockStore.GetExistingContent(
-		chunkHashes,
+		copyChunkHashes,
 		Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }

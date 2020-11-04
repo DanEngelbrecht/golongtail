@@ -441,32 +441,18 @@ func updateRemoteStoreIndex(
 	return nil
 }
 
-func getBlockIndexesFromStore(
+func getBlockIndexes(
 	ctx context.Context,
 	s *remoteStore,
-	blobClient BlobClient) ([]longtaillib.Longtail_BlockIndex, int) {
-
+	blobClient BlobClient,
+	blockKeys []string) ([]longtaillib.Longtail_BlockIndex, int) {
 	var blockIndexes []longtaillib.Longtail_BlockIndex
-	var items []string
-	blobs, err := blobClient.GetObjects()
-	if err != nil {
-		return blockIndexes, longtaillib.EIO
-	}
-
-	for _, blob := range blobs {
-		if blob.Size == 0 {
-			continue
-		}
-		if strings.HasSuffix(blob.Name, ".lsb") {
-			items = append(items, blob.Name)
-		}
-	}
 
 	batchCount := runtime.NumCPU()
 	batchStart := 0
 
-	if batchCount > len(items) {
-		batchCount = len(items)
+	if batchCount > len(blockKeys) {
+		batchCount = len(blockKeys)
 	}
 	clients := make([]BlobClient, batchCount)
 	for c := 0; c < batchCount; c++ {
@@ -479,16 +465,16 @@ func getBlockIndexesFromStore(
 
 	var wg sync.WaitGroup
 
-	for batchStart < len(items) {
+	for batchStart < len(blockKeys) {
 		batchLength := batchCount
-		if batchStart+batchLength > len(items) {
-			batchLength = len(items) - batchStart
+		if batchStart+batchLength > len(blockKeys) {
+			batchLength = len(blockKeys) - batchStart
 		}
 		batchBlockIndexes := make([]longtaillib.Longtail_BlockIndex, batchLength)
 		wg.Add(batchLength)
 		for batchPos := 0; batchPos < batchLength; batchPos++ {
 			i := batchStart + batchPos
-			blockKey := items[i]
+			blockKey := blockKeys[i]
 			go func(client BlobClient, batchPos int, blockKey string) {
 				objHandle, err := client.NewObject(blockKey)
 				if err != nil {
@@ -540,7 +526,7 @@ func getBlockIndexesFromStore(
 		}
 		blockIndexes = append(blockIndexes, batchBlockIndexes[:writeIndex]...)
 		batchStart += batchLength
-		fmt.Printf("Scanned %d/%d blocks in %s\n", batchStart, len(items), blobClient.String())
+		fmt.Printf("Scanned %d/%d blocks in %s\n", batchStart, len(blockKeys), blobClient.String())
 	}
 
 	for c := 0; c < batchCount; c++ {
@@ -548,6 +534,30 @@ func getBlockIndexesFromStore(
 	}
 
 	return blockIndexes, 0
+}
+
+func getBlockIndexesFromStore(
+	ctx context.Context,
+	s *remoteStore,
+	blobClient BlobClient) ([]longtaillib.Longtail_BlockIndex, int) {
+
+	var blockIndexes []longtaillib.Longtail_BlockIndex
+	var items []string
+	blobs, err := blobClient.GetObjects()
+	if err != nil {
+		return blockIndexes, longtaillib.EIO
+	}
+
+	for _, blob := range blobs {
+		if blob.Size == 0 {
+			continue
+		}
+		if strings.HasSuffix(blob.Name, ".lsb") {
+			items = append(items, blob.Name)
+		}
+	}
+
+	return getBlockIndexes(ctx, s, blobClient, items)
 }
 
 func storeIndexWorkerReplyErrorState(
@@ -612,7 +622,7 @@ func contentIndexWorker(
 		}
 
 		if err == nil {
-			storeIndex, errno = longtaillib.ReadStoredIndexFromBuffer(storedStoredIndexData)
+			storeIndex, errno = longtaillib.ReadStoreIndexFromBuffer(storedStoredIndexData)
 			if errno != 0 {
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
 				return fmt.Errorf("contentIndexWorker: longtaillib.ReadStoreIndexFromBuffer() failed with %s", longtaillib.ErrNoToDescription(errno))

@@ -1506,6 +1506,31 @@ func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index L
 	return Longtail_StoreIndex{cStoreIndex: sIndex}, 0
 }
 
+// WriteStoreIndexToBuffer ...
+func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, int) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteStoreIndexToBuffer(index.cStoreIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, int(errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, 0
+}
+
+// ReadStoreIndexFromBuffer ...
+func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, int) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var cindex *C.struct_Longtail_StoreIndex
+	errno := C.Longtail_ReadStoreIndexFromBuffer(cBuffer, cSize, &cindex)
+	if errno != 0 {
+		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
+	}
+	return Longtail_StoreIndex{cStoreIndex: cindex}, 0
+}
+
 // WriteContentIndexToBuffer ...
 func WriteContentIndexToBuffer(index Longtail_ContentIndex) ([]byte, int) {
 	var buffer unsafe.Pointer

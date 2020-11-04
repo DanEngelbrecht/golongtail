@@ -4,7 +4,7 @@ package longtaillib
 // #include "golongtail.h"
 import "C"
 import (
-	"fmt"
+	"errors"
 	"reflect"
 	"sync/atomic"
 	"unsafe"
@@ -46,80 +46,181 @@ const EDOM = 33       /* Math arg out of domain of func */
 const ERANGE = 34     /* Math result not representable */
 const ECANCELED = 105 /* Operation canceled */
 
-func ErrNoToDescription(errno int) string {
-	switch errno {
-	case EPERM:
-		return "Not super-user"
-	case ENOENT:
-		return "No such file or directory"
-	case ESRCH:
-		return "No such process"
-	case EINTR:
-		return "Interrupted system call"
-	case EIO:
-		return "I/O error"
-	case ENXIO:
-		return "No such device or address"
-	case E2BIG:
-		return "Arg list too long"
-	case ENOEXEC:
-		return "Exec format error"
-	case EBADF:
-		return "Bad file number"
-	case ECHILD:
-		return "No children"
-	case EAGAIN:
-		return "No more processes"
-	case ENOMEM:
-		return "Not enough core"
-	case EACCES:
-		return "Permission denied"
-	case EFAULT:
-		return "Bad address"
-	case ENOTBLK:
-		return "Block device required"
-	case EBUSY:
-		return "Mount device busy"
-	case EEXIST:
-		return "File exists"
-	case EXDEV:
-		return "Cross-device link"
-	case ENODEV:
-		return "No such device"
-	case ENOTDIR:
-		return "Not a directory"
-	case EISDIR:
-		return "Is a directory"
-	case EINVAL:
-		return "Invalid argument"
-	case ENFILE:
-		return "Too many open files in system"
-	case EMFILE:
-		return "Too many open files"
-	case ENOTTY:
-		return "Not a typewriter"
-	case ETXTBSY:
-		return "Text file busy"
-	case EFBIG:
-		return "File too large"
-	case ENOSPC:
-		return "No space left on device"
-	case ESPIPE:
-		return "Illegal seek"
-	case EROFS:
-		return "Read only file system"
-	case EMLINK:
-		return "Too many links"
-	case EPIPE:
-		return "Broken pipe"
-	case EDOM:
-		return "Math arg out of domain of func"
-	case ERANGE:
-		return "Math result not representable"
-	case ECANCELED:
-		return "Operation canceled"
+var (
+	//ErrEPERM Not super-user
+	ErrEPERM = errors.New("Not super-user")
+	//ErrENOENT No such file or directory
+	ErrENOENT = errors.New("No such file or directory")
+	//ErrESRCH No such process
+	ErrESRCH = errors.New("No such process")
+	//ErrEINTR Interrupted system call
+	ErrEINTR = errors.New("Interrupted system call")
+	//ErrEIO I/O error
+	ErrEIO = errors.New("I/O error")
+	//ErrENXIO No such device or address
+	ErrENXIO = errors.New("No such device or address")
+	//ErrE2BIG Arg list too long
+	ErrE2BIG = errors.New("Arg list too long")
+	//ErrENOEXEC Exec format error
+	ErrENOEXEC = errors.New("Exec format error")
+	//ErrEBADF Bad file number
+	ErrEBADF = errors.New("Bad file number")
+	//ErrECHILD No children
+	ErrECHILD = errors.New("No children")
+	//ErrEAGAIN No more processes
+	ErrEAGAIN = errors.New("No more processes")
+	//ErrENOMEM Not enough core
+	ErrENOMEM = errors.New("Not enough core")
+	//ErrEACCES Permission denied
+	ErrEACCES = errors.New("Permission denied")
+	//ErrEFAULT Bad address
+	ErrEFAULT = errors.New("Bad address")
+	//ErrENOTBLK Block device required
+	ErrENOTBLK = errors.New("Block device required")
+	//ErrEBUSY Mount device busy
+	ErrEBUSY = errors.New("Mount device busy")
+	//ErrEEXIST File exists
+	ErrEEXIST = errors.New("File exists")
+	//ErrEXDEV Cross-device link
+	ErrEXDEV = errors.New("Cross-device link")
+	//ErrENODEV No such device
+	ErrENODEV = errors.New("No such device")
+	//ErrENOTDIR Not a directory
+	ErrENOTDIR = errors.New("Not a directory")
+	//ErrEISDIR Is a directory
+	ErrEISDIR = errors.New("Is a directory")
+	//ErrEINVAL Invalid argument
+	ErrEINVAL = errors.New("Invalid argument")
+	//ErrENFILE Too many open files in system
+	ErrENFILE = errors.New("Too many open files in system")
+	//ErrEMFILE Too many open files
+	ErrEMFILE = errors.New("Too many open files")
+	//ErrENOTTY Not a typewriter
+	ErrENOTTY = errors.New("Not a typewriter")
+	//ErrETXTBSY Text file busy
+	ErrETXTBSY = errors.New("Text file busy")
+	//ErrEFBIG File too large
+	ErrEFBIG = errors.New("File too large")
+	//ErrENOSPC No space left on device
+	ErrENOSPC = errors.New("No space left on device")
+	//ErrESPIPE Illegal seek
+	ErrESPIPE = errors.New("Illegal seek")
+	//ErrEROFS Read only file system
+	ErrEROFS = errors.New("Read only file system")
+	//ErrEMLINK Too many links
+	ErrEMLINK = errors.New("Too many links")
+	//ErrEPIPE Broken pipe
+	ErrEPIPE = errors.New("Broken pipe")
+	//ErrEDOM Math arg out of domain of func
+	ErrEDOM = errors.New("Math arg out of domain of func")
+	//ErrERANGE Math result not representable
+	ErrERANGE = errors.New("Math result not representable")
+	//ErrECANCELED Operation canceled
+	ErrECANCELED = errors.New("Operation canceled")
+)
+
+var errnoToError = map[int]error{
+	EPERM:     ErrEPERM,
+	ENOENT:    ErrENOENT,
+	ESRCH:     ErrESRCH,
+	EINTR:     ErrEINTR,
+	EIO:       ErrEIO,
+	ENXIO:     ErrENXIO,
+	E2BIG:     ErrE2BIG,
+	ENOEXEC:   ErrENOEXEC,
+	EBADF:     ErrEBADF,
+	ECHILD:    ErrECHILD,
+	EAGAIN:    ErrEAGAIN,
+	ENOMEM:    ErrENOMEM,
+	EACCES:    ErrEACCES,
+	EFAULT:    ErrEFAULT,
+	ENOTBLK:   ErrENOTBLK,
+	EBUSY:     ErrEBUSY,
+	EEXIST:    ErrEEXIST,
+	EXDEV:     ErrEXDEV,
+	ENODEV:    ErrENODEV,
+	ENOTDIR:   ErrENOTDIR,
+	EISDIR:    ErrEISDIR,
+	EINVAL:    ErrEINVAL,
+	ENFILE:    ErrENFILE,
+	EMFILE:    ErrEMFILE,
+	ENOTTY:    ErrENOTTY,
+	ETXTBSY:   ErrETXTBSY,
+	EFBIG:     ErrEFBIG,
+	ENOSPC:    ErrENOSPC,
+	ESPIPE:    ErrESPIPE,
+	EROFS:     ErrEROFS,
+	EMLINK:    ErrEMLINK,
+	EPIPE:     ErrEPIPE,
+	EDOM:      ErrEDOM,
+	ERANGE:    ErrERANGE,
+	ECANCELED: ErrECANCELED,
+}
+
+var errorToErrno = map[error]int{
+	ErrEPERM:     EPERM,
+	ErrENOENT:    ENOENT,
+	ErrESRCH:     ESRCH,
+	ErrEINTR:     EINTR,
+	ErrEIO:       EIO,
+	ErrENXIO:     ENXIO,
+	ErrE2BIG:     E2BIG,
+	ErrENOEXEC:   ENOEXEC,
+	ErrEBADF:     EBADF,
+	ErrECHILD:    ECHILD,
+	ErrEAGAIN:    EAGAIN,
+	ErrENOMEM:    ENOMEM,
+	ErrEACCES:    EACCES,
+	ErrEFAULT:    EFAULT,
+	ErrENOTBLK:   ENOTBLK,
+	ErrEBUSY:     EBUSY,
+	ErrEEXIST:    EEXIST,
+	ErrEXDEV:     EXDEV,
+	ErrENODEV:    ENODEV,
+	ErrENOTDIR:   ENOTDIR,
+	ErrEISDIR:    EISDIR,
+	ErrEINVAL:    EINVAL,
+	ErrENFILE:    ENFILE,
+	ErrEMFILE:    EMFILE,
+	ErrENOTTY:    ENOTTY,
+	ErrETXTBSY:   ETXTBSY,
+	ErrEFBIG:     EFBIG,
+	ErrENOSPC:    ENOSPC,
+	ErrESPIPE:    ESPIPE,
+	ErrEROFS:     EROFS,
+	ErrEMLINK:    EMLINK,
+	ErrEPIPE:     EPIPE,
+	ErrEDOM:      EDOM,
+	ErrERANGE:    ERANGE,
+	ErrECANCELED: ECANCELED,
+}
+
+// ErrnoToError Converts a longtail int errno to golang error
+func ErrnoToError(errno int, fallback error) error {
+	if errno == 0 {
+		return nil
 	}
-	return fmt.Sprintf("%d", errno)
+	error, exists := errnoToError[errno]
+	if exists {
+		return error
+	}
+	return fallback //errors.New(fmt.Sprintf("Error: %d", errno))
+}
+
+// ErrorToErrno Converts a golang error to a longtail int errno
+func ErrorToErrno(err error, fallback int) int {
+	if err == nil {
+		return 0
+	}
+	unwrappedError := errors.Unwrap(err)
+	if unwrappedError == nil {
+		unwrappedError = err
+	}
+	errno, exists := errorToErrno[unwrappedError]
+	if exists {
+		return errno
+	}
+	return fallback //ENOENT // Bad catchall
 }
 
 type ProgressAPI interface {

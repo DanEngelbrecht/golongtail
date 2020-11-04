@@ -182,6 +182,10 @@ func (blobObject *gcsBlobObject) Delete() error {
 	if err != nil {
 		return err
 	}
-	err = blobObject.objHandle.Delete(blobObject.ctx)
+	if blobObject.writeCondition == nil {
+		err = blobObject.objHandle.Delete(blobObject.ctx)
+	} else {
+		err = blobObject.objHandle.If(*blobObject.writeCondition).Delete(blobObject.ctx)
+	}
 	return err
 }

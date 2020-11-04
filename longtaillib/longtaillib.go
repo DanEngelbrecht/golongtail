@@ -1595,6 +1595,27 @@ func GetExistingContentIndex(
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
+func GetRequiredChunkHashes(
+	versionIndex Longtail_VersionIndex,
+	versionDiff Longtail_VersionDiff) ([]uint64, int) {
+	maxChunkCount := uint64(versionIndex.GetChunkCount())
+	outChunkHashes := make([]uint64, maxChunkCount)
+	var cChunkHashes *C.TLongtail_Hash
+	if maxChunkCount > 0 {
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&outChunkHashes[0]))
+	}
+	var outChunkCount C.uint64_t
+	errno := C.Longtail_GetRequiredChunkHashes(
+		versionIndex.cVersionIndex,
+		versionDiff.cVersionDiff,
+		&outChunkCount,
+		cChunkHashes)
+	if errno != 0 {
+		return []uint64{}, int(errno)
+	}
+	return outChunkHashes[:int(outChunkCount)], 0
+}
+
 func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index Longtail_StoreIndex) (Longtail_StoreIndex, int) {
 	var sIndex *C.struct_Longtail_StoreIndex
 	errno := C.Longtail_MergeStoreIndex(

@@ -705,7 +705,7 @@ func contentIndexWorker(
 	var errno int
 	var storeIndex longtaillib.Longtail_StoreIndex
 
-	key := "store.lci"
+	key := "store.lsi"
 
 	objHandle, err := client.NewObject(key)
 	if exists, err := objHandle.Exists(); err == nil && exists {

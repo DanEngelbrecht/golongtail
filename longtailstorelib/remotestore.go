@@ -601,7 +601,7 @@ func readStoreContentIndex(
 	client BlobClient) (longtaillib.Longtail_ContentIndex, error) {
 
 	key := "store.lci"
-	blobData, _, err := readBlobWithRetry(ctx, s, client, "store.lci")
+	blobData, _, err := readBlobWithRetry(ctx, s, client, key)
 	if err != nil {
 		return longtaillib.Longtail_ContentIndex{}, err
 	}
@@ -621,7 +621,7 @@ func readStoreStoreIndex(
 	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
 
 	key := "store.lsi"
-	blobData, _, err := readBlobWithRetry(ctx, s, client, "store.lsi")
+	blobData, _, err := readBlobWithRetry(ctx, s, client, key)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, err
 	}

@@ -695,8 +695,8 @@ func (storeIndex *Longtail_StoreIndex) GetChunkCount() uint64 {
 }
 
 func (storeIndex *Longtail_StoreIndex) GetBlockHashes() []uint64 {
-	size := int(C.Longtail_StoreIndex_GetChunkCount(storeIndex.cStoreIndex))
-	return carray2slice64(C.Longtail_StoreIndex_GetChunkHashes(storeIndex.cStoreIndex), size)
+	size := int(C.Longtail_StoreIndex_GetBlockCount(storeIndex.cStoreIndex))
+	return carray2slice64(C.Longtail_StoreIndex_GetBlockHashes(storeIndex.cStoreIndex), size)
 }
 
 func (versionIndex *Longtail_VersionIndex) Dispose() {

@@ -116,8 +116,11 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *FIXED* Workaround for local folder paths on Windows
-           - *UPDATE* Longtail to v0.0.60
+           - *UPDATE* Longtail to v0.1.0
+            - Now uses StoreIndex (store.lsi) for GCS store while keeping compatability with store ContentIndex
+           - *FIXED* Rare crash bug with use after free in remotestore.go
+           - *ADDED* More tests
+           - *CHANGED* Improved error reporting
         draft: false
         prerelease: false
     - name: Download Linux artifacts

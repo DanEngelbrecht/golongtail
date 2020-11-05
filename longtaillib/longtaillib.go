@@ -4,7 +4,7 @@ package longtaillib
 // #include "golongtail.h"
 import "C"
 import (
-	"fmt"
+	"errors"
 	"reflect"
 	"sync/atomic"
 	"unsafe"
@@ -46,80 +46,181 @@ const EDOM = 33       /* Math arg out of domain of func */
 const ERANGE = 34     /* Math result not representable */
 const ECANCELED = 105 /* Operation canceled */
 
-func ErrNoToDescription(errno int) string {
-	switch errno {
-	case EPERM:
-		return "Not super-user"
-	case ENOENT:
-		return "No such file or directory"
-	case ESRCH:
-		return "No such process"
-	case EINTR:
-		return "Interrupted system call"
-	case EIO:
-		return "I/O error"
-	case ENXIO:
-		return "No such device or address"
-	case E2BIG:
-		return "Arg list too long"
-	case ENOEXEC:
-		return "Exec format error"
-	case EBADF:
-		return "Bad file number"
-	case ECHILD:
-		return "No children"
-	case EAGAIN:
-		return "No more processes"
-	case ENOMEM:
-		return "Not enough core"
-	case EACCES:
-		return "Permission denied"
-	case EFAULT:
-		return "Bad address"
-	case ENOTBLK:
-		return "Block device required"
-	case EBUSY:
-		return "Mount device busy"
-	case EEXIST:
-		return "File exists"
-	case EXDEV:
-		return "Cross-device link"
-	case ENODEV:
-		return "No such device"
-	case ENOTDIR:
-		return "Not a directory"
-	case EISDIR:
-		return "Is a directory"
-	case EINVAL:
-		return "Invalid argument"
-	case ENFILE:
-		return "Too many open files in system"
-	case EMFILE:
-		return "Too many open files"
-	case ENOTTY:
-		return "Not a typewriter"
-	case ETXTBSY:
-		return "Text file busy"
-	case EFBIG:
-		return "File too large"
-	case ENOSPC:
-		return "No space left on device"
-	case ESPIPE:
-		return "Illegal seek"
-	case EROFS:
-		return "Read only file system"
-	case EMLINK:
-		return "Too many links"
-	case EPIPE:
-		return "Broken pipe"
-	case EDOM:
-		return "Math arg out of domain of func"
-	case ERANGE:
-		return "Math result not representable"
-	case ECANCELED:
-		return "Operation canceled"
+var (
+	//ErrEPERM Not super-user
+	ErrEPERM = errors.New("Not super-user")
+	//ErrENOENT No such file or directory
+	ErrENOENT = errors.New("No such file or directory")
+	//ErrESRCH No such process
+	ErrESRCH = errors.New("No such process")
+	//ErrEINTR Interrupted system call
+	ErrEINTR = errors.New("Interrupted system call")
+	//ErrEIO I/O error
+	ErrEIO = errors.New("I/O error")
+	//ErrENXIO No such device or address
+	ErrENXIO = errors.New("No such device or address")
+	//ErrE2BIG Arg list too long
+	ErrE2BIG = errors.New("Arg list too long")
+	//ErrENOEXEC Exec format error
+	ErrENOEXEC = errors.New("Exec format error")
+	//ErrEBADF Bad file number
+	ErrEBADF = errors.New("Bad file number")
+	//ErrECHILD No children
+	ErrECHILD = errors.New("No children")
+	//ErrEAGAIN No more processes
+	ErrEAGAIN = errors.New("No more processes")
+	//ErrENOMEM Not enough core
+	ErrENOMEM = errors.New("Not enough core")
+	//ErrEACCES Permission denied
+	ErrEACCES = errors.New("Permission denied")
+	//ErrEFAULT Bad address
+	ErrEFAULT = errors.New("Bad address")
+	//ErrENOTBLK Block device required
+	ErrENOTBLK = errors.New("Block device required")
+	//ErrEBUSY Mount device busy
+	ErrEBUSY = errors.New("Mount device busy")
+	//ErrEEXIST File exists
+	ErrEEXIST = errors.New("File exists")
+	//ErrEXDEV Cross-device link
+	ErrEXDEV = errors.New("Cross-device link")
+	//ErrENODEV No such device
+	ErrENODEV = errors.New("No such device")
+	//ErrENOTDIR Not a directory
+	ErrENOTDIR = errors.New("Not a directory")
+	//ErrEISDIR Is a directory
+	ErrEISDIR = errors.New("Is a directory")
+	//ErrEINVAL Invalid argument
+	ErrEINVAL = errors.New("Invalid argument")
+	//ErrENFILE Too many open files in system
+	ErrENFILE = errors.New("Too many open files in system")
+	//ErrEMFILE Too many open files
+	ErrEMFILE = errors.New("Too many open files")
+	//ErrENOTTY Not a typewriter
+	ErrENOTTY = errors.New("Not a typewriter")
+	//ErrETXTBSY Text file busy
+	ErrETXTBSY = errors.New("Text file busy")
+	//ErrEFBIG File too large
+	ErrEFBIG = errors.New("File too large")
+	//ErrENOSPC No space left on device
+	ErrENOSPC = errors.New("No space left on device")
+	//ErrESPIPE Illegal seek
+	ErrESPIPE = errors.New("Illegal seek")
+	//ErrEROFS Read only file system
+	ErrEROFS = errors.New("Read only file system")
+	//ErrEMLINK Too many links
+	ErrEMLINK = errors.New("Too many links")
+	//ErrEPIPE Broken pipe
+	ErrEPIPE = errors.New("Broken pipe")
+	//ErrEDOM Math arg out of domain of func
+	ErrEDOM = errors.New("Math arg out of domain of func")
+	//ErrERANGE Math result not representable
+	ErrERANGE = errors.New("Math result not representable")
+	//ErrECANCELED Operation canceled
+	ErrECANCELED = errors.New("Operation canceled")
+)
+
+var errnoToError = map[int]error{
+	EPERM:     ErrEPERM,
+	ENOENT:    ErrENOENT,
+	ESRCH:     ErrESRCH,
+	EINTR:     ErrEINTR,
+	EIO:       ErrEIO,
+	ENXIO:     ErrENXIO,
+	E2BIG:     ErrE2BIG,
+	ENOEXEC:   ErrENOEXEC,
+	EBADF:     ErrEBADF,
+	ECHILD:    ErrECHILD,
+	EAGAIN:    ErrEAGAIN,
+	ENOMEM:    ErrENOMEM,
+	EACCES:    ErrEACCES,
+	EFAULT:    ErrEFAULT,
+	ENOTBLK:   ErrENOTBLK,
+	EBUSY:     ErrEBUSY,
+	EEXIST:    ErrEEXIST,
+	EXDEV:     ErrEXDEV,
+	ENODEV:    ErrENODEV,
+	ENOTDIR:   ErrENOTDIR,
+	EISDIR:    ErrEISDIR,
+	EINVAL:    ErrEINVAL,
+	ENFILE:    ErrENFILE,
+	EMFILE:    ErrEMFILE,
+	ENOTTY:    ErrENOTTY,
+	ETXTBSY:   ErrETXTBSY,
+	EFBIG:     ErrEFBIG,
+	ENOSPC:    ErrENOSPC,
+	ESPIPE:    ErrESPIPE,
+	EROFS:     ErrEROFS,
+	EMLINK:    ErrEMLINK,
+	EPIPE:     ErrEPIPE,
+	EDOM:      ErrEDOM,
+	ERANGE:    ErrERANGE,
+	ECANCELED: ErrECANCELED,
+}
+
+var errorToErrno = map[error]int{
+	ErrEPERM:     EPERM,
+	ErrENOENT:    ENOENT,
+	ErrESRCH:     ESRCH,
+	ErrEINTR:     EINTR,
+	ErrEIO:       EIO,
+	ErrENXIO:     ENXIO,
+	ErrE2BIG:     E2BIG,
+	ErrENOEXEC:   ENOEXEC,
+	ErrEBADF:     EBADF,
+	ErrECHILD:    ECHILD,
+	ErrEAGAIN:    EAGAIN,
+	ErrENOMEM:    ENOMEM,
+	ErrEACCES:    EACCES,
+	ErrEFAULT:    EFAULT,
+	ErrENOTBLK:   ENOTBLK,
+	ErrEBUSY:     EBUSY,
+	ErrEEXIST:    EEXIST,
+	ErrEXDEV:     EXDEV,
+	ErrENODEV:    ENODEV,
+	ErrENOTDIR:   ENOTDIR,
+	ErrEISDIR:    EISDIR,
+	ErrEINVAL:    EINVAL,
+	ErrENFILE:    ENFILE,
+	ErrEMFILE:    EMFILE,
+	ErrENOTTY:    ENOTTY,
+	ErrETXTBSY:   ETXTBSY,
+	ErrEFBIG:     EFBIG,
+	ErrENOSPC:    ENOSPC,
+	ErrESPIPE:    ESPIPE,
+	ErrEROFS:     EROFS,
+	ErrEMLINK:    EMLINK,
+	ErrEPIPE:     EPIPE,
+	ErrEDOM:      EDOM,
+	ErrERANGE:    ERANGE,
+	ErrECANCELED: ECANCELED,
+}
+
+// ErrnoToError Converts a longtail int errno to golang error
+func ErrnoToError(errno int, fallback error) error {
+	if errno == 0 {
+		return nil
 	}
-	return fmt.Sprintf("%d", errno)
+	error, exists := errnoToError[errno]
+	if exists {
+		return error
+	}
+	return fallback //errors.New(fmt.Sprintf("Error: %d", errno))
+}
+
+// ErrorToErrno Converts a golang error to a longtail int errno
+func ErrorToErrno(err error, fallback int) int {
+	if err == nil {
+		return 0
+	}
+	unwrappedError := errors.Unwrap(err)
+	if unwrappedError == nil {
+		unwrappedError = err
+	}
+	errno, exists := errorToErrno[unwrappedError]
+	if exists {
+		return errno
+	}
+	return fallback //ENOENT // Bad catchall
 }
 
 type ProgressAPI interface {
@@ -137,7 +238,7 @@ type AsyncGetStoredBlockAPI interface {
 	OnComplete(stored_block Longtail_StoredBlock, errno int)
 }
 
-type AsyncRetargetContentAPI interface {
+type AsyncGetExistingContentAPI interface {
 	OnComplete(content_index Longtail_ContentIndex, errno int)
 }
 
@@ -161,8 +262,8 @@ type Longtail_AsyncPutStoredBlockAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncPutStoredBlockAPI
 }
 
-type Longtail_AsyncRetargetContentAPI struct {
-	cAsyncCompleteAPI *C.struct_Longtail_AsyncRetargetContentAPI
+type Longtail_AsyncGetExistingContentAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetExistingContentAPI
 }
 
 type Longtail_AsyncFlushAPI struct {
@@ -182,9 +283,9 @@ const (
 	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count = 8
 	Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count  = 9
 
-	Longtail_BlockStoreAPI_StatU64_RetargetContent_Count      = 10
-	Longtail_BlockStoreAPI_StatU64_RetargetContent_RetryCount = 11
-	Longtail_BlockStoreAPI_StatU64_RetargetContent_FailCount  = 12
+	Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count      = 10
+	Longtail_BlockStoreAPI_StatU64_GetExistingContent_RetryCount = 11
+	Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount  = 12
 
 	Longtail_BlockStoreAPI_StatU64_PreflightGet_Count      = 13
 	Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount = 14
@@ -203,9 +304,9 @@ type BlockStoreStats struct {
 
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
-	PreflightGet(contentIndex Longtail_ContentIndex) int
+	PreflightGet(chunkHashes []uint64) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
-	RetargetContent(contentIndex Longtail_ContentIndex, asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int
+	GetExistingContent(chunkHashes []uint64, asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int
 	GetStats() (BlockStoreStats, int)
 	Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int
 	Close()
@@ -217,6 +318,10 @@ type Longtail_FileInfos struct {
 
 type Longtail_ContentIndex struct {
 	cContentIndex *C.struct_Longtail_ContentIndex
+}
+
+type Longtail_StoreIndex struct {
+	cStoreIndex *C.struct_Longtail_StoreIndex
 }
 
 type Longtail_VersionIndex struct {
@@ -562,6 +667,38 @@ func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
 	return carray2slice64(C.Longtail_ContentIndex_BlockHashes(contentIndex.cContentIndex), size)
 }
 
+func (storeIndex *Longtail_StoreIndex) IsValid() bool {
+	return storeIndex.cStoreIndex != nil
+}
+
+func (storeIndex *Longtail_StoreIndex) Dispose() {
+	if storeIndex.cStoreIndex != nil {
+		C.Longtail_Free(unsafe.Pointer(storeIndex.cStoreIndex))
+		storeIndex.cStoreIndex = nil
+	}
+}
+
+func (storeIndex *Longtail_StoreIndex) GetVersion() uint32 {
+	return uint32(*storeIndex.cStoreIndex.m_Version)
+}
+
+func (storeIndex *Longtail_StoreIndex) GetHashIdentifier() uint32 {
+	return uint32(*storeIndex.cStoreIndex.m_HashIdentifier)
+}
+
+func (storeIndex *Longtail_StoreIndex) GetBlockCount() uint64 {
+	return uint64(*storeIndex.cStoreIndex.m_BlockCount)
+}
+
+func (storeIndex *Longtail_StoreIndex) GetChunkCount() uint64 {
+	return uint64(*storeIndex.cStoreIndex.m_ChunkCount)
+}
+
+func (storeIndex *Longtail_StoreIndex) GetBlockHashes() []uint64 {
+	size := int(C.Longtail_StoreIndex_GetBlockCount(storeIndex.cStoreIndex))
+	return carray2slice64(C.Longtail_StoreIndex_GetBlockHashes(storeIndex.cStoreIndex), size)
+}
+
 func (versionIndex *Longtail_VersionIndex) Dispose() {
 	if versionIndex.cVersionIndex != nil {
 		C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))
@@ -725,9 +862,9 @@ func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block
 	C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, C.int(errno))
 }
 
-//// Longtail_AsyncRetargetContentAPI::OnComplete() ...
-func (asyncCompleteAPI *Longtail_AsyncRetargetContentAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
-	C.Longtail_AsyncRetargetContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
+//// Longtail_AsyncGetExistingContentAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncGetExistingContentAPI) OnComplete(content_index Longtail_ContentIndex, errno int) {
+	C.Longtail_AsyncGetExistingContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, content_index.cContentIndex, C.int(errno))
 }
 
 //// Longtail_AsyncFlushAPI::OnComplete() ...
@@ -808,14 +945,20 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	return int(errno)
 }
 
-// RetargetContent() ...
-func (blockStoreAPI *Longtail_BlockStoreAPI) RetargetContent(
-	contentIndex Longtail_ContentIndex,
-	asyncCompleteAPI Longtail_AsyncRetargetContentAPI) int {
+// GetExistingContent() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
+	chunkHashes []uint64,
+	asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int {
 
-	errno := C.Longtail_BlockStore_RetargetContent(
+	chunkCount := len(chunkHashes)
+	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
+	if chunkCount > 0 {
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
+	}
+	errno := C.Longtail_BlockStore_GetExistingContent(
 		blockStoreAPI.cBlockStoreAPI,
-		contentIndex.cContentIndex,
+		C.uint64_t(chunkCount),
+		cChunkHashes,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -1303,6 +1446,7 @@ func CreateContentIndex(
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
+/*
 // CreateContentIndexFromDiff
 func CreateContentIndexFromDiff(
 	hashAPI Longtail_HashAPI,
@@ -1325,7 +1469,7 @@ func CreateContentIndexFromDiff(
 
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
-
+*/
 // CreateContentIndexRaw ...
 func CreateContentIndexRaw(
 	hashAPI Longtail_HashAPI,
@@ -1377,6 +1521,7 @@ func CreateContentIndexRaw(
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
+// CreateContentIndexFromBlocks ...
 func CreateContentIndexFromBlocks(
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -1402,6 +1547,126 @@ func CreateContentIndexFromBlocks(
 		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
+func CreateContentIndexFromStoreIndex(
+	storeIndex Longtail_StoreIndex,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_CreateContentIndexFromStoreIndex(
+		storeIndex.cStoreIndex,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
+		&cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
+// CreateStoreIndexFromBlocks ...
+func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (Longtail_StoreIndex, int) {
+	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
+	blockCount := len(blockIndexes)
+	for index, blockIndex := range blockIndexes {
+		rawBlockIndexes[index] = blockIndex.cBlockIndex
+	}
+	var cBlockIndexes unsafe.Pointer
+	if blockCount > 0 {
+		cBlockIndexes = unsafe.Pointer(&rawBlockIndexes[0])
+	}
+	var sindex *C.struct_Longtail_StoreIndex
+	errno := C.Longtail_CreateStoreIndexFromBlocks(
+		C.uint32_t(blockCount),
+		(**C.struct_Longtail_BlockIndex)(cBlockIndexes),
+		&sindex)
+	if errno != 0 {
+		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
+	}
+	return Longtail_StoreIndex{cStoreIndex: sindex}, 0
+}
+
+func GetExistingContentIndex(
+	storeIndex Longtail_StoreIndex,
+	chunkHashes []uint64,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
+	chunkCount := uint64(len(chunkHashes))
+	var cChunkHashes *C.TLongtail_Hash
+	if chunkCount > 0 {
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
+	}
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_GetExistingContentIndex(
+		storeIndex.cStoreIndex,
+		C.uint32_t(chunkCount),
+		cChunkHashes,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
+		&cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
+func GetRequiredChunkHashes(
+	versionIndex Longtail_VersionIndex,
+	versionDiff Longtail_VersionDiff) ([]uint64, int) {
+	maxChunkCount := uint64(versionIndex.GetChunkCount())
+	outChunkHashes := make([]uint64, maxChunkCount)
+	var cChunkHashes *C.TLongtail_Hash
+	if maxChunkCount > 0 {
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&outChunkHashes[0]))
+	}
+	var outChunkCount C.uint64_t
+	errno := C.Longtail_GetRequiredChunkHashes(
+		versionIndex.cVersionIndex,
+		versionDiff.cVersionDiff,
+		&outChunkCount,
+		cChunkHashes)
+	if errno != 0 {
+		return []uint64{}, int(errno)
+	}
+	return outChunkHashes[:int(outChunkCount)], 0
+}
+
+func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index Longtail_StoreIndex) (Longtail_StoreIndex, int) {
+	var sIndex *C.struct_Longtail_StoreIndex
+	errno := C.Longtail_MergeStoreIndex(
+		local_store_index.cStoreIndex,
+		remote_store_index.cStoreIndex,
+		&sIndex)
+	if errno != 0 {
+		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
+	}
+	return Longtail_StoreIndex{cStoreIndex: sIndex}, 0
+}
+
+// WriteStoreIndexToBuffer ...
+func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, int) {
+	var buffer unsafe.Pointer
+	size := C.size_t(0)
+	errno := C.Longtail_WriteStoreIndexToBuffer(index.cStoreIndex, &buffer, &size)
+	if errno != 0 {
+		return nil, int(errno)
+	}
+	defer C.Longtail_Free(buffer)
+	bytes := C.GoBytes(buffer, C.int(size))
+	return bytes, 0
+}
+
+// ReadStoreIndexFromBuffer ...
+func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, int) {
+	cBuffer := unsafe.Pointer(&buffer[0])
+	cSize := C.size_t(len(buffer))
+	var cindex *C.struct_Longtail_StoreIndex
+	errno := C.Longtail_ReadStoreIndexFromBuffer(cBuffer, cSize, &cindex)
+	if errno != 0 {
+		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
+	}
+	return Longtail_StoreIndex{cStoreIndex: cindex}, 0
 }
 
 // WriteContentIndexToBuffer ...
@@ -1540,23 +1805,23 @@ func AsyncGetStoredBlockAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	C.Longtail_Free(unsafe.Pointer(api))
 }
 
-// CreateAsyncRetargetContentAPI ...
-func CreateAsyncRetargetContentAPI(asyncComplete AsyncRetargetContentAPI) Longtail_AsyncRetargetContentAPI {
+// CreateAsyncGetExistingContentAPI ...
+func CreateAsyncGetExistingContentAPI(asyncComplete AsyncGetExistingContentAPI) Longtail_AsyncGetExistingContentAPI {
 	cContext := SavePointer(asyncComplete)
-	asyncCompleteAPIProxy := C.CreateAsyncRetargetContentAPI(cContext)
-	return Longtail_AsyncRetargetContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+	asyncCompleteAPIProxy := C.CreateAsyncGetExistingContentAPI(cContext)
+	return Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
-//export AsyncRetargetContentAPIProxy_OnComplete
-func AsyncRetargetContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncRetargetContentAPI, content_index *C.struct_Longtail_ContentIndex, errno C.int) {
-	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
-	asyncComplete := RestorePointer(context).(AsyncRetargetContentAPI)
+//export AsyncGetExistingContentAPIProxy_OnComplete
+func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI, content_index *C.struct_Longtail_ContentIndex, errno C.int) {
+	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
+	asyncComplete := RestorePointer(context).(AsyncGetExistingContentAPI)
 	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(errno))
 }
 
-//export AsyncRetargetContentAPIProxy_Dispose
-func AsyncRetargetContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
-	context := C.AsyncRetargetContentAPIProxy_GetContext(unsafe.Pointer(api))
+//export AsyncGetExistingContentAPIProxy_Dispose
+func AsyncGetExistingContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(api))
 	UnrefPointer(context)
 	C.Longtail_Free(unsafe.Pointer(api))
 }
@@ -1638,18 +1903,19 @@ func CreateMissingContent(
 	return Longtail_ContentIndex{cContentIndex: missingContentIndex}, 0
 }
 
-// RetargetContent ...
-func RetargetContent(
+/*
+// GetExistingContent ...
+func GetExistingContent(
 	referenceContentIndex Longtail_ContentIndex,
 	contentIndex Longtail_ContentIndex) (Longtail_ContentIndex, int) {
 	var retargetedContentIndex *C.struct_Longtail_ContentIndex
-	errno := C.Longtail_RetargetContent(referenceContentIndex.cContentIndex, contentIndex.cContentIndex, &retargetedContentIndex)
+	errno := C.Longtail_GetExistingContent(referenceContentIndex.cContentIndex, contentIndex.cContentIndex, &retargetedContentIndex)
 	if errno != 0 {
 		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
 	}
 	return Longtail_ContentIndex{cContentIndex: retargetedContentIndex}, 0
 }
-
+*/
 // MergeContentIndex ...
 func MergeContentIndex(
 	jobAPI Longtail_JobAPI,
@@ -1812,21 +2078,26 @@ func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blo
 }
 
 //export BlockStoreAPIProxy_PreflightGet
-func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, content_index *C.struct_Longtail_ContentIndex) C.int {
+func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint64_t, chunk_hashes *C.TLongtail_Hash) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	errno := blockStore.PreflightGet(
-		Longtail_ContentIndex{cContentIndex: content_index})
+	chunkCount := int(chunk_count)
+	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
+	copyChunkHashes := append([]uint64{}, chunkHashes...)
+	errno := blockStore.PreflightGet(copyChunkHashes)
 	return C.int(errno)
 }
 
-//export BlockStoreAPIProxy_RetargetContent
-func BlockStoreAPIProxy_RetargetContent(api *C.struct_Longtail_BlockStoreAPI, content_index *C.struct_Longtail_ContentIndex, async_complete_api *C.struct_Longtail_AsyncRetargetContentAPI) C.int {
+//export BlockStoreAPIProxy_GetExistingContent
+func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint64_t, chunk_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	errno := blockStore.RetargetContent(
-		Longtail_ContentIndex{cContentIndex: content_index},
-		Longtail_AsyncRetargetContentAPI{cAsyncCompleteAPI: async_complete_api})
+	chunkCount := int(chunk_count)
+	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
+	copyChunkHashes := append([]uint64{}, chunkHashes...)
+	errno := blockStore.GetExistingContent(
+		copyChunkHashes,
+		Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

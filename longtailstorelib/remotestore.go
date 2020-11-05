@@ -180,6 +180,7 @@ func putStoredBlock(
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	}
 
+	// We need to make a copy of the block index - as soon as we call the OnComplete function the data for the block might be deallocated
 	storedBlockIndex, errno := longtaillib.WriteBlockIndexToBuffer(blockIndex)
 	if errno != 0 {
 		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
@@ -1083,6 +1084,7 @@ func (s *remoteStore) GetStats() (longtaillib.BlockStoreStats, int) {
 	return s.stats, 0
 }
 
+// Flush ...
 func (s *remoteStore) Flush(asyncCompleteAPI longtaillib.Longtail_AsyncFlushAPI) int {
 	go func() {
 		any_errno := 0

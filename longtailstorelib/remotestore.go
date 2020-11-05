@@ -180,7 +180,15 @@ func putStoredBlock(
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	}
 
-	blockIndexMessages <- blockIndexMessage{blockIndex: blockIndex}
+	storedBlockIndex, errno := longtaillib.WriteBlockIndexToBuffer(blockIndex)
+	if errno != 0 {
+		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
+	}
+	blockIndexCopy, errno := longtaillib.ReadBlockIndexFromBuffer(storedBlockIndex)
+	if errno != 0 {
+		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
+	}
+	blockIndexMessages <- blockIndexMessage{blockIndex: blockIndexCopy}
 	return nil
 }
 
@@ -791,6 +799,7 @@ func contentIndexWorker(
 				saveStoreIndex = true
 			}
 		} else {
+			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
 			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
 		}
 	}
@@ -842,7 +851,7 @@ func contentIndexWorker(
 				storeIndex.Dispose()
 				storeIndex = updatedStoreIndex
 				saveStoreIndex = true
-				saveStoreContentIndex = true
+				saveStoreContentIndex = storeContentIndex.IsValid()
 				addedBlockIndexes = nil
 			}
 			onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
@@ -861,7 +870,7 @@ func contentIndexWorker(
 				storeIndex.Dispose()
 				storeIndex = updatedStoreIndex
 				saveStoreIndex = true
-				saveStoreContentIndex = true
+				saveStoreContentIndex = storeContentIndex.IsValid()
 				addedBlockIndexes = nil
 			}
 			onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
@@ -882,7 +891,7 @@ func contentIndexWorker(
 					storeIndex.Dispose()
 					storeIndex = updatedStoreIndex
 					saveStoreIndex = true
-					saveStoreContentIndex = true
+					saveStoreContentIndex = storeContentIndex.IsValid()
 					addedBlockIndexes = nil
 				}
 				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
@@ -899,7 +908,7 @@ func contentIndexWorker(
 					storeIndex.Dispose()
 					storeIndex = updatedStoreIndex
 					saveStoreIndex = true
-					saveStoreContentIndex = true
+					saveStoreContentIndex = storeContentIndex.IsValid()
 					addedBlockIndexes = nil
 				}
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
@@ -925,7 +934,7 @@ func contentIndexWorker(
 		storeIndex.Dispose()
 		storeIndex = updatedStoreIndex
 		saveStoreIndex = true
-		saveStoreContentIndex = true
+		saveStoreContentIndex = storeContentIndex.IsValid()
 		addedBlockIndexes = nil
 	}
 
@@ -947,13 +956,13 @@ func contentIndexWorker(
 		}
 
 		if err != nil {
-			return errors.Wrapf(err, "WARNING: Failed to write store index failed")
+			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
 		}
 	}
 	if saveStoreContentIndex {
 		updatedContentIndex, errno := longtaillib.CreateContentIndexFromStoreIndex(storeIndex, s.maxBlockSize, s.maxChunksPerBlock)
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "WARNING: Failed to create legacy store content index")
+			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
 		}
 		defer updatedContentIndex.Dispose()
 

@@ -701,21 +701,6 @@ func contentIndexWorker(
 	var errno int
 
 	storeIndex, err := readStoreStoreIndex(ctx, s, client)
-	/*
-		storedStoredIndexData, _, err := readBlobWithRetry(
-			ctx,
-			s,
-			client,
-			key)
-		if err == nil && storedStoredIndexData != nil {
-			storeIndex, errno = longtaillib.ReadStoreIndexFromBuffer(storedStoredIndexData)
-			if errno != 0 {
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.ReadStoreIndexFromBuffer() for %s failed", key)
-			}
-			storedStoredIndexData = nil
-		}
-	*/
 	defer storeIndex.Dispose()
 	saveStoreIndex := false
 	saveStoreContentIndex := false

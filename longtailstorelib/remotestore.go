@@ -718,6 +718,7 @@ func contentIndexWorker(
 	*/
 	defer storeIndex.Dispose()
 	saveStoreIndex := false
+	saveStoreContentIndex := false
 
 	if !storeIndex.IsValid() {
 		storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks(
@@ -791,6 +792,7 @@ func contentIndexWorker(
 				storeIndex.Dispose()
 				storeIndex = updatedStoreIndex
 				saveStoreIndex = true
+				saveStoreContentIndex = true
 				addedBlockIndexes = nil
 			}
 			onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
@@ -809,6 +811,7 @@ func contentIndexWorker(
 				storeIndex.Dispose()
 				storeIndex = updatedStoreIndex
 				saveStoreIndex = true
+				saveStoreContentIndex = true
 				addedBlockIndexes = nil
 			}
 			onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
@@ -829,6 +832,7 @@ func contentIndexWorker(
 					storeIndex.Dispose()
 					storeIndex = updatedStoreIndex
 					saveStoreIndex = true
+					saveStoreContentIndex = true
 					addedBlockIndexes = nil
 				}
 				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
@@ -845,6 +849,7 @@ func contentIndexWorker(
 					storeIndex.Dispose()
 					storeIndex = updatedStoreIndex
 					saveStoreIndex = true
+					saveStoreContentIndex = true
 					addedBlockIndexes = nil
 				}
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
@@ -870,6 +875,7 @@ func contentIndexWorker(
 		storeIndex.Dispose()
 		storeIndex = updatedStoreIndex
 		saveStoreIndex = true
+		saveStoreContentIndex = true
 		addedBlockIndexes = nil
 	}
 
@@ -893,6 +899,14 @@ func contentIndexWorker(
 		if err != nil {
 			return errors.Wrapf(err, "WARNING: Failed to write store index failed")
 		}
+	}
+	if saveStoreContentIndex {
+		updatedContentIndex, errno := longtaillib.CreateContentIndexFromStoreIndex(storeIndex, s.maxBlockSize, s.maxChunksPerBlock)
+		if errno != 0 {
+			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "WARNING: Failed to create legacy store content index")
+		}
+		defer updatedContentIndex.Dispose()
+		// TODO updateRemoteContentIndex
 	}
 	return nil
 }

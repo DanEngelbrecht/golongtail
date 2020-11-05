@@ -1549,6 +1549,22 @@ func CreateContentIndexFromBlocks(
 	return Longtail_ContentIndex{cContentIndex: cindex}, 0
 }
 
+func CreateContentIndexFromStoreIndex(
+	storeIndex Longtail_StoreIndex,
+	maxBlockSize uint32,
+	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
+	var cindex *C.struct_Longtail_ContentIndex
+	errno := C.Longtail_CreateContentIndexFromStoreIndex(
+		storeIndex.cStoreIndex,
+		C.uint32_t(maxBlockSize),
+		C.uint32_t(maxChunksPerBlock),
+		&cindex)
+	if errno != 0 {
+		return Longtail_ContentIndex{cContentIndex: nil}, int(errno)
+	}
+	return Longtail_ContentIndex{cContentIndex: cindex}, 0
+}
+
 // CreateStoreIndexFromBlocks ...
 func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (Longtail_StoreIndex, int) {
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))

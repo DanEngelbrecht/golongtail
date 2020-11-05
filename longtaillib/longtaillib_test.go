@@ -657,15 +657,6 @@ func TestBlockStoreProxyFull(t *testing.T) {
 		t.Errorf("TestBlockStoreProxyFull() CreateVersionIndex() %q != %v", errno, 0)
 	}
 	defer versionIndex.Dispose()
-	/*	contentIndex, errno := CreateContentIndex(
-			hashAPI,
-			versionIndex,
-			32768*2,
-			8)
-		if errno != 0 {
-			t.Errorf("TestBlockStoreProxyFull() CreateContentIndex() %q != %v", errno, 0)
-		}
-		defer contentIndex.Dispose()*/
 
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)

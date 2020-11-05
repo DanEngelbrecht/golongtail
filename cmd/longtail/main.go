@@ -795,16 +795,6 @@ func downSyncVersion(
 	chunkHashes, errno := longtaillib.GetRequiredChunkHashes(
 		sourceVersionIndex,
 		versionDiff)
-	/*	sourceVersionContentIndex, errno := longtaillib.CreateContentIndexFromDiff(
-			hash,
-			sourceVersionIndex,
-			versionDiff,
-			targetBlockSize,
-			maxChunksPerBlock)
-		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.CreateContentIndex() failed")
-		}
-		defer sourceVersionContentIndex.Dispose()*/
 
 	retargettedVersionContentIndex, errno := getExistingContentIndexSync(indexStore, chunkHashes)
 	if errno != 0 {

@@ -512,6 +512,7 @@ func (b *TestBlockStore) GetIndexSync() (Longtail_StoreIndex, int) {
 
 func (b *TestBlockStore) GetExistingContent(
 	chunkHashes []uint64,
+	minBlockUsagePercent uint32,
 	asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int {
 	b.stats[Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count] += 1
 	sIndex, errno := b.GetIndexSync()
@@ -524,6 +525,7 @@ func (b *TestBlockStore) GetExistingContent(
 	cExistingIndex, errno := GetExistingContentIndex(
 		sIndex,
 		chunkHashes,
+		minBlockUsagePercent,
 		b.maxBlockSize,
 		b.maxChunksPerBlock)
 	if errno != 0 {
@@ -660,7 +662,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
-	errno = blockStoreAPI.GetExistingContent(versionIndex.GetChunkHashes(), CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+	errno = blockStoreAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %d != %d", errno, 0)
 		getExistingContentComplete.wg.Done()
@@ -867,7 +869,7 @@ func TestRewriteVersion(t *testing.T) {
 
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
-	errno = blockStorageAPI.GetExistingContent(versionIndex.GetChunkHashes(), CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+	errno = blockStorageAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %d != %d", errno, 0)
 		getExistingContentComplete.wg.Done()

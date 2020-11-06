@@ -151,10 +151,10 @@ func printStats(name string, stats longtaillib.BlockStoreStats) {
 	log.Printf("------------------\n")
 }
 
-func getExistingContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64) (longtaillib.Longtail_ContentIndex, int) {
+func getExistingContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64, minBlockUsagePercent uint32) (longtaillib.Longtail_ContentIndex, int) {
 	getExistingContentComplete := &getExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
-	errno := indexStore.GetExistingContent(chunkHashes, longtaillib.CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+	errno := indexStore.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if errno != 0 {
 		getExistingContentComplete.wg.Done()
 		return longtaillib.Longtail_ContentIndex{}, errno
@@ -429,6 +429,7 @@ func upSyncVersion(
 	hashAlgorithm *string,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
+	minBlockUsagePercent uint32,
 	showStats bool) error {
 
 	var pathFilter longtaillib.Longtail_PathFilterAPI
@@ -540,7 +541,7 @@ func upSyncVersion(
 		}
 	}
 
-	existingRemoteContentIndex, errno := getExistingContentIndexSync(indexStore, vindex.GetChunkHashes())
+	existingRemoteContentIndex, errno := getExistingContentIndexSync(indexStore, vindex.GetChunkHashes(), minBlockUsagePercent)
 	if errno != 0 {
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.getExistingContentIndexSync(%s) failed", blobStoreURI)
 	}
@@ -796,7 +797,7 @@ func downSyncVersion(
 		sourceVersionIndex,
 		versionDiff)
 
-	retargettedVersionContentIndex, errno := getExistingContentIndexSync(indexStore, chunkHashes)
+	retargettedVersionContentIndex, errno := getExistingContentIndexSync(indexStore, chunkHashes, 0)
 	if errno != 0 {
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: getExistingContentIndexSync(indexStore, chunkHashes) failed")
 	}
@@ -1040,7 +1041,7 @@ func validateVersion(
 	}
 	defer versionIndex.Dispose()
 
-	remoteContentIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes())
+	remoteContentIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if errno != 0 {
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
@@ -1332,7 +1333,7 @@ func cpVersionIndex(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.GetHashAPI() failed")
 	}
 
-	contentIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes())
+	contentIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if errno != 0 {
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
@@ -1524,7 +1525,7 @@ func initRemoteStore(
 	}
 	defer contentIndex.Dispose()
 
-	retargetContentIndex, errno := getExistingContentIndexSync(remoteIndexStore, []uint64{})
+	retargetContentIndex, errno := getExistingContentIndexSync(remoteIndexStore, []uint64{}, 0)
 	if errno != 0 {
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
@@ -1665,6 +1666,7 @@ var (
 			"zstd",
 			"zstd_min",
 			"zstd_max")
+	commandUpsyncMinBlockUsagePercent = commandUpsync.Flag("min-block-usage-percent", "Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all").Default("0").Uint32()
 
 	commandDownsync                    = kingpin.Command("downsync", "Download a folder")
 	commandDownsyncStorageURI          = commandDownsync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
@@ -1748,6 +1750,7 @@ func main() {
 			commandUpsyncHashing,
 			includeFilterRegEx,
 			excludeFilterRegEx,
+			*commandUpsyncMinBlockUsagePercent,
 			*showStats)
 		if err != nil {
 			log.Fatal(err)

@@ -49,7 +49,7 @@ void BlockStoreAPIProxy_Dispose(struct Longtail_API* api);
 int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct Longtail_StoredBlock* stored_block, struct Longtail_AsyncPutStoredBlockAPI* async_complete_api);
 int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint64_t chunk_count, TLongtail_Hash* chunk_hashes);
 int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
-int BlockStoreAPIProxy_GetExistingContent(struct Longtail_BlockStoreAPI* api, uint64_t chunk_count, TLongtail_Hash* chunk_hashes, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+int BlockStoreAPIProxy_GetExistingContent(struct Longtail_BlockStoreAPI* api, uint64_t chunk_count, TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
 int BlockStoreAPIProxy_Flush(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncFlushAPI* async_complete_api);
 

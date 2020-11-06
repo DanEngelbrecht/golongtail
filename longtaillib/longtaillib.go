@@ -306,7 +306,7 @@ type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
 	PreflightGet(chunkHashes []uint64) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
-	GetExistingContent(chunkHashes []uint64, asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int
+	GetExistingContent(chunkHashes []uint64, uint32_t minBlockUsagePercent, asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int
 	GetStats() (BlockStoreStats, int)
 	Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int
 	Close()
@@ -948,6 +948,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 // GetExistingContent() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 	chunkHashes []uint64,
+	minBlockUsagePercent uint32,
 	asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int {
 
 	chunkCount := len(chunkHashes)
@@ -959,6 +960,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(chunkCount),
 		cChunkHashes,
+		C.uint32_t(minBlockUsagePercent),
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -1590,6 +1592,7 @@ func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (Longtail_St
 func GetExistingContentIndex(
 	storeIndex Longtail_StoreIndex,
 	chunkHashes []uint64,
+	minBlockUsagePercent uint32,
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32) (Longtail_ContentIndex, int) {
 	chunkCount := uint64(len(chunkHashes))
@@ -1602,6 +1605,7 @@ func GetExistingContentIndex(
 		storeIndex.cStoreIndex,
 		C.uint32_t(chunkCount),
 		cChunkHashes,
+		C.uint32_t(minBlockUsagePercent),
 		C.uint32_t(maxBlockSize),
 		C.uint32_t(maxChunksPerBlock),
 		&cindex)
@@ -2089,14 +2093,16 @@ func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, chunk
 }
 
 //export BlockStoreAPIProxy_GetExistingContent
-func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint64_t, chunk_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI) C.int {
+func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint64_t, chunk_hashes *C.TLongtail_Hash, min_block_usage_percent C.uint32_T, async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
 	chunkCount := int(chunk_count)
+	minBlockUsagePercent := uint32(min_block_usage_percent)
 	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
 	copyChunkHashes := append([]uint64{}, chunkHashes...)
 	errno := blockStore.GetExistingContent(
 		copyChunkHashes,
+		minBlockUsagePercent,
 		Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }

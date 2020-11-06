@@ -38,8 +38,9 @@ type blockIndexMessage struct {
 }
 
 type getExistingContentMessage struct {
-	chunkHashes      []uint64
-	asyncCompleteAPI longtaillib.Longtail_AsyncGetExistingContentAPI
+	chunkHashes          []uint64
+	minBlockUsagePercent uint32
+	asyncCompleteAPI     longtaillib.Longtail_AsyncGetExistingContentAPI
 }
 
 type stopMessage struct {
@@ -714,7 +715,7 @@ func onPreflighMessage(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message preflightGetMessage,
 	prefetchBlockMessages chan<- prefetchBlockMessage) {
-	existingContentIndex, errno := longtaillib.GetExistingContentIndex(storeIndex, message.chunkHashes, s.maxBlockSize, s.maxChunksPerBlock)
+	existingContentIndex, errno := longtaillib.GetExistingContentIndex(storeIndex, message.chunkHashes, 0, s.maxBlockSize, s.maxChunksPerBlock)
 	if errno != 0 {
 		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingContentIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
 		return
@@ -729,7 +730,7 @@ func onGetExistingContentMessage(
 	s *remoteStore,
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message getExistingContentMessage) {
-	existingContentIndex, errno := longtaillib.GetExistingContentIndex(storeIndex, message.chunkHashes, s.maxBlockSize, s.maxChunksPerBlock)
+	existingContentIndex, errno := longtaillib.GetExistingContentIndex(storeIndex, message.chunkHashes, message.minBlockUsagePercent, s.maxBlockSize, s.maxChunksPerBlock)
 	if errno != 0 {
 		message.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
 		return
@@ -1074,8 +1075,9 @@ func (s *remoteStore) GetStoredBlock(blockHash uint64, asyncCompleteAPI longtail
 // GetExistingContent ...
 func (s *remoteStore) GetExistingContent(
 	chunkHashes []uint64,
+	minBlockUsagePercent uint32,
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetExistingContentAPI) int {
-	s.getExistingContentChan <- getExistingContentMessage{chunkHashes: chunkHashes, asyncCompleteAPI: asyncCompleteAPI}
+	s.getExistingContentChan <- getExistingContentMessage{chunkHashes: chunkHashes, minBlockUsagePercent, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

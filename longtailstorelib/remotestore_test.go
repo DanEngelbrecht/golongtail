@@ -58,10 +58,10 @@ func (a *getStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtai
 	a.wg.Done()
 }
 
-func getExistingContent(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64) (longtaillib.Longtail_ContentIndex, int) {
+func getExistingContent(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64, minBlockUsagePercent uint32) (longtaillib.Longtail_ContentIndex, int) {
 	g := &getExistingContentCompletionAPI{}
 	g.wg.Add(1)
-	errno := storeAPI.GetExistingContent(chunkHashes, longtaillib.CreateAsyncGetExistingContentAPI(g))
+	errno := storeAPI.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(g))
 	if errno != 0 {
 		g.wg.Done()
 		return longtaillib.Longtail_ContentIndex{}, errno
@@ -86,7 +86,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 
 	chunkHashes := []uint64{1, 2, 3, 4}
 
-	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes)
+	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
 	defer existingContent.Dispose()
 	if errno != 0 {
 		t.Errorf("TestEmptyGetExistingContent() getExistingContent(t, storeAPI, chunkHashes) %d != %d", errno, 0)
@@ -231,7 +231,7 @@ func TestGetExistingContent(t *testing.T) {
 
 	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3}
 
-	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes)
+	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
 	defer existingContent.Dispose()
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
@@ -287,7 +287,7 @@ func TestRestoreStore(t *testing.T) {
 
 	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3}
 
-	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes)
+	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -302,7 +302,7 @@ func TestRestoreStore(t *testing.T) {
 
 	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
 
-	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes)
+	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -334,7 +334,7 @@ func TestRestoreStore(t *testing.T) {
 
 	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
 
-	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes)
+	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}

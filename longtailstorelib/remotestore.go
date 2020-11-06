@@ -1077,7 +1077,7 @@ func (s *remoteStore) GetExistingContent(
 	chunkHashes []uint64,
 	minBlockUsagePercent uint32,
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetExistingContentAPI) int {
-	s.getExistingContentChan <- getExistingContentMessage{chunkHashes: chunkHashes, minBlockUsagePercent, asyncCompleteAPI: asyncCompleteAPI}
+	s.getExistingContentChan <- getExistingContentMessage{chunkHashes: chunkHashes, minBlockUsagePercent: minBlockUsagePercent, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 

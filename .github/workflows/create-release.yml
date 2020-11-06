@@ -116,11 +116,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-           - *UPDATE* Longtail to v0.1.0
-            - Now uses StoreIndex (store.lsi) for GCS store while keeping compatability with store ContentIndex
-           - *FIXED* Rare crash bug with use after free in remotestore.go
-           - *ADDED* More tests
-           - *CHANGED* Improved error reporting
+           - *UPDATE* Longtail to v0.1.2
+           - *ADDED* `--min-block-usage-percent` to `upsync` allowing control of which blocks to use when considering what to upload to remote store
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -683,6 +683,26 @@ func downSyncVersion(
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
+	var fileInfos longtaillib.Longtail_FileInfos
+	var syncErr error
+	defer fileInfos.Dispose()
+
+	var wg sync.WaitGroup
+	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
+		wg.Add(1)
+		go func() {
+			var errno int
+			fileInfos, errno = longtaillib.GetFilesRecursively(
+				fs,
+				pathFilter,
+				normalizePath(targetFolderPath))
+			if errno != 0 {
+				syncErr = errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetFilesRecursively() failed")
+			}
+			wg.Done()
+		}()
+	}
+
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
 	if err != nil {
@@ -716,14 +736,13 @@ func downSyncVersion(
 	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
-	errno := 0
 	var sourceVersionIndex longtaillib.Longtail_VersionIndex
 
 	vbuffer, err := readFromURI(sourceFilePath)
 	if err != nil {
 		return err
 	}
-	sourceVersionIndex, errno = longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
@@ -743,15 +762,10 @@ func downSyncVersion(
 
 	var targetVersionIndex longtaillib.Longtail_VersionIndex
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		fileInfos, errno := longtaillib.GetFilesRecursively(
-			fs,
-			pathFilter,
-			normalizePath(targetFolderPath))
-		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetFilesRecursively() failed")
+		wg.Wait()
+		if syncErr != nil {
+			return syncErr
 		}
-		defer fileInfos.Dispose()
-
 		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
 
 		chunker := longtaillib.CreateHPCDCChunkerAPI()

@@ -250,8 +250,13 @@ type Assert interface {
 	OnAssert(expression string, file string, line int)
 }
 
+type LogField struct {
+	Name  string
+	Value string
+}
+
 type Logger interface {
-	OnLog(level int, log string)
+	OnLog(file string, function string, line int, level int, logFields []LogField, message string)
 }
 
 type Longtail_AsyncGetStoredBlockAPI struct {
@@ -2051,9 +2056,15 @@ func ChangeVersion(
 }
 
 //export LogProxy_Log
-func LogProxy_Log(context unsafe.Pointer, level C.int, log *C.char) {
-	logger := RestorePointer(context).(Logger)
-	logger.OnLog(int(level), C.GoString(log))
+func LogProxy_Log(log_context *C.struct_Longtail_LogContext, log *C.char) {
+	logger := RestorePointer(log_context.context).(Logger)
+	logFields := make([]LogField, log_context.field_count)
+	for i := 0; i < int(log_context.field_count); i++ {
+		logField := C.GetLogField(log_context, C.int(i))
+		logFields[i].Name = C.GoString(logField.name)
+		logFields[i].Value = C.GoString(logField.value)
+	}
+	logger.OnLog(C.GoString(log_context.file), C.GoString(log_context.function), int(log_context.line), int(log_context.level), logFields, C.GoString(log))
 }
 
 //export BlockStoreAPIProxy_Dispose

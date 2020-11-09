@@ -32,7 +32,9 @@
 extern "C" {
 #endif
 
-void LogProxy_Log(void* context, int level, char* str);
+static struct Longtail_LogField* GetLogField(struct Longtail_LogContext* log_context, int index) { return &log_context->fields[index]; }
+
+void LogProxy_Log(struct Longtail_LogContext* log_context, char* str);
 
 void AssertProxy_Assert(char* expression, char* file, int line);
 

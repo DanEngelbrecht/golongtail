@@ -74,8 +74,8 @@ type testLogger struct {
 	t *testing.T
 }
 
-func (l *testLogger) OnLog(level int, log string) {
-	l.t.Logf("%d: %s", level, log)
+func (l *testLogger) OnLog(file string, function string, line int, level int, logFields []LogField, message string) {
+	l.t.Logf("%d: %s", level, message)
 }
 
 type testAssert struct {

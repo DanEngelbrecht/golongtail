@@ -21,17 +21,22 @@ import (
 type loggerData struct {
 }
 
-func (l *loggerData) OnLog(level int, message string) {
-	switch level {
-	case 0:
-		log.Printf("DEBUG: %s", message)
-	case 1:
-		log.Printf("INFO: %s", message)
-	case 2:
-		log.Printf("WARNING: %s", message)
-	case 3:
-		log.Printf("ERROR: %s", message)
+var logLevelNames = [...]string{"DEBUG", "INFO", "WARNING", "ERROR", "OFF"}
+
+func (l *loggerData) OnLog(file string, function string, line int, level int, logFields []longtaillib.LogField, message string) {
+	var b strings.Builder
+	b.Grow(32 + len(message))
+	fmt.Fprintf(&b, "{")
+	fmt.Fprintf(&b, "\"file\": \"%s\"", file)
+	fmt.Fprintf(&b, ", \"func\": \"%s\"", function)
+	fmt.Fprintf(&b, ", \"line\": \"%d\"", line)
+	fmt.Fprintf(&b, ", \"level\": \"%s\"", logLevelNames[level])
+	for _, field := range logFields {
+		fmt.Fprintf(&b, ", \"%s\": \"%s\"", field.Name, field.Value)
 	}
+	fmt.Fprintf(&b, ", \"msg\": \"%s\"", message)
+	fmt.Fprintf(&b, "}")
+	log.Printf(b.String())
 }
 
 func parseLevel(lvl string) (int, error) {

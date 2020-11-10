@@ -131,6 +131,18 @@ func (a *flushCompletionAPI) OnComplete(err int) {
 	a.wg.Done()
 }
 
+type getStoredBlockCompletionAPI struct {
+	wg          sync.WaitGroup
+	storedBlock longtaillib.Longtail_StoredBlock
+	err         int
+}
+
+func (a *getStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtail_StoredBlock, err int) {
+	a.err = err
+	a.storedBlock = storedBlock
+	a.wg.Done()
+}
+
 func printStats(name string, stats longtaillib.BlockStoreStats) {
 	log.Printf("%s:\n", name)
 	log.Printf("------------------\n")
@@ -1653,6 +1665,186 @@ func lsVersionIndex(
 	return nil
 }
 
+func stats(
+	blobStoreURI string,
+	versionIndexPath string,
+	localCachePath *string,
+	showStats bool) error {
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobs.Dispose()
+
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	var indexStore longtaillib.Longtail_BlockStoreAPI
+
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	if err != nil {
+		return err
+	}
+	defer remoteIndexStore.Dispose()
+
+	var localFS longtaillib.Longtail_StorageAPI
+
+	var localIndexStore longtaillib.Longtail_BlockStoreAPI
+	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
+
+	if localCachePath != nil && len(*localCachePath) > 0 {
+		localFS = longtaillib.CreateFSStorageAPI()
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath), 8388608, 1024)
+
+		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
+
+		indexStore = cacheBlockStore
+	} else {
+		indexStore = remoteIndexStore
+	}
+
+	defer cacheBlockStore.Dispose()
+	defer localIndexStore.Dispose()
+	defer localFS.Dispose()
+
+	vbuffer, err := readFromURI(versionIndexPath)
+	if err != nil {
+		return err
+	}
+	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtaillib.ReadVersionIndexFromBuffer() failed")
+	}
+	defer versionIndex.Dispose()
+
+	existingContentIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
+	if errno != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: getExistingContentIndexSync() failed")
+	}
+	defer existingContentIndex.Dispose()
+
+	blockLookup := make(map[uint64]uint64)
+
+	blockChunkCount := uint64(0)
+
+	blockHashes := existingContentIndex.GetBlockHashes()
+	maxBatchSize := runtime.NumCPU()
+	for i := 0; i < len(blockHashes); {
+		batchSize := len(blockHashes) - i
+		if batchSize > maxBatchSize {
+			batchSize = maxBatchSize
+		}
+		completions := make([]getStoredBlockCompletionAPI, batchSize)
+		for offset := 0; offset < batchSize; offset++ {
+			completions[offset].wg.Add(1)
+			go func(startIndex int, offset int) {
+				blockHash := blockHashes[startIndex+offset]
+				indexStore.GetStoredBlock(blockHash, longtaillib.CreateAsyncGetStoredBlockAPI(&completions[offset]))
+			}(i, offset)
+		}
+
+		for offset := 0; offset < batchSize; offset++ {
+			completions[offset].wg.Wait()
+			if completions[offset].err != 0 {
+				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStoreIndex.GetStoredBlock() failed")
+			}
+			blockIndex := completions[offset].storedBlock.GetBlockIndex()
+			for _, chunkHash := range blockIndex.GetChunkHashes() {
+				blockLookup[chunkHash] = blockHashes[i+offset]
+			}
+			blockChunkCount += uint64(len(blockIndex.GetChunkHashes()))
+		}
+
+		i += batchSize
+	}
+
+	blockUsage := uint32(100)
+	if blockChunkCount > 0 {
+		blockUsage = uint32((100 * existingContentIndex.GetChunkCount()) / blockChunkCount)
+	}
+
+	var assetFragmentCount uint64
+	chunkHashes := versionIndex.GetChunkHashes()
+	assetChunkCounts := versionIndex.GetAssetChunkCounts()
+	assetChunkIndexStarts := versionIndex.GetAssetChunkIndexStarts()
+	assetChunkIndexes := versionIndex.GetAssetChunkIndexes()
+	for a := uint32(0); a < versionIndex.GetAssetCount(); a++ {
+		uniqueBlockCount := uint64(0)
+		chunkCount := assetChunkCounts[a]
+		chunkIndexOffset := assetChunkIndexStarts[a]
+		lastBlockIndex := ^uint64(0)
+		for c := chunkIndexOffset; c < chunkIndexOffset+chunkCount; c++ {
+			chunkIndex := assetChunkIndexes[c]
+			chunkHash := chunkHashes[chunkIndex]
+			blockIndex, _ := blockLookup[chunkHash]
+			if blockIndex != lastBlockIndex {
+				uniqueBlockCount++
+				lastBlockIndex = blockIndex
+				assetFragmentCount++
+			}
+		}
+	}
+	assetFragmentation := uint32(0)
+	if versionIndex.GetAssetCount() > 0 {
+		assetFragmentation = uint32((100*(assetFragmentCount))/uint64(versionIndex.GetAssetCount()) - 100)
+	}
+
+	fmt.Printf("Block Usage:          %d%%\n", blockUsage)
+	fmt.Printf("Asset Fragmentation:  %d%%\n", assetFragmentation)
+
+	cacheStoreFlushComplete := &flushCompletionAPI{}
+	cacheStoreFlushComplete.wg.Add(1)
+	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
+	if errno != 0 {
+		cacheStoreFlushComplete.wg.Done()
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", localCachePath)
+	}
+
+	localStoreFlushComplete := &flushCompletionAPI{}
+	localStoreFlushComplete.wg.Add(1)
+	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
+	if errno != 0 {
+		localStoreFlushComplete.wg.Done()
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", localCachePath)
+	}
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	if errno != 0 {
+		remoteStoreFlushComplete.wg.Done()
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+	}
+
+	cacheStoreFlushComplete.wg.Wait()
+	if cacheStoreFlushComplete.err != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
+	}
+
+	localStoreFlushComplete.wg.Wait()
+	if localStoreFlushComplete.err != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", blobStoreURI)
+	}
+
+	remoteStoreFlushComplete.wg.Wait()
+	if remoteStoreFlushComplete.err != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+	}
+
+	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
+	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
+	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
+	if showStats {
+		if cacheStoreStatsErrno == 0 {
+			printStats("Cache", cacheStoreStats)
+		}
+		if localStoreStatsErrno == 0 {
+			printStats("Local", localStoreStats)
+		}
+		if remoteStoreStatsErrno == 0 {
+			printStats("Remote", remoteStoreStats)
+		}
+	}
+	return nil
+}
+
 var (
 	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
@@ -1735,6 +1927,11 @@ var (
 	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
 						Default("blake3").
 						Enum("meow", "blake2", "blake3")
+
+	commandStats                 = kingpin.Command("stats", "Show fragmenation stats about a version index")
+	commandStatsStorageURI       = commandStats.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandStatsVersionIndexPath = commandStats.Flag("version-index-path", "Path to a version index file").Required().String()
+	commandStatsCachePath        = commandStats.Flag("cache-path", "Location for cached blocks").String()
 )
 
 func main() {
@@ -1838,6 +2035,15 @@ func main() {
 		err := initRemoteStore(
 			*commandInitRemoteStoreStorageURI,
 			commandInitRemoteStoreHashing,
+			*showStats)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandStats.FullCommand():
+		err := stats(
+			*commandStatsStorageURI,
+			*commandStatsVersionIndexPath,
+			commandStatsCachePath,
 			*showStats)
 		if err != nil {
 			log.Fatal(err)

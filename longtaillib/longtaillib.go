@@ -747,6 +747,21 @@ func (versionIndex *Longtail_VersionIndex) GetAssetPermissions(assetIndex uint32
 	return uint16(cPermissions)
 }
 
+func (versionIndex *Longtail_VersionIndex) GetAssetChunkCounts() []uint32 {
+	size := int(*versionIndex.cVersionIndex.m_AssetCount)
+	return carray2slice32(versionIndex.cVersionIndex.m_AssetChunkCounts, size)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetAssetChunkIndexStarts() []uint32 {
+	size := int(*versionIndex.cVersionIndex.m_AssetCount)
+	return carray2slice32(versionIndex.cVersionIndex.m_AssetChunkIndexStarts, size)
+}
+
+func (versionIndex *Longtail_VersionIndex) GetAssetChunkIndexes() []uint32 {
+	size := int(*versionIndex.cVersionIndex.m_AssetChunkIndexCount)
+	return carray2slice32(versionIndex.cVersionIndex.m_AssetChunkIndexes, size)
+}
+
 func (versionIndex *Longtail_VersionIndex) GetChunkCount() uint32 {
 	return uint32(*versionIndex.cVersionIndex.m_ChunkCount)
 }

@@ -401,17 +401,21 @@ type Longtail_ChunkerAPI struct {
 }
 
 var pointerIndex uint32
-var pointerStore [512]interface{}
-var pointerIndexer = (*[1 << 30]C.uint32_t)(C.malloc(4 * 512))
+var pointerStore [1024]interface{}
+var pointerIndexer = (*[1 << 30]C.uint32_t)(C.malloc(4 * 1024))
 
 func SavePointer(v interface{}) unsafe.Pointer {
 	if v == nil {
 		return nil
 	}
 
-	newPointerIndex := (atomic.AddUint32(&pointerIndex, 1)) % 512
+	newPointerIndex := (atomic.AddUint32(&pointerIndex, 1)) % 1024
+	startPointerIndex := newPointerIndex
 	for pointerStore[newPointerIndex] != nil {
-		newPointerIndex = (atomic.AddUint32(&pointerIndex, 1)) % 512
+		newPointerIndex = (atomic.AddUint32(&pointerIndex, 1)) % 1024
+		if newPointerIndex == startPointerIndex {
+			return nil
+		}
 	}
 	pointerIndexer[newPointerIndex] = C.uint32_t(newPointerIndex)
 	pointerStore[newPointerIndex] = v
@@ -1799,6 +1803,7 @@ func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtai
 	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
 	asyncComplete.OnComplete(int(errno))
+	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
 //export AsyncPutStoredBlockAPIProxy_Dispose
@@ -1820,6 +1825,7 @@ func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtai
 	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
 	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(errno))
+	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
 //export AsyncGetStoredBlockAPIProxy_Dispose
@@ -1841,6 +1847,7 @@ func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Lon
 	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetExistingContentAPI)
 	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(errno))
+	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
 //export AsyncGetExistingContentAPIProxy_Dispose
@@ -1862,6 +1869,7 @@ func AsyncFlushAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncFl
 	context := C.AsyncFlushAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncFlushAPI)
 	asyncComplete.OnComplete(int(errno))
+	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
 //export AsyncFlushAPIProxy_Dispose

@@ -1724,6 +1724,7 @@ func stats(
 
 	blockChunkCount := uint64(0)
 
+	progress := &progressData{task: "Fetching blocks"}
 	blockHashes := existingContentIndex.GetBlockHashes()
 	maxBatchSize := runtime.NumCPU()
 	for i := 0; i < len(blockHashes); {
@@ -1753,6 +1754,7 @@ func stats(
 		}
 
 		i += batchSize
+		progress.OnProgress(uint32(len(blockHashes)), uint32(i))
 	}
 
 	blockUsage := uint32(100)

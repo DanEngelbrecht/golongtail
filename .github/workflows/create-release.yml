@@ -116,9 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - *UPDATE* Longtail to v0.1.6
-          - *CHANGED* Scanning target folder during `downsync` is now done in background thread
-          - *CHANGED* Logging is now more structured and detailed
+          - *ADDED* `stats` command for showing fragmentation and block usage for a version index
         draft: false
         prerelease: false
     - name: Download Linux artifacts

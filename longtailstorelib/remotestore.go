@@ -15,6 +15,18 @@ import (
 	"github.com/pkg/errors"
 )
 
+// AccessType defines how we will access the data in the store
+type AccessType int
+
+const (
+	// Init - read/write access with forced rebuild of store index
+	Init AccessType = iota
+	// ReadWrite - read/write access with optional rebuild of store index
+	ReadWrite
+	// ReadOnly - read only access
+	ReadOnly
+)
+
 type putBlockMessage struct {
 	storedBlock      longtaillib.Longtail_StoredBlock
 	asyncCompleteAPI longtaillib.Longtail_AsyncPutStoredBlockAPI
@@ -338,7 +350,8 @@ func remoteWorker(
 	blockIndexMessages chan<- blockIndexMessage,
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int,
-	stopMessages <-chan stopMessage) error {
+	stopMessages <-chan stopMessage,
+	accessType AccessType) error {
 	client, err := s.blobStore.NewClient(ctx)
 	if err != nil {
 		return errors.Wrap(err, s.blobStore.String())
@@ -350,6 +363,10 @@ func remoteWorker(
 		select {
 		case putMsg := <-putBlockMessages:
 			received += 1
+			if accessType != ReadOnly {
+				putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
+				continue
+			}
 			err := putStoredBlock(ctx, s, client, blockIndexMessages, putMsg.storedBlock)
 			putMsg.asyncCompleteAPI.OnComplete(longtaillib.ErrorToErrno(err, longtaillib.EIO))
 		case getMsg := <-getBlockMessages:
@@ -363,6 +380,10 @@ func remoteWorker(
 				case _ = <-flushMessages:
 					flushReplyMessages <- 0
 				case putMsg := <-putBlockMessages:
+					if accessType != ReadOnly {
+						putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
+						continue
+					}
 					err := putStoredBlock(ctx, s, client, blockIndexMessages, putMsg.storedBlock)
 					putMsg.asyncCompleteAPI.OnComplete(longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				case getMsg := <-getBlockMessages:
@@ -377,6 +398,10 @@ func remoteWorker(
 				case _ = <-flushMessages:
 					flushReplyMessages <- 0
 				case putMsg := <-putBlockMessages:
+					if accessType != ReadOnly {
+						putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
+						continue
+					}
 					err := putStoredBlock(ctx, s, client, blockIndexMessages, putMsg.storedBlock)
 					putMsg.asyncCompleteAPI.OnComplete(longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				case getMsg := <-getBlockMessages:
@@ -771,7 +796,7 @@ func contentIndexWorker(
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int,
 	stopMessages <-chan stopMessage,
-	rebuildIndex bool) error {
+	accessType AccessType) error {
 
 	client, err := s.blobStore.NewClient(ctx)
 	if err != nil {
@@ -786,7 +811,7 @@ func contentIndexWorker(
 	saveStoreContentIndex := false
 
 	var storeIndex longtaillib.Longtail_StoreIndex
-	if rebuildIndex {
+	if accessType == Init {
 		saveStoreIndex = true
 		saveStoreContentIndex = true
 	} else {
@@ -798,27 +823,35 @@ func contentIndexWorker(
 	defer storeIndex.Dispose()
 
 	if !storeIndex.IsValid() {
-		storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks(
-			[]longtaillib.Longtail_BlockIndex{})
-		if errno != 0 {
-			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
-		}
+		if accessType == ReadOnly {
+			storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+			if errno != 0 {
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
+				return errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
+			}
+		} else {
+			storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks(
+				[]longtaillib.Longtail_BlockIndex{})
+			if errno != 0 {
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
+				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
+			}
 
-		storeIndex, err = buildStoreIndexFromStoreBlocks(
-			ctx,
-			s,
-			client)
+			storeIndex, err = buildStoreIndexFromStoreBlocks(
+				ctx,
+				s,
+				client)
 
-		if err != nil {
-			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
-		}
-		log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
-		err := updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
-		if err != nil {
-			log.Printf("Failed to update store index in store %s\n", s.String())
-			saveStoreIndex = true
+			if err != nil {
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages, stopMessages)
+				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
+			}
+			log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
+			err := updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
+			if err != nil {
+				log.Printf("Failed to update store index in store %s\n", s.String())
+				saveStoreIndex = true
+			}
 		}
 	}
 
@@ -948,6 +981,10 @@ func contentIndexWorker(
 		}
 	}
 
+	if accessType == ReadOnly {
+		return nil
+	}
+
 	for len(blockIndexMessages) > 0 {
 		select {
 		case blockIndexMsg := <-blockIndexMessages:
@@ -1025,7 +1062,7 @@ func NewRemoteBlockStore(
 	blobStore BlobStore,
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32,
-	rebuildIndex bool) (longtaillib.BlockStoreAPI, error) {
+	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
 	defaultClient, err := blobStore.NewClient(ctx)
 	if err != nil {
@@ -1061,13 +1098,13 @@ func NewRemoteBlockStore(
 	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 
 	go func() {
-		err := contentIndexWorker(ctx, s, s.preflightGetChan, s.prefetchBlockChan, s.blockIndexChan, s.getExistingContentChan, s.indexFlushChan, s.indexFlushReplyChan, s.indexStopChan, rebuildIndex)
+		err := contentIndexWorker(ctx, s, s.preflightGetChan, s.prefetchBlockChan, s.blockIndexChan, s.getExistingContentChan, s.indexFlushChan, s.indexFlushReplyChan, s.indexStopChan, accessType)
 		s.workerErrorChan <- err
 	}()
 
 	for i := 0; i < s.workerCount; i++ {
 		go func() {
-			err := remoteWorker(ctx, s, s.putBlockChan, s.getBlockChan, s.prefetchBlockChan, s.blockIndexChan, s.workerFlushChan, s.workerFlushReplyChan, s.workerStopChan)
+			err := remoteWorker(ctx, s, s.putBlockChan, s.getBlockChan, s.prefetchBlockChan, s.blockIndexChan, s.workerFlushChan, s.workerFlushReplyChan, s.workerStopChan, accessType)
 			s.workerErrorChan <- err
 		}()
 	}

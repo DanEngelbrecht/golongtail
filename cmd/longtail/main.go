@@ -180,7 +180,7 @@ func getExistingContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, 
 	return getExistingContentComplete.contentIndex, getExistingContentComplete.err
 }
 
-func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, rebuildIndex bool) (longtaillib.Longtail_BlockStoreAPI, error) {
+func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, accessType longtailstorelib.AccessType) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -194,7 +194,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				gcsBlobStore,
 				targetBlockSize,
 				maxChunksPerBlock,
-				rebuildIndex)
+				accessType)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -209,7 +209,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				s3BlobStore,
 				targetBlockSize,
 				maxChunksPerBlock,
-				rebuildIndex)
+				accessType)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -483,7 +483,7 @@ func upSyncVersion(
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
-	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, false)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, longtailstorelib.ReadWrite)
 	if err != nil {
 		return err
 	}
@@ -723,7 +723,7 @@ func downSyncVersion(
 	}
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return err
 	}
@@ -1058,7 +1058,7 @@ func validateVersion(
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
+	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return err
 	}
@@ -1345,7 +1345,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return err
 	}
@@ -1569,7 +1569,7 @@ func initRemoteStore(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: hashRegistry.GetHashAPI() failed")
 	}
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.Init)
 	if err != nil {
 		return err
 	}
@@ -1708,7 +1708,7 @@ func stats(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return err
 	}

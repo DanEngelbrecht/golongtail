@@ -180,7 +180,7 @@ func getExistingContentIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, 
 	return getExistingContentComplete.contentIndex, getExistingContentComplete.err
 }
 
-func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32) (longtaillib.Longtail_BlockStoreAPI, error) {
+func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, rebuildIndex bool) (longtaillib.Longtail_BlockStoreAPI, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -193,7 +193,8 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				jobAPI,
 				gcsBlobStore,
 				targetBlockSize,
-				maxChunksPerBlock)
+				maxChunksPerBlock,
+				rebuildIndex)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -207,7 +208,8 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				jobAPI,
 				s3BlobStore,
 				targetBlockSize,
-				maxChunksPerBlock)
+				maxChunksPerBlock,
+				rebuildIndex)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}
@@ -481,7 +483,7 @@ func upSyncVersion(
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
-	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock)
+	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, false)
 	if err != nil {
 		return err
 	}
@@ -721,7 +723,7 @@ func downSyncVersion(
 	}
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
 	if err != nil {
 		return err
 	}
@@ -1056,7 +1058,7 @@ func validateVersion(
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
 	if err != nil {
 		return err
 	}
@@ -1195,6 +1197,34 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
+func showStoreIndex(storeIndexPath string, compact bool) error {
+	vbuffer, err := readFromURI(storeIndexPath)
+	if err != nil {
+		return err
+	}
+	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadStoreIndexFromBuffer() failed")
+	}
+	defer storeIndex.Dispose()
+
+	if compact {
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\n",
+			storeIndexPath,
+			storeIndex.GetVersion(),
+			hashIdentifierToString(storeIndex.GetHashIdentifier()),
+			storeIndex.GetBlockCount(),
+			storeIndex.GetChunkCount())
+	} else {
+		fmt.Printf("Version:             %d\n", storeIndex.GetVersion())
+		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(storeIndex.GetHashIdentifier()))
+		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), byteCountDecimal(uint64(storeIndex.GetBlockCount())))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), byteCountDecimal(uint64(storeIndex.GetChunkCount())))
+	}
+
+	return nil
+}
+
 func getDetailsString(path string, size uint64, permissions uint16, isDir bool, sizePadding int) string {
 	sizeString := fmt.Sprintf("%d", size)
 	sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
@@ -1315,7 +1345,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
 	if err != nil {
 		return err
 	}
@@ -1539,7 +1569,7 @@ func initRemoteStore(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: hashRegistry.GetHashAPI() failed")
 	}
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
 	if err != nil {
 		return err
 	}
@@ -1678,7 +1708,7 @@ func stats(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, false)
 	if err != nil {
 		return err
 	}
@@ -1899,13 +1929,17 @@ var (
 	commandValidateVersionTargetBlockSize   = commandValidate.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandValidateVersionMaxChunksPerBlock = commandValidate.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 
-	commandPrintVersionIndex        = kingpin.Command("commandPrintVersionIndex", "Print info about a file")
+	commandPrintVersionIndex        = kingpin.Command("printVersionIndex", "Print info about a file")
 	commandPrintVersionIndexPath    = commandPrintVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
 	commandPrintVersionIndexCompact = commandPrintVersionIndex.Flag("compact", "Show info in compact layout").Bool()
 
-	commandPrintContentIndex        = kingpin.Command("commandPrintContentIndex", "Print info about a file")
+	commandPrintContentIndex        = kingpin.Command("printContentIndex", "Print info about a file")
 	commandPrintContentIndexPath    = commandPrintContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
 	commandPrintContentIndexCompact = commandPrintContentIndex.Flag("compact", "Show info in compact layout").Bool()
+
+	commandPrintStoreIndex        = kingpin.Command("printStoreIndex", "Print info about a file")
+	commandPrintStoreIndexPath    = commandPrintStoreIndex.Flag("store-index-path", "Path to a store index file").Required().String()
+	commandPrintStoreIndexCompact = commandPrintStoreIndex.Flag("compact", "Show info in compact layout").Bool()
 
 	commandDump                 = kingpin.Command("dump", "Dump the asset paths inside a version index")
 	commandDumpVersionIndexPath = commandDump.Flag("version-index-path", "Path to a version index file").Required().String()
@@ -1924,7 +1958,7 @@ var (
 	commandCPTargetBlockSize   = commandCPVersion.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandCPMaxChunksPerBlock = commandCPVersion.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 
-	commandInitRemoteStore           = kingpin.Command("init", "open a remote store triggering reindexing of store index is missing")
+	commandInitRemoteStore           = kingpin.Command("init", "open/create a remote store and force rebuild the store index")
 	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
 	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
 						Default("blake3").
@@ -2007,6 +2041,11 @@ func main() {
 		}
 	case commandPrintContentIndex.FullCommand():
 		err := showContentIndex(*commandPrintContentIndexPath, *commandPrintContentIndexCompact)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandPrintStoreIndex.FullCommand():
+		err := showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
 		if err != nil {
 			log.Fatal(err)
 		}

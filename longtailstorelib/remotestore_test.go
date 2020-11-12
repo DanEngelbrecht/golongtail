@@ -16,7 +16,8 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -78,7 +79,8 @@ func TestEmptyGetExistingContent(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -175,7 +177,8 @@ func TestPutGetStoredBlock(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -209,7 +212,8 @@ func TestGetExistingContent(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -254,7 +258,8 @@ func TestRestoreStore(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -279,7 +284,8 @@ func TestRestoreStore(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -326,7 +332,8 @@ func TestRestoreStore(t *testing.T) {
 		jobs,
 		blobStore,
 		8192,
-		128)
+		128,
+		false)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}

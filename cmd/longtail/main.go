@@ -1901,11 +1901,11 @@ var (
 	commandValidateVersionTargetBlockSize   = commandValidate.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandValidateVersionMaxChunksPerBlock = commandValidate.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 
-	commandPrintVersionIndex        = kingpin.Command("commandPrintVersionIndex", "Print info about a file")
+	commandPrintVersionIndex        = kingpin.Command("printVersionIndex", "Print info about a file")
 	commandPrintVersionIndexPath    = commandPrintVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
 	commandPrintVersionIndexCompact = commandPrintVersionIndex.Flag("compact", "Show info in compact layout").Bool()
 
-	commandPrintContentIndex        = kingpin.Command("commandPrintContentIndex", "Print info about a file")
+	commandPrintContentIndex        = kingpin.Command("printContentIndex", "Print info about a file")
 	commandPrintContentIndexPath    = commandPrintContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
 	commandPrintContentIndexCompact = commandPrintContentIndex.Flag("compact", "Show info in compact layout").Bool()
 

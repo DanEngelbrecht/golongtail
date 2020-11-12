@@ -116,14 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **CHANGE** `init` command will always force-rebuild the store index
-          - **ADDED** `stats` command for showing fragmentation and block usage for a version index
-          - **ADDED** `printStoreIndex` command for printing details for a store index
-          - **FIX** Fixed resource leak of async completion API
-          - **FIX** Validate chunk paths when scanning store
-          - **FIX** Rebuild logic for store content vs store index more robust
-          - **FIX** Fixed name of `printContentIndex` and `printVersionIndex` commands
-          - **UPDATE** Update to longtail v0.1.7
+          - **FIX** Added AccessType to remote store so only `upsync` and `init` will ever try a full reindex or update store indexes
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -1197,6 +1197,34 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	return nil
 }
 
+func showStoreIndex(storeIndexPath string, compact bool) error {
+	vbuffer, err := readFromURI(storeIndexPath)
+	if err != nil {
+		return err
+	}
+	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
+	if errno != 0 {
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadStoreIndexFromBuffer() failed")
+	}
+	defer storeIndex.Dispose()
+
+	if compact {
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\n",
+			storeIndexPath,
+			storeIndex.GetVersion(),
+			hashIdentifierToString(storeIndex.GetHashIdentifier()),
+			storeIndex.GetBlockCount(),
+			storeIndex.GetChunkCount())
+	} else {
+		fmt.Printf("Version:             %d\n", storeIndex.GetVersion())
+		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(storeIndex.GetHashIdentifier()))
+		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), byteCountDecimal(uint64(storeIndex.GetBlockCount())))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), byteCountDecimal(uint64(storeIndex.GetChunkCount())))
+	}
+
+	return nil
+}
+
 func getDetailsString(path string, size uint64, permissions uint16, isDir bool, sizePadding int) string {
 	sizeString := fmt.Sprintf("%d", size)
 	sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
@@ -1909,6 +1937,10 @@ var (
 	commandPrintContentIndexPath    = commandPrintContentIndex.Flag("content-index-path", "Path to a content index file").Required().String()
 	commandPrintContentIndexCompact = commandPrintContentIndex.Flag("compact", "Show info in compact layout").Bool()
 
+	commandPrintStoreIndex        = kingpin.Command("printStoreIndex", "Print info about a file")
+	commandPrintStoreIndexPath    = commandPrintStoreIndex.Flag("store-index-path", "Path to a store index file").Required().String()
+	commandPrintStoreIndexCompact = commandPrintStoreIndex.Flag("compact", "Show info in compact layout").Bool()
+
 	commandDump                 = kingpin.Command("dump", "Dump the asset paths inside a version index")
 	commandDumpVersionIndexPath = commandDump.Flag("version-index-path", "Path to a version index file").Required().String()
 	commandDumpDetails          = commandDump.Flag("details", "Show details about assets").Bool()
@@ -2009,6 +2041,11 @@ func main() {
 		}
 	case commandPrintContentIndex.FullCommand():
 		err := showContentIndex(*commandPrintContentIndexPath, *commandPrintContentIndexCompact)
+		if err != nil {
+			log.Fatal(err)
+		}
+	case commandPrintStoreIndex.FullCommand():
+		err := showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
 		if err != nil {
 			log.Fatal(err)
 		}

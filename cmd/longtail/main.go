@@ -573,7 +573,7 @@ func upSyncVersion(
 		existingRemoteContentIndex.GetMaxBlockSize(),
 		existingRemoteContentIndex.GetMaxChunksPerBlock())
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.CreateMissingContent(%s) failed with %s", sourceFolderPath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.CreateMissingContent(%s) failed", sourceFolderPath)
 	}
 	defer versionMissingContentIndex.Dispose()
 
@@ -590,7 +590,7 @@ func upSyncVersion(
 			vindex,
 			normalizePath(sourceFolderPath))
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteContent(%s) failed with %s", sourceFolderPath)
+			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteContent(%s) failed", sourceFolderPath)
 		}
 	}
 

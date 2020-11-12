@@ -363,7 +363,7 @@ func remoteWorker(
 		select {
 		case putMsg := <-putBlockMessages:
 			received += 1
-			if accessType != ReadOnly {
+			if accessType == ReadOnly {
 				putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 				continue
 			}
@@ -380,7 +380,7 @@ func remoteWorker(
 				case _ = <-flushMessages:
 					flushReplyMessages <- 0
 				case putMsg := <-putBlockMessages:
-					if accessType != ReadOnly {
+					if accessType == ReadOnly {
 						putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 						continue
 					}
@@ -398,7 +398,7 @@ func remoteWorker(
 				case _ = <-flushMessages:
 					flushReplyMessages <- 0
 				case putMsg := <-putBlockMessages:
-					if accessType != ReadOnly {
+					if accessType == ReadOnly {
 						putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 						continue
 					}

@@ -1926,7 +1926,7 @@ var (
 	commandCPTargetBlockSize   = commandCPVersion.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandCPMaxChunksPerBlock = commandCPVersion.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 
-	commandInitRemoteStore           = kingpin.Command("init", "open a remote store triggering reindexing of store index is missing")
+	commandInitRemoteStore           = kingpin.Command("init", "open/create a remote store and force rebuild the store index")
 	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
 	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
 						Default("blake3").

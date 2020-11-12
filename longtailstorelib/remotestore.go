@@ -587,7 +587,13 @@ func getStoreIndexFromBlocks(
 					return
 				}
 
-				batchBlockIndexes[batchPos] = blockIndex
+				blockPath := getBlockPath("chunks", blockIndex.GetBlockHash())
+				if blockPath == blockKey {
+					batchBlockIndexes[batchPos] = blockIndex
+				} else {
+					log.Printf("Block %s name does not match content hash, expected name %s\n", blockKey, blockPath)
+				}
+
 				wg.Done()
 			}(clients[batchPos], batchPos, blockKey)
 		}

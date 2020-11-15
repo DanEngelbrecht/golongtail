@@ -457,4 +457,22 @@ func TestBlockScanning(t *testing.T) {
 	if errno != longtaillib.ENOENT {
 		t.Errorf("TestBlockScanning() fetchBlockFromStore(t, storeAPI, badBlockInBatPathHash) %d != %d", errno, longtaillib.ENOENT)
 	}
+
+	goodBlockInCorrectPathIndex := goodBlockInCorrectPath.GetBlockIndex()
+	chunks := goodBlockInCorrectPathIndex.GetChunkHashes()
+	badBlockInCorrectPathIndex := badBlockInCorrectPath.GetBlockIndex()
+	chunks = append(chunks, badBlockInCorrectPathIndex.GetChunkHashes()...)
+	goodBlockInBadPathIndex := goodBlockInBadPath.GetBlockIndex()
+	chunks = append(chunks, goodBlockInBadPathIndex.GetChunkHashes()...)
+	badBlockInBatPathIndex := badBlockInBatPath.GetBlockIndex()
+	chunks = append(chunks, badBlockInBatPathIndex.GetChunkHashes()...)
+
+	existingContent, errno := getExistingContent(t, storeAPI, chunks, 0)
+	if errno != 0 {
+		t.Errorf("TestBlockScanning() getExistingContent(t, storeAPI, chunkHashes, 0) %d != %d", errno, 0)
+	}
+	defer existingContent.Dispose()
+	if len(existingContent.GetChunkHashes()) != len(goodBlockInCorrectPathIndex.GetChunkHashes()) {
+		t.Errorf("TestBlockScanning() getExistingContent(t, storeAPI, chunks, 0) %d!= %d", len(existingContent.GetChunkHashes()), len(goodBlockInCorrectPathIndex.GetChunkHashes()))
+	}
 }

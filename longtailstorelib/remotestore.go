@@ -154,7 +154,7 @@ func putStoredBlock(
 
 	blockIndex := storedBlock.GetBlockIndex()
 	blockHash := blockIndex.GetBlockHash()
-	key := getBlockPath("chunks", blockHash)
+	key := GetBlockPath("chunks", blockHash)
 	objHandle, err := blobClient.NewObject(key)
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func getStoredBlock(
 
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1)
 
-	key := getBlockPath("chunks", blockHash)
+	key := GetBlockPath("chunks", blockHash)
 
 	storedBlockData, retryCount, err := readBlobWithRetry(ctx, s, blobClient, key)
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], uint64(retryCount))
@@ -226,11 +226,15 @@ func getStoredBlock(
 
 	storedBlock, errno := longtaillib.ReadStoredBlockFromBuffer(storedBlockData)
 	if errno != 0 {
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1)
 		return longtaillib.Longtail_StoredBlock{}, longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
 	}
 
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], (uint64)(len(storedBlockData)))
 	blockIndex := storedBlock.GetBlockIndex()
+	if blockIndex.GetBlockHash() != blockHash {
+		return longtaillib.Longtail_StoredBlock{}, longtaillib.ErrnoToError(longtaillib.EBADF, longtaillib.ErrEBADF)
+	}
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	return storedBlock, nil
 }
@@ -566,7 +570,7 @@ func getStoreIndexFromBlocks(
 		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 
-	batchCount := runtime.NumCPU()
+	batchCount := 1 //runtime.NumCPU()
 	batchStart := 0
 
 	if batchCount > len(blockKeys) {
@@ -612,7 +616,7 @@ func getStoreIndexFromBlocks(
 					return
 				}
 
-				blockPath := getBlockPath("chunks", blockIndex.GetBlockHash())
+				blockPath := GetBlockPath("chunks", blockIndex.GetBlockHash())
 				if blockPath == blockKey {
 					batchBlockIndexes[batchPos] = blockIndex
 				} else {
@@ -866,7 +870,7 @@ func contentIndexWorker(
 		contentIndexBlocks := make(map[uint64]bool)
 		for _, b := range storeContentIndex.GetBlockHashes() {
 			if _, exists := storeIndexBlocks[b]; !exists {
-				missingBlockPaths = append(missingBlockPaths, getBlockPath("chunks", b))
+				missingBlockPaths = append(missingBlockPaths, GetBlockPath("chunks", b))
 			}
 			contentIndexBlocks[b] = true
 		}
@@ -1112,7 +1116,8 @@ func NewRemoteBlockStore(
 	return s, nil
 }
 
-func getBlockPath(basePath string, blockHash uint64) string {
+// GetBlockPath ...
+func GetBlockPath(basePath string, blockHash uint64) string {
 	fileName := fmt.Sprintf("0x%016x.lsb", blockHash)
 	dir := filepath.Join(basePath, fileName[2:6])
 	name := filepath.Join(dir, fileName)

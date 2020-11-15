@@ -1,6 +1,7 @@
 package longtailstorelib
 
 import (
+	"context"
 	"runtime"
 	"sync"
 	"testing"
@@ -17,7 +18,7 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadOnly)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -80,7 +81,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadOnly)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -105,7 +106,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	defer storeAPI.Dispose()
 }
 
-func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (uint64, int) {
+func generateStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_StoredBlock, int) {
 	chunkHashes := []uint64{uint64(seed) + 1, uint64(seed) + 2, uint64(seed) + 3}
 	chunkSizes := []uint32{uint32(seed) + 10, uint32(seed) + 20, uint32(seed) + 30}
 
@@ -115,7 +116,7 @@ func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAP
 		blockData[p] = seed
 	}
 
-	storedBlock, errno := longtaillib.CreateStoredBlock(
+	return longtaillib.CreateStoredBlock(
 		uint64(seed)+21412151,
 		997,
 		2,
@@ -123,6 +124,10 @@ func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAP
 		chunkSizes,
 		blockData,
 		false)
+}
+
+func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (uint64, int) {
+	storedBlock, errno := generateStoredBlock(t, seed)
 	if errno != 0 {
 		return 0, errno
 	}
@@ -178,7 +183,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -213,7 +218,7 @@ func TestGetExistingContent(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -259,7 +264,7 @@ func TestRestoreStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -285,7 +290,7 @@ func TestRestoreStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -333,7 +338,7 @@ func TestRestoreStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		false)
+		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
@@ -355,4 +360,101 @@ func TestRestoreStore(t *testing.T) {
 	}
 	existingContent.Dispose()
 	storeAPI.Dispose()
+}
+
+func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (longtaillib.Longtail_StoredBlock, int) {
+	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
+	chunkHashes := make([]uint64, chunkCount)
+	chunkSizes := make([]uint32, chunkCount)
+	blockOffset := uint32(0)
+	for index, _ := range chunkHashes {
+		chunkHashes[index] = uint64(index+1) * 4711
+		chunkSizes[index] = uint32(index+1) * 10
+		blockOffset += uint32(chunkSizes[index])
+	}
+	blockData := make([]uint8, blockOffset)
+	blockOffset = 0
+	for chunkIndex, _ := range chunkHashes {
+		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
+			blockData[blockOffset+index] = uint8(chunkIndex + 1)
+		}
+		blockOffset += uint32(chunkSizes[chunkIndex])
+	}
+
+	return longtaillib.CreateStoredBlock(
+		blockHash,
+		hashIdentifier,
+		chunkCount+uint32(10000),
+		chunkHashes,
+		chunkSizes,
+		blockData,
+		false)
+}
+
+func storeBlock(blobClient BlobClient, storedBlock longtaillib.Longtail_StoredBlock, blockHashOffset uint64, parentPath string) uint64 {
+	bytes, _ := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+	blockIndex := storedBlock.GetBlockIndex()
+	storedBlockHash := blockIndex.GetBlockHash() + blockHashOffset
+	path := GetBlockPath("chunks", storedBlockHash)
+	if len(parentPath) > 0 {
+		path = parentPath + "/" + path
+	}
+	blobObject, _ := blobClient.NewObject(path)
+	blobObject.Write(bytes)
+	return storedBlockHash
+}
+
+func TestBlockScanning(t *testing.T) {
+	// Create stored blocks
+	// Create/move stored blocks to faulty path
+	// Scan and make sure we only get the blocks in the currect path
+	blobStore, _ := NewTestBlobStore("")
+	blobClient, _ := blobStore.NewClient(context.Background())
+
+	goodBlockInCorrectPath, _ := generateStoredBlock(t, 7)
+	goodBlockInCorrectPathHash := storeBlock(blobClient, goodBlockInCorrectPath, 0, "")
+
+	badBlockInCorrectPath, _ := generateStoredBlock(t, 14)
+	badBlockInCorrectPathHash := storeBlock(blobClient, badBlockInCorrectPath, 1, "")
+
+	goodBlockInBadPath, _ := generateStoredBlock(t, 21)
+	goodBlockInBadPathHash := storeBlock(blobClient, goodBlockInBadPath, 0, "chunks")
+
+	badBlockInBatPath, _ := generateStoredBlock(t, 33)
+	badBlockInBatPathHash := storeBlock(blobClient, badBlockInBatPath, 2, "chunks")
+
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobs.Dispose()
+	remoteStore, err := NewRemoteBlockStore(
+		jobs,
+		blobStore,
+		8192,
+		128,
+		Init)
+	if err != nil {
+		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
+	}
+	storeAPI := longtaillib.CreateBlockStoreAPI(remoteStore)
+	defer storeAPI.Dispose()
+
+	b, errno := fetchBlockFromStore(t, storeAPI, goodBlockInCorrectPathHash)
+	if errno != 0 {
+		t.Errorf("TestBlockScanning() fetchBlockFromStore(t, storeAPI, goodBlockInCorrectPathHash) %d != %d", errno, 0)
+	}
+	b.Dispose()
+
+	_, errno = fetchBlockFromStore(t, storeAPI, badBlockInCorrectPathHash)
+	if errno != longtaillib.EBADF {
+		t.Errorf("TestBlockScanning() fetchBlockFromStore(t, storeAPI, badBlockInCorrectPathHash) %d != %d", errno, longtaillib.ENOENT)
+	}
+
+	_, errno = fetchBlockFromStore(t, storeAPI, goodBlockInBadPathHash)
+	if errno != longtaillib.ENOENT {
+		t.Errorf("TestBlockScanning() fetchBlockFromStore(t, storeAPI, goodBlockInBadPathHash) %d != %d", errno, longtaillib.ENOENT)
+	}
+
+	_, errno = fetchBlockFromStore(t, storeAPI, badBlockInBatPathHash)
+	if errno != longtaillib.ENOENT {
+		t.Errorf("TestBlockScanning() fetchBlockFromStore(t, storeAPI, badBlockInBatPathHash) %d != %d", errno, longtaillib.ENOENT)
+	}
 }

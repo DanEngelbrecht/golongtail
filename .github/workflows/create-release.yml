@@ -117,6 +117,9 @@ jobs:
         body: |
           Changes in this Release
           - **UPDATE** Update to longtail 0.1.8
+          - **ADD** `Longtail_ContentIndex.GetChunkHashes()`
+          - **FIXED** Fetching a block from a remote store with block hash not matching stored path returns bad format
+          - **FIXED** Failing block fetch due to bad format increases `Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount` stat
         draft: false
         prerelease: false
     - name: Download Linux artifacts

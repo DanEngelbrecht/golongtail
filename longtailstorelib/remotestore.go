@@ -570,7 +570,7 @@ func getStoreIndexFromBlocks(
 		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 
-	batchCount := 1 //runtime.NumCPU()
+	batchCount := runtime.NumCPU()
 	batchStart := 0
 
 	if batchCount > len(blockKeys) {

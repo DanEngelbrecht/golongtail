@@ -23,6 +23,9 @@ jobs:
           pushd ./longtaillib
           go test .
           popd
+          pushd ./longtailstorelib
+          go test .
+          popd
 
       - name: build cmd
         run: |
@@ -48,6 +51,9 @@ jobs:
           pushd ./longtaillib
           go test .
           popd
+          pushd ./longtailstorelib
+          go test .
+          popd
 
       - name: build cmd
         run: |
@@ -71,6 +77,9 @@ jobs:
       - name: test
         run: |
           pushd ./longtaillib
+          go test .
+          popd
+          pushd ./longtailstorelib
           go test .
           popd
 

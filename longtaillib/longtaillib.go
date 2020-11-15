@@ -676,6 +676,11 @@ func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
 	return carray2slice64(C.Longtail_ContentIndex_BlockHashes(contentIndex.cContentIndex), size)
 }
 
+func (contentIndex *Longtail_ContentIndex) GetChunkHashes() []uint64 {
+	size := int(*contentIndex.cContentIndex.m_ChunkCount)
+	return carray2slice64(contentIndex.cContentIndex.m_ChunkHashes, size)
+}
+
 func (storeIndex *Longtail_StoreIndex) IsValid() bool {
 	return storeIndex.cStoreIndex != nil
 }

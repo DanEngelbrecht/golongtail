@@ -209,6 +209,16 @@ func TestPutGetStoredBlock(t *testing.T) {
 	defer storeAPI.Dispose()
 }
 
+type flushCompletionAPI struct {
+	wg  sync.WaitGroup
+	err int
+}
+
+func (a *flushCompletionAPI) OnComplete(err int) {
+	a.err = err
+	a.wg.Done()
+}
+
 func TestGetExistingContent(t *testing.T) {
 	blobStore, _ := NewTestBlobStore("the_path")
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
@@ -237,8 +247,25 @@ func TestGetExistingContent(t *testing.T) {
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
 	}
+	_, errno = storeBlockFromSeed(t, storeAPI, 30)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	_, errno = storeBlockFromSeed(t, storeAPI, 40)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	_, errno = storeBlockFromSeed(t, storeAPI, 50)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
 
-	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3}
+	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(20) + 1, uint64(20) + 2, uint64(30) + 2, uint64(30) + 3, uint64(40) + 1, uint64(40) + 3, uint64(50) + 1}
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	_ = remoteStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	remoteStoreFlushComplete.wg.Wait()
 
 	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
 	defer existingContent.Dispose()
@@ -246,12 +273,12 @@ func TestGetExistingContent(t *testing.T) {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}
 
-	if existingContent.GetBlockCount() != 2 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 2)
+	if existingContent.GetBlockCount() != 6 {
+		t.Errorf("TestEmptyGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 6)
 	}
 
-	if existingContent.GetChunkCount() != 4 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 4)
+	if existingContent.GetChunkCount() != 11 {
+		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 10)
 	}
 }
 

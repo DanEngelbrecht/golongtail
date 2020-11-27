@@ -120,16 +120,17 @@ func (blobObject *gcsBlobObject) Read() ([]byte, error) {
 }
 
 func (blobObject *gcsBlobObject) LockWriteVersion() (bool, error) {
-	blobObject.writeCondition = &storage.Conditions{DoesNotExist: true}
 	objAttrs, err := blobObject.objHandle.Attrs(blobObject.ctx)
+	if err == nil {
+		blobObject.writeCondition = &storage.Conditions{MetagenerationMatch: objAttrs.Metageneration, DoesNotExist: false}
+
+		return true, nil
+	}
 	if err == storage.ErrObjectNotExist {
+		blobObject.writeCondition = &storage.Conditions{DoesNotExist: true}
 		return false, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	blobObject.writeCondition = &storage.Conditions{MetagenerationMatch: objAttrs.Metageneration, DoesNotExist: false}
-	return true, nil
+	return false, err
 }
 
 func (blobObject *gcsBlobObject) Exists() (bool, error) {
@@ -144,29 +145,24 @@ func (blobObject *gcsBlobObject) Exists() (bool, error) {
 }
 
 func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
+	var writer storage.Writer
 	if blobObject.writeCondition == nil {
 		writer := blobObject.objHandle.NewWriter(blobObject.ctx)
-		_, err := writer.Write(data)
-		err2 := writer.Close()
-		if err != nil {
-			return false, errors.Wrap(err, blobObject.path)
-		}
-		if err2 != nil {
-			return false, errors.Wrap(err2, blobObject.path)
-		}
 	} else {
 		writer := blobObject.objHandle.If(*blobObject.writeCondition).NewWriter(blobObject.ctx)
-		_, err := writer.Write(data)
-		err2 := writer.Close()
-		if err != nil {
-			return false, errors.Wrap(err, blobObject.path)
-		}
-		if e, ok := err2.(*googleapi.Error); ok && e.Code == 412 {
-			return false, nil
-		} else if err2 != nil {
-			return false, err2
-		}
 	}
+
+	_, err := writer.Write(data)
+	err2 := writer.Close()
+	if err != nil {
+		return false, errors.Wrap(err, blobObject.path)
+	}
+	if e, ok := err2.(*googleapi.Error); ok && e.Code == 412 {
+		return false, nil
+	} else if err2 != nil {
+		return false, err2
+	}
+
 	_, err := blobObject.objHandle.Update(blobObject.ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 	if err != nil {
 		return true, err

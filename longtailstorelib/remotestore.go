@@ -372,24 +372,16 @@ func remoteWorker(
 			} else {
 				run = false
 			}
-		case getMsg, more := <-getBlockMessages:
-			if more {
-				received += 1
-				fetchBlock(ctx, s, client, getMsg)
-			} else {
-				run = false
-			}
+		case getMsg := <-getBlockMessages:
+			received += 1
+			fetchBlock(ctx, s, client, getMsg)
 		default:
 		}
 		if received == 0 {
 			if s.prefetchMemory < s.maxPrefetchMemory {
 				select {
-				case _, more := <-flushMessages:
-					if more {
-						flushReplyMessages <- 0
-					} else {
-						run = false
-					}
+				case _ = <-flushMessages:
+					flushReplyMessages <- 0
 				case putMsg, more := <-putBlockMessages:
 					if more {
 						if accessType == ReadOnly {
@@ -401,27 +393,15 @@ func remoteWorker(
 					} else {
 						run = false
 					}
-				case getMsg, more := <-getBlockMessages:
-					if more {
-						fetchBlock(ctx, s, client, getMsg)
-					} else {
-						run = false
-					}
-				case prefetchMsg, more := <-prefetchBlockChan:
-					if more {
-						prefetchBlock(ctx, s, client, prefetchMsg)
-					} else {
-						run = false
-					}
+				case getMsg := <-getBlockMessages:
+					fetchBlock(ctx, s, client, getMsg)
+				case prefetchMsg := <-prefetchBlockChan:
+					prefetchBlock(ctx, s, client, prefetchMsg)
 				}
 			} else {
 				select {
-				case _, more := <-flushMessages:
-					if more {
-						flushReplyMessages <- 0
-					} else {
-						run = false
-					}
+				case _ = <-flushMessages:
+					flushReplyMessages <- 0
 				case putMsg, more := <-putBlockMessages:
 					if more {
 						if accessType == ReadOnly {
@@ -433,12 +413,8 @@ func remoteWorker(
 					} else {
 						run = false
 					}
-				case getMsg, more := <-getBlockMessages:
-					if more {
-						fetchBlock(ctx, s, client, getMsg)
-					} else {
-						run = false
-					}
+				case getMsg := <-getBlockMessages:
+					fetchBlock(ctx, s, client, getMsg)
 				}
 			}
 		}
@@ -711,22 +687,14 @@ func storeIndexWorkerReplyErrorState(
 	flushReplyMessages chan<- int) {
 	for {
 		select {
-		case _, more := <-flushMessages:
-			if more {
-				flushReplyMessages <- 0
-			} else {
-				return
-			}
+		case _ = <-flushMessages:
+			flushReplyMessages <- 0
 		case _, more := <-blockIndexMessages:
 			if !more {
 				return
 			}
-		case getExistingContentMessage, more := <-getExistingContentMessages:
-			if more {
-				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
-			} else {
-				return
-			}
+		case getExistingContentMessage := <-getExistingContentMessages:
+			getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
 		}
 	}
 }
@@ -932,9 +900,52 @@ func contentIndexWorker(
 	for run {
 		received := 0
 		select {
-		case preflightGetMsg, more := <-preflightGetMessages:
+		case preflightGetMsg := <-preflightGetMessages:
+			received += 1
+			if len(addedBlockIndexes) > 0 {
+				updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
+				if err != nil {
+					log.Printf("WARNING: Failed to update store index with added blocks %v", err)
+					continue
+				}
+				storeIndex.Dispose()
+				storeIndex = updatedStoreIndex
+				saveStoreIndex = true
+				saveStoreContentIndex = storeContentIndex.IsValid()
+				addedBlockIndexes = nil
+			}
+			onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
+		case blockIndexMsg, more := <-blockIndexMessages:
 			if more {
 				received += 1
+				addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
+			} else {
+				run = false
+			}
+		case getExistingContentMessage := <-getExistingContentMessages:
+			received += 1
+			if len(addedBlockIndexes) > 0 {
+				updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
+				if err != nil {
+					log.Printf("WARNING: Failed to update store index with added blocks %v", err)
+					getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+					continue
+				}
+				storeIndex.Dispose()
+				storeIndex = updatedStoreIndex
+				saveStoreIndex = true
+				saveStoreContentIndex = storeContentIndex.IsValid()
+				addedBlockIndexes = nil
+			}
+			onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
+		default:
+		}
+
+		if received == 0 {
+			select {
+			case _ = <-flushMessages:
+				flushReplyMessages <- 0
+			case preflightGetMsg := <-preflightGetMessages:
 				if len(addedBlockIndexes) > 0 {
 					updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
 					if err != nil {
@@ -948,19 +959,13 @@ func contentIndexWorker(
 					addedBlockIndexes = nil
 				}
 				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
-			} else {
-				run = false
-			}
-		case blockIndexMsg, more := <-blockIndexMessages:
-			if more {
-				received += 1
-				addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
-			} else {
-				run = false
-			}
-		case getExistingContentMessage, more := <-getExistingContentMessages:
-			if more {
-				received += 1
+			case blockIndexMsg, more := <-blockIndexMessages:
+				if more {
+					addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
+				} else {
+					run = false
+				}
+			case getExistingContentMessage := <-getExistingContentMessages:
 				if len(addedBlockIndexes) > 0 {
 					updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
 					if err != nil {
@@ -975,63 +980,6 @@ func contentIndexWorker(
 					addedBlockIndexes = nil
 				}
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
-			} else {
-				run = false
-			}
-		default:
-		}
-
-		if received == 0 {
-			select {
-			case _, more := <-flushMessages:
-				if more {
-					flushReplyMessages <- 0
-				} else {
-					run = false
-				}
-			case preflightGetMsg, more := <-preflightGetMessages:
-				if more {
-					if len(addedBlockIndexes) > 0 {
-						updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
-						if err != nil {
-							log.Printf("WARNING: Failed to update store index with added blocks %v", err)
-							continue
-						}
-						storeIndex.Dispose()
-						storeIndex = updatedStoreIndex
-						saveStoreIndex = true
-						saveStoreContentIndex = storeContentIndex.IsValid()
-						addedBlockIndexes = nil
-					}
-					onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
-				} else {
-					run = false
-				}
-			case blockIndexMsg, more := <-blockIndexMessages:
-				if more {
-					addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
-				} else {
-					run = false
-				}
-			case getExistingContentMessage, more := <-getExistingContentMessages:
-				if more {
-					if len(addedBlockIndexes) > 0 {
-						updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
-						if err != nil {
-							log.Printf("WARNING: Failed to update store index with added blocks %v", err)
-							getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
-							continue
-						}
-						storeIndex.Dispose()
-						storeIndex = updatedStoreIndex
-						saveStoreIndex = true
-						saveStoreContentIndex = storeContentIndex.IsValid()
-						addedBlockIndexes = nil
-					}
-					onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
-				} else {
-					run = false
-				}
 			}
 		}
 	}
@@ -1239,9 +1187,6 @@ func (s *remoteStore) Flush(asyncCompleteAPI longtaillib.Longtail_AsyncFlushAPI)
 // Close ...
 func (s *remoteStore) Close() {
 	close(s.putBlockChan)
-	close(s.getBlockChan)
-	close(s.prefetchBlockChan)
-	close(s.workerFlushChan)
 	for i := 0; i < s.workerCount; i++ {
 		select {
 		case err := <-s.workerErrorChan:
@@ -1251,9 +1196,6 @@ func (s *remoteStore) Close() {
 		}
 	}
 	close(s.blockIndexChan)
-	close(s.getExistingContentChan)
-	close(s.indexFlushChan)
-	close(s.preflightGetChan)
 	select {
 	case err := <-s.workerErrorChan:
 		if err != nil {

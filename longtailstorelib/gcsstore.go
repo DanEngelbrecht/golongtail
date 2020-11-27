@@ -145,11 +145,11 @@ func (blobObject *gcsBlobObject) Exists() (bool, error) {
 }
 
 func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
-	var writer storage.Writer
+	var writer *storage.Writer
 	if blobObject.writeCondition == nil {
-		writer := blobObject.objHandle.NewWriter(blobObject.ctx)
+		writer = blobObject.objHandle.NewWriter(blobObject.ctx)
 	} else {
-		writer := blobObject.objHandle.If(*blobObject.writeCondition).NewWriter(blobObject.ctx)
+		writer = blobObject.objHandle.If(*blobObject.writeCondition).NewWriter(blobObject.ctx)
 	}
 
 	_, err := writer.Write(data)
@@ -163,7 +163,7 @@ func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
 		return false, err2
 	}
 
-	_, err := blobObject.objHandle.Update(blobObject.ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
+	_, err = blobObject.objHandle.Update(blobObject.ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 	if err != nil {
 		return true, err
 	}

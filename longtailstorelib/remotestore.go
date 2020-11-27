@@ -987,18 +987,7 @@ func contentIndexWorker(
 	if accessType == ReadOnly {
 		return nil
 	}
-	/*
-		for {
-			select {
-			case blockIndexMsg, isChannelOpen := <-blockIndexMessages:
-				if !isChannelOpen {
-					// ?? Does break break out of the for loop or just this select statement?
-					break
-				}
-				addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
-			}
-		}
-	*/
+
 	if len(addedBlockIndexes) > 0 {
 		updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
 		if err != nil {

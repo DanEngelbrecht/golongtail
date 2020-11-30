@@ -422,11 +422,59 @@ func remoteWorker(
 	return nil
 }
 
+func tryUpdateRemoteStoreIndex(
+	ctx context.Context,
+	updatedStoreIndex longtaillib.Longtail_StoreIndex,
+	objHandle BlobObject) (bool, error) {
+
+	exists, err := objHandle.LockWriteVersion()
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		blob, err := objHandle.Read()
+		if err != nil {
+			return false, errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Read() failed")
+		}
+
+		remoteStoreIndex, errno := longtaillib.ReadStoreIndexFromBuffer(blob)
+		if errno != 0 {
+			return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "updateRemoteStoreIndex: longtaillib.ReadStoreIndexFromBuffer() failed")
+		}
+		defer remoteStoreIndex.Dispose()
+
+		newStoreIndex, errno := longtaillib.MergeStoreIndex(updatedStoreIndex, remoteStoreIndex)
+		if errno != 0 {
+			return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: longtaillib.MergeStoreIndex() failed")
+		}
+		defer newStoreIndex.Dispose()
+
+		storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(newStoreIndex)
+		if errno != 0 {
+			return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: longtaillib.WriteStoreIndexToBuffer() kfailed")
+		}
+
+		ok, err := objHandle.Write(storeBlob)
+		if err != nil {
+			return false, errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Write() failed")
+		}
+		return ok, nil
+	}
+	storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(updatedStoreIndex)
+	if errno != 0 {
+		return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: WriteStoreIndexToBuffer() failed")
+	}
+
+	ok, err := objHandle.Write(storeBlob)
+	if err != nil {
+		return false, errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Write() failed")
+	}
+	return ok, nil
+}
+
 func updateRemoteStoreIndex(
 	ctx context.Context,
 	blobClient BlobClient,
-	//	prefix string,
-	jobAPI longtaillib.Longtail_JobAPI,
 	updatedStoreIndex longtaillib.Longtail_StoreIndex) error {
 
 	key := "store.lsi"
@@ -435,64 +483,74 @@ func updateRemoteStoreIndex(
 		return errors.Wrapf(err, "updateRemoteStoreIndex: blobClient.NewObject(%s) failed", key)
 	}
 	for {
-		exists, err := objHandle.LockWriteVersion()
+		ok, err := tryUpdateRemoteStoreIndex(
+			ctx,
+			updatedStoreIndex,
+			objHandle)
+		if ok {
+			return nil
+		}
 		if err != nil {
-			return errors.Wrap(err, key)
+			return errors.Wrapf(err, "updateRemoteStoreIndex: tryUpdateRemoteStoreIndex(%s) failed", key)
 		}
-		if exists {
-			blob, err := objHandle.Read()
-			if err != nil {
-				return errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Read() key %s failed", key)
-			}
-
-			remoteStoreIndex, errno := longtaillib.ReadStoreIndexFromBuffer(blob)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "updateRemoteStoreIndex: longtaillib.ReadStoreIndexFromBuffer() key %s failed", key)
-			}
-			defer remoteStoreIndex.Dispose()
-
-			newStoreIndex, errno := longtaillib.MergeStoreIndex(updatedStoreIndex, remoteStoreIndex)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: longtaillib.MergeStoreIndex() key %s failed", key)
-			}
-			defer newStoreIndex.Dispose()
-
-			storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(newStoreIndex)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: longtaillib.WriteStoreIndexToBuffer() key %s failed", key)
-			}
-
-			ok, err := objHandle.Write(storeBlob)
-			if err != nil {
-				return errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Write() key %s failed", key)
-			}
-			if ok {
-				break
-			}
-			// Add log for retrying
-		} else {
-			storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(updatedStoreIndex)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: WriteStoreIndexToBuffer() %s failed", key)
-			}
-
-			ok, err := objHandle.Write(storeBlob)
-			if err != nil {
-				return errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Write() %s failed", key)
-			}
-			if ok {
-				break
-			}
-			// Add log for retrying
-		}
+		log.Printf("Retrying updating remote store index %s\n", key)
 	}
 	return nil
+}
+
+func tryUpdateRemoteContentIndex(
+	ctx context.Context,
+	jobAPI longtaillib.Longtail_JobAPI,
+	updatedContentIndex longtaillib.Longtail_ContentIndex,
+	objHandle BlobObject) (bool, error) {
+	exists, err := objHandle.LockWriteVersion()
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		blob, err := objHandle.Read()
+		if err != nil {
+			return false, err
+		}
+
+		remoteContentIndex, errno := longtaillib.ReadContentIndexFromBuffer(blob)
+		if errno != 0 {
+			return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "updateRemoteContentIndex: longtaillib.ReadContentIndexFromBuffer() failed")
+		}
+		defer remoteContentIndex.Dispose()
+
+		newContentIndex, errno := longtaillib.MergeContentIndex(jobAPI, remoteContentIndex, updatedContentIndex)
+		if errno != 0 {
+			return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteContentIndex: longtaillib.MergeContentIndex() failed")
+		}
+		defer newContentIndex.Dispose()
+
+		storeBlob, errno := longtaillib.WriteContentIndexToBuffer(newContentIndex)
+		if errno != 0 {
+			return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer() failed")
+		}
+
+		ok, err := objHandle.Write(storeBlob)
+		if err != nil {
+			return false, errors.Wrapf(err, "updateRemoteContentIndex: objHandle.Write() failed")
+		}
+		return ok, nil
+	}
+	storeBlob, errno := longtaillib.WriteContentIndexToBuffer(updatedContentIndex)
+	if errno != 0 {
+		return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteContentIndex: WriteContentIndexToBuffer() failed")
+	}
+
+	ok, err := objHandle.Write(storeBlob)
+	if err != nil {
+		return false, errors.Wrapf(err, "updateRemoteContentIndex: objHandle.Write() failed")
+	}
+	return ok, nil
 }
 
 func updateRemoteContentIndex(
 	ctx context.Context,
 	blobClient BlobClient,
-	//	prefix string,
 	jobAPI longtaillib.Longtail_JobAPI,
 	updatedContentIndex longtaillib.Longtail_ContentIndex) error {
 
@@ -502,54 +560,18 @@ func updateRemoteContentIndex(
 		return errors.Wrapf(err, "updateRemoteContentIndex: blobClient.NewObject(%s) failed", key)
 	}
 	for {
-		exists, err := objHandle.LockWriteVersion()
+		ok, err := tryUpdateRemoteContentIndex(
+			ctx,
+			jobAPI,
+			updatedContentIndex,
+			objHandle)
+		if ok {
+			return nil
+		}
 		if err != nil {
-			return errors.Wrap(err, key)
+			return errors.Wrapf(err, "updateRemoteStoreIndex: tryUpdateRemoteStoreIndex(%s) failed", key)
 		}
-		if exists {
-			blob, err := objHandle.Read()
-			if err != nil {
-				return errors.Wrapf(err, "updateRemoteContentIndex: objHandle.Read() key %s failed", key)
-			}
-
-			remoteContentIndex, errno := longtaillib.ReadContentIndexFromBuffer(blob)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "updateRemoteContentIndex: longtaillib.ReadContentIndexFromBuffer() key %s failed", key)
-			}
-			defer remoteContentIndex.Dispose()
-
-			newContentIndex, errno := longtaillib.MergeContentIndex(jobAPI, remoteContentIndex, updatedContentIndex)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteContentIndex: longtaillib.MergeContentIndex() key %s failed", key)
-			}
-			defer newContentIndex.Dispose()
-
-			storeBlob, errno := longtaillib.WriteContentIndexToBuffer(newContentIndex)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteContentIndex: longtaillib.WriteContentIndexToBuffer() key %s failed", key)
-			}
-
-			ok, err := objHandle.Write(storeBlob)
-			if err != nil {
-				return errors.Wrapf(err, "updateRemoteContentIndex: objHandle.Write() key %s failed", key)
-			}
-			if ok {
-				break
-			}
-		} else {
-			storeBlob, errno := longtaillib.WriteContentIndexToBuffer(updatedContentIndex)
-			if errno != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteContentIndex: WriteContentIndexToBuffer() %s failed", key)
-			}
-
-			ok, err := objHandle.Write(storeBlob)
-			if err != nil {
-				return errors.Wrapf(err, "updateRemoteContentIndex: objHandle.Write() %s failed", key)
-			}
-			if ok {
-				break
-			}
-		}
+		log.Printf("Retrying updating remote content index %s\n", key)
 	}
 	return nil
 }
@@ -844,7 +866,7 @@ func contentIndexWorker(
 				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
 			}
 			log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
-			err := updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
+			err := updateRemoteStoreIndex(ctx, client, storeIndex)
 			if err != nil {
 				log.Printf("Failed to update store index in store %s\n", s.String())
 				saveStoreIndex = true
@@ -1001,20 +1023,20 @@ func contentIndexWorker(
 	}
 
 	if saveStoreIndex {
-		err := updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
+		err := updateRemoteStoreIndex(ctx, client, storeIndex)
 		if err != nil {
 			log.Printf("Retrying store index in store %s\n", s.String())
-			err = updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
+			err = updateRemoteStoreIndex(ctx, client, storeIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 500 ms delayed store index in store %s\n", s.String())
 			time.Sleep(500 * time.Millisecond)
-			err = updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
+			err = updateRemoteStoreIndex(ctx, client, storeIndex)
 		}
 		if err != nil {
 			log.Printf("Retrying 2 s delayed store index in store %s\n", s.String())
 			time.Sleep(2 * time.Second)
-			err = updateRemoteStoreIndex(ctx, client, s.jobAPI, storeIndex)
+			err = updateRemoteStoreIndex(ctx, client, storeIndex)
 		}
 
 		if err != nil {

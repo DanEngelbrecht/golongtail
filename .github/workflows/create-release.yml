@@ -116,10 +116,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **UPDATE** Update to longtail 0.1.8
-          - **ADD** `Longtail_ContentIndex.GetChunkHashes()`
-          - **FIXED** Fetching a block from a remote store with block hash not matching stored path returns bad format
-          - **FIXED** Failing block fetch due to bad format increases `Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount` stat
+          - **FIXED** Use close() on channels to detect end of message stream, this fixes problems with blocks missing in gcs store index
+          - **FIXED** remotestore.go - updateRemoteContentIndex and updateRemoteStoreIndex no longer leaks memory on retry
+          - **ADDED** remotestore.go - log when retrying store index updates
         draft: false
         prerelease: false
     - name: Download Linux artifacts

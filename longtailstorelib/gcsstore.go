@@ -133,7 +133,7 @@ func (blobObject *gcsBlobObject) LockWriteVersion() (bool, error) {
 		return false, err
 	}
 
-	blobObject.writeCondition = &storage.Conditions{MetagenerationMatch: objAttrs.Metageneration, DoesNotExist: false}
+	blobObject.writeCondition = &storage.Conditions{GenerationMatch: objAttrs.Generation, DoesNotExist: false}
 	return true, nil
 }
 

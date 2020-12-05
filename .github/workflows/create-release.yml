@@ -116,9 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **FIXED** Use close() on channels to detect end of message stream, this fixes problems with blocks missing in gcs store index
-          - **FIXED** remotestore.go - updateRemoteContentIndex and updateRemoteStoreIndex no longer leaks memory on retry
-          - **ADDED** remotestore.go - log when retrying store index updates
+          - **FIXED** Use Generation when locking file versions in GCS instead of Metageneration
         draft: false
         prerelease: false
     - name: Download Linux artifacts

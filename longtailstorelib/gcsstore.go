@@ -35,6 +35,7 @@ type gcsBlobObject struct {
 const (
 	// If the meta generation changes between our lock and write/close we get a gcs error with code 412
 	writeConditionFailed = 412
+	rateLimitExceeded    = 429
 )
 
 // NewGCSBlobStore ...
@@ -161,8 +162,13 @@ func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
 	if err != nil {
 		return false, errors.Wrap(err, blobObject.path)
 	}
-	if e, ok := err2.(*googleapi.Error); ok && e.Code == writeConditionFailed {
-		return false, nil
+	if e, ok := err2.(*googleapi.Error); ok {
+		if e.Code == writeConditionFailed {
+			return false, nil
+		} else if e.Code == rateLimitExceeded {
+			return false, nil
+		}
+		return false, err2
 	} else if err2 != nil {
 		return false, err2
 	}

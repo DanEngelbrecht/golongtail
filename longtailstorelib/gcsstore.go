@@ -163,9 +163,7 @@ func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
 		return false, errors.Wrap(err, blobObject.path)
 	}
 	if e, ok := err2.(*googleapi.Error); ok {
-		if e.Code == writeConditionFailed {
-			return false, nil
-		} else if e.Code == rateLimitExceeded {
+		if e.Code == writeConditionFailed || e.Code == rateLimitExceeded {
 			return false, nil
 		}
 		return false, err2

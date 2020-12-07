@@ -14,8 +14,9 @@ import (
 )
 
 func TestGCSBlobStore(t *testing.T) {
-	// This test uses hardcoded paths and is disabled
-	return
+	// This test uses hardcoded paths in gcs and is disabled
+	t.Skip()
+
 	u, err := url.Parse("gs://longtail-storage/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
@@ -42,8 +43,9 @@ func TestGCSBlobStore(t *testing.T) {
 }
 
 func TestGCSBlobStoreVersioning(t *testing.T) {
-	// This test uses hardcoded paths and is disabled
-	return
+	// This test uses hardcoded paths in gcs and is disabled
+	t.Skip()
+
 	u, err := url.Parse("gs://longtail-storage/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
@@ -147,8 +149,9 @@ func writeANumberWithRetry(number int, blobStore BlobStore) error {
 }
 
 func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
-	// This test uses hardcoded paths and is disabled
-	return
+	// This test uses hardcoded paths in gcs and is disabled
+	t.Skip()
+
 	u, err := url.Parse("gs://longtail-storage/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)

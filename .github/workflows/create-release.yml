@@ -117,6 +117,7 @@ jobs:
         body: |
           Changes in this Release
           - **FIXED** Use GenerationMatch instead of MetagenerationMatch in GCS to fix store index from loosing content
+          - **FIXED** Fixed broken logging formatting
           - **CHANGED** Refactored scanning of folders/reading index more async
           - **ADDED** Added time stats in upsync and downsync commands
         draft: false

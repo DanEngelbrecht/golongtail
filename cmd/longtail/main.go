@@ -54,7 +54,7 @@ func parseLevel(lvl string) (int, error) {
 		return 4, nil
 	}
 
-	return -1, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EIO, longtaillib.ErrEIO), "not a valid log Level: %d", lvl)
+	return -1, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EIO, longtaillib.ErrEIO), "not a valid log Level: %s", lvl)
 }
 
 func normalizePath(path string) string {
@@ -517,7 +517,7 @@ func getFolderIndex(
 	var errno int
 	vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", sourceIndexPath)
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", *sourceIndexPath)
 	}
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
@@ -982,7 +982,7 @@ func downSyncVersion(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", localCachePath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -990,7 +990,7 @@ func downSyncVersion(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", localCachePath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -1290,7 +1290,7 @@ func showContentIndex(contentIndexPath string, compact bool) error {
 	defer contentIndex.Dispose()
 
 	if compact {
-		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
+		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\n",
 			contentIndexPath,
 			contentIndex.GetVersion(),
 			hashIdentifierToString(contentIndex.GetHashIdentifier()),
@@ -1582,7 +1582,7 @@ func cpVersionIndex(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", localCachePath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -1590,7 +1590,7 @@ func cpVersionIndex(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", localCachePath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -1710,7 +1710,7 @@ func initRemoteStore(
 	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	if errno != 0 {
 		remoteStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed with with %s", blobStoreURI)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	remoteStoreFlushComplete.wg.Wait()
@@ -1939,7 +1939,7 @@ func stats(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", localCachePath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -1947,7 +1947,7 @@ func stats(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", localCachePath)
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}

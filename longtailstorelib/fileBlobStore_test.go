@@ -8,7 +8,8 @@ import (
 
 func TestFSBlobStore(t *testing.T) {
 	// This test uses hardcoded paths and is disabled
-	return
+	t.Skip()
+
 	blobStore, err := NewFSBlobStore("C:\\Temp\\fsblobstore")
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %q", err)

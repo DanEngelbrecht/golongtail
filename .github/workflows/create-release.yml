@@ -116,7 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **FIXED** Use Generation when locking file versions in GCS instead of Metageneration
+          - **FIXED** Use GenerationMatch instead of MetagenerationMatch in GCS to fix store index from loosing content
         draft: false
         prerelease: false
     - name: Download Linux artifacts

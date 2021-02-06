@@ -437,6 +437,7 @@ func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
 type asyncFolderScanner struct {
 	wg        sync.WaitGroup
 	fileInfos longtaillib.Longtail_FileInfos
+	elapsed   time.Duration
 	err       error
 }
 
@@ -447,6 +448,7 @@ func (scanner *asyncFolderScanner) scan(
 
 	scanner.wg.Add(1)
 	go func() {
+		startTime := time.Now()
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
@@ -455,13 +457,14 @@ func (scanner *asyncFolderScanner) scan(
 			scanner.err = errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.GetFilesRecursively(%s) failed", sourceFolderPath)
 		}
 		scanner.fileInfos = fileInfos
+		scanner.elapsed = time.Since(startTime)
 		scanner.wg.Done()
 	}()
 }
 
-func (scanner *asyncFolderScanner) get() (longtaillib.Longtail_FileInfos, error) {
+func (scanner *asyncFolderScanner) get() (longtaillib.Longtail_FileInfos, time.Duration, error) {
 	scanner.wg.Wait()
-	return scanner.fileInfos, scanner.err
+	return scanner.fileInfos, scanner.elapsed, scanner.err
 }
 
 func getFolderIndex(
@@ -474,19 +477,21 @@ func getFolderIndex(
 	fs longtaillib.Longtail_StorageAPI,
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
-	scanner *asyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, error) {
+	scanner *asyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
-		fileInfos, err := scanner.get()
+		fileInfos, scanTime, err := scanner.get()
 		if err != nil {
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, err
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime, err
 		}
 		defer fileInfos.Dispose()
+
+		startTime := time.Now()
 
 		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
 
 		hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
 		}
 
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
@@ -505,31 +510,36 @@ func getFolderIndex(
 			compressionTypes,
 			targetChunkSize)
 		if errno != 0 {
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.CreateVersionIndex(%s)", sourceFolderPath)
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.CreateVersionIndex(%s)", sourceFolderPath)
 		}
-		return vindex, hash, nil
+
+		return vindex, hash, scanTime + time.Since(startTime), nil
 	}
+	startTime := time.Now()
+
 	vbuffer, err := readFromURI(*sourceIndexPath)
 	if err != nil {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, err
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
 	}
 	var errno int
 	vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", *sourceIndexPath)
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", *sourceIndexPath)
 	}
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
 	}
-	return vindex, hash, nil
+
+	return vindex, hash, time.Since(startTime), nil
 }
 
 type asyncVersionIndexReader struct {
 	wg           sync.WaitGroup
 	versionIndex longtaillib.Longtail_VersionIndex
 	hashAPI      longtaillib.Longtail_HashAPI
+	elapsedTime  time.Duration
 	err          error
 }
 
@@ -546,7 +556,7 @@ func (indexReader *asyncVersionIndexReader) read(
 	scanner *asyncFolderScanner) {
 	indexReader.wg.Add(1)
 	go func() {
-		indexReader.versionIndex, indexReader.hashAPI, indexReader.err = getFolderIndex(
+		indexReader.versionIndex, indexReader.hashAPI, indexReader.elapsedTime, indexReader.err = getFolderIndex(
 			sourceFolderPath,
 			sourceIndexPath,
 			targetChunkSize,
@@ -561,9 +571,9 @@ func (indexReader *asyncVersionIndexReader) read(
 	}()
 }
 
-func (scanner *asyncVersionIndexReader) get() (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, error) {
-	scanner.wg.Wait()
-	return scanner.versionIndex, scanner.hashAPI, scanner.err
+func (indexReader *asyncVersionIndexReader) get() (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
+	indexReader.wg.Wait()
+	return indexReader.versionIndex, indexReader.hashAPI, indexReader.elapsedTime, indexReader.err
 }
 
 func upSyncVersion(
@@ -611,7 +621,6 @@ func upSyncVersion(
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
-	readSourceIndexStartTime := time.Now()
 	sourceFolderScanner := asyncFolderScanner{}
 	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
 		sourceFolderScanner.scan(sourceFolderPath, pathFilter, fs)
@@ -622,8 +631,6 @@ func upSyncVersion(
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
-	setupTime := time.Since(setupStartTime)
-
 	compressionType, err := getCompressionType(compressionAlgorithm)
 	if err != nil {
 		return err
@@ -632,6 +639,8 @@ func upSyncVersion(
 	if err != nil {
 		return err
 	}
+
+	setupTime := time.Since(setupStartTime)
 
 	sourceIndexReader := asyncVersionIndexReader{}
 	sourceIndexReader.read(sourceFolderPath,
@@ -657,13 +666,11 @@ func upSyncVersion(
 	indexStore := longtaillib.CreateCompressBlockStore(remoteStore, creg)
 	defer indexStore.Dispose()
 
-	vindex, hash, err := sourceIndexReader.get()
+	vindex, hash, readSourceIndexTime, err := sourceIndexReader.get()
 	if err != nil {
 		return err
 	}
 	defer vindex.Dispose()
-
-	readSourceIndexTime := time.Since(readSourceIndexStartTime)
 
 	getMissingContentStartTime := time.Now()
 	existingRemoteContentIndex, errno := getExistingContentIndexSync(indexStore, vindex.GetChunkHashes(), minBlockUsagePercent)
@@ -826,7 +833,6 @@ func downSyncVersion(
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
-	readTargetIndexStartTime := time.Now()
 	targetFolderScanner := asyncFolderScanner{}
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
 		targetFolderScanner.scan(targetFolderPath, pathFilter, fs)
@@ -905,12 +911,11 @@ func downSyncVersion(
 
 	setupTime := time.Since(setupStartTime)
 
-	targetVersionIndex, hash, err := targetIndexReader.get()
+	targetVersionIndex, hash, readTargetIndexTime, err := targetIndexReader.get()
 	if err != nil {
 		return err
 	}
 	defer targetVersionIndex.Dispose()
-	readTargetIndexTime := time.Since(readTargetIndexStartTime)
 
 	getExistingContentStartTime := time.Now()
 	versionDiff, errno := longtaillib.CreateVersionDiff(

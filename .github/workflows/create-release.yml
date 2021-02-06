@@ -116,10 +116,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **FIXED** Use GenerationMatch instead of MetagenerationMatch in GCS to fix store index from loosing content
-          - **FIXED** Fixed broken logging formatting
-          - **CHANGED** Refactored scanning of folders/reading index more async
-          - **ADDED** Added time stats in upsync and downsync commands
+          - **UPDATE** Update longtail to 0.1.14
+          - **CHANGED** Use `Longtail_CreateRateLimitedProgress` to reduce overhead from C/Go calls
         draft: false
         prerelease: false
     - name: Download Linux artifacts

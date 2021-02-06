@@ -1214,6 +1214,16 @@ func CreateBikeshedJobAPI(workerCount uint32, workerPriority int) Longtail_JobAP
 	return Longtail_JobAPI{cJobAPI: C.Longtail_CreateBikeshedJobAPI(C.uint32_t(workerCount), C.int(workerPriority))}
 }
 
+// CreateRateLimitedProgressAPI ...
+func CreateRateLimitedProgressAPI(progressAPI Longtail_ProgressAPI, percentRateLimit uint32) Longtail_ProgressAPI {
+	return Longtail_ProgressAPI{cProgressAPI: C.Longtail_CreateRateLimitedProgress(progressAPI.cProgressAPI, C.uint32_t(percentRateLimit))}
+}
+
+// OnProgress ...
+func (progressAPI *Longtail_ProgressAPI) OnProgress(totalCount uint32, doneCount uint32) {
+	C.Longtail_Progress_OnProgress(progressAPI.cProgressAPI, C.uint32_t(totalCount), C.uint32_t(doneCount))
+}
+
 // Longtail_ProgressAPI.Dispose() ...
 func (progressAPI *Longtail_ProgressAPI) Dispose() {
 	if progressAPI.cProgressAPI != nil {

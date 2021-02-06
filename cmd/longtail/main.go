@@ -72,30 +72,29 @@ func (a *assertData) OnAssert(expression string, file string, line int) {
 }
 
 type progressData struct {
-	inited     bool
-	oldPercent uint32
-	task       string
+	inited bool
+	task   string
 }
 
 func (p *progressData) OnProgress(totalCount uint32, doneCount uint32) {
-	if doneCount < totalCount {
-		if !p.inited {
-			fmt.Fprintf(os.Stderr, "%s: ", p.task)
-			p.inited = true
-		}
-		percentDone := (100 * doneCount) / totalCount
-		if (percentDone - p.oldPercent) >= 5 {
-			fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
-			p.oldPercent = percentDone
+	if doneCount == totalCount {
+		if p.inited {
+			fmt.Fprintf(os.Stderr, "100%%")
+			fmt.Fprintf(os.Stderr, " Done\n")
 		}
 		return
 	}
-	if p.inited {
-		if p.oldPercent != 100 {
-			fmt.Fprintf(os.Stderr, "100%%")
-		}
-		fmt.Fprintf(os.Stderr, " Done\n")
+	if !p.inited {
+		fmt.Fprintf(os.Stderr, "%s: ", p.task)
+		p.inited = true
 	}
+	percentDone := (100 * doneCount) / totalCount
+	fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
+}
+
+func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
+	baseProgress := longtaillib.CreateProgressAPI(&progressData{task: task})
+	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 5)
 }
 
 type getIndexCompletionAPI struct {
@@ -493,7 +492,7 @@ func getFolderIndex(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Indexing version"})
+		createVersionIndexProgress := CreateProgress("Indexing version")
 		defer createVersionIndexProgress.Dispose()
 		vindex, errno := longtaillib.CreateVersionIndex(
 			fs,
@@ -687,7 +686,7 @@ func upSyncVersion(
 	getMissingContentTime := time.Since(getMissingContentStartTime)
 	writeContentStartTime := time.Now()
 	if versionMissingContentIndex.GetBlockCount() > 0 {
-		writeContentProgress := longtaillib.CreateProgressAPI(&progressData{task: "Writing content blocks"})
+		writeContentProgress := CreateProgress("Writing content blocks")
 		defer writeContentProgress.Dispose()
 
 		errno = longtaillib.WriteContent(
@@ -935,7 +934,7 @@ func downSyncVersion(
 	getExistingContentTime := time.Since(getExistingContentStartTime)
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := longtaillib.CreateProgressAPI(&progressData{task: "Updating version"})
+	changeVersionProgress := CreateProgress("Updating version")
 	defer changeVersionProgress.Dispose()
 	errno = longtaillib.ChangeVersion(
 		indexStore,
@@ -1054,7 +1053,7 @@ func downSyncVersion(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtaillib.CreateProgressAPI(&progressData{task: "Validating version"})
+		createVersionIndexProgress := CreateProgress("Validating version")
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, errno := longtaillib.CreateVersionIndex(
 			fs,
@@ -1867,7 +1866,9 @@ func stats(
 
 	blockChunkCount := uint64(0)
 
-	progress := &progressData{task: "Fetching blocks"}
+	progress := CreateProgress("Fetching blocks")
+	defer progress.Dispose()
+
 	blockHashes := existingContentIndex.GetBlockHashes()
 	maxBatchSize := runtime.NumCPU()
 	for i := 0; i < len(blockHashes); {

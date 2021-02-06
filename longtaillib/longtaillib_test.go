@@ -9,31 +9,30 @@ import (
 )
 
 type testProgress struct {
-	inited     bool
-	oldPercent uint32
-	task       string
-	t          *testing.T
+	inited bool
+	task   string
+	t      *testing.T
 }
 
 func (p *testProgress) OnProgress(total uint32, current uint32) {
-	if current < total {
-		if !p.inited {
-			p.t.Logf("%s: ", p.task)
-			p.inited = true
-		}
-		percentDone := (100 * current) / total
-		if (percentDone - p.oldPercent) >= 5 {
-			p.t.Logf("%d%% ", percentDone)
-			p.oldPercent = percentDone
+	if current == total {
+		if p.inited {
+			p.t.Logf("100%%")
+			p.t.Logf(" Done\n")
 		}
 		return
 	}
-	if p.inited {
-		if p.oldPercent != 100 {
-			p.t.Logf("100%%")
-		}
-		p.t.Logf(" Done\n")
+	if !p.inited {
+		p.t.Logf("%s: ", p.task)
+		p.inited = true
 	}
+	percentDone := (100 * current) / total
+	p.t.Logf("%d%% ", percentDone)
+}
+
+func CreateProgress(t *testing.T, task string) Longtail_ProgressAPI {
+	baseProgress := CreateProgressAPI(&testProgress{task: task, t: t})
+	return CreateRateLimitedProgressAPI(baseProgress, 5)
 }
 
 type testPutBlockCompletionAPI struct {
@@ -824,7 +823,7 @@ func TestRewriteVersion(t *testing.T) {
 
 	compressionTypes := make([]uint32, fileInfos.GetFileCount())
 
-	createVersionProgress := CreateProgressAPI(&testProgress{task: "CreateVersionIndex", t: t})
+	createVersionProgress := CreateProgress(t, "CreateVersionIndex")
 	versionIndex, errno := CreateVersionIndex(
 		storageAPI,
 		hashAPI,
@@ -852,7 +851,7 @@ func TestRewriteVersion(t *testing.T) {
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateZStdCompressionRegistry()
 	compressionRegistry.Dispose()
-	writeContentProgress := CreateProgressAPI(&testProgress{task: "WriteContent", t: t})
+	writeContentProgress := CreateProgress(t, "WriteContent")
 	defer writeContentProgress.Dispose()
 
 	errno = WriteContent(
@@ -878,7 +877,7 @@ func TestRewriteVersion(t *testing.T) {
 	retargetedContentIndex := getExistingContentComplete.contentIndex
 	defer retargetedContentIndex.Dispose()
 
-	writeVersionProgress2 := CreateProgressAPI(&testProgress{task: "WriteVersion", t: t})
+	writeVersionProgress2 := CreateProgress(t, "WriteVersion")
 	errno = WriteVersion(
 		blockStorageAPI,
 		storageAPI,

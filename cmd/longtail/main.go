@@ -691,6 +691,7 @@ func upSyncVersion(
 	defer versionMissingContentIndex.Dispose()
 
 	getMissingContentTime := time.Since(getMissingContentStartTime)
+
 	writeContentStartTime := time.Now()
 	if versionMissingContentIndex.GetBlockCount() > 0 {
 		writeContentProgress := CreateProgress("Writing content blocks")
@@ -708,6 +709,9 @@ func upSyncVersion(
 			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteContent(%s) failed", sourceFolderPath)
 		}
 	}
+	writeContentTime := time.Since(writeContentStartTime)
+
+	flushStartTime := time.Now()
 
 	indexStoreFlushComplete := &flushCompletionAPI{}
 	indexStoreFlushComplete.wg.Add(1)
@@ -734,10 +738,10 @@ func upSyncVersion(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
+	flushTime := time.Since(flushStartTime)
+
 	indexStoreStats, errno := indexStore.GetStats()
 	remoteStoreStats, errno := remoteStore.GetStats()
-
-	writeContentTime := time.Since(writeContentStartTime)
 
 	writeVersionContentIndexStartTime := time.Now()
 	if versionContentIndexPath != nil && len(*versionContentIndexPath) > 0 {
@@ -778,6 +782,7 @@ func upSyncVersion(
 		log.Printf("Read source index:           %s", readSourceIndexTime)
 		log.Printf("Get missing content:         %s", getMissingContentTime)
 		log.Printf("Write version content:       %s", writeContentTime)
+		log.Printf("Flush:                       %s", flushTime)
 		if versionContentIndexPath != nil && len(*versionContentIndexPath) > 0 {
 			log.Printf("Write version content index: %s", writeVersionContentIndexTime)
 		}
@@ -843,6 +848,8 @@ func downSyncVersion(
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
+	readSourceStartTime := time.Now()
+
 	vbuffer, err := readFromURI(sourceFilePath)
 	if err != nil {
 		return err
@@ -852,6 +859,8 @@ func downSyncVersion(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer sourceVersionIndex.Dispose()
+
+	readSourceTime := time.Since(readSourceStartTime)
 
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
 	targetChunkSize = sourceVersionIndex.GetTargetChunkSize()
@@ -957,6 +966,10 @@ func downSyncVersion(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ChangeVersion() failed")
 	}
 
+	changeVersionTime := time.Since(changeVersionStartTime)
+
+	flushStartTime := time.Now()
+
 	indexStoreFlushComplete := &flushCompletionAPI{}
 	indexStoreFlushComplete.wg.Add(1)
 	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
@@ -1035,7 +1048,7 @@ func downSyncVersion(
 		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
-	changeVersionTime := time.Since(changeVersionStartTime)
+	flushTime := time.Since(flushStartTime)
 
 	shareStoreStats, shareStoreStatsErrno := indexStore.GetStats()
 	lruStoreStats, lruStoreStatsErrno := lruBlockStore.GetStats()
@@ -1140,9 +1153,11 @@ func downSyncVersion(
 			printStats("Remote", remoteStoreStats)
 		}
 		log.Printf("Setup:                %s", setupTime)
+		log.Printf("Read source index:    %s", readSourceTime)
 		log.Printf("Read target index:    %s", readTargetIndexTime)
 		log.Printf("Get existing content: %s", getExistingContentTime)
 		log.Printf("Change version:       %s", changeVersionTime)
+		log.Printf("Flush:                %s", flushTime)
 		if validate {
 			log.Printf("Validate:             %s", validateTime)
 		}

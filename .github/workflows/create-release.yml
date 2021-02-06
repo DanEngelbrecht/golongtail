@@ -118,6 +118,8 @@ jobs:
           Changes in this Release
           - **UPDATE** Update longtail to 0.1.14
           - **CHANGED** Use `Longtail_CreateRateLimitedProgress` to reduce overhead from C/Go calls
+          - **FIXED** Times in `--show-stats` are now more accurate for async operations
+          - **ADDED** `downsync` read source index, `downsync` flush and `upsync` flush times are now shown with `--show-stats`
         draft: false
         prerelease: false
     - name: Download Linux artifacts

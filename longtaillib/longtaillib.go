@@ -1814,10 +1814,10 @@ func CreateAsyncPutStoredBlockAPI(asyncComplete AsyncPutStoredBlockAPI) Longtail
 }
 
 //export AsyncPutStoredBlockAPIProxy_OnComplete
-func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, errno C.int) {
+func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI, err C.int) {
 	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
-	asyncComplete.OnComplete(int(errno))
+	asyncComplete.OnComplete(int(err))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
@@ -1836,10 +1836,10 @@ func CreateAsyncGetStoredBlockAPI(asyncComplete AsyncGetStoredBlockAPI) Longtail
 }
 
 //export AsyncGetStoredBlockAPIProxy_OnComplete
-func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, errno C.int) {
+func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI, stored_block *C.struct_Longtail_StoredBlock, err C.int) {
 	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
-	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(errno))
+	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, int(err))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
@@ -1858,10 +1858,10 @@ func CreateAsyncGetExistingContentAPI(asyncComplete AsyncGetExistingContentAPI) 
 }
 
 //export AsyncGetExistingContentAPIProxy_OnComplete
-func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI, content_index *C.struct_Longtail_ContentIndex, errno C.int) {
+func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI, content_index *C.struct_Longtail_ContentIndex, err C.int) {
 	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetExistingContentAPI)
-	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(errno))
+	asyncComplete.OnComplete(Longtail_ContentIndex{cContentIndex: content_index}, int(err))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 
@@ -1880,10 +1880,10 @@ func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
 }
 
 //export AsyncFlushAPIProxy_OnComplete
-func AsyncFlushAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncFlushAPI, errno C.int) {
+func AsyncFlushAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncFlushAPI, err C.int) {
 	context := C.AsyncFlushAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncFlushAPI)
-	asyncComplete.OnComplete(int(errno))
+	asyncComplete.OnComplete(int(err))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
 

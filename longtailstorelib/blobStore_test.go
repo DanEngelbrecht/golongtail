@@ -6,14 +6,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"cloud.google.com/go/storage"
 )
 
 type testBlob struct {
-	generation int
-	path       string
-	data       []byte
+	path string
+	data []byte
 }
 
 type testBlobStore struct {
@@ -27,9 +24,8 @@ type testBlobClient struct {
 }
 
 type testBlobObject struct {
-	client           *testBlobClient
-	path             string
-	lockedGeneration *int
+	client *testBlobClient
+	path   string
 }
 
 // NewTestBlobStore ...
@@ -94,24 +90,13 @@ func (blobObject *testBlobObject) Write(data []byte) (bool, error) {
 
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
 
-	if blobObject.lockedGeneration != nil {
-		if exists {
-			if blob.generation != *blobObject.lockedGeneration {
-				return false, nil
-			}
-		} else if (*blobObject.lockedGeneration) != -1 {
-			return false, nil
-		}
-	}
-
 	if !exists {
-		blob = &testBlob{generation: 0, path: blobObject.path, data: data}
+		blob = &testBlob{path: blobObject.path, data: data}
 		blobObject.client.store.blobs[blobObject.path] = blob
 		return true, nil
 	}
 
 	blob.data = data
-	blob.generation++
 	return true, nil
 }
 
@@ -119,15 +104,6 @@ func (blobObject *testBlobObject) Delete() error {
 	blobObject.client.store.blobsMutex.Lock()
 	defer blobObject.client.store.blobsMutex.Unlock()
 
-	if blobObject.lockedGeneration != nil {
-		blob, exists := blobObject.client.store.blobs[blobObject.path]
-		if !exists {
-			return storage.ErrObjectNotExist
-		}
-		if blob.generation != *blobObject.lockedGeneration {
-			return fmt.Errorf("testBlobObject: generation lock mismatch %s", blobObject.path)
-		}
-	}
 	delete(blobObject.client.store.blobs, blobObject.path)
 	return nil
 }
@@ -195,6 +171,19 @@ func TestSingleObjectStore(t *testing.T) {
 	err = obj.Delete()
 	if err != nil {
 		t.Errorf("TestSingleObjectStore() obj.Delete()) %v != %v", err, nil)
+	}
+}
+
+func TestDeleteObject(t *testing.T) {
+	blobStore, _ := NewTestBlobStore("the_path")
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	obj, _ := client.NewObject("my-fine-object.txt")
+	testContent := "the content of the object"
+	_, _ = obj.Write([]byte(testContent))
+	obj.Delete()
+	if exists, _ := obj.Exists(); exists {
+		t.Errorf("TestSingleObjectStore() obj.Exists()) %t != %t", exists, false)
 	}
 }
 

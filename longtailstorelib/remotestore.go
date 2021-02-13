@@ -427,21 +427,14 @@ func updateRemoteStoreIndex(
 	blobClient BlobClient,
 	addedStoreIndex longtaillib.Longtail_StoreIndex) error {
 
-	existingStoreIndex, indexNames, err := readStoreIndexes(ctx, blobClient)
-	if err != nil {
-		return err
-	}
-
-	storeIndex, errno := longtaillib.MergeStoreIndex(existingStoreIndex, addedStoreIndex)
+	addedStoreIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(addedStoreIndex)
 	if errno != 0 {
-		return errors.Wrapf(err, "readStoreStoreIndex: longtaillib.MergeStoreIndex(existingStoreIndex, addedStoreIndex) failed")
+		return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
-
-	storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
-	storeIndexSha := sha1.Sum(storeIndexBlob)
-	storeIndexName := fmt.Sprintf("index/%x.lsi", storeIndexSha)
-	objHandle, err := blobClient.NewObject(storeIndexName)
-	ok, err := objHandle.Write(storeIndexBlob)
+	addedStoreIndexSha := sha1.Sum(addedStoreIndexBlob)
+	addedStoreIndexName := fmt.Sprintf("index/%x.plsi", addedStoreIndexSha)
+	objHandle, err := blobClient.NewObject(addedStoreIndexName)
+	ok, err := objHandle.Write(addedStoreIndexBlob)
 	if err != nil {
 		return err
 	}
@@ -450,7 +443,25 @@ func updateRemoteStoreIndex(
 		return nil
 	}
 
-	for _, indexName := range indexNames {
+	storeIndex, partialIndexNames, err := readStoreIndexes(ctx, blobClient)
+	defer storeIndex.Dispose()
+	if err != nil {
+		return err
+	}
+
+	storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	objHandle, err = blobClient.NewObject("store.lsi")
+	ok, err = objHandle.Write(storeIndexBlob)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Return error here
+		return nil
+	}
+
+	// Loop hole here? Need to think hard if it is possible to mess things up...
+	for _, indexName := range partialIndexNames {
 		objHandle, err := blobClient.NewObject(indexName)
 		if err == nil {
 			objHandle.Delete()
@@ -607,26 +618,32 @@ func readStoreIndexes(
 	ctx context.Context,
 	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
 
+	var storeIndex longtaillib.Longtail_StoreIndex
+	storeIndexBuffer, _, err := readBlobWithRetry(ctx, client, "store.lsi")
+	if err == nil {
+		storeIndex, _ = longtaillib.ReadStoreIndexFromBuffer(storeIndexBuffer)
+	}
+
+	if !storeIndex.IsValid() {
+		errno := 0
+		storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+		if errno != 0 {
+			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "readStoreStoreIndex: longtaillib.CreateStoreIndexFromBlocks() failed")
+		}
+	}
+
 	var indexNames []string
-	blobs, err := client.GetObjects("index")
+	blobs, err := client.GetObjects("index/")
 	if err != nil {
+		storeIndex.Dispose()
 		return longtaillib.Longtail_StoreIndex{}, nil, err
-	}
-	legacyStoreBlobs, err := client.GetObjects("store.lsi")
-	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, nil, err
-	}
-	blobs = append(blobs, legacyStoreBlobs...)
-	storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-	if errno != 0 {
-		return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "readStoreStoreIndex: longtaillib.CreateStoreIndexFromBlocks() failed")
 	}
 
 	for _, blob := range blobs {
 		if blob.Size == 0 {
 			continue
 		}
-		if strings.HasSuffix(blob.Name, ".lsi") {
+		if strings.HasSuffix(blob.Name, ".plsi") {
 			indexData, _, err := readBlobWithRetry(ctx, client, blob.Name)
 			if err != nil {
 				continue
@@ -636,8 +653,8 @@ func readStoreIndexes(
 				continue
 			}
 			storeIndexNew, errno := longtaillib.MergeStoreIndex(storeIndex, partialStoreIndex)
+			partialStoreIndex.Dispose()
 			if errno != 0 {
-				partialStoreIndex.Dispose()
 				continue
 			}
 			storeIndex.Dispose()
@@ -860,6 +877,7 @@ func contentIndexWorker(
 
 	if saveStoreIndex {
 		addedStoreIndex, errno := longtaillib.CreateStoreIndexFromBlocks(addedBlockIndexes)
+		defer addedStoreIndex.Dispose()
 		if errno != 0 {
 			return errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), s.blobStore.String())
 		}

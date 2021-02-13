@@ -108,7 +108,7 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	}
 }
 
-func writeANumberWithRetry(number int, blobStore BlobStore) error {
+func gcsWriteANumberWithRetry(number int, blobStore BlobStore) error {
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 		wg.Add(20)
 		for n := 0; n < 20; n++ {
 			go func(number int, blobStore BlobStore) {
-				err := writeANumberWithRetry(number, blobStore)
+				err := gcsWriteANumberWithRetry(number, blobStore)
 				if err != nil {
 					t.Fatal(err)
 				}

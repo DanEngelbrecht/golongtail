@@ -114,18 +114,18 @@ func readBlobWithRetry(
 	}
 	blobData, err := objHandle.Read()
 	if err != nil {
-		log.Printf("Retrying getBlob %s\n", key)
+		log.Printf("Retrying getBlob %s using %s\n", key, client.String())
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
 	if err != nil {
-		log.Printf("Retrying 500 ms delayed getBlob %s\n", key)
+		log.Printf("Retrying 500 ms delayed getBlob %s using %s\n", key, client.String())
 		time.Sleep(500 * time.Millisecond)
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
 	if err != nil {
-		log.Printf("Retrying 2 s delayed getBlob %s\n", key)
+		log.Printf("Retrying 2 s delayed getBlob %s using %s\n", key, client.String())
 		time.Sleep(2 * time.Second)
 		retryCount++
 		blobData, err = objHandle.Read()

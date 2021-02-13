@@ -55,21 +55,11 @@ func (blobStore *s3BlobStore) NewClient(ctx context.Context) (BlobClient, error)
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
 	client := s3.NewFromConfig(cfg)
-	/*	output, err := client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-			Bucket: aws.String(u.Host),
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-		log.Println("first page results:")
-		for _, object := range output.Contents {
-			log.Printf("key=%s size=%d", aws.ToString(object.Key), object.Size)
-		}*/
 	return &s3BlobClient{store: blobStore, ctx: ctx, client: client}, nil
 }
 
 func (blobStore *s3BlobStore) String() string {
-	return ""
+	return "s3://" + blobStore.bucketName + "/" + blobStore.prefix
 }
 
 func (blobClient *s3BlobClient) NewObject(path string) (BlobObject, error) {

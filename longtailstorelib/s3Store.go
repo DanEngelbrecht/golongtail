@@ -50,7 +50,7 @@ func NewS3BlobStore(u *url.URL) (BlobStore, error) {
 }
 
 func (blobStore *s3BlobStore) NewClient(ctx context.Context) (BlobClient, error) {
-	cfg, err := config.LoadDefaultConfig(context.Background())
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}

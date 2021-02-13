@@ -81,10 +81,11 @@ func (blobClient *s3BlobClient) NewObject(path string) (BlobObject, error) {
 		nil
 }
 
-func (blobClient *s3BlobClient) GetObjects() ([]BlobProperties, error) {
+func (blobClient *s3BlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
 	var items []BlobProperties
 	output, err := blobClient.client.ListObjectsV2(blobClient.ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(blobClient.store.bucketName),
+		Prefix: aws.String(blobClient.store.prefix + pathPrefix),
 	})
 	if err != nil {
 		return nil, err
@@ -123,13 +124,16 @@ func (blobObject *s3BlobObject) Read() ([]byte, error) {
 	return data, nil
 }
 
-func (blobObject *s3BlobObject) LockWriteVersion() (bool, error) {
-	return true, nil
-	//	return false, fmt.Errorf("S3 storage not yet implemented")
-}
-
 func (blobObject *s3BlobObject) Exists() (bool, error) {
-	return false, fmt.Errorf("S3 storage not yet implemented")
+	input := &s3.GetObjectAclInput{
+		Bucket: aws.String(blobObject.client.store.bucketName),
+		Key:    aws.String(blobObject.path),
+	}
+	_, err := blobObject.client.client.GetObjectAcl(blobObject.client.ctx, input)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (blobObject *s3BlobObject) Write(data []byte) (bool, error) {
@@ -147,5 +151,10 @@ func (blobObject *s3BlobObject) Write(data []byte) (bool, error) {
 }
 
 func (blobObject *s3BlobObject) Delete() error {
-	return fmt.Errorf("S3 storage not yet implemented")
+	input := &s3.DeleteObjectInput{
+		Bucket: aws.String(blobObject.client.store.bucketName),
+		Key:    aws.String(blobObject.path),
+	}
+	_, err := blobObject.client.client.DeleteObject(blobObject.client.ctx, input)
+	return err
 }

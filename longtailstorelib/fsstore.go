@@ -40,7 +40,7 @@ func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
 	return &fsBlobObject{client: blobClient, path: fsPath}, nil
 }
 
-func (blobClient *fsBlobClient) GetObjects() ([]BlobProperties, error) {
+func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
 	return make([]BlobProperties, 0), nil
 }
 
@@ -68,10 +68,6 @@ func (blobObject *fsBlobObject) Read() ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
-}
-
-func (blobObject *fsBlobObject) LockWriteVersion() (bool, error) {
-	return blobObject.Exists()
 }
 
 func (blobObject *fsBlobObject) Write(data []byte) (bool, error) {

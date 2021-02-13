@@ -3,6 +3,7 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -49,13 +50,15 @@ func (blobClient *testBlobClient) NewObject(filepath string) (BlobObject, error)
 	return &testBlobObject{client: blobClient, path: filepath}, nil
 }
 
-func (blobClient *testBlobClient) GetObjects() ([]BlobProperties, error) {
+func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
 	blobClient.store.blobsMutex.RLock()
 	defer blobClient.store.blobsMutex.RUnlock()
-	properties := make([]BlobProperties, len(blobClient.store.blobs))
+	properties := make([]BlobProperties, 0)
 	i := 0
 	for key, blob := range blobClient.store.blobs {
-		properties[i] = BlobProperties{Name: key, Size: int64(len(blob.data))}
+		if strings.HasPrefix(key, pathPrefix) {
+			properties = append(properties, BlobProperties{Name: key, Size: int64(len(blob.data))})
+		}
 		i++
 	}
 	return properties, nil
@@ -83,19 +86,6 @@ func (blobObject *testBlobObject) Read() ([]byte, error) {
 		return nil, fmt.Errorf("testBlobObject object does not exist: %s", blobObject.path)
 	}
 	return blob.data, nil
-}
-
-func (blobObject *testBlobObject) LockWriteVersion() (bool, error) {
-	blobObject.client.store.blobsMutex.RLock()
-	defer blobObject.client.store.blobsMutex.RUnlock()
-	blob, exists := blobObject.client.store.blobs[blobObject.path]
-	blobObject.lockedGeneration = new(int)
-	if !exists {
-		*blobObject.lockedGeneration = -1
-		return false, nil
-	}
-	*blobObject.lockedGeneration = blob.generation
-	return true, nil
 }
 
 func (blobObject *testBlobObject) Write(data []byte) (bool, error) {
@@ -158,12 +148,12 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	blobStore, _ := NewTestBlobStore("the_path")
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	objects, err := client.GetObjects()
+	objects, err := client.GetObjects("")
 	if err != nil {
-		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects()) %v != %v", err, nil)
+		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %v != %v", err, nil)
 	}
 	if len(objects) != 0 {
-		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects()) %d != %d", len(objects), 0)
+		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %d != %d", len(objects), 0)
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
@@ -218,12 +208,12 @@ func TestListObjects(t *testing.T) {
 	obj.Write([]byte("my-fine-object2.txt"))
 	obj, _ = client.NewObject("my-fine-object3.txt")
 	obj.Write([]byte("my-fine-object3.txt"))
-	objects, err := client.GetObjects()
+	objects, err := client.GetObjects("")
 	if err != nil {
-		t.Errorf("TestListObjects() client.GetObjects()) %v != %v", err, nil)
+		t.Errorf("TestListObjects() client.GetObjects(\"\")) %v != %v", err, nil)
 	}
 	if len(objects) != 3 {
-		t.Errorf("TestListObjects() client.GetObjects()) %d != %d", len(objects), 3)
+		t.Errorf("TestListObjects() client.GetObjects(\"\")) %d != %d", len(objects), 3)
 	}
 	for _, o := range objects {
 		readObj, err := client.NewObject(o.Name)
@@ -241,74 +231,5 @@ func TestListObjects(t *testing.T) {
 		if stringData != o.Name {
 			t.Errorf("TestListObjects() string(data) != o.Name) %s != %s", stringData, o.Name)
 		}
-	}
-}
-
-func TestGenerationWrite(t *testing.T) {
-	blobStore, _ := NewTestBlobStore("the_path")
-	client, _ := blobStore.NewClient(context.Background())
-	defer client.Close()
-	obj, _ := client.NewObject("my-fine-object.txt")
-	testContent1 := "the content of the object1"
-	testContent2 := "the content of the object2"
-	testContent3 := "the content of the object3"
-	exists, err := obj.LockWriteVersion()
-	if exists {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %t != %t", exists, false)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %v != %v", err, nil)
-	}
-	ok, err := obj.Write([]byte(testContent1))
-	if !ok {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent1)) %t != %t", ok, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent1)) %v != %v", err, nil)
-	}
-	ok, err = obj.Write([]byte(testContent2))
-	if ok {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %t != %t", ok, false)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %v != %v", err, nil)
-	}
-	obj2, _ := client.NewObject("my-fine-object.txt")
-	exists, err = obj.LockWriteVersion()
-	if !exists {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %t != %t", exists, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %v != %v", err, nil)
-	}
-	exists, err = obj2.LockWriteVersion()
-	if !exists {
-		t.Errorf("TestGenerationWrite() obj2.LockWriteVersion()) %t != %t", exists, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj2.LockWriteVersion()) %v != %v", err, nil)
-	}
-	ok, err = obj.Write([]byte(testContent2))
-	if !ok {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %t != %t", ok, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %v != %v", err, nil)
-	}
-	ok, err = obj2.Write([]byte(testContent3))
-	if ok {
-		t.Errorf("TestGenerationWrite() obj2.Write([]byte(testContent3))) %t != %t", ok, false)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj2.Write([]byte(testContent3))) %v != %v", err, nil)
-	}
-	err = obj.Delete()
-	if err == nil {
-		t.Errorf("TestGenerationWrite() obj.Delete()) %v == %v", err, nil)
-	}
-	obj.LockWriteVersion()
-	err = obj.Delete()
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Delete()) %v != %v", err, nil)
 	}
 }

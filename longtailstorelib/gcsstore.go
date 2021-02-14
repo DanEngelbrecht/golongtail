@@ -108,6 +108,7 @@ func (blobClient *gcsBlobClient) String() string {
 }
 
 func (blobObject *gcsBlobObject) Read() ([]byte, error) {
+	//todo: if file does not exist - return nil, nil
 	reader, err := blobObject.objHandle.NewReader(blobObject.ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, blobObject.path)

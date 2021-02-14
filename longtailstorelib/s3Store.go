@@ -96,6 +96,7 @@ func (blobClient *s3BlobClient) String() string {
 }
 
 func (blobObject *s3BlobObject) Read() ([]byte, error) {
+	//todo: if file does not exist - return nil, nil
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(blobObject.client.store.bucketName),
 		Key:    aws.String(blobObject.path),

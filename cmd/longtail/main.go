@@ -274,6 +274,8 @@ func readFromURI(uri string) ([]byte, error) {
 	vbuffer, err := object.Read()
 	if err != nil {
 		return nil, err
+	} else if vbuffer == nil {
+		return nil, longtaillib.ErrENOENT
 	}
 	return vbuffer, nil
 }

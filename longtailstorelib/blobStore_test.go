@@ -81,7 +81,7 @@ func (blobObject *testBlobObject) Read() ([]byte, error) {
 	defer blobObject.client.store.blobsMutex.RUnlock()
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
 	if !exists {
-		return nil, fmt.Errorf("testBlobObject object does not exist: %s", blobObject.path)
+		return nil, nil
 	}
 	return blob.data, nil
 }
@@ -203,11 +203,8 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if err == nil {
+	if err != nil || data != nil {
 		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", fmt.Errorf("testBlobObject object does not exist: should-not-exist"), err)
-	}
-	if data != nil {
-		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", nil, data)
 	}
 }
 
@@ -295,35 +292,62 @@ func TestListObjects(t *testing.T) {
 
 func TestStoreIndexSync(t *testing.T) {
 	blobStore, _ := NewTestBlobStore("the_path")
+
+	blockGenerateCount := 2
+	workerCount := 30
+
+	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
+
+	var wg sync.WaitGroup
+	for n := 0; n < workerCount; n++ {
+		wg.Add(1)
+		//seedBase := blockGenerateCount * n
+		go func(blockGenerateCount int, seedBase int) {
+			client, _ := blobStore.NewClient(context.Background())
+			defer client.Close()
+			blocks := []longtaillib.Longtail_BlockIndex{}
+			for i := 0; i < blockGenerateCount; i++ {
+				block, _ := generateStoredBlock(t, uint8(seedBase+i))
+				blocks = append(blocks, block.GetBlockIndex())
+			}
+
+			storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
+			defer storeIndex.Dispose()
+
+			writeStoreIndex(context.Background(), client, storeIndex)
+			newStoreIndex, _, _ := readStoreIndex(context.Background(), client)
+
+			lookup := map[uint64]bool{}
+			for _, h := range newStoreIndex.GetBlockHashes() {
+				lookup[h] = true
+			}
+
+			blockHashes := storeIndex.GetBlockHashes()
+			for n := 0; n < blockGenerateCount; n++ {
+				h := blockHashes[n]
+				generatedBlockHashes <- blockHashes[n]
+				_, exists := lookup[h]
+				if !exists {
+					t.Errorf("TestStoreIndexSync() Missing new block %d", h)
+				}
+			}
+
+			wg.Done()
+		}(blockGenerateCount, blockGenerateCount*n)
+	}
+	wg.Wait()
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-
-	blockGenerateCount := 3
-	seedBase := 0
-
-	for n := 0; n < 10; n++ {
-		blocks := []longtaillib.Longtail_BlockIndex{}
-		for i := 0; i < blockGenerateCount; i++ {
-			block, _ := generateStoredBlock(t, uint8(seedBase+i))
-			blocks = append(blocks, block.GetBlockIndex())
+	newStoreIndex, _, _ := readStoreIndex(context.Background(), client)
+	lookup := map[uint64]bool{}
+	for _, h := range newStoreIndex.GetBlockHashes() {
+		lookup[h] = true
+	}
+	for n := 0; n < workerCount*blockGenerateCount; n++ {
+		h := <-generatedBlockHashes
+		_, exists := lookup[h]
+		if !exists {
+			t.Errorf("TestStoreIndexSync() Missing block %d", h)
 		}
-
-		storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
-		defer storeIndex.Dispose()
-		writeStoreIndex(context.Background(), client, storeIndex)
-		newStoreIndex, _, _ := readStoreIndex(context.Background(), client)
-
-		lookup := map[int]bool{}
-		for h, _ := range newStoreIndex.GetBlockHashes() {
-			lookup[int(h)] = true
-		}
-
-		for h, _ := range storeIndex.GetBlockHashes() {
-			_, exists := lookup[int(h)]
-			if !exists {
-				t.Errorf("TestStoreIndexSync() Missing block %d", h)
-			}
-		}
-		seedBase += blockGenerateCount
 	}
 }

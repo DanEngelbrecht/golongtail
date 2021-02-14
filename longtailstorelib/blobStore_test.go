@@ -292,3 +292,38 @@ func TestListObjects(t *testing.T) {
 		}
 	}
 }
+
+func TestStoreIndexSync(t *testing.T) {
+	blobStore, _ := NewTestBlobStore("the_path")
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+
+	blockGenerateCount := 3
+	seedBase := 0
+
+	for n := 0; n < 10; n++ {
+		blocks := []longtaillib.Longtail_BlockIndex{}
+		for i := 0; i < blockGenerateCount; i++ {
+			block, _ := generateStoredBlock(t, uint8(seedBase+i))
+			blocks = append(blocks, block.GetBlockIndex())
+		}
+
+		storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
+		defer storeIndex.Dispose()
+		writeStoreIndex(context.Background(), client, storeIndex)
+		newStoreIndex, _, _ := readStoreIndex(context.Background(), client)
+
+		lookup := map[int]bool{}
+		for h, _ := range newStoreIndex.GetBlockHashes() {
+			lookup[int(h)] = true
+		}
+
+		for h, _ := range storeIndex.GetBlockHashes() {
+			_, exists := lookup[int(h)]
+			if !exists {
+				t.Errorf("TestStoreIndexSync() Missing block %d", h)
+			}
+		}
+		seedBase += blockGenerateCount
+	}
+}

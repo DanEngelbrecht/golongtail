@@ -452,7 +452,7 @@ func contentIndexWorker(
 	if accessType == Init {
 		saveStoreIndex = true
 	} else {
-		storeIndex, _, err = readStoreIndex(ctx, client)
+		storeIndex, err = readStoreIndex(ctx, client)
 		if err != nil {
 			log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
 		}

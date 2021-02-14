@@ -130,6 +130,26 @@ func generateStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_StoredB
 		false)
 }
 
+func generateUniqueStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_StoredBlock, int) {
+	chunkHashes := []uint64{uint64(seed)<<8 + 1, uint64(seed)<<8 + 2, uint64(seed)<<8 + 3}
+	chunkSizes := []uint32{uint32(seed)<<8 + 10, uint32(seed)<<8 + 20, uint32(seed)<<8 + 30}
+
+	blockDataLen := (int)(chunkSizes[0] + chunkSizes[1] + chunkSizes[2])
+	blockData := make([]uint8, blockDataLen)
+	for p := 0; p < blockDataLen; p++ {
+		blockData[p] = seed
+	}
+
+	return longtaillib.CreateStoredBlock(
+		uint64(seed)<<16+21412151,
+		997,
+		2,
+		chunkHashes,
+		chunkSizes,
+		blockData,
+		false)
+}
+
 func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (uint64, int) {
 	storedBlock, errno := generateStoredBlock(t, seed)
 	if errno != 0 {
@@ -293,8 +313,8 @@ func TestListObjects(t *testing.T) {
 func TestStoreIndexSync(t *testing.T) {
 	blobStore, _ := NewTestBlobStore("the_path")
 
-	blockGenerateCount := 2
-	workerCount := 30
+	blockGenerateCount := 3
+	workerCount := 85
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 
@@ -307,7 +327,7 @@ func TestStoreIndexSync(t *testing.T) {
 			defer client.Close()
 			blocks := []longtaillib.Longtail_BlockIndex{}
 			for i := 0; i < blockGenerateCount; i++ {
-				block, _ := generateStoredBlock(t, uint8(seedBase+i))
+				block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
 				blocks = append(blocks, block.GetBlockIndex())
 			}
 
@@ -315,21 +335,11 @@ func TestStoreIndexSync(t *testing.T) {
 			defer storeIndex.Dispose()
 
 			writeStoreIndex(context.Background(), client, storeIndex)
-			newStoreIndex, _, _ := readStoreIndex(context.Background(), client)
-
-			lookup := map[uint64]bool{}
-			for _, h := range newStoreIndex.GetBlockHashes() {
-				lookup[h] = true
-			}
 
 			blockHashes := storeIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
-				generatedBlockHashes <- blockHashes[n]
-				_, exists := lookup[h]
-				if !exists {
-					t.Errorf("TestStoreIndexSync() Missing new block %d", h)
-				}
+				generatedBlockHashes <- h
 			}
 
 			wg.Done()
@@ -338,7 +348,7 @@ func TestStoreIndexSync(t *testing.T) {
 	wg.Wait()
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	newStoreIndex, _, _ := readStoreIndex(context.Background(), client)
+	newStoreIndex, _ := readStoreIndex(context.Background(), client)
 	lookup := map[uint64]bool{}
 	for _, h := range newStoreIndex.GetBlockHashes() {
 		lookup[h] = true

@@ -13,8 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// TODO: Not yet implemented, shell here to show how what it would require to support S3
-
 type s3BlobStore struct {
 	bucketName string
 	prefix     string

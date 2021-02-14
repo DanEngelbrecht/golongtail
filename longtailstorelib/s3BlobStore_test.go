@@ -28,6 +28,12 @@ func TestS3BlobStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("client.NewObject() err == %q", err)
 	}
+
+	data, err := object.Read()
+	if data != nil && err != nil {
+		t.Errorf("object.Read() nil != %v", err)
+	}
+
 	testData := []byte("apa")
 	ok, err := object.Write(testData)
 	if !ok {
@@ -43,7 +49,7 @@ func TestS3BlobStore(t *testing.T) {
 	if blobs[0].Name != "test.txt" {
 		t.Errorf("blobs[0].Name %s != %s", blobs[0].Name, "test.txt")
 	}
-	data, err := object.Read()
+	data, err = object.Read()
 	if len(data) != 3 {
 		t.Errorf("len(data) %d != %d", len(data), 3)
 	}

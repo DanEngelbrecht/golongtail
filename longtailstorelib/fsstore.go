@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"syscall"
 )
 
 type fsBlobStore struct {
@@ -63,8 +64,10 @@ func (blobObject *fsBlobObject) Exists() (bool, error) {
 }
 
 func (blobObject *fsBlobObject) Read() ([]byte, error) {
-	//todo: if file does not exist - return nil, nil
 	data, err := ioutil.ReadFile(blobObject.path)
+	if e, ok := err.(*os.PathError); ok && e.Err == syscall.ENOENT {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

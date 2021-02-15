@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
@@ -49,6 +50,7 @@ func (blobClient *testBlobClient) NewObject(filepath string) (BlobObject, error)
 }
 
 func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+	time.Sleep(50 * time.Millisecond)
 	blobClient.store.blobsMutex.RLock()
 	defer blobClient.store.blobsMutex.RUnlock()
 	properties := make([]BlobProperties, 0)
@@ -70,6 +72,7 @@ func (blobClient *testBlobClient) String() string {
 }
 
 func (blobObject *testBlobObject) Exists() (bool, error) {
+	time.Sleep(20 * time.Millisecond)
 	blobObject.client.store.blobsMutex.RLock()
 	defer blobObject.client.store.blobsMutex.RUnlock()
 	_, exists := blobObject.client.store.blobs[blobObject.path]
@@ -77,6 +80,7 @@ func (blobObject *testBlobObject) Exists() (bool, error) {
 }
 
 func (blobObject *testBlobObject) Read() ([]byte, error) {
+	time.Sleep(50 * time.Millisecond)
 	blobObject.client.store.blobsMutex.RLock()
 	defer blobObject.client.store.blobsMutex.RUnlock()
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
@@ -87,6 +91,7 @@ func (blobObject *testBlobObject) Read() ([]byte, error) {
 }
 
 func (blobObject *testBlobObject) Write(data []byte) (bool, error) {
+	time.Sleep(100 * time.Millisecond)
 	blobObject.client.store.blobsMutex.Lock()
 	defer blobObject.client.store.blobsMutex.Unlock()
 
@@ -103,6 +108,7 @@ func (blobObject *testBlobObject) Write(data []byte) (bool, error) {
 }
 
 func (blobObject *testBlobObject) Delete() error {
+	time.Sleep(20 * time.Millisecond)
 	blobObject.client.store.blobsMutex.Lock()
 	defer blobObject.client.store.blobsMutex.Unlock()
 
@@ -311,10 +317,11 @@ func TestListObjects(t *testing.T) {
 }
 
 func TestStoreIndexSync(t *testing.T) {
+	//t.Skip()
 	blobStore, _ := NewTestBlobStore("the_path")
 
 	blockGenerateCount := 3
-	workerCount := 85
+	workerCount := 82
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 
@@ -336,20 +343,20 @@ func TestStoreIndexSync(t *testing.T) {
 
 			writeStoreIndex(context.Background(), client, storeIndex)
 
-			/*			newStoreIndex, _ := readStoreIndex(context.Background(), client)
-						lookup := map[uint64]bool{}
-						for _, h := range newStoreIndex.GetBlockHashes() {
-							lookup[h] = true
-						}*/
+			newStoreIndex, _ := readStoreIndex(context.Background(), client)
+			lookup := map[uint64]bool{}
+			for _, h := range newStoreIndex.GetBlockHashes() {
+				lookup[h] = true
+			}
 
 			blockHashes := storeIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
 				generatedBlockHashes <- h
-				/*				_, exists := lookup[h]
-								if !exists {
-									t.Errorf("TestStoreIndexSync() Missing block %d", h)
-								}*/
+				_, exists := lookup[h]
+				if !exists {
+					t.Errorf("TestStoreIndexSync() Missing block %d", h)
+				}
 			}
 
 			wg.Done()

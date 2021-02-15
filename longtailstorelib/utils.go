@@ -174,127 +174,165 @@ func readStoreIndexBlob(
 	return storeIndex, nil
 }
 
-func consolidateStoreIndex(
-	ctx context.Context,
-	client BlobClient,
-	addedStoreIndex longtaillib.Longtail_StoreIndex) (string, longtaillib.Longtail_StoreIndex, error) {
-
-	_, err := writePartialStoreIndex(ctx, client, addedStoreIndex)
-	if err != nil {
-		return "", longtaillib.Longtail_StoreIndex{}, err
+func copyStoreIndex(storeIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
+	storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	if errno != 0 {
+		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
-
-	partialIndexBlobs, err := client.GetObjects("index/")
-	if err != nil {
-		return "", longtaillib.Longtail_StoreIndex{}, err
+	copyIndex, errno := longtaillib.ReadStoreIndexFromBuffer(storeIndexBlob)
+	if errno != 0 {
+		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
-
-	consolidatedStoreIndex, err := readStoreIndexBlob(ctx, client, "store.lsi")
-	if err != nil {
-		if !errors.Is(err, longtaillib.ErrENOENT) {
-			return "", longtaillib.Longtail_StoreIndex{}, err
-		}
-		errno := 0
-		consolidatedStoreIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-		if errno != 0 {
-			return "", longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
-		}
-	}
-
-	for _, blob := range partialIndexBlobs {
-		partialStoreIndex, err := readStoreIndexBlob(ctx, client, blob.Name)
-		if err != nil {
-			consolidatedStoreIndex.Dispose()
-			// Someone else is also updating the index, tell caller to try again
-			return "", longtaillib.Longtail_StoreIndex{}, longtaillib.ErrEBUSY
-		}
-		mergedStoreIndex, errno := longtaillib.MergeStoreIndex(consolidatedStoreIndex, partialStoreIndex)
-		if errno != 0 {
-			consolidatedStoreIndex.Dispose()
-			return "", longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
-		}
-		consolidatedStoreIndex.Dispose()
-		consolidatedStoreIndex = mergedStoreIndex
-	}
-
-	consolidatedStoreIndexName, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
-	if err != nil {
-		return "", longtaillib.Longtail_StoreIndex{}, err
-	}
-	for _, blob := range partialIndexBlobs {
-		if blob.Name == consolidatedStoreIndexName {
-			continue
-		}
-		objHandle, err := client.NewObject(blob.Name)
-		if err != nil {
-			consolidatedStoreIndex.Dispose()
-			return "", longtaillib.Longtail_StoreIndex{}, err
-		}
-		err = objHandle.Delete()
-		if err != nil {
-			// Someone else has also picked it up, which is fine
-			continue
-		}
-	}
-	return consolidatedStoreIndexName, consolidatedStoreIndex, nil
+	return copyIndex, nil
 }
 
-func addToStoreIndex(
+func getNewPartialIndexNames(
 	ctx context.Context,
 	client BlobClient,
-	storeIndex longtaillib.Longtail_StoreIndex) error {
-	consolidatedStoreIndexName, consolidatedStoreIndex, err := consolidateStoreIndex(ctx, client, storeIndex)
+	skipName string) ([]string, bool, error) {
+	exists := false
+	partialIndexBlobs, err := client.GetObjects("index/")
 	if err != nil {
-		return err
+		return []string{}, exists, err
 	}
-	defer consolidatedStoreIndex.Dispose()
-
-	storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(consolidatedStoreIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+	newIndexNames := []string{}
+	for _, blob := range partialIndexBlobs {
+		if blob.Name == skipName {
+			exists = true
+			continue
+		}
+		newIndexNames = append(newIndexNames, blob.Name)
 	}
-	objHandle, err := client.NewObject("store.lsi")
-	if err != nil {
-		return err
-	}
-
-	_, err = objHandle.Write(storeIndexBlob)
-	if err != nil {
-		return err
-	}
-
-	objHandle, err = client.NewObject(consolidatedStoreIndexName)
-	if err != nil {
-		return err
-	}
-
-	//	partialIndexBlobs, err := client.GetObjects("index/")
-	//	if err != nil {
-	//		return err
-	//	}
-
-	//	if len(partialIndexBlobs) != 1 {
-	//		// Someone else is also updating the index, tell caller to try again
-	//		return longtaillib.ErrEBUSY
-	//	}
-	//
-	//	if partialIndexBlobs[0].Name != consolidatedStoreIndexName {
-	//		// Someone else is also updating the index, tell caller to try again
-	//		return longtaillib.ErrEBUSY
-	//	}
-	return nil
+	return newIndexNames, exists, nil
 }
 
 func writeStoreIndex(
 	ctx context.Context,
-	blobClient BlobClient,
+	client BlobClient,
 	addedStoreIndex longtaillib.Longtail_StoreIndex) error {
+
+	storeIndex := longtaillib.Longtail_StoreIndex{}
+
+	checkPartialIndexes, err := client.GetObjects("index/")
+	if err != nil {
+		return err
+	}
+
+	if len(checkPartialIndexes) == 0 {
+		storeIndex, err = readStoreIndexBlob(ctx, client, "store.lsi")
+		if err != nil {
+			if !errors.Is(err, longtaillib.ErrENOENT) {
+				return err
+			}
+			errno := 0
+			storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+			if errno != 0 {
+				return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			}
+		}
+	} else {
+		errno := 0
+		storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+		if errno != 0 {
+			return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+		}
+	}
+
+	consolidatedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, addedStoreIndex)
+	storeIndex.Dispose()
+	if errno != 0 {
+		return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+	}
+
+	consolidatedStoreIndexName, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
+	if err != nil {
+		return err
+	}
+
+	storeUpdated := false
+	//delayTime := 100 * time.Millisecond
+
 	for {
-		err := addToStoreIndex(ctx, blobClient, addedStoreIndex)
-		if !errors.Is(err, longtaillib.ErrEBUSY) {
+		newIndexNames, exists, err := getNewPartialIndexNames(ctx, client, consolidatedStoreIndexName)
+		if err != nil {
+			consolidatedStoreIndex.Dispose()
 			return err
 		}
-		time.Sleep(50 * time.Millisecond)
+
+		if storeUpdated && !exists {
+			// Someone else picked up our merged (and already stored) index, let it go...
+			consolidatedStoreIndex.Dispose()
+			return nil
+		}
+
+		consolidatedNames := []string{}
+		for _, name := range newIndexNames {
+			partialStoreIndex, err := readStoreIndexBlob(ctx, client, name)
+			if err != nil {
+				continue
+			}
+			mergedStoreIndex, errno := longtaillib.MergeStoreIndex(consolidatedStoreIndex, partialStoreIndex)
+			partialStoreIndex.Dispose()
+			if errno != 0 {
+				consolidatedStoreIndex.Dispose()
+				return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			}
+			consolidatedStoreIndex.Dispose()
+			consolidatedStoreIndex = mergedStoreIndex
+			consolidatedNames = append(consolidatedNames, name)
+		}
+
+		if len(consolidatedNames) == 0 {
+			if storeUpdated {
+				log.Printf("writeStoreIndex updated")
+				return nil
+			}
+			storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(consolidatedStoreIndex)
+			if errno != 0 {
+				consolidatedStoreIndex.Dispose()
+				return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			}
+			objHandle, err := client.NewObject("store.lsi")
+			if err != nil {
+				consolidatedStoreIndex.Dispose()
+				return err
+			}
+
+			_, err = objHandle.Write(storeIndexBlob)
+			if err != nil {
+				consolidatedStoreIndex.Dispose()
+				return err
+			}
+
+			storeUpdated = true
+
+			continue
+		}
+
+		consolidatedStoreIndexName2, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
+		if err != nil {
+			consolidatedStoreIndex.Dispose()
+			return err
+		}
+		if consolidatedStoreIndexName2 != consolidatedStoreIndexName {
+			consolidatedNames = append(consolidatedNames, consolidatedStoreIndexName)
+			consolidatedStoreIndexName = consolidatedStoreIndexName2
+		}
+
+		for _, name := range consolidatedNames {
+			objHandle, err := client.NewObject(name)
+			if err != nil {
+				consolidatedStoreIndex.Dispose()
+				return err
+			}
+			err = objHandle.Delete()
+			if err != nil {
+				// Someone else has also picked it up, which is fine
+				continue
+			}
+		}
+
+		storeUpdated = false
 	}
 }
 

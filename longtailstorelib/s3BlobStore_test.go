@@ -89,8 +89,8 @@ func TestS3StoreIndexSync(t *testing.T) {
 
 	blobStore, _ := NewS3BlobStore(u)
 
-	blockGenerateCount := 3
-	workerCount := 85
+	blockGenerateCount := 1
+	workerCount := 20
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 
@@ -112,20 +112,20 @@ func TestS3StoreIndexSync(t *testing.T) {
 
 			writeStoreIndex(context.Background(), client, storeIndex)
 
-			/*			newStoreIndex, _ := readStoreIndex(context.Background(), client)
-						lookup := map[uint64]bool{}
-						for _, h := range newStoreIndex.GetBlockHashes() {
-							lookup[h] = true
-						}*/
+			newStoreIndex, _ := readStoreIndex(context.Background(), client)
+			lookup := map[uint64]bool{}
+			for _, h := range newStoreIndex.GetBlockHashes() {
+				lookup[h] = true
+			}
 
 			blockHashes := storeIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
 				generatedBlockHashes <- h
-				/*				_, exists := lookup[h]
-								if !exists {
-									t.Errorf("TestStoreIndexSync() Missing block %d", h)
-								}*/
+				_, exists := lookup[h]
+				if !exists {
+					t.Errorf("TestStoreIndexSync() Missing block %d", h)
+				}
 			}
 
 			wg.Done()

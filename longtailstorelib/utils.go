@@ -177,27 +177,27 @@ func readStoreIndexBlob(
 func consolidateStoreIndex(
 	ctx context.Context,
 	client BlobClient,
-	addedStoreIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
+	addedStoreIndex longtaillib.Longtail_StoreIndex) (string, longtaillib.Longtail_StoreIndex, error) {
 
 	_, err := writePartialStoreIndex(ctx, client, addedStoreIndex)
 	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, err
+		return "", longtaillib.Longtail_StoreIndex{}, err
 	}
 
 	partialIndexBlobs, err := client.GetObjects("index/")
 	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, err
+		return "", longtaillib.Longtail_StoreIndex{}, err
 	}
 
 	consolidatedStoreIndex, err := readStoreIndexBlob(ctx, client, "store.lsi")
 	if err != nil {
 		if !errors.Is(err, longtaillib.ErrENOENT) {
-			return longtaillib.Longtail_StoreIndex{}, err
+			return "", longtaillib.Longtail_StoreIndex{}, err
 		}
 		errno := 0
 		consolidatedStoreIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
 		if errno != 0 {
-			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			return "", longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 		}
 	}
 
@@ -205,13 +205,13 @@ func consolidateStoreIndex(
 		partialStoreIndex, err := readStoreIndexBlob(ctx, client, blob.Name)
 		if err != nil {
 			consolidatedStoreIndex.Dispose()
-			// Somebody has changed stuff behind our back
-			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrEBUSY
+			// Someone else is also updating the index, tell caller to try again
+			return "", longtaillib.Longtail_StoreIndex{}, longtaillib.ErrEBUSY
 		}
 		mergedStoreIndex, errno := longtaillib.MergeStoreIndex(consolidatedStoreIndex, partialStoreIndex)
 		if errno != 0 {
 			consolidatedStoreIndex.Dispose()
-			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			return "", longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 		}
 		consolidatedStoreIndex.Dispose()
 		consolidatedStoreIndex = mergedStoreIndex
@@ -219,7 +219,7 @@ func consolidateStoreIndex(
 
 	consolidatedStoreIndexName, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
 	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, err
+		return "", longtaillib.Longtail_StoreIndex{}, err
 	}
 	for _, blob := range partialIndexBlobs {
 		if blob.Name == consolidatedStoreIndexName {
@@ -228,7 +228,7 @@ func consolidateStoreIndex(
 		objHandle, err := client.NewObject(blob.Name)
 		if err != nil {
 			consolidatedStoreIndex.Dispose()
-			return longtaillib.Longtail_StoreIndex{}, err
+			return "", longtaillib.Longtail_StoreIndex{}, err
 		}
 		err = objHandle.Delete()
 		if err != nil {
@@ -236,14 +236,14 @@ func consolidateStoreIndex(
 			continue
 		}
 	}
-	return consolidatedStoreIndex, nil
+	return consolidatedStoreIndexName, consolidatedStoreIndex, nil
 }
 
 func addToStoreIndex(
 	ctx context.Context,
 	client BlobClient,
 	storeIndex longtaillib.Longtail_StoreIndex) error {
-	consolidatedStoreIndex, err := consolidateStoreIndex(ctx, client, storeIndex)
+	consolidatedStoreIndexName, consolidatedStoreIndex, err := consolidateStoreIndex(ctx, client, storeIndex)
 	if err != nil {
 		return err
 	}
@@ -263,6 +263,25 @@ func addToStoreIndex(
 		return err
 	}
 
+	objHandle, err = client.NewObject(consolidatedStoreIndexName)
+	if err != nil {
+		return err
+	}
+
+	//	partialIndexBlobs, err := client.GetObjects("index/")
+	//	if err != nil {
+	//		return err
+	//	}
+
+	//	if len(partialIndexBlobs) != 1 {
+	//		// Someone else is also updating the index, tell caller to try again
+	//		return longtaillib.ErrEBUSY
+	//	}
+	//
+	//	if partialIndexBlobs[0].Name != consolidatedStoreIndexName {
+	//		// Someone else is also updating the index, tell caller to try again
+	//		return longtaillib.ErrEBUSY
+	//	}
 	return nil
 }
 

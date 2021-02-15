@@ -336,10 +336,20 @@ func TestStoreIndexSync(t *testing.T) {
 
 			writeStoreIndex(context.Background(), client, storeIndex)
 
+			/*			newStoreIndex, _ := readStoreIndex(context.Background(), client)
+						lookup := map[uint64]bool{}
+						for _, h := range newStoreIndex.GetBlockHashes() {
+							lookup[h] = true
+						}*/
+
 			blockHashes := storeIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
 				generatedBlockHashes <- h
+				/*				_, exists := lookup[h]
+								if !exists {
+									t.Errorf("TestStoreIndexSync() Missing block %d", h)
+								}*/
 			}
 
 			wg.Done()

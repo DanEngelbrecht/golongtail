@@ -3,6 +3,7 @@ package longtailstorelib
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 type s3BlobStore struct {
@@ -94,14 +96,16 @@ func (blobClient *s3BlobClient) String() string {
 }
 
 func (blobObject *s3BlobObject) Read() ([]byte, error) {
-	//todo: if file does not exist - return nil, nil
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(blobObject.client.store.bucketName),
 		Key:    aws.String(blobObject.path),
 	}
 	result, err := blobObject.client.client.GetObject(blobObject.client.ctx, input)
 	if err != nil {
-		fmt.Println(err.Error())
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	data, err := ioutil.ReadAll(result.Body)

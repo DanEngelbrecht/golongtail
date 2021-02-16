@@ -150,7 +150,7 @@ func writePartialStoreIndex(
 		return "", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 	storeIndexSha := sha1.Sum(storeIndexBlob)
-	storeIndexName := fmt.Sprintf("index/%x.plsi", storeIndexSha)
+	storeIndexName := fmt.Sprintf("index/%x.lsi", storeIndexSha)
 	objHandle, err := client.NewObject(storeIndexName)
 	_, err = objHandle.Write(storeIndexBlob)
 	if err != nil {
@@ -211,42 +211,10 @@ func writeStoreIndex(
 	client BlobClient,
 	addedStoreIndex longtaillib.Longtail_StoreIndex) error {
 
-	storeIndex := longtaillib.Longtail_StoreIndex{}
-
-	checkPartialIndexes, err := client.GetObjects("index/")
+	consolidatedStoreIndex, err := copyStoreIndex(addedStoreIndex)
 	if err != nil {
-		log.Printf("writeStoreIndex: client.GetObjects failed with %v\n", err)
+		log.Printf("writeStoreIndex: longtaillib.MergeStoreIndex failed with %v\n", err)
 		return err
-	}
-
-	if len(checkPartialIndexes) == 0 {
-		storeIndex, err = readStoreIndexBlob(ctx, client, "store.lsi")
-		if err != nil {
-			if !errors.Is(err, longtaillib.ErrENOENT) {
-				log.Printf("writeStoreIndex: readStoreIndexBlob failed with %v\n", err)
-				return err
-			}
-			errno := 0
-			storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-			if errno != 0 {
-				log.Printf("writeStoreIndex: longtaillib.CreateStoreIndexFromBlocks failed with %v\n", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
-				return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
-			}
-		}
-	} else {
-		errno := 0
-		storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-		if errno != 0 {
-			log.Printf("writeStoreIndex: longtaillib.CreateStoreIndexFromBlocks failed with %v\n", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
-			return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
-		}
-	}
-
-	consolidatedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, addedStoreIndex)
-	storeIndex.Dispose()
-	if errno != 0 {
-		log.Printf("writeStoreIndex: longtaillib.MergeStoreIndex failed with %v\n", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 
 	consolidatedStoreIndexName, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
@@ -254,31 +222,14 @@ func writeStoreIndex(
 		log.Printf("writeStoreIndex: writePartialStoreIndex failed with %v\n", err)
 		return err
 	}
-	//	log.Printf("writeStoreIndex: Wrote initial `%s`\n", consolidatedStoreIndexName)
-
-	storeUpdated := false
+	log.Printf("writeStoreIndex: Wrote initial `%s`\n", consolidatedStoreIndexName)
 
 	for {
-		newIndexNames, exists, err := getNewPartialIndexNames(ctx, client, consolidatedStoreIndexName)
+		newIndexNames, _, err := getNewPartialIndexNames(ctx, client, consolidatedStoreIndexName)
 		if err != nil {
 			consolidatedStoreIndex.Dispose()
 			log.Printf("writeStoreIndex: getNewPartialIndexNames failed with %v\n", err)
 			return err
-		}
-
-		if storeUpdated {
-			if !exists {
-				//				log.Print("writeStoreIndex: Someone else picked up our merged (and already stored) index")
-				// Someone else picked up our merged (and already stored) index, let it go...
-				consolidatedStoreIndex.Dispose()
-				return nil
-			}
-			if len(newIndexNames) == 0 {
-				//				log.Print("writeStoreIndex: No new indexes present to pick up")
-				// No new indexes present to pick up
-				consolidatedStoreIndex.Dispose()
-				return nil
-			}
 		}
 
 		consolidatedNames := []string{}
@@ -300,11 +251,23 @@ func writeStoreIndex(
 		}
 
 		if len(consolidatedNames) == 0 {
-			if storeUpdated {
-				//				log.Printf("writeStoreIndex updated")
-				return nil
+			storeIndex, err := readStoreIndex(ctx, client)
+			if err != nil {
+				consolidatedStoreIndex.Dispose()
+				log.Printf("writeStoreIndex: readStoreIndex failed with %v\n", err)
+				return err
 			}
-			storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(consolidatedStoreIndex)
+
+			newStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, consolidatedStoreIndex)
+			storeIndex.Dispose()
+			if errno != 0 {
+				consolidatedStoreIndex.Dispose()
+				log.Printf("writeStoreIndex: longtaillib.MergeStoreIndex failed with %v\n", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
+				return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			}
+
+			storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(newStoreIndex)
+			newStoreIndex.Dispose()
 			if errno != 0 {
 				consolidatedStoreIndex.Dispose()
 				log.Printf("writeStoreIndex: WriteStoreIndexToBuffer failed with %v\n", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
@@ -324,41 +287,37 @@ func writeStoreIndex(
 				return err
 			}
 
-			//			log.Print("writeStoreIndex: Store updated")
+			log.Print("writeStoreIndex: Store updated")
+			consolidatedStoreIndex.Dispose()
 
-			storeUpdated = true
-
-			continue
+			return nil
 		}
+		log.Printf("writeStoreIndex: Consolidated %d indexes\n", len(consolidatedNames)+1)
 
-		if len(consolidatedNames) > 0 {
-			consolidatedStoreIndexName2, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
+		tmpName, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
+		if err != nil {
+			consolidatedStoreIndex.Dispose()
+			log.Printf("writeStoreIndex: writePartialStoreIndex failed with %v\n", err)
+			return err
+		}
+		consolidatedNames = append(consolidatedNames, consolidatedStoreIndexName)
+		consolidatedStoreIndexName = tmpName
+
+		log.Printf("writeStoreIndex: Wrote updated `%s`\n", consolidatedStoreIndexName)
+
+		for _, name := range consolidatedNames {
+			objHandle, err := client.NewObject(name)
 			if err != nil {
 				consolidatedStoreIndex.Dispose()
-				log.Printf("writeStoreIndex: writePartialStoreIndex failed with %v\n", err)
+				log.Printf("writeStoreIndex: client.NewObject with %v\n", err)
 				return err
 			}
-			consolidatedNames = append(consolidatedNames, consolidatedStoreIndexName)
-			consolidatedStoreIndexName = consolidatedStoreIndexName2
-
-			//			log.Printf("writeStoreIndex: Wrote updated `%s`\n", consolidatedStoreIndexName)
-
-			for _, name := range consolidatedNames {
-				objHandle, err := client.NewObject(name)
-				if err != nil {
-					consolidatedStoreIndex.Dispose()
-					log.Printf("writeStoreIndex: client.NewObject with %v\n", err)
-					return err
-				}
-				err = objHandle.Delete()
-				if err != nil {
-					// Someone else has also picked it up, which is fine
-					continue
-				}
+			err = objHandle.Delete()
+			if err != nil {
+				// Someone else has also picked it up, which is fine
+				continue
 			}
 		}
-
-		storeUpdated = false
 	}
 }
 

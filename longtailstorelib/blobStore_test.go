@@ -320,8 +320,8 @@ func TestStoreIndexSync(t *testing.T) {
 	//t.Skip()
 	blobStore, _ := NewTestBlobStore("the_path")
 
-	blockGenerateCount := 3
-	workerCount := 82
+	blockGenerateCount := 2
+	workerCount := 127
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 

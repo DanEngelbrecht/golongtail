@@ -233,7 +233,6 @@ func writeStoreIndex(
 		log.Printf("writeStoreIndex: writePartialStoreIndex failed with %v\n", err)
 		return err
 	}
-	log.Printf("writeStoreIndex: Wrote initial `%s`\n", consolidatedStoreIndexName)
 
 	for {
 		newIndexNames, _, err := getNewPartialIndexNames(ctx, client, consolidatedStoreIndexName)
@@ -287,12 +286,10 @@ func writeStoreIndex(
 
 			_, err = writeBlobWithRetry(ctx, client, "store.lsi", true, storeIndexBlob)
 
-			log.Print("writeStoreIndex: Store updated")
 			consolidatedStoreIndex.Dispose()
 
 			return nil
 		}
-		log.Printf("writeStoreIndex: Consolidated %d indexes\n", len(consolidatedNames)+1)
 
 		tmpName, err := writePartialStoreIndex(ctx, client, consolidatedStoreIndex)
 		if err != nil {
@@ -303,8 +300,6 @@ func writeStoreIndex(
 		consolidatedNames = append(consolidatedNames, consolidatedStoreIndexName)
 		consolidatedStoreIndexName = tmpName
 
-		log.Printf("writeStoreIndex: Wrote updated `%s`\n", consolidatedStoreIndexName)
-
 		for _, name := range consolidatedNames {
 			objHandle, err := client.NewObject(name)
 			if err != nil {
@@ -312,11 +307,7 @@ func writeStoreIndex(
 				log.Printf("writeStoreIndex: client.NewObject with %v\n", err)
 				return err
 			}
-			err = objHandle.Delete()
-			if err != nil {
-				// Someone else has also picked it up, which is fine
-				continue
-			}
+			_ = objHandle.Delete()
 		}
 	}
 }

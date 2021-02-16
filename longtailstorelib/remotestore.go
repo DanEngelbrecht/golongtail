@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
@@ -112,7 +111,7 @@ func putStoredBlock(
 		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
 	}
 
-	retryCount, err := writeBlobWithRetry(ctx, blobClient, key, blob)
+	retryCount, err := writeBlobWithRetry(ctx, blobClient, key, false, blob)
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], uint64(retryCount))
 	if err != nil {
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1)
@@ -590,21 +589,6 @@ func contentIndexWorker(
 			return errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), s.blobStore.String())
 		}
 		err := writeStoreIndex(ctx, client, addedStoreIndex)
-		if err != nil {
-			log.Printf("Retrying store index in store %s\n", s.String())
-			err = writeStoreIndex(ctx, client, addedStoreIndex)
-		}
-		if err != nil {
-			log.Printf("Retrying 500 ms delayed store index in store %s\n", s.String())
-			time.Sleep(500 * time.Millisecond)
-			err = writeStoreIndex(ctx, client, addedStoreIndex)
-		}
-		if err != nil {
-			log.Printf("Retrying 2 s delayed store index in store %s\n", s.String())
-			time.Sleep(2 * time.Second)
-			err = writeStoreIndex(ctx, client, addedStoreIndex)
-		}
-
 		if err != nil {
 			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 		}

@@ -65,6 +65,7 @@ func writeBlobWithRetry(
 	ctx context.Context,
 	client BlobClient,
 	key string,
+	forceWrite bool,
 	blob []byte) (int, error) {
 
 	retryCount := 0
@@ -72,30 +73,41 @@ func writeBlobWithRetry(
 	if err != nil {
 		return retryCount, err
 	}
-	if exists, err := objHandle.Exists(); err == nil && !exists {
-		_, err := objHandle.Write(blob)
-		if err != nil {
-			log.Printf("Retrying putBlob %s in store %s\n", key, client.String())
-			retryCount++
-			_, err = objHandle.Write(blob)
-		}
-		if err != nil {
-			log.Printf("Retrying 500 ms delayed putBlob %s in store %s\n", key, client.String())
-			time.Sleep(500 * time.Millisecond)
-			retryCount++
-			_, err = objHandle.Write(blob)
-		}
-		if err != nil {
-			log.Printf("Retrying 2 s delayed putBlob %s in store %s\n", key, client.String())
-			time.Sleep(2 * time.Second)
-			retryCount++
-			_, err = objHandle.Write(blob)
-		}
-
+	write := forceWrite
+	if !forceWrite {
+		exists, err := objHandle.Exists()
 		if err != nil {
 			return retryCount, err
 		}
+		write = !exists
 	}
+	if !write {
+		return 0, nil
+	}
+
+	_, err = objHandle.Write(blob)
+	if err != nil {
+		log.Printf("Retrying putBlob %s in store %s\n", key, client.String())
+		retryCount++
+		_, err = objHandle.Write(blob)
+	}
+	if err != nil {
+		log.Printf("Retrying 500 ms delayed putBlob %s in store %s\n", key, client.String())
+		time.Sleep(500 * time.Millisecond)
+		retryCount++
+		_, err = objHandle.Write(blob)
+	}
+	if err != nil {
+		log.Printf("Retrying 2 s delayed putBlob %s in store %s\n", key, client.String())
+		time.Sleep(2 * time.Second)
+		retryCount++
+		_, err = objHandle.Write(blob)
+	}
+
+	if err != nil {
+		return retryCount, err
+	}
+
 	return retryCount, nil
 }
 
@@ -151,8 +163,7 @@ func writePartialStoreIndex(
 	}
 	storeIndexSha := sha1.Sum(storeIndexBlob)
 	storeIndexName := fmt.Sprintf("index/%x.lsi", storeIndexSha)
-	objHandle, err := client.NewObject(storeIndexName)
-	_, err = objHandle.Write(storeIndexBlob)
+	_, err := writeBlobWithRetry(ctx, client, storeIndexName, false, storeIndexBlob)
 	if err != nil {
 		return "", err
 	}
@@ -273,19 +284,8 @@ func writeStoreIndex(
 				log.Printf("writeStoreIndex: WriteStoreIndexToBuffer failed with %v\n", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
 				return longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 			}
-			objHandle, err := client.NewObject("store.lsi")
-			if err != nil {
-				consolidatedStoreIndex.Dispose()
-				log.Printf("writeStoreIndex: client.NewObject failed with %v\n", err)
-				return err
-			}
 
-			_, err = objHandle.Write(storeIndexBlob)
-			if err != nil {
-				consolidatedStoreIndex.Dispose()
-				log.Printf("writeStoreIndex: objHandle.Write failed with %v\n", err)
-				return err
-			}
+			_, err = writeBlobWithRetry(ctx, client, "store.lsi", true, storeIndexBlob)
 
 			log.Print("writeStoreIndex: Store updated")
 			consolidatedStoreIndex.Dispose()

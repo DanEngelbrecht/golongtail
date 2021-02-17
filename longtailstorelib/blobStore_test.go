@@ -3,6 +3,7 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"testing"
@@ -50,9 +51,7 @@ func (blobClient *testBlobClient) NewObject(filepath string) (BlobObject, error)
 }
 
 func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
-	time.Sleep(50 * time.Millisecond)
 	blobClient.store.blobsMutex.RLock()
-	defer blobClient.store.blobsMutex.RUnlock()
 	properties := make([]BlobProperties, 0)
 	i := 0
 	for key, blob := range blobClient.store.blobs {
@@ -61,6 +60,8 @@ func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobPropertie
 		}
 		i++
 	}
+	blobClient.store.blobsMutex.RUnlock()
+	time.Sleep(time.Duration(rand.Intn(10)+1) * time.Millisecond)
 	return properties, nil
 }
 
@@ -72,47 +73,47 @@ func (blobClient *testBlobClient) String() string {
 }
 
 func (blobObject *testBlobObject) Exists() (bool, error) {
-	time.Sleep(20 * time.Millisecond)
 	blobObject.client.store.blobsMutex.RLock()
-	defer blobObject.client.store.blobsMutex.RUnlock()
 	_, exists := blobObject.client.store.blobs[blobObject.path]
+	blobObject.client.store.blobsMutex.RUnlock()
+	time.Sleep(time.Duration(rand.Intn(10)+2) * time.Millisecond)
 	return exists, nil
 }
 
 func (blobObject *testBlobObject) Read() ([]byte, error) {
-	time.Sleep(50 * time.Millisecond)
 	blobObject.client.store.blobsMutex.RLock()
-	defer blobObject.client.store.blobsMutex.RUnlock()
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
+	blobObject.client.store.blobsMutex.RUnlock()
 	if !exists {
 		return nil, nil
 	}
+	time.Sleep(time.Duration(rand.Intn(3)+len(blob.data)+2) * time.Millisecond)
 	return blob.data, nil
 }
 
 func (blobObject *testBlobObject) Write(data []byte) (bool, error) {
-	time.Sleep(100 * time.Millisecond)
 	blobObject.client.store.blobsMutex.Lock()
-	defer blobObject.client.store.blobsMutex.Unlock()
 
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
 
 	if !exists {
 		blob = &testBlob{path: blobObject.path, data: data}
 		blobObject.client.store.blobs[blobObject.path] = blob
+		blobObject.client.store.blobsMutex.Unlock()
+		time.Sleep(time.Duration(rand.Intn(3)+len(data)+3) * time.Millisecond)
 		return true, nil
 	}
-
 	blob.data = data
+	blobObject.client.store.blobsMutex.Unlock()
+	time.Sleep((time.Duration(len(data)) + 3) * time.Millisecond)
 	return true, nil
 }
 
 func (blobObject *testBlobObject) Delete() error {
-	time.Sleep(20 * time.Millisecond)
 	blobObject.client.store.blobsMutex.Lock()
-	defer blobObject.client.store.blobsMutex.Unlock()
-
 	delete(blobObject.client.store.blobs, blobObject.path)
+	blobObject.client.store.blobsMutex.Unlock()
+	time.Sleep(time.Duration(rand.Intn(3)+rand.Intn(10)+2) * time.Millisecond)
 	return nil
 }
 
@@ -341,9 +342,9 @@ func TestStoreIndexSync(t *testing.T) {
 			storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
 			defer storeIndex.Dispose()
 
-			writeStoreIndex(context.Background(), client, storeIndex)
+			writeStoreIndex(client, storeIndex)
 
-			newStoreIndex, _ := readStoreIndex(context.Background(), client)
+			newStoreIndex, _ := readStoreIndex(client)
 			lookup := map[uint64]bool{}
 			for _, h := range newStoreIndex.GetBlockHashes() {
 				lookup[h] = true
@@ -365,7 +366,7 @@ func TestStoreIndexSync(t *testing.T) {
 	wg.Wait()
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	newStoreIndex, _ := readStoreIndex(context.Background(), client)
+	newStoreIndex, _ := readStoreIndex(client)
 	lookup := map[uint64]bool{}
 	for _, h := range newStoreIndex.GetBlockHashes() {
 		lookup[h] = true

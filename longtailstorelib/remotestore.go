@@ -95,7 +95,6 @@ func (s *remoteStore) String() string {
 }
 
 func putStoredBlock(
-	ctx context.Context,
 	s *remoteStore,
 	blobClient BlobClient,
 	blockIndexMessages chan<- blockIndexMessage,
@@ -111,7 +110,7 @@ func putStoredBlock(
 		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
 	}
 
-	retryCount, err := writeBlobWithRetry(ctx, blobClient, key, false, blob)
+	retryCount, err := writeBlobWithRetry(blobClient, key, false, blob)
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], uint64(retryCount))
 	if err != nil {
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1)
@@ -135,7 +134,6 @@ func putStoredBlock(
 }
 
 func getStoredBlock(
-	ctx context.Context,
 	s *remoteStore,
 	blobClient BlobClient,
 	blockHash uint64) (longtaillib.Longtail_StoredBlock, error) {
@@ -144,7 +142,7 @@ func getStoredBlock(
 
 	key := GetBlockPath("chunks", blockHash)
 
-	storedBlockData, retryCount, err := readBlobWithRetry(ctx, blobClient, key)
+	storedBlockData, retryCount, err := readBlobWithRetry(blobClient, key)
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], uint64(retryCount))
 
 	if err != nil || storedBlockData == nil {
@@ -193,7 +191,7 @@ func fetchBlock(
 	s.prefetchBlocks[getMsg.blockHash] = prefetchedBlock
 	s.fetchedBlocks[getMsg.blockHash] = true
 	s.fetchedBlocksSync.Unlock()
-	storedBlock, getStoredBlockErr := getStoredBlock(ctx, s, client, getMsg.blockHash)
+	storedBlock, getStoredBlockErr := getStoredBlock(s, client, getMsg.blockHash)
 	s.fetchedBlocksSync.Lock()
 	completeCallbacks := prefetchedBlock.completeCallbacks
 	delete(s.prefetchBlocks, getMsg.blockHash)
@@ -235,7 +233,7 @@ func prefetchBlock(
 	s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
 	s.fetchedBlocksSync.Unlock()
 
-	storedBlock, getErr := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
+	storedBlock, getErr := getStoredBlock(s, client, prefetchMsg.blockHash)
 	if getErr != nil {
 		return
 	}
@@ -300,7 +298,7 @@ func remoteWorker(
 					putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 					continue
 				}
-				err := putStoredBlock(ctx, s, client, blockIndexMessages, putMsg.storedBlock)
+				err := putStoredBlock(s, client, blockIndexMessages, putMsg.storedBlock)
 				putMsg.asyncCompleteAPI.OnComplete(longtaillib.ErrorToErrno(err, longtaillib.EIO))
 			} else {
 				run = false
@@ -321,7 +319,7 @@ func remoteWorker(
 							putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 							continue
 						}
-						err := putStoredBlock(ctx, s, client, blockIndexMessages, putMsg.storedBlock)
+						err := putStoredBlock(s, client, blockIndexMessages, putMsg.storedBlock)
 						putMsg.asyncCompleteAPI.OnComplete(longtaillib.ErrorToErrno(err, longtaillib.EIO))
 					} else {
 						run = false
@@ -341,7 +339,7 @@ func remoteWorker(
 							putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 							continue
 						}
-						err := putStoredBlock(ctx, s, client, blockIndexMessages, putMsg.storedBlock)
+						err := putStoredBlock(s, client, blockIndexMessages, putMsg.storedBlock)
 						putMsg.asyncCompleteAPI.OnComplete(longtaillib.ErrorToErrno(err, longtaillib.EIO))
 					} else {
 						run = false
@@ -451,7 +449,7 @@ func contentIndexWorker(
 	if accessType == Init {
 		saveStoreIndex = true
 	} else {
-		storeIndex, err = readStoreIndex(ctx, client)
+		storeIndex, err = readStoreIndex(client)
 		if err != nil {
 			log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
 		}
@@ -483,7 +481,7 @@ func contentIndexWorker(
 				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
 			}
 			log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
-			err := writeStoreIndex(ctx, client, storeIndex)
+			err := writeStoreIndex(client, storeIndex)
 			if err != nil {
 				log.Printf("Failed to update store index in store %s\n", s.String())
 				saveStoreIndex = true
@@ -588,7 +586,7 @@ func contentIndexWorker(
 		if errno != 0 {
 			return errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), s.blobStore.String())
 		}
-		err := writeStoreIndex(ctx, client, addedStoreIndex)
+		err := writeStoreIndex(client, addedStoreIndex)
 		if err != nil {
 			storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 		}

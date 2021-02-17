@@ -14,7 +14,7 @@ func TestGCSBlobStore(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store")
+	u, err := url.Parse("gs://longtail-test/test-gcs-blob-store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -75,9 +75,9 @@ func TestGCSBlobStore(t *testing.T) {
 
 func TestGCSStoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
-	t.Skip()
+	//t.Skip()
 
-	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
+	u, err := url.Parse("gs://longtail-test/test-gcs-blob-store-sync")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -114,12 +114,12 @@ func TestGCSStoreIndexSync(t *testing.T) {
 			}
 			defer storeIndex.Dispose()
 
-			err = writeStoreIndex(context.Background(), client, storeIndex)
+			err = writeStoreIndex(client, storeIndex)
 			if err != nil {
 				log.Fatalf("%v", err)
 			}
 
-			newStoreIndex, _ := readStoreIndex(context.Background(), client)
+			newStoreIndex, _ := readStoreIndex(client)
 			lookup := map[uint64]bool{}
 			for _, h := range newStoreIndex.GetBlockHashes() {
 				lookup[h] = true
@@ -144,7 +144,7 @@ func TestGCSStoreIndexSync(t *testing.T) {
 		log.Fatalf("%v", err)
 	}
 	defer client.Close()
-	newStoreIndex, err := readStoreIndex(context.Background(), client)
+	newStoreIndex, err := readStoreIndex(client)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}

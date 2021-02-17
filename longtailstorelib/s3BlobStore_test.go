@@ -110,9 +110,9 @@ func TestS3StoreIndexSync(t *testing.T) {
 			storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
 			defer storeIndex.Dispose()
 
-			writeStoreIndex(context.Background(), client, storeIndex)
+			writeStoreIndex(client, storeIndex)
 
-			newStoreIndex, _ := readStoreIndex(context.Background(), client)
+			newStoreIndex, _ := readStoreIndex(client)
 			lookup := map[uint64]bool{}
 			for _, h := range newStoreIndex.GetBlockHashes() {
 				lookup[h] = true
@@ -134,7 +134,7 @@ func TestS3StoreIndexSync(t *testing.T) {
 	wg.Wait()
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	newStoreIndex, _ := readStoreIndex(context.Background(), client)
+	newStoreIndex, _ := readStoreIndex(client)
 	lookup := map[uint64]bool{}
 	for _, h := range newStoreIndex.GetBlockHashes() {
 		lookup[h] = true

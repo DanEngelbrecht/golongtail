@@ -82,7 +82,7 @@ func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {
 func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
 	var items []BlobProperties
 	it := blobClient.bucket.Objects(blobClient.ctx, &storage.Query{
-		Prefix: blobClient.store.prefix, // + pathPrefix,
+		Prefix: blobClient.store.prefix + pathPrefix,
 	})
 
 	for {

@@ -77,7 +77,7 @@ func TestGCSStoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	//t.Skip()
 
-	u, err := url.Parse("gs://longtail-test/test-gcs-blob-store-sync")
+	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -88,7 +88,7 @@ func TestGCSStoreIndexSync(t *testing.T) {
 	}
 
 	blockGenerateCount := 1
-	workerCount := 20
+	workerCount := 85
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 
@@ -97,10 +97,7 @@ func TestGCSStoreIndexSync(t *testing.T) {
 		wg.Add(1)
 		//seedBase := blockGenerateCount * n
 		go func(blockGenerateCount int, seedBase int) {
-			client, err := blobStore.NewClient(context.Background())
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
+			client, _ := blobStore.NewClient(context.Background())
 			defer client.Close()
 			blocks := []longtaillib.Longtail_BlockIndex{}
 			for i := 0; i < blockGenerateCount; i++ {
@@ -108,16 +105,10 @@ func TestGCSStoreIndexSync(t *testing.T) {
 				blocks = append(blocks, block.GetBlockIndex())
 			}
 
-			storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
-			if errno != 0 {
-				log.Fatalf("%d", errno)
-			}
+			storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
 			defer storeIndex.Dispose()
 
-			err = writeStoreIndex(client, storeIndex)
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
+			writeStoreIndex(client, storeIndex)
 
 			newStoreIndex, _ := readStoreIndex(client)
 			lookup := map[uint64]bool{}
@@ -139,15 +130,9 @@ func TestGCSStoreIndexSync(t *testing.T) {
 		}(blockGenerateCount, blockGenerateCount*n)
 	}
 	wg.Wait()
-	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
+	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	newStoreIndex, err := readStoreIndex(client)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
+	newStoreIndex, _ := readStoreIndex(client)
 	lookup := map[uint64]bool{}
 	for _, h := range newStoreIndex.GetBlockHashes() {
 		lookup[h] = true

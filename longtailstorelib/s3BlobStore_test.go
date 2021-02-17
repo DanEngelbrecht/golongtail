@@ -13,7 +13,7 @@ func TestS3BlobStore(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
-	u, err := url.Parse("s3://longtail-test/test-gcs-blob-store")
+	u, err := url.Parse("s3://longtail-test/test-s3-blob-store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -82,7 +82,7 @@ func TestS3StoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
-	u, err := url.Parse("s3://longtail-test/test-gcs-blob-store-sync")
+	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-sync")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -124,7 +124,7 @@ func TestS3StoreIndexSync(t *testing.T) {
 				generatedBlockHashes <- h
 				_, exists := lookup[h]
 				if !exists {
-					t.Errorf("TestStoreIndexSync() Missing block %d", h)
+					t.Errorf("TestStoreIndexSync() Missing direct block %d", h)
 				}
 			}
 

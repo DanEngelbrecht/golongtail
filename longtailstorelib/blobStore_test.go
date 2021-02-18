@@ -3,11 +3,9 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
@@ -61,7 +59,7 @@ func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobPropertie
 		i++
 	}
 	blobClient.store.blobsMutex.RUnlock()
-	time.Sleep(time.Duration(rand.Intn(10)+1) * time.Millisecond)
+	//	time.Sleep(time.Duration(rand.Intn(10)+1) * time.Millisecond)
 	return properties, nil
 }
 
@@ -76,7 +74,7 @@ func (blobObject *testBlobObject) Exists() (bool, error) {
 	blobObject.client.store.blobsMutex.RLock()
 	_, exists := blobObject.client.store.blobs[blobObject.path]
 	blobObject.client.store.blobsMutex.RUnlock()
-	time.Sleep(time.Duration(rand.Intn(10)+2) * time.Millisecond)
+	//	time.Sleep(time.Duration(rand.Intn(10)+2) * time.Millisecond)
 	return exists, nil
 }
 
@@ -87,7 +85,7 @@ func (blobObject *testBlobObject) Read() ([]byte, error) {
 	if !exists {
 		return nil, nil
 	}
-	time.Sleep(time.Duration(rand.Intn(3)+len(blob.data)+2) * time.Millisecond)
+	//	time.Sleep(time.Duration(rand.Intn(3)+len(blob.data)+2) * time.Millisecond)
 	return blob.data, nil
 }
 
@@ -100,12 +98,12 @@ func (blobObject *testBlobObject) Write(data []byte) (bool, error) {
 		blob = &testBlob{path: blobObject.path, data: data}
 		blobObject.client.store.blobs[blobObject.path] = blob
 		blobObject.client.store.blobsMutex.Unlock()
-		time.Sleep(time.Duration(rand.Intn(3)+len(data)+3) * time.Millisecond)
+		//		time.Sleep(time.Duration(rand.Intn(3)+len(data)+3) * time.Millisecond)
 		return true, nil
 	}
 	blob.data = data
 	blobObject.client.store.blobsMutex.Unlock()
-	time.Sleep((time.Duration(len(data)) + 3) * time.Millisecond)
+	//	time.Sleep((time.Duration(len(data)) + 3) * time.Millisecond)
 	return true, nil
 }
 
@@ -113,7 +111,7 @@ func (blobObject *testBlobObject) Delete() error {
 	blobObject.client.store.blobsMutex.Lock()
 	delete(blobObject.client.store.blobs, blobObject.path)
 	blobObject.client.store.blobsMutex.Unlock()
-	time.Sleep(time.Duration(rand.Intn(3)+rand.Intn(10)+2) * time.Millisecond)
+	//	time.Sleep(time.Duration(rand.Intn(3)+rand.Intn(10)+2) * time.Millisecond)
 	return nil
 }
 

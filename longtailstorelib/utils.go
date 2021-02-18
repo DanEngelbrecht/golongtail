@@ -180,19 +180,6 @@ func writeStoreIndexBlob(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	storeIndexName string,
 	force bool) (bool, error) {
-	//obj, err := client.NewObject(storeIndexName)
-	//if err != nil {
-	//	log.Printf("writeStoreIndexBlob: writeStoreIndexBlob(%s) failed with %v\n", storeIndexName, err)
-	//	return false, err
-	//}
-	//	exists, err := obj.Exists()
-	//	if err != nil {
-	//		log.Printf("writeStoreIndexBlob: obj.Exists() for %s failed with %v\n", storeIndexName, err)
-	//		return false, err
-	//	}
-	//	if exists && (!force) {
-	//		return true, err
-	//	}
 
 	storeIndexBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
 	if errno != 0 {

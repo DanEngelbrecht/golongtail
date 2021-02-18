@@ -80,7 +80,7 @@ func TestS3BlobStore(t *testing.T) {
 
 func TestS3StoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
-	t.Skip()
+	//t.Skip()
 
 	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-sync")
 	if err != nil {
@@ -89,30 +89,41 @@ func TestS3StoreIndexSync(t *testing.T) {
 
 	blobStore, _ := NewS3BlobStore(u)
 
-	blockGenerateCount := 2
-	workerCount := 33
+	blockGenerateCount := 4
+	workerCount := 21
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 
 	var wg sync.WaitGroup
 	for n := 0; n < workerCount; n++ {
 		wg.Add(1)
-		//seedBase := blockGenerateCount * n
+		seedBase := blockGenerateCount * n
 		go func(blockGenerateCount int, seedBase int) {
 			client, _ := blobStore.NewClient(context.Background())
 			defer client.Close()
 			blocks := []longtaillib.Longtail_BlockIndex{}
-			for i := 0; i < blockGenerateCount; i++ {
+			for i := 0; i < blockGenerateCount-1; i++ {
 				block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
 				blocks = append(blocks, block.GetBlockIndex())
 			}
 
 			storeIndex, _ := longtaillib.CreateStoreIndexFromBlocks(blocks)
-			defer storeIndex.Dispose()
-
 			writeStoreIndex(client, storeIndex)
+			storeIndex.Dispose()
 
 			newStoreIndex, _ := readStoreIndex(client)
+			newStoreIndex.Dispose()
+
+			for i := blockGenerateCount - 1; i < blockGenerateCount; i++ {
+				block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
+				blocks = append(blocks, block.GetBlockIndex())
+			}
+
+			storeIndex, _ = longtaillib.CreateStoreIndexFromBlocks(blocks)
+			writeStoreIndex(client, storeIndex)
+			defer storeIndex.Dispose()
+
+			newStoreIndex, _ = readStoreIndex(client)
 			lookup := map[uint64]bool{}
 			for _, h := range newStoreIndex.GetBlockHashes() {
 				lookup[h] = true
@@ -129,7 +140,7 @@ func TestS3StoreIndexSync(t *testing.T) {
 			}
 
 			wg.Done()
-		}(blockGenerateCount, blockGenerateCount*n)
+		}(blockGenerateCount, seedBase)
 	}
 	wg.Wait()
 	client, _ := blobStore.NewClient(context.Background())

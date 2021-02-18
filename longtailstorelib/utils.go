@@ -147,7 +147,7 @@ func updateStoreIndex(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
 	}
 
-	updatedStoreIndex, errno := longtaillib.MergeStoreIndex(addedStoreIndex, storeIndex)
+	updatedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, addedStoreIndex)
 	addedStoreIndex.Dispose()
 	if errno != 0 {
 		updatedStoreIndex.Dispose()

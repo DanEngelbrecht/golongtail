@@ -508,10 +508,10 @@ func contentIndexWorker(
 					log.Printf("WARNING: Failed to update store index with added blocks %v", err)
 					continue
 				}
-				onPreflighMessage(s, updatedStoreIndex, preflightGetMsg, prefetchBlockMessages)
-			} else {
-				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
+				storeIndex.Dispose()
+				storeIndex = updatedStoreIndex
 			}
+			onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
 		case blockIndexMsg, more := <-blockIndexMessages:
 			if more {
 				received++
@@ -528,10 +528,10 @@ func contentIndexWorker(
 					getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 					continue
 				}
-				onGetExistingContentMessage(s, updatedStoreIndex, getExistingContentMessage)
-			} else {
-				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
+				storeIndex.Dispose()
+				storeIndex = updatedStoreIndex
 			}
+			onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 		default:
 		}
 
@@ -546,10 +546,10 @@ func contentIndexWorker(
 						log.Printf("WARNING: Failed to update store index with added blocks %v", err)
 						continue
 					}
-					onPreflighMessage(s, updatedStoreIndex, preflightGetMsg, prefetchBlockMessages)
-				} else {
-					onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
+					storeIndex.Dispose()
+					storeIndex = updatedStoreIndex
 				}
+				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
 			case blockIndexMsg, more := <-blockIndexMessages:
 				if more {
 					addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
@@ -564,10 +564,10 @@ func contentIndexWorker(
 						getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 						continue
 					}
-					onGetExistingContentMessage(s, updatedStoreIndex, getExistingContentMessage)
-				} else {
-					onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
+					storeIndex.Dispose()
+					storeIndex = updatedStoreIndex
 				}
+				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 			}
 		}
 	}

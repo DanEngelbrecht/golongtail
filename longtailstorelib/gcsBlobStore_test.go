@@ -75,7 +75,7 @@ func TestGCSBlobStore(t *testing.T) {
 
 func TestGCSStoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
-	//t.Skip()
+	t.Skip()
 
 	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
 	if err != nil {

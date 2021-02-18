@@ -80,7 +80,7 @@ func TestS3BlobStore(t *testing.T) {
 
 func TestS3StoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
-	//t.Skip()
+	t.Skip()
 
 	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-sync")
 	if err != nil {

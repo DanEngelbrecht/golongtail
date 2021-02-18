@@ -157,10 +157,10 @@ func generateUniqueStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_S
 		false)
 }
 
-func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (uint64, int) {
+func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (longtaillib.Longtail_StoredBlock, int) {
 	storedBlock, errno := generateStoredBlock(t, seed)
 	if errno != 0 {
-		return 0, errno
+		return longtaillib.Longtail_StoredBlock{}, errno
 	}
 
 	p := &putStoredBlockCompletionAPI{}
@@ -169,11 +169,11 @@ func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAP
 	if errno != 0 {
 		p.wg.Done()
 		storedBlock.Dispose()
-		return 0, errno
+		return longtaillib.Longtail_StoredBlock{}, errno
 	}
 	p.wg.Wait()
 
-	return uint64(seed) + 21412151, p.err
+	return storedBlock, p.err
 }
 
 func fetchBlockFromStore(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, blockHash uint64) (longtaillib.Longtail_StoredBlock, int) {

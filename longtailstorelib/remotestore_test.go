@@ -121,10 +121,13 @@ func TestPutGetStoredBlock(t *testing.T) {
 	}
 	storeAPI := longtaillib.CreateBlockStoreAPI(remoteStore)
 
-	blockHash, errno := storeBlockFromSeed(t, storeAPI, 0)
+	block, errno := storeBlockFromSeed(t, storeAPI, 0)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
 	}
+	defer block.Dispose()
+	blockIndex := block.GetBlockIndex()
+	blockHash := blockIndex.GetBlockHash()
 
 	storedBlockCopy, errno := fetchBlockFromStore(t, storeAPI, blockHash)
 	if errno != 0 {
@@ -167,32 +170,56 @@ func TestGetExistingContent(t *testing.T) {
 	storeAPI := longtaillib.CreateBlockStoreAPI(remoteStore)
 	defer storeAPI.Dispose()
 
-	_, errno := storeBlockFromSeed(t, storeAPI, 0)
+	b1, errno := storeBlockFromSeed(t, storeAPI, 0)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
 	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 10)
-	if errno != 0 {
-		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
-	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 20)
-	if errno != 0 {
-		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
-	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 30)
-	if errno != 0 {
-		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
-	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 40)
-	if errno != 0 {
-		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
-	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 50)
-	if errno != 0 {
-		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
-	}
+	defer b1.Dispose()
 
-	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(20) + 1, uint64(20) + 2, uint64(30) + 2, uint64(30) + 3, uint64(40) + 1, uint64(40) + 3, uint64(50) + 1}
+	b2, errno := storeBlockFromSeed(t, storeAPI, 10)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	defer b2.Dispose()
+
+	b3, errno := storeBlockFromSeed(t, storeAPI, 20)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	defer b3.Dispose()
+
+	b4, errno := storeBlockFromSeed(t, storeAPI, 30)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	defer b4.Dispose()
+
+	b5, errno := storeBlockFromSeed(t, storeAPI, 40)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	defer b5.Dispose()
+
+	b6, errno := storeBlockFromSeed(t, storeAPI, 50)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	defer b6.Dispose()
+
+	b1Index := b1.GetBlockIndex()
+	b2Index := b2.GetBlockIndex()
+	b3Index := b3.GetBlockIndex()
+	b4Index := b4.GetBlockIndex()
+	b5Index := b5.GetBlockIndex()
+	b6Index := b6.GetBlockIndex()
+
+	chunkHashes := []uint64{
+		b1Index.GetChunkHashes()[0], b1Index.GetChunkHashes()[1],
+		b2Index.GetChunkHashes()[0], b2Index.GetChunkHashes()[1],
+		b3Index.GetChunkHashes()[0], b3Index.GetChunkHashes()[1],
+		b4Index.GetChunkHashes()[0], b4Index.GetChunkHashes()[1],
+		b5Index.GetChunkHashes()[0], b5Index.GetChunkHashes()[1],
+		b6Index.GetChunkHashes()[0]}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
 	remoteStoreFlushComplete.wg.Add(1)
@@ -229,18 +256,33 @@ func TestRestoreStore(t *testing.T) {
 	}
 	storeAPI := longtaillib.CreateBlockStoreAPI(remoteStore)
 
-	_, errno := storeBlockFromSeed(t, storeAPI, 0)
+	b1, errno := storeBlockFromSeed(t, storeAPI, 0)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
 	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 10)
+	b1Index := b1.GetBlockIndex()
+	b1ChunkHashes := b1Index.GetChunkHashes()
+
+	b2, errno := storeBlockFromSeed(t, storeAPI, 10)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 10) %d != %d", errno, 0)
 	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 20)
+	b2Index := b2.GetBlockIndex()
+	b2ChunkHashes := b2Index.GetChunkHashes()
+
+	b3, errno := storeBlockFromSeed(t, storeAPI, 20)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 20) %d != %d", errno, 0)
 	}
+	b3Index := b3.GetBlockIndex()
+	b3ChunkHashes := b3Index.GetChunkHashes()
+
+	chunkHashes1 := []uint64{b1ChunkHashes[0], b1ChunkHashes[1], b3ChunkHashes[1], b3ChunkHashes[2]}
+	chunkHashes2 := []uint64{b2ChunkHashes[0], b2ChunkHashes[1], b3ChunkHashes[0], b3ChunkHashes[1]}
+
+	b1.Dispose()
+	b2.Dispose()
+	b3.Dispose()
 
 	storeAPI.Dispose()
 
@@ -255,9 +297,7 @@ func TestRestoreStore(t *testing.T) {
 	}
 	storeAPI = longtaillib.CreateBlockStoreAPI(remoteStore)
 
-	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3}
-
-	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes1, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -270,9 +310,7 @@ func TestRestoreStore(t *testing.T) {
 		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 4)
 	}
 
-	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
-
-	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes2, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -285,10 +323,16 @@ func TestRestoreStore(t *testing.T) {
 		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 4)
 	}
 
-	_, errno = storeBlockFromSeed(t, storeAPI, 30)
+	b5, errno := storeBlockFromSeed(t, storeAPI, 30)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 30) %d != %d", errno, 0)
 	}
+	b5Index := b5.GetBlockIndex()
+	b5ChunkHashes := b5Index.GetChunkHashes()
+	b5.Dispose()
+
+	chunkHashes3 := append(chunkHashes2, b5ChunkHashes[1])
+
 	existingContent.Dispose()
 	storeAPI.Dispose()
 
@@ -303,9 +347,7 @@ func TestRestoreStore(t *testing.T) {
 	}
 	storeAPI = longtaillib.CreateBlockStoreAPI(remoteStore)
 
-	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
-
-	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes3, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}

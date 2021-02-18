@@ -89,8 +89,8 @@ func TestS3StoreIndexSync(t *testing.T) {
 
 	blobStore, _ := NewS3BlobStore(u)
 
-	blockGenerateCount := 1
-	workerCount := 85
+	blockGenerateCount := 2
+	workerCount := 33
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 

@@ -87,8 +87,8 @@ func TestGCSStoreIndexSync(t *testing.T) {
 		log.Fatalf("%v", err)
 	}
 
-	blockGenerateCount := 1
-	workerCount := 85
+	blockGenerateCount := 2
+	workerCount := 33
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 

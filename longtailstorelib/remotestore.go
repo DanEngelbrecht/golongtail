@@ -771,6 +771,7 @@ func onPreflighMessage(
 		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingContentIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
 		return
 	}
+	defer existingContentIndex.Dispose()
 	blockHashes := existingContentIndex.GetBlockHashes()
 	for _, blockHash := range blockHashes {
 		prefetchBlockMessages <- prefetchBlockMessage{blockHash: blockHash}

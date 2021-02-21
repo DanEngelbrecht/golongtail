@@ -188,14 +188,9 @@ func putStoredBlock(
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	}
 
-	// We need to make a copy of the block index - as soon as we call the OnComplete function the data for the block might be deallocated
-	storedBlockIndex, errno := longtaillib.WriteBlockIndexToBuffer(blockIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
-	}
-	blockIndexCopy, errno := longtaillib.ReadBlockIndexFromBuffer(storedBlockIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
+	blockIndexCopy, err := blockIndex.Copy()
+	if err != nil {
+		return err
 	}
 	blockIndexMessages <- blockIndexMessage{blockIndex: blockIndexCopy}
 	return nil
@@ -270,6 +265,7 @@ func fetchBlock(
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, longtaillib.ErrorToErrno(getStoredBlockErr, longtaillib.EIO))
 			continue
 		}
+		// Need CopyStoredBlock
 		buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 		if errno != 0 {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
@@ -326,6 +322,7 @@ func prefetchBlock(
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, longtaillib.ErrorToErrno(getErr, longtaillib.EIO))
 			continue
 		}
+		// Need CopyStoredBlock
 		buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 		if errno != 0 {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)

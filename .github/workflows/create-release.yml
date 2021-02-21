@@ -117,6 +117,7 @@ jobs:
         body: |
           Changes in this Release
           - **FIXED** Fixed compatability problem with cgo and golang 15
+          - **FIXED** Fixed memory leak in onPreflighMessage
           - **CHANGED** Updated to golang 1.15.8 toolchain in Github actions scripts
         draft: false
         prerelease: false

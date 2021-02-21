@@ -405,6 +405,7 @@ func onPreflighMessage(
 		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingContentIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
 		return
 	}
+	defer existingContentIndex.Dispose()
 	blockHashes := existingContentIndex.GetBlockHashes()
 	for _, blockHash := range blockHashes {
 		prefetchBlockMessages <- prefetchBlockMessage{blockHash: blockHash}
@@ -464,13 +465,6 @@ func contentIndexWorker(
 				return errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
 			}
 		} else {
-			storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks(
-				[]longtaillib.Longtail_BlockIndex{})
-			if errno != 0 {
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
-			}
-
 			storeIndex, err = buildStoreIndexFromStoreBlocks(
 				ctx,
 				s,

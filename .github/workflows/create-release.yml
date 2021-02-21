@@ -117,7 +117,9 @@ jobs:
         body: |
           Changes in this Release
           - **FIXED** Fixed compatability problem with cgo and golang 15
+          - **FIXED** Fixed memory leak in onPreflighMessage
           - **CHANGED** Updated to golang 1.15.8 toolchain in Github actions scripts
+          - **CHANGED** Removed support for legacy `store.lci` in stores
         draft: false
         prerelease: false
     - name: Download Linux artifacts

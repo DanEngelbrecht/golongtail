@@ -1313,16 +1313,6 @@ func GetZStdMaxCompressionType() uint32 {
 	return uint32(C.Longtail_GetZStdMaxQuality())
 }
 
-// LongtailAlloc ...
-func LongtailAlloc(context string, size uint64) unsafe.Pointer {
-	return C.Longtail_Alloc(C.CString(context), C.size_t(size))
-}
-
-// LongtailFree ...
-func LongtailFree(data unsafe.Pointer) {
-	C.Longtail_Free(data)
-}
-
 // GetFilesRecursively ...
 func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (Longtail_FileInfos, int) {
 	cFolderPath := C.CString(rootPath)

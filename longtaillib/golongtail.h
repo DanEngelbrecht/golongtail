@@ -58,7 +58,7 @@ int BlockStoreAPIProxy_Flush(struct Longtail_BlockStoreAPI* api, struct Longtail
 
 static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
 {
-    struct BlockStoreAPIProxy* api = (struct BlockStoreAPIProxy*)Longtail_Alloc(sizeof(struct BlockStoreAPIProxy));
+    struct BlockStoreAPIProxy* api = (struct BlockStoreAPIProxy*)Longtail_Alloc("CreateBlockStoreProxyAPI", sizeof(struct BlockStoreAPIProxy));
     api->m_Context = context;
     return Longtail_MakeBlockStoreAPI(
         api,
@@ -85,7 +85,7 @@ int PathFilterAPIProxy_Include(struct Longtail_PathFilterAPI* path_filter_api, c
 
 static struct Longtail_PathFilterAPI* CreatePathFilterProxyAPI(void* context)
 {
-    struct PathFilterAPIProxy* api = (struct PathFilterAPIProxy*)Longtail_Alloc(sizeof(struct PathFilterAPIProxy));
+    struct PathFilterAPIProxy* api = (struct PathFilterAPIProxy*)Longtail_Alloc("CreatePathFilterProxyAPI", sizeof(struct PathFilterAPIProxy));
     api->m_Context = context;
     return Longtail_MakePathFilterAPI(
         api,
@@ -107,7 +107,7 @@ void ProgressAPIProxy_OnProgress(struct Longtail_ProgressAPI* progress_api, uint
 
 static struct Longtail_ProgressAPI* CreateProgressProxyAPI(void* context)
 {
-    struct ProgressAPIProxy* api = (struct ProgressAPIProxy*)Longtail_Alloc(sizeof(struct ProgressAPIProxy));
+    struct ProgressAPIProxy* api = (struct ProgressAPIProxy*)Longtail_Alloc("Longtail_Alloc", sizeof(struct ProgressAPIProxy));
     api->m_Context = context;
     return Longtail_MakeProgressAPI(
         api,
@@ -129,7 +129,7 @@ void AsyncPutStoredBlockAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncPutStoredBlockAPI* CreateAsyncPutStoredBlockAPI(void* context)
 {
-    struct AsyncPutStoredBlockAPIProxy* api = (struct AsyncPutStoredBlockAPIProxy*)Longtail_Alloc(sizeof(struct AsyncPutStoredBlockAPIProxy));
+    struct AsyncPutStoredBlockAPIProxy* api = (struct AsyncPutStoredBlockAPIProxy*)Longtail_Alloc("AsyncPutStoredBlockAPIProxy", sizeof(struct AsyncPutStoredBlockAPIProxy));
     api->m_Context = context;
     return Longtail_MakeAsyncPutStoredBlockAPI(
         api,
@@ -151,7 +151,7 @@ void AsyncGetStoredBlockAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncGetStoredBlockAPI* CreateAsyncGetStoredBlockAPI(void* context)
 {
-    struct AsyncGetStoredBlockAPIProxy* api = (struct AsyncGetStoredBlockAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetStoredBlockAPIProxy));
+    struct AsyncGetStoredBlockAPIProxy* api = (struct AsyncGetStoredBlockAPIProxy*)Longtail_Alloc("AsyncGetStoredBlockAPIProxy", sizeof(struct AsyncGetStoredBlockAPIProxy));
     api->m_Context = context;
     return Longtail_MakeAsyncGetStoredBlockAPI(
         api,
@@ -173,7 +173,7 @@ void AsyncGetExistingContentAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncGetExistingContentAPI* CreateAsyncGetExistingContentAPI(void* context)
 {
-    struct AsyncGetExistingContentAPIProxy* api    = (struct AsyncGetExistingContentAPIProxy*)Longtail_Alloc(sizeof(struct AsyncGetExistingContentAPIProxy));
+    struct AsyncGetExistingContentAPIProxy* api    = (struct AsyncGetExistingContentAPIProxy*)Longtail_Alloc("AsyncGetExistingContentAPIProxy", sizeof(struct AsyncGetExistingContentAPIProxy));
     api->m_Context = context;
     return Longtail_MakeAsyncGetExistingContentAPI(
         api,
@@ -195,7 +195,7 @@ void AsyncFlushAPIProxy_Dispose(struct Longtail_API* api);
 
 static struct Longtail_AsyncFlushAPI* CreateAsyncFlushAPI(void* context)
 {
-    struct AsyncFlushAPIProxy* api    = (struct AsyncFlushAPIProxy*)Longtail_Alloc(sizeof(struct AsyncFlushAPIProxy));
+    struct AsyncFlushAPIProxy* api    = (struct AsyncFlushAPIProxy*)Longtail_Alloc("Longtail_Alloc", sizeof(struct AsyncFlushAPIProxy));
     api->m_Context = context;
     return Longtail_MakeAsyncFlushAPI(
         api,

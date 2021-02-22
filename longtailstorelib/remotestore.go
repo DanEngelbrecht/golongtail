@@ -265,7 +265,6 @@ func fetchBlock(
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, longtaillib.ErrorToErrno(getStoredBlockErr, longtaillib.EIO))
 			continue
 		}
-		// Need CopyStoredBlock
 		buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 		if errno != 0 {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)
@@ -322,7 +321,6 @@ func prefetchBlock(
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, longtaillib.ErrorToErrno(getErr, longtaillib.EIO))
 			continue
 		}
-		// Need CopyStoredBlock
 		buf, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 		if errno != 0 {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errno)

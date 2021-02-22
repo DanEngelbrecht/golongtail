@@ -681,6 +681,17 @@ func (contentIndex *Longtail_ContentIndex) GetChunkHashes() []uint64 {
 	return carray2slice64(contentIndex.cContentIndex.m_ChunkHashes, size)
 }
 
+func (storeIndex *Longtail_StoreIndex) Copy() (Longtail_StoreIndex, error) {
+	if storeIndex.cStoreIndex == nil {
+		return Longtail_StoreIndex{}, nil
+	}
+	cStoreIndex := C.Longtail_CopyStoreIndex(storeIndex.cStoreIndex)
+	if cStoreIndex == nil {
+		return Longtail_StoreIndex{}, ErrENOMEM
+	}
+	return Longtail_StoreIndex{cStoreIndex: cStoreIndex}, nil
+}
+
 func (storeIndex *Longtail_StoreIndex) IsValid() bool {
 	return storeIndex.cStoreIndex != nil
 }
@@ -1048,6 +1059,17 @@ func (blockIndex *Longtail_BlockIndex) GetChunkHashes() []uint64 {
 func (blockIndex *Longtail_BlockIndex) GetChunkSizes() []uint32 {
 	size := int(*blockIndex.cBlockIndex.m_ChunkCount)
 	return carray2slice32(blockIndex.cBlockIndex.m_ChunkSizes, size)
+}
+
+func (blockIndex *Longtail_BlockIndex) Copy() (Longtail_BlockIndex, error) {
+	if blockIndex.cBlockIndex == nil {
+		return Longtail_BlockIndex{}, nil
+	}
+	cBlockIndex := C.Longtail_CopyBlockIndex(blockIndex.cBlockIndex)
+	if cBlockIndex == nil {
+		return Longtail_BlockIndex{}, ErrENOMEM
+	}
+	return Longtail_BlockIndex{cBlockIndex: cBlockIndex}, nil
 }
 
 func (blockIndex *Longtail_BlockIndex) IsValid() bool {

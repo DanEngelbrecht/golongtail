@@ -121,6 +121,7 @@ jobs:
           - **CHANGED** Updated to golang 1.15.8 toolchain in Github actions scripts
           - **CHANGED** Removed support for legacy `store.lci` in stores
           - **UPDATE** Longtail 0.1.15
+          - **CHANGED** Expose `Longtail_BlockIndex.Copy()` and `Longtail_StoreIndex.Copy()`
         draft: false
         prerelease: false
     - name: Download Linux artifacts

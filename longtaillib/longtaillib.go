@@ -2234,3 +2234,13 @@ func AssertProxy_Assert(expression *C.char, file *C.char, line C.int) {
 		activeAssert.OnAssert(C.GoString(expression), C.GoString(file), int(line))
 	}
 }
+
+//EnableMemtrace ...
+func EnableMemtrace() {
+	C.EnableMemtrace()
+}
+
+//EnableMemtrace ...
+func DisableMemtrace() {
+	C.DisableMemtrace()
+}

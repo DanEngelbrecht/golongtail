@@ -23,6 +23,7 @@
 #include "longtail/include/lib/fsblockstore/longtail_fsblockstore.h"
 #include "longtail/include/lib/lz4/longtail_lz4.h"
 #include "longtail/include/lib/memstorage/longtail_memstorage.h"
+#include "longtail/include/lib/memtracer/longtail_memtracer.h"
 #include "longtail/include/lib/meowhash/longtail_meowhash.h"
 #include "longtail/include/lib/zstd/longtail_zstd.h"
 #include <stdlib.h>
@@ -216,6 +217,16 @@ static uint64_t GetVersionAssetSize(struct Longtail_VersionIndex* version_index,
 static uint16_t GetVersionAssetPermissions(struct Longtail_VersionIndex* version_index, uint32_t asset_index)
 {
     return version_index->m_Permissions[asset_index];
+}
+
+static void EnableMemtrace() {
+    Longtail_MemTracer_Init();
+    Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+}
+
+static void DisableMemtrace() {
+    Longtail_SetAllocAndFree(0,  0);
+    Longtail_MemTracer_Dispose(Longtail_GetMemTracerDetailed());
 }
 
 #ifdef __cplusplus

@@ -120,6 +120,7 @@ jobs:
           - **FIXED** Fixed memory leak in onPreflighMessage
           - **CHANGED** Updated to golang 1.15.8 toolchain in Github actions scripts
           - **CHANGED** Removed support for legacy `store.lci` in stores
+          - **ADDED** Added `--mem-trace` that displays diagnostics about memory usage in longtaillib
         draft: false
         prerelease: false
     - name: Download Linux artifacts

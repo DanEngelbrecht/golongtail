@@ -226,7 +226,7 @@ static void EnableMemtrace() {
 
 static void DisableMemtrace() {
     Longtail_SetAllocAndFree(0,  0);
-    Longtail_MemTracer_Dispose(Longtail_GetMemTracerDetailed());
+    Longtail_MemTracer_Dispose(Longtail_GetMemTracerSummary());
 }
 
 #ifdef __cplusplus

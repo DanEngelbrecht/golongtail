@@ -507,6 +507,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 
 func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_StorageAPI_HOpenFile, int) {
 	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
 	errno := C.Longtail_Storage_OpenReadFile(storageAPI.cStorageAPI, cPath, &cOpenFile)
 	if errno != 0 {
@@ -540,6 +541,7 @@ func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile
 
 func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, int) {
 	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
 	var cIterator C.Longtail_StorageAPI_HIterator
 	errno := C.Longtail_Storage_StartFind(storageAPI.cStorageAPI, cPath, &cIterator)
 	if errno != 0 {
@@ -630,6 +632,17 @@ func (fileInfos *Longtail_FileInfos) GetFilePermissions() []uint16 {
 
 func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
+}
+
+func (storeIndex *Longtail_StoreIndex) Copy() (Longtail_StoreIndex, error) {
+	if storeIndex.cStoreIndex == nil {
+		return Longtail_StoreIndex{}, nil
+	}
+	cStoreIndex := C.Longtail_CopyStoreIndex(storeIndex.cStoreIndex)
+	if cStoreIndex == nil {
+		return Longtail_StoreIndex{}, ErrENOMEM
+	}
+	return Longtail_StoreIndex{cStoreIndex: cStoreIndex}, nil
 }
 
 func (storeIndex *Longtail_StoreIndex) IsValid() bool {
@@ -1004,6 +1017,17 @@ func (blockIndex *Longtail_BlockIndex) GetChunkHashes() []uint64 {
 func (blockIndex *Longtail_BlockIndex) GetChunkSizes() []uint32 {
 	size := int(*blockIndex.cBlockIndex.m_ChunkCount)
 	return carray2slice32(blockIndex.cBlockIndex.m_ChunkSizes, size)
+}
+
+func (blockIndex *Longtail_BlockIndex) Copy() (Longtail_BlockIndex, error) {
+	if blockIndex.cBlockIndex == nil {
+		return Longtail_BlockIndex{}, nil
+	}
+	cBlockIndex := C.Longtail_CopyBlockIndex(blockIndex.cBlockIndex)
+	if cBlockIndex == nil {
+		return Longtail_BlockIndex{}, ErrENOMEM
+	}
+	return Longtail_BlockIndex{cBlockIndex: cBlockIndex}, nil
 }
 
 func (blockIndex *Longtail_BlockIndex) IsValid() bool {
@@ -1458,9 +1482,7 @@ func CreateStoreIndex(
 func GetExistingStoreIndex(
 	storeIndex Longtail_StoreIndex,
 	chunkHashes []uint64,
-	minBlockUsagePercent uint32,
-	maxBlockSize uint32,
-	maxChunksPerBlock uint32) (Longtail_StoreIndex, int) {
+	minBlockUsagePercent uint32) (Longtail_StoreIndex, int) {
 	chunkCount := uint32(len(chunkHashes))
 	var cChunkHashes *C.TLongtail_Hash
 	if chunkCount > 0 {
@@ -1472,8 +1494,6 @@ func GetExistingStoreIndex(
 		C.uint32_t(chunkCount),
 		cChunkHashes,
 		C.uint32_t(minBlockUsagePercent),
-		C.uint32_t(maxBlockSize),
-		C.uint32_t(maxChunksPerBlock),
 		&cindex)
 	if errno != 0 {
 		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
@@ -1972,4 +1992,11 @@ func EnableMemtrace() {
 //EnableMemtrace ...
 func DisableMemtrace() {
 	C.DisableMemtrace()
+}
+
+//MemTraceDumpStats
+func MemTraceDumpStats(path string) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	C.Longtail_MemTracer_DumpStats(cPath)
 }

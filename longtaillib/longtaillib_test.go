@@ -428,13 +428,11 @@ func TestFSBlockStore(t *testing.T) {
 }
 
 type TestBlockStore struct {
-	blocks            map[uint64]Longtail_StoredBlock
-	maxBlockSize      uint32
-	maxChunksPerBlock uint32
-	blockStoreAPI     Longtail_BlockStoreAPI
-	lock              sync.Mutex
-	stats             [Longtail_BlockStoreAPI_StatU64_Count]uint64
-	didClose          bool
+	blocks        map[uint64]Longtail_StoredBlock
+	blockStoreAPI Longtail_BlockStoreAPI
+	lock          sync.Mutex
+	stats         [Longtail_BlockStoreAPI_StatU64_Count]uint64
+	didClose      bool
 }
 
 func (b *TestBlockStore) PutStoredBlock(
@@ -524,9 +522,7 @@ func (b *TestBlockStore) GetExistingContent(
 	sExistingIndex, errno := GetExistingStoreIndex(
 		sIndex,
 		chunkHashes,
-		minBlockUsagePercent,
-		b.maxBlockSize,
-		b.maxChunksPerBlock)
+		minBlockUsagePercent)
 	if errno != 0 {
 		asyncCompleteAPI.OnComplete(Longtail_StoreIndex{}, errno)
 		return 0
@@ -562,7 +558,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024, didClose: false}
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), didClose: false}
 	blockStoreProxy := CreateBlockStoreAPI(blockStore)
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
@@ -632,7 +628,7 @@ func TestBlockStoreProxyFull(t *testing.T) {
 	defer chunkerAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
-	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), maxBlockSize: 65536, maxChunksPerBlock: 1024}
+	testBlockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock)}
 	blockStoreAPI := CreateBlockStoreAPI(testBlockStore)
 	defer blockStoreAPI.Dispose()
 

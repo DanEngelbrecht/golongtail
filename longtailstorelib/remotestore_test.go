@@ -16,8 +16,6 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadOnly)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -79,8 +77,6 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadOnly)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -181,8 +177,6 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -226,8 +220,6 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -289,8 +281,6 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -315,8 +305,6 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -363,8 +351,6 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestRestoreStore() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -455,8 +441,6 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		Init)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)

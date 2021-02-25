@@ -61,11 +61,9 @@ type pendingPrefetchedBlock struct {
 }
 
 type remoteStore struct {
-	jobAPI            longtaillib.Longtail_JobAPI
-	maxBlockSize      uint32
-	maxChunksPerBlock uint32
-	blobStore         BlobStore
-	defaultClient     BlobClient
+	jobAPI        longtaillib.Longtail_JobAPI
+	blobStore     BlobStore
+	defaultClient BlobClient
 
 	workerCount int
 
@@ -188,14 +186,9 @@ func putStoredBlock(
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	}
 
-	// We need to make a copy of the block index - as soon as we call the OnComplete function the data for the block might be deallocated
-	storedBlockIndex, errno := longtaillib.WriteBlockIndexToBuffer(blockIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
-	}
-	blockIndexCopy, errno := longtaillib.ReadBlockIndexFromBuffer(storedBlockIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
+	blockIndexCopy, err := blockIndex.Copy()
+	if err != nil {
+		return err
 	}
 	blockIndexMessages <- blockIndexMessage{blockIndex: blockIndexCopy}
 	return nil
@@ -668,7 +661,7 @@ func onPreflighMessage(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message preflightGetMessage,
 	prefetchBlockMessages chan<- prefetchBlockMessage) {
-	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, 0, s.maxBlockSize, s.maxChunksPerBlock)
+	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, 0)
 	if errno != 0 {
 		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingStoreIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
 		return
@@ -684,7 +677,7 @@ func onGetExistingContentMessage(
 	s *remoteStore,
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message getExistingContentMessage) {
-	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, message.minBlockUsagePercent, s.maxBlockSize, s.maxChunksPerBlock)
+	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, message.minBlockUsagePercent)
 	if errno != 0 {
 		message.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, errno)
 		return
@@ -902,8 +895,6 @@ func contentIndexWorker(
 func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore BlobStore,
-	maxBlockSize uint32,
-	maxChunksPerBlock uint32,
 	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
 	defaultClient, err := blobStore.NewClient(ctx)
@@ -912,11 +903,9 @@ func NewRemoteBlockStore(
 	}
 
 	s := &remoteStore{
-		jobAPI:            jobAPI,
-		maxBlockSize:      maxBlockSize,
-		maxChunksPerBlock: maxChunksPerBlock,
-		blobStore:         blobStore,
-		defaultClient:     defaultClient}
+		jobAPI:        jobAPI,
+		blobStore:     blobStore,
+		defaultClient: defaultClient}
 
 	s.workerCount = runtime.NumCPU()
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)

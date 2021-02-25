@@ -192,8 +192,6 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 			gcsBlockStore, err := longtailstorelib.NewRemoteBlockStore(
 				jobAPI,
 				gcsBlobStore,
-				targetBlockSize,
-				maxChunksPerBlock,
 				accessType)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
@@ -207,8 +205,6 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 			s3BlockStore, err := longtailstorelib.NewRemoteBlockStore(
 				jobAPI,
 				s3BlobStore,
-				targetBlockSize,
-				maxChunksPerBlock,
 				accessType)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
@@ -2040,6 +2036,7 @@ func main() {
 	if *memTrace {
 		longtaillib.EnableMemtrace()
 		defer longtaillib.DisableMemtrace()
+		defer longtaillib.MemTraceDumpStats("longtail.csv")
 	}
 
 	switch p {

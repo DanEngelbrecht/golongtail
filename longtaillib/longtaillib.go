@@ -511,6 +511,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 
 func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_StorageAPI_HOpenFile, int) {
 	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
 	errno := C.Longtail_Storage_OpenReadFile(storageAPI.cStorageAPI, cPath, &cOpenFile)
 	if errno != 0 {
@@ -544,6 +545,7 @@ func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile
 
 func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, int) {
 	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
 	var cIterator C.Longtail_StorageAPI_HIterator
 	errno := C.Longtail_Storage_StartFind(storageAPI.cStorageAPI, cPath, &cIterator)
 	if errno != 0 {
@@ -679,6 +681,17 @@ func (contentIndex *Longtail_ContentIndex) GetBlockHashes() []uint64 {
 func (contentIndex *Longtail_ContentIndex) GetChunkHashes() []uint64 {
 	size := int(*contentIndex.cContentIndex.m_ChunkCount)
 	return carray2slice64(contentIndex.cContentIndex.m_ChunkHashes, size)
+}
+
+func (storeIndex *Longtail_StoreIndex) Copy() (Longtail_StoreIndex, error) {
+	if storeIndex.cStoreIndex == nil {
+		return Longtail_StoreIndex{}, nil
+	}
+	cStoreIndex := C.Longtail_CopyStoreIndex(storeIndex.cStoreIndex)
+	if cStoreIndex == nil {
+		return Longtail_StoreIndex{}, ErrENOMEM
+	}
+	return Longtail_StoreIndex{cStoreIndex: cStoreIndex}, nil
 }
 
 func (storeIndex *Longtail_StoreIndex) IsValid() bool {
@@ -1050,6 +1063,17 @@ func (blockIndex *Longtail_BlockIndex) GetChunkSizes() []uint32 {
 	return carray2slice32(blockIndex.cBlockIndex.m_ChunkSizes, size)
 }
 
+func (blockIndex *Longtail_BlockIndex) Copy() (Longtail_BlockIndex, error) {
+	if blockIndex.cBlockIndex == nil {
+		return Longtail_BlockIndex{}, nil
+	}
+	cBlockIndex := C.Longtail_CopyBlockIndex(blockIndex.cBlockIndex)
+	if cBlockIndex == nil {
+		return Longtail_BlockIndex{}, ErrENOMEM
+	}
+	return Longtail_BlockIndex{cBlockIndex: cBlockIndex}, nil
+}
+
 func (blockIndex *Longtail_BlockIndex) IsValid() bool {
 	return blockIndex.cBlockIndex != nil
 }
@@ -1311,16 +1335,6 @@ func GetZStdDefaultCompressionType() uint32 {
 // GetZStdMaxCompressionType ...
 func GetZStdMaxCompressionType() uint32 {
 	return uint32(C.Longtail_GetZStdMaxQuality())
-}
-
-// LongtailAlloc ...
-func LongtailAlloc(size uint64) unsafe.Pointer {
-	return C.Longtail_Alloc(C.size_t(size))
-}
-
-// LongtailFree ...
-func LongtailFree(data unsafe.Pointer) {
-	C.Longtail_Free(data)
 }
 
 // GetFilesRecursively ...
@@ -2221,4 +2235,21 @@ func AssertProxy_Assert(expression *C.char, file *C.char, line C.int) {
 	if activeAssert != nil {
 		activeAssert.OnAssert(C.GoString(expression), C.GoString(file), int(line))
 	}
+}
+
+//EnableMemtrace ...
+func EnableMemtrace() {
+	C.EnableMemtrace()
+}
+
+//EnableMemtrace ...
+func DisableMemtrace() {
+	C.DisableMemtrace()
+}
+
+//MemTraceDumpStats
+func MemTraceDumpStats(path string) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	C.Longtail_MemTracer_DumpStats(cPath)
 }

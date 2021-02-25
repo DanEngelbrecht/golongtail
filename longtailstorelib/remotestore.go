@@ -120,14 +120,9 @@ func putStoredBlock(
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], (uint64)(len(blob)))
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 
-	// We need to make a copy of the block index - as soon as we call the OnComplete function the data for the block might be deallocated
-	storedBlockIndex, errno := longtaillib.WriteBlockIndexToBuffer(blockIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
-	}
-	blockIndexCopy, errno := longtaillib.ReadBlockIndexFromBuffer(storedBlockIndex)
-	if errno != 0 {
-		return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
+	blockIndexCopy, err := blockIndex.Copy()
+	if err != nil {
+		return err
 	}
 	blockIndexMessages <- blockIndexMessage{blockIndex: blockIndexCopy}
 	return nil

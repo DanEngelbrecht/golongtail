@@ -511,6 +511,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 
 func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_StorageAPI_HOpenFile, int) {
 	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
 	errno := C.Longtail_Storage_OpenReadFile(storageAPI.cStorageAPI, cPath, &cOpenFile)
 	if errno != 0 {
@@ -544,6 +545,7 @@ func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile
 
 func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, int) {
 	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
 	var cIterator C.Longtail_StorageAPI_HIterator
 	errno := C.Longtail_Storage_StartFind(storageAPI.cStorageAPI, cPath, &cIterator)
 	if errno != 0 {
@@ -2243,4 +2245,11 @@ func EnableMemtrace() {
 //EnableMemtrace ...
 func DisableMemtrace() {
 	C.DisableMemtrace()
+}
+
+//MemTraceDumpStats
+func MemTraceDumpStats(path string) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	C.Longtail_MemTracer_DumpStats(cPath)
 }

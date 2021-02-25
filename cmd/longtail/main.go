@@ -2127,6 +2127,7 @@ func main() {
 	if *memTrace {
 		longtaillib.EnableMemtrace()
 		defer longtaillib.DisableMemtrace()
+		defer longtaillib.MemTraceDumpStats("longtail.csv")
 	}
 
 	switch p {

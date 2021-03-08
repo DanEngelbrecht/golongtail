@@ -18,7 +18,7 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadOnly)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -82,7 +82,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadOnly)
 	if err != nil {
 		t.Errorf("TestCreateRemoveBlobStore() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -185,7 +185,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -231,7 +231,7 @@ func TestGetExistingContent(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -295,7 +295,7 @@ func TestRestoreStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -322,7 +322,7 @@ func TestRestoreStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -371,7 +371,7 @@ func TestRestoreStore(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
@@ -464,7 +464,7 @@ func TestBlockScanning(t *testing.T) {
 		blobStore,
 		8192,
 		128,
-		uint32(runtime.NumCPU()),
+		runtime.NumCPU(),
 		Init)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -504,7 +503,7 @@ func getStoreIndexFromBlocks(
 		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 
-	batchCount := runtime.NumCPU()
+	batchCount := s.workerCount
 	batchStart := 0
 
 	if batchCount > len(blockKeys) {
@@ -899,6 +898,7 @@ func NewRemoteBlockStore(
 	blobStore BlobStore,
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32,
+	workerCount int,
 	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
 	defaultClient, err := blobStore.NewClient(ctx)
@@ -913,7 +913,7 @@ func NewRemoteBlockStore(
 		blobStore:         blobStore,
 		defaultClient:     defaultClient}
 
-	s.workerCount = runtime.NumCPU()
+	s.workerCount = workerCount
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)

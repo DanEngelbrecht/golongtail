@@ -116,16 +116,13 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **FIXED** Fixed compatability problem with cgo and golang 15
-          - **FIXED** Fixed memory leak in onPreflighMessage
-          - **FIXED** Fixed a couple of C string leaks
-          - **CHANGED** Updated to golang 1.15.8 toolchain in Github actions scripts
-          - **CHANGED** Removed support for legacy `store.lci` in stores
-          - **UPDATE** Longtail 0.1.15
-          - **UPDATE** Longtail 0.1.16
-          - **CHANGED** Expose `Longtail_BlockIndex.Copy()` and `Longtail_StoreIndex.Copy()`
-          - **ADDED** Added `--mem-trace` that displays diagnostics about memory usage in longtaillib
-          - **ADDED** Exposed `Longtail_MemTracer_DumpStats` which writes memory stats to `longtail.csv` if `--mem-trace` is enabled
+          - **UPDATE** Longtail to 0.1.17
+          - **ADDED** `--worker-count` to control how many worker threads are created
+          - **CHANGED** `--show-stats` outputs summary about execution times
+          - **CHANGED** `--mem-trace` outputs summary about longtail memory usage to console
+          - **ADDED** `--show-store-stats` outputs stat details about block stores
+          - **ADDED** `--mem-trace-detailed` outputs details about longtail memory usage to console
+          - **ADDED** `--mem-trace-csv <file>` outputs details about longtail memory usage in csv format to <file>
         draft: false
         prerelease: false
     - name: Download Linux artifacts

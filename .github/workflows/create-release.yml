@@ -118,7 +118,9 @@ jobs:
           Changes in this Release
           - **UPDATE** Longtail to 0.1.17
           - **ADDED** `--worker-count` to control how many worker threads are created
+          - **CHANGED** `--show-stats` outputs summary about execution times
           - **CHANGED** `--mem-trace` outputs summary about longtail memory usage to console
+          - **ADDED** `--show-store-stats` outputs stat details about block stores
           - **ADDED** `--mem-trace-detailed` outputs details about longtail memory usage to console
           - **ADDED** `--mem-trace-csv <file>` outputs details about longtail memory usage in csv format to <file>
         draft: false

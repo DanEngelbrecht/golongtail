@@ -22,6 +22,8 @@ import (
 type loggerData struct {
 }
 
+var numWorkerCount = runtime.NumCPU()
+
 var logLevelNames = [...]string{"DEBUG", "INFO", "WARNING", "ERROR", "OFF"}
 
 func (l *loggerData) OnLog(file string, function string, line int, level int, logFields []longtaillib.LogField, message string) {
@@ -194,6 +196,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				gcsBlobStore,
 				targetBlockSize,
 				maxChunksPerBlock,
+				numWorkerCount,
 				accessType)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
@@ -209,6 +212,7 @@ func createBlockStoreForURI(uri string, jobAPI longtaillib.Longtail_JobAPI, targ
 				s3BlobStore,
 				targetBlockSize,
 				maxChunksPerBlock,
+				numWorkerCount,
 				accessType)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
@@ -626,7 +630,7 @@ func upSyncVersion(
 		sourceFolderScanner.scan(sourceFolderPath, pathFilter, fs)
 	}
 
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
@@ -834,7 +838,6 @@ func downSyncVersion(
 		}
 	}
 
-	//	defer un(trace("downSyncVersion " + sourceFilePath))
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
@@ -843,7 +846,7 @@ func downSyncVersion(
 		targetFolderScanner.scan(targetFolderPath, pathFilter, fs)
 	}
 
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
@@ -1186,7 +1189,7 @@ func validateVersion(
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32) error {
 
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
@@ -1469,7 +1472,7 @@ func cpVersionIndex(
 	sourcePath string,
 	targetPath string,
 	showStats bool) error {
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
@@ -1685,7 +1688,7 @@ func initRemoteStore(
 	blobStoreURI string,
 	hashAlgorithm *string,
 	showStats bool) error {
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
@@ -1750,7 +1753,7 @@ func initRemoteStore(
 func lsVersionIndex(
 	versionIndexPath string,
 	commandLSVersionDir *string) error {
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
@@ -1832,7 +1835,7 @@ func stats(
 	versionIndexPath string,
 	localCachePath *string,
 	showStats bool) error {
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
@@ -1890,7 +1893,7 @@ func stats(
 	defer progress.Dispose()
 
 	blockHashes := existingContentIndex.GetBlockHashes()
-	maxBatchSize := runtime.NumCPU()
+	maxBatchSize := int(numWorkerCount)
 	for i := 0; i < len(blockHashes); {
 		batchSize := len(blockHashes) - i
 		if batchSize > maxBatchSize {
@@ -2017,6 +2020,7 @@ var (
 	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	memTrace           = kingpin.Flag("mem-trace", "Output memory statistics from longtail").Bool()
+	workerCount        = kingpin.Flag("worker-count", "Limit number of workers created, defaults to match number of logical CPUs").Int()
 
 	commandUpsync           = kingpin.Command("upsync", "Upload a folder")
 	commandUpsyncStorageURI = commandUpsync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
@@ -2128,6 +2132,10 @@ func main() {
 		longtaillib.EnableMemtrace()
 		defer longtaillib.DisableMemtrace()
 		defer longtaillib.MemTraceDumpStats("longtail.csv")
+	}
+
+	if *workerCount != 0 {
+		numWorkerCount = *workerCount
 	}
 
 	switch p {

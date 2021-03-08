@@ -594,7 +594,8 @@ func upSyncVersion(
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
 	minBlockUsagePercent uint32,
-	showStats bool) error {
+	showStats bool,
+	showStoreStats bool) error {
 
 	executionStartTime := time.Now()
 
@@ -779,9 +780,11 @@ func upSyncVersion(
 
 	executionTime := time.Since(executionStartTime)
 
-	if showStats {
+	if showStoreStats {
 		printStats("Compress", indexStoreStats)
 		printStats("Remote", remoteStoreStats)
+	}
+	if showStats {
 		log.Printf("Setup:                       %s", setupTime)
 		log.Printf("Read source index:           %s", readSourceIndexTime)
 		log.Printf("Get missing content:         %s", getMissingContentTime)
@@ -810,7 +813,8 @@ func downSyncVersion(
 	validate bool,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
-	showStats bool) error {
+	showStats bool,
+	showStoreStats bool) error {
 
 	executionStartTime := time.Now()
 
@@ -1136,7 +1140,7 @@ func downSyncVersion(
 
 	executionTime := time.Since(executionStartTime)
 
-	if showStats {
+	if showStoreStats {
 		if shareStoreStatsErrno == 0 {
 			printStats("Share", shareStoreStats)
 		}
@@ -1155,6 +1159,8 @@ func downSyncVersion(
 		if remoteStoreStatsErrno == 0 {
 			printStats("Remote", remoteStoreStats)
 		}
+	}
+	if showStats {
 		log.Printf("Setup:                %s", setupTime)
 		log.Printf("Read source index:    %s", readSourceTime)
 		log.Printf("Read target index:    %s", readTargetIndexTime)
@@ -1471,7 +1477,7 @@ func cpVersionIndex(
 	maxChunksPerBlock uint32,
 	sourcePath string,
 	targetPath string,
-	showStats bool) error {
+	showStoreStats bool) error {
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
@@ -1660,7 +1666,7 @@ func cpVersionIndex(
 	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
 	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
 
-	if showStats {
+	if showStoreStats {
 		if shareStoreStatsErrno == 0 {
 			printStats("Share", shareStoreStats)
 		}
@@ -1687,7 +1693,7 @@ func cpVersionIndex(
 func initRemoteStore(
 	blobStoreURI string,
 	hashAlgorithm *string,
-	showStats bool) error {
+	showStoreStats bool) error {
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
@@ -1741,7 +1747,7 @@ func initRemoteStore(
 	}
 	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
 
-	if showStats {
+	if showStoreStats {
 		if remoteStoreStatsErrno == 0 {
 			printStats("Remote", remoteStoreStats)
 		}
@@ -1834,7 +1840,7 @@ func stats(
 	blobStoreURI string,
 	versionIndexPath string,
 	localCachePath *string,
-	showStats bool) error {
+	showStoreStats bool) error {
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
@@ -2000,7 +2006,7 @@ func stats(
 	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
 	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
 	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
-	if showStats {
+	if showStoreStats {
 		if cacheStoreStatsErrno == 0 {
 			printStats("Cache", cacheStoreStats)
 		}
@@ -2017,6 +2023,7 @@ func stats(
 var (
 	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
+	showStoreStats     = kingpin.Flag("show-store-stats", "Output detailed stats for block stores").Bool()
 	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	memTrace           = kingpin.Flag("mem-trace", "Output summary memory statistics from longtail").Bool()
@@ -2164,7 +2171,8 @@ func main() {
 			includeFilterRegEx,
 			excludeFilterRegEx,
 			*commandUpsyncMinBlockUsagePercent,
-			*showStats)
+			*showStats,
+			*showStoreStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -2182,7 +2190,8 @@ func main() {
 			*commandDownsyncValidate,
 			includeFilterRegEx,
 			excludeFilterRegEx,
-			*showStats)
+			*showStats,
+			*showStoreStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -2229,7 +2238,7 @@ func main() {
 			*commandCPMaxChunksPerBlock,
 			*commandCPSourcePath,
 			*commandCPTargetPath,
-			*showStats)
+			*showStoreStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -2237,7 +2246,7 @@ func main() {
 		err := initRemoteStore(
 			*commandInitRemoteStoreStorageURI,
 			commandInitRemoteStoreHashing,
-			*showStats)
+			*showStoreStats)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -2246,7 +2255,7 @@ func main() {
 			*commandStatsStorageURI,
 			*commandStatsVersionIndexPath,
 			commandStatsCachePath,
-			*showStats)
+			*showStoreStats)
 		if err != nil {
 			log.Fatal(err)
 		}

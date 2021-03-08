@@ -2019,7 +2019,9 @@ var (
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
 	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
 	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
-	memTrace           = kingpin.Flag("mem-trace", "Output memory statistics from longtail").Bool()
+	memTrace           = kingpin.Flag("mem-trace", "Output summary memory statistics from longtail").Bool()
+	memTraceDetailed   = kingpin.Flag("mem-trace-detailed", "Output detailed memory statistics from longtail").Bool()
+	memTraceCSV        = kingpin.Flag("mem-trace-csv", "Output path for detailed memory statistics from longtail in csv format").String()
 	workerCount        = kingpin.Flag("worker-count", "Limit number of workers created, defaults to match number of logical CPUs").Int()
 
 	commandUpsync           = kingpin.Command("upsync", "Upload a folder")
@@ -2128,10 +2130,18 @@ func main() {
 
 	p := kingpin.Parse()
 
-	if *memTrace {
+	if *memTrace || *memTraceDetailed || *memTraceCSV != "" {
 		longtaillib.EnableMemtrace()
-		defer longtaillib.DisableMemtrace()
-		defer longtaillib.MemTraceDumpStats("longtail.csv")
+		memTraceLogLevel := longtaillib.MemTraceSilent
+		if *memTraceDetailed {
+			memTraceLogLevel = longtaillib.MemTraceDetailed
+		} else if *memTrace {
+			memTraceLogLevel = longtaillib.MemTraceSummary
+		}
+		defer longtaillib.DisableMemtrace(memTraceLogLevel)
+		if *memTraceCSV != "" {
+			defer longtaillib.MemTraceDumpStats(*memTraceCSV)
+		}
 	}
 
 	if *workerCount != 0 {

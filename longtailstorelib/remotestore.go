@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,9 +60,9 @@ type pendingPrefetchedBlock struct {
 }
 
 type remoteStore struct {
-	jobAPI        longtaillib.Longtail_JobAPI
-	blobStore     BlobStore
-	defaultClient BlobClient
+	jobAPI            longtaillib.Longtail_JobAPI
+	blobStore         BlobStore
+	defaultClient     BlobClient
 
 	workerCount int
 
@@ -502,7 +501,7 @@ func getStoreIndexFromBlocks(
 		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 
-	batchCount := runtime.NumCPU()
+	batchCount := s.workerCount
 	batchStart := 0
 
 	if batchCount > len(blockKeys) {
@@ -895,6 +894,7 @@ func contentIndexWorker(
 func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore BlobStore,
+	workerCount int,
 	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
 	defaultClient, err := blobStore.NewClient(ctx)
@@ -903,11 +903,11 @@ func NewRemoteBlockStore(
 	}
 
 	s := &remoteStore{
-		jobAPI:        jobAPI,
-		blobStore:     blobStore,
-		defaultClient: defaultClient}
+		jobAPI:            jobAPI,
+		blobStore:         blobStore,
+		defaultClient:     defaultClient}
 
-	s.workerCount = runtime.NumCPU()
+	s.workerCount = workerCount
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)

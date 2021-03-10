@@ -1989,9 +1989,22 @@ func EnableMemtrace() {
 	C.EnableMemtrace()
 }
 
+const MemTraceSilent = 0
+const MemTraceSummary = 1
+const MemTraceDetailed = 2
+
 //EnableMemtrace ...
-func DisableMemtrace() {
-	C.DisableMemtrace()
+func DisableMemtrace(logLevel int) {
+	var cLogLevel C.uint32_t
+	switch logLevel {
+	case MemTraceSilent:
+		cLogLevel = C.Longtail_GetMemTracerSilent()
+	case MemTraceSummary:
+		cLogLevel = C.Longtail_GetMemTracerSummary()
+	case MemTraceDetailed:
+		cLogLevel = C.Longtail_GetMemTracerDetailed()
+	}
+	C.DisableMemtrace(cLogLevel)
 }
 
 //MemTraceDumpStats

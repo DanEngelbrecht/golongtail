@@ -1989,25 +1989,33 @@ func EnableMemtrace() {
 	C.EnableMemtrace()
 }
 
-const MemTraceSilent = 0
-const MemTraceSummary = 1
-const MemTraceDetailed = 2
+//MemTraceSummary ...
+const MemTraceSummary = 0
 
-//EnableMemtrace ...
-func DisableMemtrace(logLevel int) {
+//MemTraceDetailed ...
+const MemTraceDetailed = 1
+
+//GetMemTraceStats ...
+func GetMemTraceStats(logLevel int) string {
 	var cLogLevel C.uint32_t
 	switch logLevel {
-	case MemTraceSilent:
-		cLogLevel = C.Longtail_GetMemTracerSilent()
 	case MemTraceSummary:
 		cLogLevel = C.Longtail_GetMemTracerSummary()
 	case MemTraceDetailed:
 		cLogLevel = C.Longtail_GetMemTracerDetailed()
 	}
-	C.DisableMemtrace(cLogLevel)
+	cStats := C.Longtail_MemTracer_GetStats(cLogLevel)
+	stats := C.GoString(cStats)
+	C.Longtail_Free(unsafe.Pointer(cStats))
+	return stats
 }
 
-//MemTraceDumpStats
+//DisableMemtrace ...
+func DisableMemtrace() {
+	C.DisableMemtrace()
+}
+
+//MemTraceDumpStats ...
 func MemTraceDumpStats(path string) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))

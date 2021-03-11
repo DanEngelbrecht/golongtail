@@ -224,9 +224,9 @@ static void EnableMemtrace() {
     Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
 }
 
-static void DisableMemtrace(uint32_t logLevel) {
+static void DisableMemtrace() {
     Longtail_SetAllocAndFree(0,  0);
-    Longtail_MemTracer_Dispose(logLevel);
+    Longtail_MemTracer_Dispose();
 }
 
 #ifdef __cplusplus

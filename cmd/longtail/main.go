@@ -100,9 +100,9 @@ func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
 }
 
 type getIndexCompletionAPI struct {
-	wg           sync.WaitGroup
+	wg         sync.WaitGroup
 	storeIndex longtaillib.Longtail_StoreIndex
-	err          int
+	err        int
 }
 
 func (a *getIndexCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err int) {
@@ -112,9 +112,9 @@ func (a *getIndexCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_Store
 }
 
 type getExistingContentCompletionAPI struct {
-	wg           sync.WaitGroup
+	wg         sync.WaitGroup
 	storeIndex longtaillib.Longtail_StoreIndex
-	err          int
+	err        int
 }
 
 func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err int) {
@@ -1950,15 +1950,15 @@ var (
 	commandUpsyncHashing    = commandUpsync.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
 				Default("blake3").
 				Enum("meow", "blake2", "blake3")
-	commandUpsyncTargetChunkSize         = commandUpsync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	commandUpsyncTargetBlockSize         = commandUpsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	commandUpsyncMaxChunksPerBlock       = commandUpsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	commandUpsyncSourcePath              = commandUpsync.Flag("source-path", "Source folder path").Required().String()
-	commandUpsyncSourceIndexPath         = commandUpsync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	commandUpsyncTargetPath              = commandUpsync.Flag("target-path", "Target file uri").Required().String()
-	commandUpsyncCompression             = commandUpsync.Flag("compression-algorithm", "compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
-						Default("zstd").
-						Enum(
+	commandUpsyncTargetChunkSize   = commandUpsync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
+	commandUpsyncTargetBlockSize   = commandUpsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
+	commandUpsyncMaxChunksPerBlock = commandUpsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+	commandUpsyncSourcePath        = commandUpsync.Flag("source-path", "Source folder path").Required().String()
+	commandUpsyncSourceIndexPath   = commandUpsync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
+	commandUpsyncTargetPath        = commandUpsync.Flag("target-path", "Target file uri").Required().String()
+	commandUpsyncCompression       = commandUpsync.Flag("compression-algorithm", "compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
+					Default("zstd").
+					Enum(
 			"none",
 			"brotli",
 			"brotli_min",
@@ -2048,13 +2048,12 @@ func main() {
 
 	if *memTrace || *memTraceDetailed || *memTraceCSV != "" {
 		longtaillib.EnableMemtrace()
-		memTraceLogLevel := longtaillib.MemTraceSilent
 		if *memTraceDetailed {
-			memTraceLogLevel = longtaillib.MemTraceDetailed
+			log.Print(longtaillib.GetMemTraceStats(longtaillib.MemTraceDetailed))
 		} else if *memTrace {
-			memTraceLogLevel = longtaillib.MemTraceSummary
+			log.Print(longtaillib.GetMemTraceStats(longtaillib.MemTraceSummary))
 		}
-		defer longtaillib.DisableMemtrace(memTraceLogLevel)
+		defer longtaillib.DisableMemtrace()
 		if *memTraceCSV != "" {
 			defer longtaillib.MemTraceDumpStats(*memTraceCSV)
 		}

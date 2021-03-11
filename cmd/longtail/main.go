@@ -789,6 +789,17 @@ func downSyncVersion(
 	executionStartTime := time.Now()
 
 	setupStartTime := time.Now()
+
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
+	defer jobs.Dispose()
+
+	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer remoteIndexStore.Dispose()
+
 	var pathFilter longtaillib.Longtail_PathFilterAPI
 
 	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
@@ -820,8 +831,6 @@ func downSyncVersion(
 		targetFolderScanner.scan(targetFolderPath, pathFilter, fs)
 	}
 
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
-	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
@@ -856,13 +865,6 @@ func downSyncVersion(
 
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
-
-	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
-	if err != nil {
-		return err
-	}
-	defer remoteIndexStore.Dispose()
 
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()

@@ -2048,11 +2048,11 @@ func main() {
 
 	if *memTrace || *memTraceDetailed || *memTraceCSV != "" {
 		longtaillib.EnableMemtrace()
+		memTraceLogLevel := longtaillib.MemTraceSummary
 		if *memTraceDetailed {
-			log.Print(longtaillib.GetMemTraceStats(longtaillib.MemTraceDetailed))
-		} else if *memTrace {
-			log.Print(longtaillib.GetMemTraceStats(longtaillib.MemTraceSummary))
+			memTraceLogLevel = longtaillib.MemTraceDetailed
 		}
+		defer log.Print(longtaillib.GetMemTraceStats(memTraceLogLevel))
 		defer longtaillib.DisableMemtrace()
 		if *memTraceCSV != "" {
 			defer longtaillib.MemTraceDumpStats(*memTraceCSV)

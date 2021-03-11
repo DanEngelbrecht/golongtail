@@ -758,13 +758,13 @@ func upSyncVersion(
 		printStats("Remote", remoteStoreStats)
 	}
 	if showStats {
-		log.Printf("Setup:                       %s", setupTime)
-		log.Printf("Read source index:           %s", readSourceIndexTime)
-		log.Printf("Get missing content:         %s", getMissingContentTime)
-		log.Printf("Write version content:       %s", writeContentTime)
-		log.Printf("Flush:                       %s", flushTime)
-		log.Printf("Write version index:         %s", writeVersionIndexTime)
-		log.Printf("Execution:                   %s", executionTime)
+		log.Printf("Setup:               %s", setupTime)
+		log.Printf("Read source index:   %s", readSourceIndexTime)
+		log.Printf("Get content index:   %s", getMissingContentTime)
+		log.Printf("Write content:       %s", writeContentTime)
+		log.Printf("Flush:               %s", flushTime)
+		log.Printf("Write version index: %s", writeVersionIndexTime)
+		log.Printf("Execution:           %s", executionTime)
 	}
 
 	return nil
@@ -1133,16 +1133,16 @@ func downSyncVersion(
 		}
 	}
 	if showStats {
-		log.Printf("Setup:                %s", setupTime)
-		log.Printf("Read source index:    %s", readSourceTime)
-		log.Printf("Read target index:    %s", readTargetIndexTime)
-		log.Printf("Get existing content: %s", getExistingContentTime)
-		log.Printf("Change version:       %s", changeVersionTime)
-		log.Printf("Flush:                %s", flushTime)
+		log.Printf("Setup:               %s", setupTime)
+		log.Printf("Read source index:   %s", readSourceTime)
+		log.Printf("Read target index:   %s", readTargetIndexTime)
+		log.Printf("Get content index:   %s", getExistingContentTime)
+		log.Printf("Change version:      %s", changeVersionTime)
+		log.Printf("Flush:               %s", flushTime)
 		if validate {
-			log.Printf("Validate:             %s", validateTime)
+			log.Printf("Validate:            %s", validateTime)
 		}
-		log.Printf("Execution:            %s", executionTime)
+		log.Printf("Execution:           %s", executionTime)
 	}
 
 	return nil
@@ -2058,7 +2058,14 @@ func main() {
 			if *memTraceCSV != "" {
 				longtaillib.MemTraceDumpStats(*memTraceCSV)
 			}
-			log.Print(longtaillib.GetMemTraceStats(memTraceLogLevel))
+			memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
+			memTraceLines := strings.Split(memTraceLog, "\n")
+			for _, l := range memTraceLines {
+				if l == "" {
+					continue
+				}
+				log.Printf("[MEM] %s", l)
+			}
 			longtaillib.DisableMemtrace()
 		}()
 	}

@@ -60,9 +60,9 @@ type pendingPrefetchedBlock struct {
 }
 
 type remoteStore struct {
-	jobAPI            longtaillib.Longtail_JobAPI
-	blobStore         BlobStore
-	defaultClient     BlobClient
+	jobAPI        longtaillib.Longtail_JobAPI
+	blobStore     BlobStore
+	defaultClient BlobClient
 
 	workerCount int
 
@@ -692,6 +692,9 @@ func updateStoreIndex(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
 	}
 
+	if !storeIndex.IsValid() {
+		return addedStoreIndex, nil
+	}
 	updatedStoreIndex, errno := longtaillib.MergeStoreIndex(addedStoreIndex, storeIndex)
 	addedStoreIndex.Dispose()
 	if errno != 0 {
@@ -712,38 +715,38 @@ func getStoreIndex(
 	var err error
 	var errno int
 	if !storeIndex.IsValid() {
-	if accessType == Init {
-		saveStoreIndex = true
-	} else {
-		storeIndex, err = readStoreStoreIndex(ctx, s, client)
-		if err != nil {
-			log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
-		}
-	}
-
-	if !storeIndex.IsValid() {
-		if accessType == ReadOnly {
-			storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-			if errno != 0 {
-					return longtaillib.Longtail_StoreIndex{}, false, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
-			}
+		if accessType == Init {
+			saveStoreIndex = true
 		} else {
-			storeIndex, err = buildStoreIndexFromStoreBlocks(
-				ctx,
-				s,
-				client)
-
+			storeIndex, err = readStoreStoreIndex(ctx, s, client)
 			if err != nil {
-					return longtaillib.Longtail_StoreIndex{}, false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
-			}
-			log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
-			err := updateRemoteStoreIndex(ctx, client, storeIndex)
-			if err != nil {
-				log.Printf("Failed to update store index in store %s\n", s.String())
-				saveStoreIndex = true
+				log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
 			}
 		}
-	}
+
+		if !storeIndex.IsValid() {
+			if accessType == ReadOnly {
+				storeIndex, errno = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+				if errno != 0 {
+					return longtaillib.Longtail_StoreIndex{}, false, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
+				}
+			} else {
+				storeIndex, err = buildStoreIndexFromStoreBlocks(
+					ctx,
+					s,
+					client)
+
+				if err != nil {
+					return longtaillib.Longtail_StoreIndex{}, false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
+				}
+				log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
+				err := updateRemoteStoreIndex(ctx, client, storeIndex)
+				if err != nil {
+					log.Printf("Failed to update store index in store %s\n", s.String())
+					saveStoreIndex = true
+				}
+			}
+		}
 	}
 
 	if len(addedBlockIndexes) > 0 {
@@ -803,7 +806,7 @@ func contentIndexWorker(
 				storeIndex,
 				saveStoreIndex,
 				addedBlockIndexes)
-				if err != nil {
+			if err != nil {
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
 			}
@@ -825,10 +828,10 @@ func contentIndexWorker(
 				storeIndex,
 				saveStoreIndex,
 				addedBlockIndexes)
-				if err != nil {
+			if err != nil {
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
-				}
+			}
 			onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 		default:
 		}
@@ -837,10 +840,10 @@ func contentIndexWorker(
 			continue
 		}
 
-			select {
-			case _ = <-flushMessages:
-				flushReplyMessages <- 0
-			case preflightGetMsg := <-preflightGetMessages:
+		select {
+		case _ = <-flushMessages:
+			flushReplyMessages <- 0
+		case preflightGetMsg := <-preflightGetMessages:
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,
@@ -849,33 +852,33 @@ func contentIndexWorker(
 				storeIndex,
 				saveStoreIndex,
 				addedBlockIndexes)
-					if err != nil {
+			if err != nil {
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
-				}
-				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
-			case blockIndexMsg, more := <-blockIndexMessages:
-				if more {
-					addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
-				} else {
-					run = false
-				}
-			case getExistingContentMessage := <-getExistingContentMessages:
-			storeIndex, saveStoreIndex, err = getStoreIndex(
-				ctx,
-				s,
-				client,
-				accessType,
-				storeIndex,
-				saveStoreIndex,
-				addedBlockIndexes)
-					if err != nil {
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
-				return err
-					}
-				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 			}
+			onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
+		case blockIndexMsg, more := <-blockIndexMessages:
+			if more {
+				addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
+			} else {
+				run = false
+			}
+		case getExistingContentMessage := <-getExistingContentMessages:
+			storeIndex, saveStoreIndex, err = getStoreIndex(
+				ctx,
+				s,
+				client,
+				accessType,
+				storeIndex,
+				saveStoreIndex,
+				addedBlockIndexes)
+			if err != nil {
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
+				return err
+			}
+			onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 		}
+	}
 
 	if accessType == ReadOnly {
 		return nil
@@ -929,9 +932,9 @@ func NewRemoteBlockStore(
 	}
 
 	s := &remoteStore{
-		jobAPI:            jobAPI,
-		blobStore:         blobStore,
-		defaultClient:     defaultClient}
+		jobAPI:        jobAPI,
+		blobStore:     blobStore,
+		defaultClient: defaultClient}
 
 	s.workerCount = workerCount
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)

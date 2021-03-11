@@ -61,8 +61,6 @@ type pendingPrefetchedBlock struct {
 
 type remoteStore struct {
 	jobAPI            longtaillib.Longtail_JobAPI
-	maxBlockSize      uint32
-	maxChunksPerBlock uint32
 	blobStore         BlobStore
 	defaultClient     BlobClient
 
@@ -632,7 +630,7 @@ func storeIndexWorkerReplyErrorState(
 				return
 			}
 		case getExistingContentMessage := <-getExistingContentMessages:
-			getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.EINVAL)
+			getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.EINVAL)
 		}
 	}
 }
@@ -662,13 +660,13 @@ func onPreflighMessage(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message preflightGetMessage,
 	prefetchBlockMessages chan<- prefetchBlockMessage) {
-	existingContentIndex, errno := longtaillib.GetExistingContentIndex(storeIndex, message.chunkHashes, 0, s.maxBlockSize, s.maxChunksPerBlock)
+	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, 0)
 	if errno != 0 {
-		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingContentIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
+		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingStoreIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
 		return
 	}
-	defer existingContentIndex.Dispose()
-	blockHashes := existingContentIndex.GetBlockHashes()
+	defer existingStoreIndex.Dispose()
+	blockHashes := existingStoreIndex.GetBlockHashes()
 	for _, blockHash := range blockHashes {
 		prefetchBlockMessages <- prefetchBlockMessage{blockHash: blockHash}
 	}
@@ -678,12 +676,12 @@ func onGetExistingContentMessage(
 	s *remoteStore,
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message getExistingContentMessage) {
-	existingContentIndex, errno := longtaillib.GetExistingContentIndex(storeIndex, message.chunkHashes, message.minBlockUsagePercent, s.maxBlockSize, s.maxChunksPerBlock)
+	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, message.minBlockUsagePercent)
 	if errno != 0 {
-		message.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, errno)
+		message.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, errno)
 		return
 	}
-	message.asyncCompleteAPI.OnComplete(existingContentIndex, 0)
+	message.asyncCompleteAPI.OnComplete(existingStoreIndex, 0)
 }
 
 func updateStoreIndex(
@@ -800,7 +798,7 @@ func contentIndexWorker(
 				updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
 				if err != nil {
 					log.Printf("WARNING: Failed to update store index with added blocks %v", err)
-					getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+					getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 					continue
 				}
 				storeIndex.Dispose()
@@ -840,7 +838,7 @@ func contentIndexWorker(
 					updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
 					if err != nil {
 						log.Printf("WARNING: Failed to update store index with added blocks %v", err)
-						getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_ContentIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+						getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 						continue
 					}
 					storeIndex.Dispose()
@@ -896,8 +894,6 @@ func contentIndexWorker(
 func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore BlobStore,
-	maxBlockSize uint32,
-	maxChunksPerBlock uint32,
 	workerCount int,
 	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
@@ -908,8 +904,6 @@ func NewRemoteBlockStore(
 
 	s := &remoteStore{
 		jobAPI:            jobAPI,
-		maxBlockSize:      maxBlockSize,
-		maxChunksPerBlock: maxChunksPerBlock,
 		blobStore:         blobStore,
 		defaultClient:     defaultClient}
 

@@ -16,8 +16,6 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadOnly)
 	if err != nil {
@@ -29,12 +27,12 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 
 type getExistingContentCompletionAPI struct {
 	wg            sync.WaitGroup
-	content_index longtaillib.Longtail_ContentIndex
+	storeIndex longtaillib.Longtail_StoreIndex
 	err           int
 }
 
-func (a *getExistingContentCompletionAPI) OnComplete(content_index longtaillib.Longtail_ContentIndex, errno int) {
-	a.content_index = content_index
+func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, errno int) {
+	a.storeIndex = storeIndex
 	a.err = errno
 	a.wg.Done()
 }
@@ -61,16 +59,16 @@ func (a *getStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtai
 	a.wg.Done()
 }
 
-func getExistingContent(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64, minBlockUsagePercent uint32) (longtaillib.Longtail_ContentIndex, int) {
+func getExistingContent(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64, minBlockUsagePercent uint32) (longtaillib.Longtail_StoreIndex, int) {
 	g := &getExistingContentCompletionAPI{}
 	g.wg.Add(1)
 	errno := storeAPI.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(g))
 	if errno != 0 {
 		g.wg.Done()
-		return longtaillib.Longtail_ContentIndex{}, errno
+		return longtaillib.Longtail_StoreIndex{}, errno
 	}
 	g.wg.Wait()
-	return g.content_index, g.err
+	return g.storeIndex, g.err
 }
 
 func TestEmptyGetExistingContent(t *testing.T) {
@@ -80,8 +78,6 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadOnly)
 	if err != nil {
@@ -183,8 +179,6 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -229,8 +223,6 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -274,15 +266,15 @@ func TestGetExistingContent(t *testing.T) {
 	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
 	defer existingContent.Dispose()
 	if !existingContent.IsValid() {
-		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
+		t.Errorf("TestGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
 	}
 
 	if existingContent.GetBlockCount() != 6 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 6)
+		t.Errorf("TestGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 6)
 	}
 
-	if existingContent.GetChunkCount() != 11 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 10)
+	if existingContent.GetChunkCount() != 18 {
+		t.Errorf("TestGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 18)
 	}
 }
 
@@ -293,8 +285,6 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -320,8 +310,6 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -333,35 +321,35 @@ func TestRestoreStore(t *testing.T) {
 
 	existingContent, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
-		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
+		t.Errorf("TestRestoreStore() g.err %t != %t", existingContent.IsValid(), true)
 	}
 
 	if existingContent.GetBlockCount() != 2 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 2)
+		t.Errorf("TestRestoreStore() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 2)
 	}
 
-	if existingContent.GetChunkCount() != 4 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 4)
+	if existingContent.GetChunkCount() != 6 {
+		t.Errorf("TestRestoreStore() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 6)
 	}
 
 	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
 
 	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
-		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
+		t.Errorf("TestRestoreStore() g.err %t != %t", existingContent.IsValid(), true)
 	}
 
 	if existingContent.GetBlockCount() != 2 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 2)
+		t.Errorf("TestRestoreStore() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 2)
 	}
 
-	if existingContent.GetChunkCount() != 4 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 4)
+	if existingContent.GetChunkCount() != 6 {
+		t.Errorf("TestRestoreStore() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 6)
 	}
 
 	_, errno = storeBlockFromSeed(t, storeAPI, 30)
 	if errno != 0 {
-		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 30) %d != %d", errno, 0)
+		t.Errorf("TestRestoreStore() storeBlock(t, storeAPI, 30) %d != %d", errno, 0)
 	}
 	existingContent.Dispose()
 	storeAPI.Dispose()
@@ -369,12 +357,10 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
-		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
+		t.Errorf("TestRestoreStore() NewRemoteBlockStore()) %v != %v", err, nil)
 	}
 	storeAPI = longtaillib.CreateBlockStoreAPI(remoteStore)
 
@@ -382,15 +368,15 @@ func TestRestoreStore(t *testing.T) {
 
 	existingContent, errno = getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
-		t.Errorf("TestEmptyGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
+		t.Errorf("TestRestoreStore() g.err %t != %t", existingContent.IsValid(), true)
 	}
 
 	if existingContent.GetBlockCount() != 3 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 3)
+		t.Errorf("TestRestoreStore() existingContent.GetBlockCount() %d != %d", existingContent.GetBlockCount(), 3)
 	}
 
-	if existingContent.GetChunkCount() != 5 {
-		t.Errorf("TestEmptyGetExistingContent() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 5)
+	if existingContent.GetChunkCount() != 9 {
+		t.Errorf("TestRestoreStore() existingContent.GetChunkCount() %d != %d", existingContent.GetChunkCount(), 9)
 	}
 	existingContent.Dispose()
 	storeAPI.Dispose()
@@ -462,8 +448,6 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		8192,
-		128,
 		runtime.NumCPU(),
 		Init)
 	if err != nil {

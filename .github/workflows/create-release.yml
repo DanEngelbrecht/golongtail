@@ -116,13 +116,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **UPDATE** Longtail to 0.1.17
-          - **ADDED** `--worker-count` to control how many worker threads are created
-          - **CHANGED** `--show-stats` outputs summary about execution times
-          - **CHANGED** `--mem-trace` outputs summary about longtail memory usage to console
-          - **ADDED** `--show-store-stats` outputs stat details about block stores
-          - **ADDED** `--mem-trace-detailed` outputs details about longtail memory usage to console
-          - **ADDED** `--mem-trace-csv <file>` outputs details about longtail memory usage in csv format to <file>
+          - **UPDATE** Longtail to 0.2.0
+          - **CHANGED** Delay read of remote store index until we know we need it
+          - **FIXED** longtail memtracer stats are not output using logging instead of C print in library
         draft: false
         prerelease: false
     - name: Download Linux artifacts

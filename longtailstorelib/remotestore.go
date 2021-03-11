@@ -354,7 +354,7 @@ func remoteWorker(
 		select {
 		case putMsg, more := <-putBlockMessages:
 			if more {
-				received += 1
+				received++
 				if accessType == ReadOnly {
 					putMsg.asyncCompleteAPI.OnComplete(longtaillib.EACCES)
 					continue
@@ -365,7 +365,7 @@ func remoteWorker(
 				run = false
 			}
 		case getMsg := <-getBlockMessages:
-			received += 1
+			received++
 			fetchBlock(ctx, s, client, getMsg)
 		default:
 		}
@@ -797,7 +797,7 @@ func contentIndexWorker(
 		received := 0
 		select {
 		case preflightGetMsg := <-preflightGetMessages:
-			received += 1
+			received++
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,
@@ -813,13 +813,13 @@ func contentIndexWorker(
 			onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
 		case blockIndexMsg, more := <-blockIndexMessages:
 			if more {
-				received += 1
+				received++
 				addedBlockIndexes = append(addedBlockIndexes, blockIndexMsg.blockIndex)
 			} else {
 				run = false
 			}
 		case getExistingContentMessage := <-getExistingContentMessages:
-			received += 1
+			received++
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,

@@ -41,7 +41,8 @@ type prefetchBlockMessage struct {
 }
 
 type preflightGetMessage struct {
-	chunkHashes []uint64
+	blockHashes      []uint64
+	asyncCompleteAPI longtaillib.Longtail_AsyncPreflightStartedAPI
 }
 
 type blockIndexMessage struct {
@@ -81,7 +82,6 @@ type remoteStore struct {
 	maxPrefetchMemory      int64
 
 	fetchedBlocksSync sync.Mutex
-	fetchedBlocks     map[uint64]bool
 	prefetchBlocks    map[uint64]*pendingPrefetchedBlock
 
 	stats longtaillib.BlockStoreStats
@@ -233,11 +233,11 @@ func fetchBlock(
 	client BlobClient,
 	getMsg getBlockMessage) {
 	s.fetchedBlocksSync.Lock()
-	prefetchedBlock, exists := s.prefetchBlocks[getMsg.blockHash]
-	if exists {
+	prefetchedBlock := s.prefetchBlocks[getMsg.blockHash]
+	if prefetchedBlock != nil {
 		storedBlock := prefetchedBlock.storedBlock
 		if storedBlock.IsValid() {
-			delete(s.prefetchBlocks, getMsg.blockHash)
+			s.prefetchBlocks[getMsg.blockHash] = nil
 			blockSize := -int64(storedBlock.GetBlockSize())
 			atomic.AddInt64(&s.prefetchMemory, blockSize)
 			s.fetchedBlocksSync.Unlock()
@@ -250,12 +250,17 @@ func fetchBlock(
 	}
 	prefetchedBlock = &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
 	s.prefetchBlocks[getMsg.blockHash] = prefetchedBlock
-	s.fetchedBlocks[getMsg.blockHash] = true
 	s.fetchedBlocksSync.Unlock()
 	storedBlock, getStoredBlockErr := getStoredBlock(ctx, s, client, getMsg.blockHash)
 	s.fetchedBlocksSync.Lock()
+	prefetchedBlock, exists := s.prefetchBlocks[getMsg.blockHash]
+	if exists && prefetchedBlock == nil {
+		storedBlock.Dispose()
+		s.fetchedBlocksSync.Unlock()
+		return
+	}
 	completeCallbacks := prefetchedBlock.completeCallbacks
-	delete(s.prefetchBlocks, getMsg.blockHash)
+	s.prefetchBlocks[getMsg.blockHash] = nil
 	s.fetchedBlocksSync.Unlock()
 	for _, c := range completeCallbacks {
 		if getStoredBlockErr != nil {
@@ -283,13 +288,12 @@ func prefetchBlock(
 	client BlobClient,
 	prefetchMsg prefetchBlockMessage) {
 	s.fetchedBlocksSync.Lock()
-	_, exists := s.fetchedBlocks[prefetchMsg.blockHash]
+	_, exists := s.prefetchBlocks[prefetchMsg.blockHash]
 	if exists {
-		// Already fetched
+		// Already pre-fetched
 		s.fetchedBlocksSync.Unlock()
 		return
 	}
-	s.fetchedBlocks[prefetchMsg.blockHash] = true
 	prefetchedBlock := &pendingPrefetchedBlock{storedBlock: longtaillib.Longtail_StoredBlock{}}
 	s.prefetchBlocks[prefetchMsg.blockHash] = prefetchedBlock
 	s.fetchedBlocksSync.Unlock()
@@ -300,7 +304,13 @@ func prefetchBlock(
 	}
 
 	s.fetchedBlocksSync.Lock()
-	prefetchedBlock = s.prefetchBlocks[prefetchMsg.blockHash]
+
+	prefetchedBlock, exists = s.prefetchBlocks[prefetchMsg.blockHash]
+	if exists && prefetchedBlock == nil {
+		storedBlock.Dispose()
+		s.fetchedBlocksSync.Unlock()
+		return
+	}
 	completeCallbacks := prefetchedBlock.completeCallbacks
 	if len(completeCallbacks) == 0 {
 		// Nobody is actively waiting for the block
@@ -310,7 +320,7 @@ func prefetchBlock(
 		s.fetchedBlocksSync.Unlock()
 		return
 	}
-	delete(s.prefetchBlocks, prefetchMsg.blockHash)
+	s.prefetchBlocks[prefetchMsg.blockHash] = nil
 	s.fetchedBlocksSync.Unlock()
 	for i := 1; i < len(completeCallbacks)-1; i++ {
 		c := completeCallbacks[i]
@@ -660,16 +670,11 @@ func onPreflighMessage(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message preflightGetMessage,
 	prefetchBlockMessages chan<- prefetchBlockMessage) {
-	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, 0)
-	if errno != 0 {
-		log.Printf("WARNING: onPreflighMessage longtaillib.GetExistingStoreIndex() failed with %v", longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM))
-		return
-	}
-	defer existingStoreIndex.Dispose()
-	blockHashes := existingStoreIndex.GetBlockHashes()
-	for _, blockHash := range blockHashes {
+
+	for _, blockHash := range message.blockHashes {
 		prefetchBlockMessages <- prefetchBlockMessage{blockHash: blockHash}
 	}
+	message.asyncCompleteAPI.OnComplete(message.blockHashes, 0)
 }
 
 func onGetExistingContentMessage(
@@ -953,7 +958,6 @@ func NewRemoteBlockStore(
 	s.prefetchMemory = 0
 	s.maxPrefetchMemory = 512 * 1024 * 1024
 
-	s.fetchedBlocks = map[uint64]bool{}
 	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 
 	go func() {
@@ -987,8 +991,8 @@ func (s *remoteStore) PutStoredBlock(storedBlock longtaillib.Longtail_StoredBloc
 }
 
 // PreflightGet ...
-func (s *remoteStore) PreflightGet(chunkHashes []uint64) int {
-	s.preflightGetChan <- preflightGetMessage{chunkHashes: chunkHashes}
+func (s *remoteStore) PreflightGet(blockHashes []uint64, asyncCompleteAPI longtaillib.Longtail_AsyncPreflightStartedAPI) int {
+	s.preflightGetChan <- preflightGetMessage{blockHashes: blockHashes, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 
@@ -1057,5 +1061,6 @@ func (s *remoteStore) Close() {
 			log.Fatal(err)
 		}
 	}
+
 	s.defaultClient.Close()
 }

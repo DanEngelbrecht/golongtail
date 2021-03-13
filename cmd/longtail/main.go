@@ -111,6 +111,16 @@ func (a *getIndexCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_Store
 	a.wg.Done()
 }
 
+type timeStat struct {
+	name string
+	dur  time.Duration
+}
+
+type storeStat struct {
+	name  string
+	stats longtaillib.BlockStoreStats
+}
+
 type getExistingContentCompletionAPI struct {
 	wg         sync.WaitGroup
 	storeIndex longtaillib.Longtail_StoreIndex
@@ -588,11 +598,10 @@ func upSyncVersion(
 	hashAlgorithm *string,
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
-	minBlockUsagePercent uint32,
-	showStats bool,
-	showStoreStats bool) error {
+	minBlockUsagePercent uint32) ([]storeStat, []timeStat, error) {
 
-	executionStartTime := time.Now()
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
 
 	setupStartTime := time.Now()
 	var pathFilter longtaillib.Longtail_PathFilterAPI
@@ -602,14 +611,14 @@ func upSyncVersion(
 		if includeFilterRegEx != nil {
 			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
 			if err != nil {
-				return err
+				return storeStats, timeStats, err
 			}
 			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
 		}
 		if excludeFilterRegEx != nil {
 			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
 			if err != nil {
-				return err
+				return storeStats, timeStats, err
 			}
 			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
 		}
@@ -633,14 +642,15 @@ func upSyncVersion(
 
 	compressionType, err := getCompressionType(compressionAlgorithm)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	hashIdentifier, err := getHashIdentifier(hashAlgorithm)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 
 	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
 
 	sourceIndexReader := asyncVersionIndexReader{}
 	sourceIndexReader.read(sourceFolderPath,
@@ -656,7 +666,7 @@ func upSyncVersion(
 
 	remoteStore, err := createBlockStoreForURI(blobStoreURI, jobs, targetBlockSize, maxChunksPerBlock, longtailstorelib.ReadWrite)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer remoteStore.Dispose()
 
@@ -668,14 +678,15 @@ func upSyncVersion(
 
 	vindex, hash, readSourceIndexTime, err := sourceIndexReader.get()
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer vindex.Dispose()
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceIndexTime})
 
 	getMissingContentStartTime := time.Now()
 	existingRemoteContentIndex, errno := getExistingContentIndexSync(indexStore, vindex.GetChunkHashes(), minBlockUsagePercent)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.getExistingContentIndexSync(%s) failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.getExistingContentIndexSync(%s) failed", blobStoreURI)
 	}
 	defer existingRemoteContentIndex.Dispose()
 
@@ -686,11 +697,12 @@ func upSyncVersion(
 		targetBlockSize,
 		maxChunksPerBlock)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.CreateMissingContent(%s) failed", sourceFolderPath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.CreateMissingContent(%s) failed", sourceFolderPath)
 	}
 	defer versionMissingContentIndex.Dispose()
 
 	getMissingContentTime := time.Since(getMissingContentStartTime)
+	timeStats = append(timeStats, timeStat{"Get content index", getMissingContentTime})
 
 	writeContentStartTime := time.Now()
 	if versionMissingContentIndex.GetBlockCount() > 0 {
@@ -706,10 +718,11 @@ func upSyncVersion(
 			vindex,
 			normalizePath(sourceFolderPath))
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteContent(%s) failed", sourceFolderPath)
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteContent(%s) failed", sourceFolderPath)
 		}
 	}
 	writeContentTime := time.Since(writeContentStartTime)
+	timeStats = append(timeStats, timeStat{"Write version content", writeContentTime})
 
 	flushStartTime := time.Now()
 
@@ -718,7 +731,7 @@ func upSyncVersion(
 	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
 	if errno != 0 {
 		indexStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -726,48 +739,41 @@ func upSyncVersion(
 	errno = remoteStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	if errno != 0 {
 		remoteStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	indexStoreFlushComplete.wg.Wait()
 	if indexStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 	remoteStoreFlushComplete.wg.Wait()
 	if remoteStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	flushTime := time.Since(flushStartTime)
+	timeStats = append(timeStats, timeStat{"Flush", flushTime})
 
 	indexStoreStats, errno := indexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Compress", indexStoreStats})
+	}
 	remoteStoreStats, errno := remoteStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+	}
 
 	writeVersionIndexStartTime := time.Now()
 	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(vindex)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: longtaillib.WriteVersionIndexToBuffer() failed")
 	}
+
 	err = writeToURI(targetFilePath, vbuffer)
 	writeVersionIndexTime := time.Since(writeVersionIndexStartTime)
+	timeStats = append(timeStats, timeStat{"Write version index", writeVersionIndexTime})
 
-	executionTime := time.Since(executionStartTime)
-
-	if showStoreStats {
-		printStats("Compress", indexStoreStats)
-		printStats("Remote", remoteStoreStats)
-	}
-	if showStats {
-		log.Printf("Setup:                       %s", setupTime)
-		log.Printf("Read source index:           %s", readSourceIndexTime)
-		log.Printf("Get missing content:         %s", getMissingContentTime)
-		log.Printf("Write version content:       %s", writeContentTime)
-		log.Printf("Flush:                       %s", flushTime)
-		log.Printf("Write version index:         %s", writeVersionIndexTime)
-		log.Printf("Execution:                   %s", executionTime)
-	}
-
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func downSyncVersion(
@@ -782,11 +788,10 @@ func downSyncVersion(
 	retainPermissions bool,
 	validate bool,
 	includeFilterRegEx *string,
-	excludeFilterRegEx *string,
-	showStats bool,
-	showStoreStats bool) error {
+	excludeFilterRegEx *string) ([]storeStat, []timeStat, error) {
 
-	executionStartTime := time.Now()
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
 
 	setupStartTime := time.Now()
 
@@ -796,7 +801,7 @@ func downSyncVersion(
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer remoteIndexStore.Dispose()
 
@@ -807,14 +812,14 @@ func downSyncVersion(
 		if includeFilterRegEx != nil {
 			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
 			if err != nil {
-				return err
+				return storeStats, timeStats, err
 			}
 			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
 		}
 		if excludeFilterRegEx != nil {
 			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
 			if err != nil {
-				return err
+				return storeStats, timeStats, err
 			}
 			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
 		}
@@ -838,15 +843,16 @@ func downSyncVersion(
 
 	vbuffer, err := readFromURI(sourceFilePath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer sourceVersionIndex.Dispose()
 
 	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
 	targetChunkSize = sourceVersionIndex.GetTargetChunkSize()
@@ -894,16 +900,18 @@ func downSyncVersion(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetHashAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetHashAPI() failed")
 	}
 
 	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
 
 	targetVersionIndex, hash, readTargetIndexTime, err := targetIndexReader.get()
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer targetVersionIndex.Dispose()
+	timeStats = append(timeStats, timeStat{"Read target index", readTargetIndexTime})
 
 	getExistingContentStartTime := time.Now()
 	versionDiff, errno := longtaillib.CreateVersionDiff(
@@ -911,7 +919,7 @@ func downSyncVersion(
 		targetVersionIndex,
 		sourceVersionIndex)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.CreateVersionDiff() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.CreateVersionDiff() failed")
 	}
 	defer versionDiff.Dispose()
 
@@ -921,10 +929,11 @@ func downSyncVersion(
 
 	retargettedVersionContentIndex, errno := getExistingContentIndexSync(indexStore, chunkHashes, 0)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: getExistingContentIndexSync(indexStore, chunkHashes) failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: getExistingContentIndexSync(indexStore, chunkHashes) failed")
 	}
 	defer retargettedVersionContentIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, timeStat{"Get content index", getExistingContentTime})
 
 	changeVersionStartTime := time.Now()
 	changeVersionProgress := CreateProgress("Updating version")
@@ -942,10 +951,11 @@ func downSyncVersion(
 		normalizePath(targetFolderPath),
 		retainPermissions)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ChangeVersion() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ChangeVersion() failed")
 	}
 
 	changeVersionTime := time.Since(changeVersionStartTime)
+	timeStats = append(timeStats, timeStat{"Change version", changeVersionTime})
 
 	flushStartTime := time.Now()
 
@@ -954,7 +964,7 @@ func downSyncVersion(
 	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
 	if errno != 0 {
 		indexStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	lruStoreFlushComplete := &flushCompletionAPI{}
@@ -962,7 +972,7 @@ func downSyncVersion(
 	errno = lruBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(lruStoreFlushComplete))
 	if errno != 0 {
 		lruStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: lruBlockStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: lruBlockStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	compressStoreFlushComplete := &flushCompletionAPI{}
@@ -970,7 +980,7 @@ func downSyncVersion(
 	errno = compressBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(compressStoreFlushComplete))
 	if errno != 0 {
 		compressStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	cacheStoreFlushComplete := &flushCompletionAPI{}
@@ -978,7 +988,7 @@ func downSyncVersion(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -986,7 +996,7 @@ func downSyncVersion(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -994,56 +1004,75 @@ func downSyncVersion(
 	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	if errno != 0 {
 		remoteStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	indexStoreFlushComplete.wg.Wait()
 	if indexStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	lruStoreFlushComplete.wg.Wait()
 	if lruStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: lruStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: lruStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	compressStoreFlushComplete.wg.Wait()
 	if compressStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	cacheStoreFlushComplete.wg.Wait()
 	if cacheStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	localStoreFlushComplete.wg.Wait()
 	if localStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	remoteStoreFlushComplete.wg.Wait()
 	if remoteStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	flushTime := time.Since(flushStartTime)
+	timeStats = append(timeStats, timeStat{"Flush", flushTime})
 
-	shareStoreStats, shareStoreStatsErrno := indexStore.GetStats()
-	lruStoreStats, lruStoreStatsErrno := lruBlockStore.GetStats()
-	compressStoreStats, compressStoreStatsErrno := compressBlockStore.GetStats()
-	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
-	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
-	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
+	shareStoreStats, errno := indexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Share", shareStoreStats})
+	}
+	lruStoreStats, errno := lruBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"LRU", lruStoreStats})
+	}
+	compressStoreStats, errno := compressBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Compress", compressStoreStats})
+	}
+	cacheStoreStats, errno := cacheBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Cache", cacheStoreStats})
+	}
+	localStoreStats, errno := localIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Local", localStoreStats})
+	}
+	remoteStoreStats, errno := remoteIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+	}
 
-	validateStartTime := time.Now()
 	if validate {
+		validateStartTime := time.Now()
 		validateFileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
 			normalizePath(targetFolderPath))
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetFilesRecursively() failed")
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetFilesRecursively() failed")
 		}
 		defer validateFileInfos.Dispose()
 
@@ -1063,11 +1092,11 @@ func downSyncVersion(
 			nil,
 			targetChunkSize)
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.CreateVersionIndex() failed")
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.CreateVersionIndex() failed")
 		}
 		defer validateVersionIndex.Dispose()
 		if validateVersionIndex.GetAssetCount() != sourceVersionIndex.GetAssetCount() {
-			return fmt.Errorf("downSyncVersion: failed validation: asset count mismatch")
+			return storeStats, timeStats, fmt.Errorf("downSyncVersion: failed validation: asset count mismatch")
 		}
 		validateAssetSizes := validateVersionIndex.GetAssetSizes()
 		validateAssetHashes := validateVersionIndex.GetAssetHashes()
@@ -1091,61 +1120,27 @@ func downSyncVersion(
 			size, exists := assetSizeLookup[validatePath]
 			hash, _ := assetHashLookup[validatePath]
 			if !exists {
-				return fmt.Errorf("downSyncVersion: failed validation: invalid path %s", validatePath)
+				return storeStats, timeStats, fmt.Errorf("downSyncVersion: failed validation: invalid path %s", validatePath)
 			}
 			if size != validateSize {
-				return fmt.Errorf("downSyncVersion: failed validation: asset %d size mismatch", i)
+				return storeStats, timeStats, fmt.Errorf("downSyncVersion: failed validation: asset %d size mismatch", i)
 			}
 			if hash != validateHash {
-				return fmt.Errorf("downSyncVersion: failed validation: asset %d hash mismatch", i)
+				return storeStats, timeStats, fmt.Errorf("downSyncVersion: failed validation: asset %d hash mismatch", i)
 			}
 			if retainPermissions {
 				validatePermissions := validateVersionIndex.GetAssetPermissions(uint32(i))
 				permissions := assetPermissionLookup[validatePath]
 				if permissions != validatePermissions {
-					return fmt.Errorf("downSyncVersion: failed validation: asset %d permission mismatch", i)
+					return storeStats, timeStats, fmt.Errorf("downSyncVersion: failed validation: asset %d permission mismatch", i)
 				}
 			}
 		}
-	}
-	validateTime := time.Since(validateStartTime)
-
-	executionTime := time.Since(executionStartTime)
-
-	if showStoreStats {
-		if shareStoreStatsErrno == 0 {
-			printStats("Share", shareStoreStats)
-		}
-		if lruStoreStatsErrno == 0 {
-			printStats("LRU", lruStoreStats)
-		}
-		if compressStoreStatsErrno == 0 {
-			printStats("Compress", compressStoreStats)
-		}
-		if cacheStoreStatsErrno == 0 {
-			printStats("Cache", cacheStoreStats)
-		}
-		if localStoreStatsErrno == 0 {
-			printStats("Local", localStoreStats)
-		}
-		if remoteStoreStatsErrno == 0 {
-			printStats("Remote", remoteStoreStats)
-		}
-	}
-	if showStats {
-		log.Printf("Setup:                %s", setupTime)
-		log.Printf("Read source index:    %s", readSourceTime)
-		log.Printf("Read target index:    %s", readTargetIndexTime)
-		log.Printf("Get existing content: %s", getExistingContentTime)
-		log.Printf("Change version:       %s", changeVersionTime)
-		log.Printf("Flush:                %s", flushTime)
-		if validate {
-			log.Printf("Validate:             %s", validateTime)
-		}
-		log.Printf("Execution:            %s", executionTime)
+		validateTime := time.Since(validateStartTime)
+		timeStats = append(timeStats, timeStat{"Validate", validateTime})
 	}
 
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func hashIdentifierToString(hashIdentifier uint32) string {
@@ -1165,7 +1160,12 @@ func validateVersion(
 	blobStoreURI string,
 	versionIndexPath string,
 	targetBlockSize uint32,
-	maxChunksPerBlock uint32) error {
+	maxChunksPerBlock uint32) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	setupStartTime := time.Now()
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
@@ -1173,45 +1173,62 @@ func validateVersion(
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	indexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer indexStore.Dispose()
+	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
 
+	readSourceStartTime := time.Now()
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
+	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
+	getExistingContentStartTime := time.Now()
 	remoteStoreIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
 	defer remoteStoreIndex.Dispose()
+	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, timeStat{"Get content index", getExistingContentTime})
 
+	validateStartTime := time.Now()
 	errno = longtaillib.ValidateStore(remoteStoreIndex, versionIndex)
-
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: longtaillib.ValidateContent() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: longtaillib.ValidateContent() failed")
 	}
+	validateTime := time.Since(validateStartTime)
+	timeStats = append(timeStats, timeStat{"Validate", validateTime})
 
-	return nil
+	return storeStats, timeStats, nil
 }
 
-func showVersionIndex(versionIndexPath string, compact bool) error {
+func showVersionIndex(versionIndexPath string, compact bool) ([]storeStat, []timeStat, error) {
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	readSourceStartTime := time.Now()
+
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
+	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
 	var smallestChunkSize uint32
 	var largestChunkSize uint32
@@ -1275,19 +1292,26 @@ func showVersionIndex(versionIndexPath string, compact bool) error {
 		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
 	}
 
-	return nil
+	return storeStats, timeStats, nil
 }
 
-func showStoreIndex(storeIndexPath string, compact bool) error {
+func showStoreIndex(storeIndexPath string, compact bool) ([]storeStat, []timeStat, error) {
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	readStoreIndexStartTime := time.Now()
+
 	vbuffer, err := readFromURI(storeIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadStoreIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "showStoreIndex: longtaillib.ReadStoreIndexFromBuffer() failed")
 	}
 	defer storeIndex.Dispose()
+	readStoreIndexTime := time.Since(readStoreIndexStartTime)
+	timeStats = append(timeStats, timeStat{"Read store index", readStoreIndexTime})
 
 	if compact {
 		fmt.Printf("%s\t%d\t%s\t%d\t%d\n",
@@ -1303,7 +1327,7 @@ func showStoreIndex(storeIndexPath string, compact bool) error {
 		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), byteCountDecimal(uint64(storeIndex.GetChunkCount())))
 	}
 
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func getDetailsString(path string, size uint64, permissions uint16, isDir bool, sizePadding int) string {
@@ -1367,16 +1391,22 @@ func getDetailsString(path string, size uint64, permissions uint16, isDir bool, 
 	return fmt.Sprintf("%s %s %s", bits, sizeString, path)
 }
 
-func dumpVersionIndex(versionIndexPath string, showDetails bool) error {
+func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]storeStat, []timeStat, error) {
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	readSourceStartTime := time.Now()
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
+	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
 	assetCount := versionIndex.GetAssetCount()
 
@@ -1406,7 +1436,7 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) error {
 		}
 	}
 
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func cpVersionIndex(
@@ -1416,8 +1446,13 @@ func cpVersionIndex(
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	sourcePath string,
-	targetPath string,
-	showStoreStats bool) error {
+	targetPath string) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	setupStartTime := time.Now()
+
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	creg := longtaillib.CreateFullCompressionRegistry()
@@ -1428,7 +1463,7 @@ func cpVersionIndex(
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer remoteIndexStore.Dispose()
 
@@ -1458,29 +1493,39 @@ func cpVersionIndex(
 	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
+	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+
+	readSourceStartTime := time.Now()
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
+	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
 	hashIdentifier := versionIndex.GetHashIdentifier()
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.GetHashAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.GetHashAPI() failed")
 	}
 
+	getExistingContentStartTime := time.Now()
 	storeIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
 	defer storeIndex.Dispose()
+	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, timeStat{"Get store index", getExistingContentTime})
 
+	createBlockStoreFSStartTime := time.Now()
 	blockStoreFS := longtaillib.CreateBlockStoreStorageAPI(
 		hash,
 		jobs,
@@ -1488,20 +1533,23 @@ func cpVersionIndex(
 		storeIndex,
 		versionIndex)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.CreateBlockStoreStorageAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.CreateBlockStoreStorageAPI() failed")
 	}
 	defer blockStoreFS.Dispose()
+	createBlockStoreFSTime := time.Since(createBlockStoreFSStartTime)
+	timeStats = append(timeStats, timeStat{"Create Blockstore FS", createBlockStoreFSTime})
 
+	copyFileStartTime := time.Now()
 	// Only support writing to regular file path for now
 	outFile, err := os.Create(targetPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer outFile.Close()
 
 	inFile, errno := blockStoreFS.OpenReadFile(sourcePath)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.OpenReadFile() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.OpenReadFile() failed")
 	}
 	defer blockStoreFS.CloseFile(inFile)
 
@@ -1515,18 +1563,22 @@ func cpVersionIndex(
 		}
 		data, errno := blockStoreFS.Read(inFile, offset, left)
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.Read() failed")
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.Read() failed")
 		}
 		outFile.Write(data)
 		offset += left
 	}
+	copyFileTime := time.Since(copyFileStartTime)
+	timeStats = append(timeStats, timeStat{"Copy file", copyFileTime})
+
+	flushStartTime := time.Now()
 
 	indexStoreFlushComplete := &flushCompletionAPI{}
 	indexStoreFlushComplete.wg.Add(1)
 	errno = indexStore.Flush(longtaillib.CreateAsyncFlushAPI(indexStoreFlushComplete))
 	if errno != 0 {
 		indexStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	lruStoreFlushComplete := &flushCompletionAPI{}
@@ -1534,7 +1586,7 @@ func cpVersionIndex(
 	errno = lruBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(lruStoreFlushComplete))
 	if errno != 0 {
 		lruStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: lruStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: lruStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	compressStoreFlushComplete := &flushCompletionAPI{}
@@ -1542,7 +1594,7 @@ func cpVersionIndex(
 	errno = compressBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(compressStoreFlushComplete))
 	if errno != 0 {
 		compressStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	cacheStoreFlushComplete := &flushCompletionAPI{}
@@ -1550,7 +1602,7 @@ func cpVersionIndex(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -1558,7 +1610,7 @@ func cpVersionIndex(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -1566,135 +1618,153 @@ func cpVersionIndex(
 	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	if errno != 0 {
 		remoteStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	indexStoreFlushComplete.wg.Wait()
 	if indexStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: indexStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	lruStoreFlushComplete.wg.Wait()
 	if lruStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: lruStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: lruStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	compressStoreFlushComplete.wg.Wait()
 	if compressStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: compressStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	cacheStoreFlushComplete.wg.Wait()
 	if cacheStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	localStoreFlushComplete.wg.Wait()
 	if localStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	remoteStoreFlushComplete.wg.Wait()
 	if remoteStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+	}
+	flushTime := time.Since(flushStartTime)
+	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+
+	shareStoreStats, errno := indexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Share", shareStoreStats})
+	}
+	lruStoreStats, errno := lruBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"LRU", lruStoreStats})
+	}
+	compressStoreStats, errno := compressBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Compress", compressStoreStats})
+	}
+	cacheStoreStats, errno := cacheBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Cache", cacheStoreStats})
+	}
+	localStoreStats, errno := localIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Local", localStoreStats})
+	}
+	remoteStoreStats, errno := remoteIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
 	}
 
-	shareStoreStats, shareStoreStatsErrno := indexStore.GetStats()
-	lruStoreStats, lruStoreStatsErrno := lruBlockStore.GetStats()
-	compressStoreStats, compressStoreStatsErrno := compressBlockStore.GetStats()
-	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
-	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
-	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
-
-	if showStoreStats {
-		if shareStoreStatsErrno == 0 {
-			printStats("Share", shareStoreStats)
-		}
-		if lruStoreStatsErrno == 0 {
-			printStats("LRU", lruStoreStats)
-		}
-		if compressStoreStatsErrno == 0 {
-			printStats("Compress", compressStoreStats)
-		}
-		if cacheStoreStatsErrno == 0 {
-			printStats("Cache", cacheStoreStats)
-		}
-		if localStoreStatsErrno == 0 {
-			printStats("Local", localStoreStats)
-		}
-		if remoteStoreStatsErrno == 0 {
-			printStats("Remote", remoteStoreStats)
-		}
-	}
-
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func initRemoteStore(
 	blobStoreURI string,
-	hashAlgorithm *string,
-	showStoreStats bool) error {
+	hashAlgorithm *string) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	setupStartTime := time.Now()
+
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
 	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.Init)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer remoteIndexStore.Dispose()
+	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
 
+	getExistingContentStartTime := time.Now()
 	retargetContentIndex, errno := getExistingContentIndexSync(remoteIndexStore, []uint64{}, 0)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
 	defer retargetContentIndex.Dispose()
+	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, timeStat{"Get store index", getExistingContentTime})
+
+	flushStartTime := time.Now()
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
 	remoteStoreFlushComplete.wg.Add(1)
 	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	if errno != 0 {
 		remoteStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	remoteStoreFlushComplete.wg.Wait()
 	if remoteStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
-	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
+	flushTime := time.Since(flushStartTime)
+	timeStats = append(timeStats, timeStat{"Flush", flushTime})
 
-	if showStoreStats {
-		if remoteStoreStatsErrno == 0 {
-			printStats("Remote", remoteStoreStats)
-		}
+	remoteStoreStats, errno := remoteIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
 	}
 
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func lsVersionIndex(
 	versionIndexPath string,
-	commandLSVersionDir *string) error {
+	commandLSVersionDir *string) ([]storeStat, []timeStat, error) {
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
 
+	readSourceStartTime := time.Now()
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
+	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
+	setupStartTime := time.Now()
 	hashIdentifier := versionIndex.GetHashIdentifier()
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.GetHashAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.GetHashAPI() failed")
 	}
 
 	fakeBlockStoreFS := longtaillib.CreateInMemStorageAPI()
@@ -1716,9 +1786,12 @@ func lsVersionIndex(
 		storeIndex,
 		versionIndex)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.CreateBlockStoreStorageAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.CreateBlockStoreStorageAPI() failed")
 	}
 	defer blockStoreFS.Dispose()
+
+	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
 
 	searchDir := ""
 	if commandLSVersionDir != nil && *commandLSVersionDir != "." {
@@ -1727,16 +1800,16 @@ func lsVersionIndex(
 
 	iterator, errno := blockStoreFS.StartFind(searchDir)
 	if errno == longtaillib.ENOENT {
-		return nil
+		return storeStats, timeStats, nil
 	}
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.StartFind() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.StartFind() failed")
 	}
 	defer blockStoreFS.CloseFind(iterator)
 	for true {
 		properties, errno := blockStoreFS.GetEntryProperties(iterator)
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: GetEntryProperties.GetEntryProperties() failed")
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: GetEntryProperties.GetEntryProperties() failed")
 		}
 		detailsString := getDetailsString(properties.Name, properties.Size, properties.Permissions, properties.IsDir, 16)
 		fmt.Printf("%s\n", detailsString)
@@ -1746,17 +1819,21 @@ func lsVersionIndex(
 			break
 		}
 		if errno != 0 {
-			return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: GetEntryProperties.FindNext() failed")
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "upSyncVersion: GetEntryProperties.FindNext() failed")
 		}
 	}
-	return nil
+	return storeStats, timeStats, nil
 }
 
 func stats(
 	blobStoreURI string,
 	versionIndexPath string,
-	localCachePath *string,
-	showStoreStats bool) error {
+	localCachePath *string) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	setupStartTime := time.Now()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
@@ -1767,7 +1844,7 @@ func stats(
 
 	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	defer remoteIndexStore.Dispose()
 
@@ -1791,25 +1868,36 @@ func stats(
 	defer localIndexStore.Dispose()
 	defer localFS.Dispose()
 
+	setupTime := time.Since(setupStartTime)
+	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+
+	readSourceStartTime := time.Now()
 	vbuffer, err := readFromURI(versionIndexPath)
 	if err != nil {
-		return err
+		return storeStats, timeStats, err
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
+	readSourceTime := time.Since(readSourceStartTime)
+	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
+	getExistingContentStartTime := time.Now()
 	existingStoreIndex, errno := getExistingContentIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: getExistingContentIndexSync() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: getExistingContentIndexSync() failed")
 	}
 	defer existingStoreIndex.Dispose()
+	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, timeStat{"Get store index", getExistingContentTime})
 
 	blockLookup := make(map[uint64]uint64)
 
 	blockChunkCount := uint32(0)
+
+	fetchingBlocksStartTime := time.Now()
 
 	progress := CreateProgress("Fetching blocks")
 	defer progress.Dispose()
@@ -1833,7 +1921,7 @@ func stats(
 		for offset := 0; offset < batchSize; offset++ {
 			completions[offset].wg.Wait()
 			if completions[offset].err != 0 {
-				return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStoreIndex.GetStoredBlock() failed")
+				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStoreIndex.GetStoredBlock() failed")
 			}
 			blockIndex := completions[offset].storedBlock.GetBlockIndex()
 			for _, chunkHash := range blockIndex.GetChunkHashes() {
@@ -1845,6 +1933,9 @@ func stats(
 		i += batchSize
 		progress.OnProgress(uint32(len(blockHashes)), uint32(i))
 	}
+
+	fetchingBlocksTime := time.Since(fetchingBlocksStartTime)
+	timeStats = append(timeStats, timeStat{"Fetching blocks", fetchingBlocksTime})
 
 	blockUsage := uint32(100)
 	if blockChunkCount > 0 {
@@ -1880,12 +1971,14 @@ func stats(
 	fmt.Printf("Block Usage:          %d%%\n", blockUsage)
 	fmt.Printf("Asset Fragmentation:  %d%%\n", assetFragmentation)
 
+	flushStartTime := time.Now()
+
 	cacheStoreFlushComplete := &flushCompletionAPI{}
 	cacheStoreFlushComplete.wg.Add(1)
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -1893,7 +1986,7 @@ func stats(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", *localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -1901,39 +1994,40 @@ func stats(
 	errno = remoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	if errno != 0 {
 		remoteStoreFlushComplete.wg.Done()
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	cacheStoreFlushComplete.wg.Wait()
 	if cacheStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	localStoreFlushComplete.wg.Wait()
 	if localStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
 	remoteStoreFlushComplete.wg.Wait()
 	if remoteStoreFlushComplete.err != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 
-	cacheStoreStats, cacheStoreStatsErrno := cacheBlockStore.GetStats()
-	localStoreStats, localStoreStatsErrno := localIndexStore.GetStats()
-	remoteStoreStats, remoteStoreStatsErrno := remoteIndexStore.GetStats()
-	if showStoreStats {
-		if cacheStoreStatsErrno == 0 {
-			printStats("Cache", cacheStoreStats)
-		}
-		if localStoreStatsErrno == 0 {
-			printStats("Local", localStoreStats)
-		}
-		if remoteStoreStatsErrno == 0 {
-			printStats("Remote", remoteStoreStats)
-		}
+	flushTime := time.Since(flushStartTime)
+	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+
+	cacheStoreStats, errno := cacheBlockStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Cache", cacheStoreStats})
 	}
-	return nil
+	localStoreStats, errno := localIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Local", localStoreStats})
+	}
+	remoteStoreStats, errno := remoteIndexStore.GetStats()
+	if errno == 0 {
+		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+	}
+	return storeStats, timeStats, nil
 }
 
 var (
@@ -2030,6 +2124,36 @@ var (
 )
 
 func main() {
+	executionStartTime := time.Now()
+	initStartTime := executionStartTime
+
+	commandStoreStat := []storeStat{}
+	commandTimeStat := []timeStat{}
+
+	defer func() {
+		executionTime := time.Since(executionStartTime)
+		commandTimeStat = append(commandTimeStat, timeStat{"Execution", executionTime})
+
+		if *showStoreStats {
+			for _, s := range commandStoreStat {
+				printStats(s.name, s.stats)
+			}
+		}
+
+		if *showStats {
+			maxLen := 0
+			for _, s := range commandTimeStat {
+				if len(s.name) > maxLen {
+					maxLen = len(s.name)
+				}
+			}
+			for _, s := range commandTimeStat {
+				name := fmt.Sprintf("%s:", s.name)
+				log.Printf("%-*s %s", maxLen+1, name, s.dur)
+			}
+		}
+	}()
+
 	kingpin.HelpFlag.Short('h')
 	kingpin.CommandLine.DefaultEnvars()
 	kingpin.Parse()
@@ -2058,7 +2182,14 @@ func main() {
 			if *memTraceCSV != "" {
 				longtaillib.MemTraceDumpStats(*memTraceCSV)
 			}
-			log.Print(longtaillib.GetMemTraceStats(memTraceLogLevel))
+			memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
+			memTraceLines := strings.Split(memTraceLog, "\n")
+			for _, l := range memTraceLines {
+				if l == "" {
+					continue
+				}
+				log.Printf("[MEM] %s", l)
+			}
 			longtaillib.DisableMemtrace()
 		}()
 	}
@@ -2067,9 +2198,11 @@ func main() {
 		numWorkerCount = *workerCount
 	}
 
+	initTime := time.Since(initStartTime)
+
 	switch p {
 	case commandUpsync.FullCommand():
-		err := upSyncVersion(
+		commandStoreStat, commandTimeStat, err = upSyncVersion(
 			*commandUpsyncStorageURI,
 			*commandUpsyncSourcePath,
 			commandUpsyncSourceIndexPath,
@@ -2081,14 +2214,9 @@ func main() {
 			commandUpsyncHashing,
 			includeFilterRegEx,
 			excludeFilterRegEx,
-			*commandUpsyncMinBlockUsagePercent,
-			*showStats,
-			*showStoreStats)
-		if err != nil {
-			log.Fatal(err)
-		}
+			*commandUpsyncMinBlockUsagePercent)
 	case commandDownsync.FullCommand():
-		err := downSyncVersion(
+		commandStoreStat, commandTimeStat, err = downSyncVersion(
 			*commandDownsyncStorageURI,
 			*commandDownsyncSourcePath,
 			*commandDownsyncTargetPath,
@@ -2100,70 +2228,44 @@ func main() {
 			!(*commandDownsyncNoRetainPermissions),
 			*commandDownsyncValidate,
 			includeFilterRegEx,
-			excludeFilterRegEx,
-			*showStats,
-			*showStoreStats)
-		if err != nil {
-			log.Fatal(err)
-		}
+			excludeFilterRegEx)
 	case commandValidate.FullCommand():
-		err := validateVersion(
+		commandStoreStat, commandTimeStat, err = validateVersion(
 			*commandValidateStorageURI,
 			*commandValidateVersionIndexPath,
 			*commandValidateVersionTargetBlockSize,
 			*commandValidateVersionMaxChunksPerBlock)
-		if err != nil {
-			log.Fatal(err)
-		}
 	case commandPrintVersionIndex.FullCommand():
-		err := showVersionIndex(*commandPrintVersionIndexPath, *commandPrintVersionIndexCompact)
-		if err != nil {
-			log.Fatal(err)
-		}
+		commandStoreStat, commandTimeStat, err = showVersionIndex(*commandPrintVersionIndexPath, *commandPrintVersionIndexCompact)
 	case commandPrintStoreIndex.FullCommand():
-		err := showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
-		if err != nil {
-			log.Fatal(err)
-		}
+		commandStoreStat, commandTimeStat, err = showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
 	case commandDump.FullCommand():
-		err := dumpVersionIndex(*commandDumpVersionIndexPath, *commandDumpDetails)
-		if err != nil {
-			log.Fatal(err)
-		}
+		commandStoreStat, commandTimeStat, err = dumpVersionIndex(*commandDumpVersionIndexPath, *commandDumpDetails)
 	case commandLSVersion.FullCommand():
-		err := lsVersionIndex(*commandLSVersionIndexPath, commandLSVersionDir)
-		if err != nil {
-			log.Fatal(err)
-		}
+		commandStoreStat, commandTimeStat, err = lsVersionIndex(*commandLSVersionIndexPath, commandLSVersionDir)
 	case commandCPVersion.FullCommand():
-		err := cpVersionIndex(
+		commandStoreStat, commandTimeStat, err = cpVersionIndex(
 			*commandCPStorageURI,
 			*commandCPVersionIndexPath,
 			commandCPCachePath,
 			*commandCPTargetBlockSize,
 			*commandCPMaxChunksPerBlock,
 			*commandCPSourcePath,
-			*commandCPTargetPath,
-			*showStoreStats)
-		if err != nil {
-			log.Fatal(err)
-		}
+			*commandCPTargetPath)
 	case commandInitRemoteStore.FullCommand():
-		err := initRemoteStore(
+		commandStoreStat, commandTimeStat, err = initRemoteStore(
 			*commandInitRemoteStoreStorageURI,
-			commandInitRemoteStoreHashing,
-			*showStoreStats)
-		if err != nil {
-			log.Fatal(err)
-		}
+			commandInitRemoteStoreHashing)
 	case commandStats.FullCommand():
-		err := stats(
+		commandStoreStat, commandTimeStat, err = stats(
 			*commandStatsStorageURI,
 			*commandStatsVersionIndexPath,
-			commandStatsCachePath,
-			*showStoreStats)
-		if err != nil {
-			log.Fatal(err)
-		}
+			commandStatsCachePath)
+	}
+
+	commandTimeStat = append([]timeStat{{"Init", initTime}}, commandTimeStat...)
+
+	if err != nil {
+		log.Fatal(err)
 	}
 }

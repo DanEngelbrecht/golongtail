@@ -118,7 +118,9 @@ jobs:
           Changes in this Release
           - **UPDATE** Longtail to 0.2.0
           - **CHANGED** Delay read of remote store index until we know we need it
+          - **ADDED** Consistent output of `--show-stats` and `--show-store-stats`
           - **FIXED** longtail memtracer stats are not output using logging instead of C print in library
+          - **FIXED** Memory leak in remote store
         draft: false
         prerelease: false
     - name: Download Linux artifacts

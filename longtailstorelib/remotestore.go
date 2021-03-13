@@ -784,6 +784,7 @@ func contentIndexWorker(
 	saveStoreIndex := false
 
 	var storeIndex longtaillib.Longtail_StoreIndex
+	defer storeIndex.Dispose()
 
 	var addedBlockIndexes []longtaillib.Longtail_BlockIndex
 	defer func(addedBlockIndexes []longtaillib.Longtail_BlockIndex) {

@@ -271,6 +271,10 @@ type Longtail_AsyncGetExistingContentAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetExistingContentAPI
 }
 
+type Longtail_AsyncPreflightStartedAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncPreflightStartedAPI
+}
+
 type Longtail_AsyncFlushAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncFlushAPI
 }
@@ -309,7 +313,7 @@ type BlockStoreStats struct {
 
 type BlockStoreAPI interface {
 	PutStoredBlock(storedBlock Longtail_StoredBlock, asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) int
-	PreflightGet(chunkHashes []uint64) int
+	PreflightGet(blockHashes []uint64, asyncCompleteAPI Longtail_AsyncPreflightStartedAPI) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetExistingContent(chunkHashes []uint64, minBlockUsagePercent uint32, asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int
 	GetStats() (BlockStoreStats, int)
@@ -863,6 +867,19 @@ func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block
 //// Longtail_AsyncGetExistingContentAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncGetExistingContentAPI) OnComplete(store_index Longtail_StoreIndex, errno int) {
 	C.Longtail_AsyncGetExistingContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, store_index.cStoreIndex, C.int(errno))
+}
+
+//// Longtail_AsyncPreflightStartedAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncPreflightStartedAPI) OnComplete(blockHashes []uint64, errno int) {
+	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
+		return
+	}
+	blockCount := len(blockHashes)
+	cblockHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
+	if blockCount > 0 {
+		cblockHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&blockHashes[0]))
+	}
+	C.Longtail_AsyncPreflightStarted_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.uint32_t(blockCount), cblockHashes, C.int(errno))
 }
 
 //// Longtail_AsyncFlushAPI::OnComplete() ...
@@ -1656,6 +1673,13 @@ func CreateAsyncGetExistingContentAPI(asyncComplete AsyncGetExistingContentAPI) 
 	return Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
+// // CreateAsyncPreflightStartedAPI ...
+//func CreateAsyncPreflightStartedAPI(asyncComplete AsyncPreflightStartedAPI) Longtail_AsyncPreflightStartedAPI {
+//	cContext := SavePointer(asyncComplete)
+//	asyncCompleteAPIProxy := C.CreateAsyncPreflightStartedAPI(cContext)
+//	return Longtail_AsyncPreflightStartedAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+//}
+
 //export AsyncGetExistingContentAPIProxy_OnComplete
 func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI, store_index *C.struct_Longtail_StoreIndex, err C.int) {
 	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
@@ -1892,13 +1916,13 @@ func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blo
 }
 
 //export BlockStoreAPIProxy_PreflightGet
-func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint32_t, chunk_hashes *C.TLongtail_Hash) C.int {
+func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, block_count C.uint32_t, block_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncPreflightStartedAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
-	chunkCount := int(chunk_count)
-	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
-	copyChunkHashes := append([]uint64{}, chunkHashes...)
-	errno := blockStore.PreflightGet(copyChunkHashes)
+	blockCount := int(block_count)
+	blockHashes := carray2slice64(block_hashes, blockCount)
+	copyBlockHashes := append([]uint64{}, blockHashes...)
+	errno := blockStore.PreflightGet(copyBlockHashes, Longtail_AsyncPreflightStartedAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

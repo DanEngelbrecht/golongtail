@@ -463,8 +463,9 @@ func (b *TestBlockStore) PutStoredBlock(
 	return 0
 }
 
-func (b *TestBlockStore) PreflightGet(chunkHashes []uint64) int {
+func (b *TestBlockStore) PreflightGet(blockHashes []uint64, asyncCompleteAPI Longtail_AsyncPreflightStartedAPI) int {
 	b.stats[Longtail_BlockStoreAPI_StatU64_PreflightGet_Count] += 1
+	asyncCompleteAPI.OnComplete(blockHashes, 0)
 	return 0
 }
 

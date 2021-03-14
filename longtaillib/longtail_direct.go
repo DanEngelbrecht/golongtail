@@ -165,8 +165,8 @@ func DirectGetExistingStoreIndex(storeIndex *StoreIndex, chunkHashes []uint64, m
 		// Favour blocks we use more data out of - if a chunk is in mutliple blocks we want to pick
 		// the blocks that has the most requested chunk data
 		// This does not guarantee a perfect block match as one block can be a 100% match which
-		// could lead to skipping part or whole of another 100% match block resulting in us
-		// picking a block that we will not use 100% of
+		// but all those chunks exists in another block and that block also has matches for other chunks
+		// and that chunk will get prioritized
 		sort.SliceStable(blockOrder, func(aIndex, bIndex int) bool {
 			aUsage := blockUses[aIndex]
 			bUsage := blockUses[bIndex]

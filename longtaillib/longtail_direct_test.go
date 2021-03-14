@@ -94,8 +94,8 @@ func TestDirectGetExistingStoreIndex(t *testing.T) {
 	if resultStoreIndex.ChunkHashes[2] != storeIndex.ChunkHashes[2] {
 		t.Errorf("TestSerializeStoreIndex() %d != %d", resultStoreIndex.ChunkHashes[2], storeIndex.ChunkHashes[2])
 	}
-	if resultStoreIndex.ChunkHashes[3] != storeIndex.ChunkHashes[3] {
-		t.Errorf("TestSerializeStoreIndex() %d != %d", resultStoreIndex.ChunkHashes[3], storeIndex.ChunkHashes[3])
+	if resultStoreIndex.ChunkHashes[3] != storeIndex.ChunkHashes[7] {
+		t.Errorf("TestSerializeStoreIndex() %d != %d", resultStoreIndex.ChunkHashes[3], storeIndex.ChunkHashes[7])
 	}
 
 	resultStoreIndex = DirectGetExistingStoreIndex(storeIndex, []uint64{271, 371}, 0)

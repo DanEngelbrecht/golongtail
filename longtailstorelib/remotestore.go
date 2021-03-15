@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -13,6 +14,83 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
 )
+
+func createBlobStoreForURI(uri string) (BlobStore, error) {
+	blobStoreURL, err := url.Parse(uri)
+	if err == nil {
+		switch blobStoreURL.Scheme {
+		case "gs":
+			return NewGCSBlobStore(blobStoreURL)
+		case "s3":
+			return NewS3BlobStore(blobStoreURL)
+		case "abfs":
+			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
+		case "abfss":
+			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
+		case "file":
+			return NewFSBlobStore(blobStoreURL.Path[1:])
+		}
+	}
+
+	return NewFSBlobStore(uri)
+}
+
+func splitURI(uri string) (string, string) {
+	i := strings.LastIndex(uri, "/")
+	if i == -1 {
+		i = strings.LastIndex(uri, "\\")
+	}
+	if i == -1 {
+		return "", uri
+	}
+	return uri[:i], uri[i+1:]
+}
+
+// ReadFromURI ...
+func ReadFromURI(uri string) ([]byte, error) {
+	uriParent, uriName := splitURI(uri)
+	blobStore, err := createBlobStoreForURI(uriParent)
+	if err != nil {
+		return nil, err
+	}
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+	object, err := client.NewObject(uriName)
+	if err != nil {
+		return nil, err
+	}
+	vbuffer, err := object.Read()
+	if err != nil {
+		return nil, err
+	}
+	return vbuffer, nil
+}
+
+// ReadFromURI ...
+func WriteToURI(uri string, data []byte) error {
+	uriParent, uriName := splitURI(uri)
+	blobStore, err := createBlobStoreForURI(uriParent)
+	if err != nil {
+		return err
+	}
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	object, err := client.NewObject(uriName)
+	if err != nil {
+		return err
+	}
+	_, err = object.Write(data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // AccessType defines how we will access the data in the store
 type AccessType int
@@ -712,6 +790,7 @@ func updateStoreIndex(
 func getStoreIndex(
 	ctx context.Context,
 	s *remoteStore,
+	optionalStoreIndexPath string,
 	client BlobClient,
 	accessType AccessType,
 	storeIndex longtaillib.Longtail_StoreIndex,
@@ -723,9 +802,22 @@ func getStoreIndex(
 		if accessType == Init {
 			saveStoreIndex = true
 		} else {
-			storeIndex, err = readStoreStoreIndex(ctx, s, client)
-			if err != nil {
-				log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
+			if accessType == ReadOnly && len(optionalStoreIndexPath) > 0 {
+				sbuffer, err := ReadFromURI(optionalStoreIndexPath)
+				if err == nil {
+					storeIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
+					if errno != 0 {
+						log.Printf("Failed parsing local store index from %s: %d\n", optionalStoreIndexPath, errno)
+					}
+				} else {
+					log.Printf("Failed reading local store index: %v\n", err)
+				}
+			}
+			if !storeIndex.IsValid() {
+				storeIndex, err = readStoreStoreIndex(ctx, s, client)
+				if err != nil {
+					log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
+				}
 			}
 		}
 
@@ -771,6 +863,7 @@ func getStoreIndex(
 func contentIndexWorker(
 	ctx context.Context,
 	s *remoteStore,
+	optionalStoreIndexPath string,
 	preflightGetMessages <-chan preflightGetMessage,
 	prefetchBlockMessages chan<- prefetchBlockMessage,
 	blockIndexMessages <-chan blockIndexMessage,
@@ -788,7 +881,7 @@ func contentIndexWorker(
 
 	saveStoreIndex := false
 
-	var storeIndex longtaillib.Longtail_StoreIndex
+	storeIndex := longtaillib.Longtail_StoreIndex{}
 	defer storeIndex.Dispose()
 
 	var addedBlockIndexes []longtaillib.Longtail_BlockIndex
@@ -807,6 +900,7 @@ func contentIndexWorker(
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,
+				optionalStoreIndexPath,
 				client,
 				accessType,
 				storeIndex,
@@ -829,6 +923,7 @@ func contentIndexWorker(
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,
+				optionalStoreIndexPath,
 				client,
 				accessType,
 				storeIndex,
@@ -853,6 +948,7 @@ func contentIndexWorker(
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,
+				optionalStoreIndexPath,
 				client,
 				accessType,
 				storeIndex,
@@ -873,6 +969,7 @@ func contentIndexWorker(
 			storeIndex, saveStoreIndex, err = getStoreIndex(
 				ctx,
 				s,
+				optionalStoreIndexPath,
 				client,
 				accessType,
 				storeIndex,
@@ -929,6 +1026,7 @@ func contentIndexWorker(
 func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore BlobStore,
+	optionalStoreIndexPath string,
 	workerCount int,
 	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
 	ctx := context.Background()
@@ -961,7 +1059,7 @@ func NewRemoteBlockStore(
 	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 
 	go func() {
-		err := contentIndexWorker(ctx, s, s.preflightGetChan, s.prefetchBlockChan, s.blockIndexChan, s.getExistingContentChan, s.indexFlushChan, s.indexFlushReplyChan, accessType)
+		err := contentIndexWorker(ctx, s, optionalStoreIndexPath, s.preflightGetChan, s.prefetchBlockChan, s.blockIndexChan, s.getExistingContentChan, s.indexFlushChan, s.indexFlushReplyChan, accessType)
 		s.workerErrorChan <- err
 	}()
 

@@ -121,6 +121,9 @@ jobs:
           - **ADDED** Consistent output of `--show-stats` and `--show-store-stats`
           - **FIXED** longtail memtracer stats are not output using logging instead of C print in library
           - **FIXED** Memory leak in remote store
+          - **ADDED** `version-local-store-index-path` option to downsync
+          - **ADDED** `version-local-store-index-path` option to upsync
+          - **ADDED** `createVersionStoreIndex` command
         draft: false
         prerelease: false
     - name: Download Linux artifacts

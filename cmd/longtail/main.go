@@ -2154,6 +2154,12 @@ func cloneStore(
 		sourceFileZipPath := sourcesZipScanner.Text()
 		targetFilePath := targetsScanner.Text()
 
+		_, err = longtailstorelib.ReadFromURI(targetFilePath)
+		if err == nil {
+			fmt.Printf("Skipping `%s`, already exists as `%s`\n", sourceFilePath, targetFilePath)
+			continue
+		}
+
 		fmt.Printf("`%s` -> `%s`\n", sourceFilePath, targetFilePath)
 
 		vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)

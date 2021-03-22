@@ -2154,10 +2154,26 @@ func cloneStore(
 		sourceFileZipPath := sourcesZipScanner.Text()
 		targetFilePath := targetsScanner.Text()
 
-		_, err = longtailstorelib.ReadFromURI(targetFilePath)
+		tbuffer, err := longtailstorelib.ReadFromURI(targetFilePath)
 		if err == nil {
-			fmt.Printf("Skipping `%s`, already exists as `%s`\n", sourceFilePath, targetFilePath)
-			continue
+			fmt.Printf("Validating `%s` as `%s`\n", sourceFilePath, targetFilePath)
+			targetVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(tbuffer)
+			tbuffer = nil
+			if errno == 0 {
+				targetStoreIndex, errno := getExistingStoreIndexSync(targetStore, targetVersionIndex.GetChunkHashes(), 0)
+				if errno == 0 {
+					errno = longtaillib.ValidateStore(targetStoreIndex, targetVersionIndex)
+					targetStoreIndex.Dispose()
+					targetVersionIndex.Dispose()
+					if errno == 0 {
+						fmt.Printf("Skipping `%s`, valid version stored as `%s`\n", sourceFilePath, targetFilePath)
+						continue
+					}
+					targetStoreIndex.Dispose()
+				}
+				targetVersionIndex.Dispose()
+			}
+			fmt.Printf("Validation failed, rebuilding `%s` as `%s`\n", sourceFilePath, targetFilePath)
 		}
 
 		fmt.Printf("`%s` -> `%s`\n", sourceFilePath, targetFilePath)
@@ -2336,6 +2352,13 @@ func cloneStore(
 			fileInfos.Dispose()
 			if errno != 0 {
 				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.CreateVersionIndex() failed")
+			}
+
+			// Make sure to update binary for new version index
+			vbuffer, errno = longtaillib.WriteVersionIndexToBuffer(sourceVersionIndex)
+			if errno != 0 {
+				sourceVersionIndex.Dispose()
+				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.WriteVersionIndexToBuffer() failed")
 			}
 		}
 

@@ -2410,6 +2410,16 @@ func cloneStore(
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: indexStore.Flush: Failed for `%s` failed", targetStoreURI)
 		}
 
+		sourceStoreFlushComplete := &flushCompletionAPI{}
+		sourceStoreFlushComplete.wg.Add(1)
+		errno = sourceRemoteIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(sourceStoreFlushComplete))
+		if errno != 0 {
+			versionMissingStoreIndex.Dispose()
+			existingStoreIndex.Dispose()
+			sourceVersionIndex.Dispose()
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: indexStore.Flush: Failed for `%s` failed", sourceStoreURI)
+		}
+
 		err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
 		if err != nil {
 			versionMissingStoreIndex.Dispose()
@@ -2451,6 +2461,10 @@ func cloneStore(
 		targetStoreFlushComplete.wg.Wait()
 		if targetStoreFlushComplete.err != 0 {
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: indexStore.Flush: Failed for `%s` failed", targetStoreURI)
+		}
+		sourceStoreFlushComplete.wg.Wait()
+		if sourceStoreFlushComplete.err != 0 {
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: indexStore.Flush: Failed for `%s` failed", sourceStoreURI)
 		}
 	}
 

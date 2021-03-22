@@ -24,9 +24,9 @@ func createBlobStoreForURI(uri string) (BlobStore, error) {
 		case "s3":
 			return NewS3BlobStore(blobStoreURL)
 		case "abfs":
-			return nil, fmt.Errorf("Azure Gen1 storage not yet implemented")
+			return nil, fmt.Errorf("azure Gen1 storage not yet implemented")
 		case "abfss":
-			return nil, fmt.Errorf("Azure Gen2 storage not yet implemented")
+			return nil, fmt.Errorf("azure Gen2 storage not yet implemented")
 		case "file":
 			return NewFSBlobStore(blobStoreURL.Path[1:])
 		}
@@ -384,7 +384,7 @@ func prefetchBlock(
 	s.fetchedBlocksSync.Lock()
 
 	prefetchedBlock, exists = s.prefetchBlocks[prefetchMsg.blockHash]
-	if exists && prefetchedBlock == nil {
+	if prefetchedBlock == nil {
 		storedBlock.Dispose()
 		s.fetchedBlocksSync.Unlock()
 		return
@@ -419,6 +419,42 @@ func prefetchBlock(
 		c.OnComplete(blockCopy, 0)
 	}
 	completeCallbacks[0].OnComplete(storedBlock, longtaillib.ErrorToErrno(getErr, longtaillib.EIO))
+}
+
+func flushPrefetch(
+	s *remoteStore,
+	prefetchBlockChan <-chan prefetchBlockMessage) {
+
+L:
+	for {
+		select {
+		case <-prefetchBlockChan:
+		default:
+			break L
+		}
+	}
+
+	s.fetchedBlocksSync.Lock()
+	flushBlocks := []uint64{}
+	for k, v := range s.prefetchBlocks {
+		if v != nil && len(v.completeCallbacks) > 0 {
+			fmt.Printf("Somebody is still waiting for prefetch %d\n", k)
+			continue
+		}
+		flushBlocks = append(flushBlocks, k)
+	}
+	for _, h := range flushBlocks {
+		b := s.prefetchBlocks[h]
+		if b != nil {
+			if b.storedBlock.IsValid() {
+				blockSize := -int64(b.storedBlock.GetBlockSize())
+				atomic.AddInt64(&s.prefetchMemory, blockSize)
+				b.storedBlock.Dispose()
+			}
+		}
+		delete(s.prefetchBlocks, h)
+	}
+	s.fetchedBlocksSync.Unlock()
 }
 
 func remoteWorker(
@@ -460,7 +496,8 @@ func remoteWorker(
 		if received == 0 {
 			if s.prefetchMemory < s.maxPrefetchMemory {
 				select {
-				case _ = <-flushMessages:
+				case <-flushMessages:
+					flushPrefetch(s, prefetchBlockChan)
 					flushReplyMessages <- 0
 				case putMsg, more := <-putBlockMessages:
 					if more {
@@ -480,7 +517,8 @@ func remoteWorker(
 				}
 			} else {
 				select {
-				case _ = <-flushMessages:
+				case <-flushMessages:
+					flushPrefetch(s, prefetchBlockChan)
 					flushReplyMessages <- 0
 				case putMsg, more := <-putBlockMessages:
 					if more {
@@ -499,6 +537,8 @@ func remoteWorker(
 			}
 		}
 	}
+
+	flushPrefetch(s, prefetchBlockChan)
 	return nil
 }
 
@@ -667,10 +707,16 @@ func getStoreIndexFromBlocks(
 			blockIndex.Dispose()
 		}
 		if errno != 0 {
+			batchStoreIndex.Dispose()
 			storeIndex.Dispose()
 			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 		}
 		newStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, batchStoreIndex)
+		if errno != 0 {
+			batchStoreIndex.Dispose()
+			storeIndex.Dispose()
+			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+		}
 		batchStoreIndex.Dispose()
 		storeIndex.Dispose()
 		storeIndex = newStoreIndex
@@ -716,7 +762,7 @@ func storeIndexWorkerReplyErrorState(
 	flushReplyMessages chan<- int) {
 	for {
 		select {
-		case _ = <-flushMessages:
+		case <-flushMessages:
 			flushReplyMessages <- 0
 		case _, more := <-blockIndexMessages:
 			if !more {
@@ -916,6 +962,7 @@ func contentIndexWorker(
 				addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
+				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
 			}
@@ -940,6 +987,7 @@ func contentIndexWorker(
 				addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
+				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
 			}
@@ -952,7 +1000,7 @@ func contentIndexWorker(
 		}
 
 		select {
-		case _ = <-flushMessages:
+		case <-flushMessages:
 			if len(addedBlockIndexes) > 0 && accessType != ReadOnly {
 				updatedStoreIndex, err := updateStoreIndex(storeIndex, addedBlockIndexes)
 				if err != nil {
@@ -989,6 +1037,7 @@ func contentIndexWorker(
 				addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
+				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
 			}
@@ -1011,6 +1060,7 @@ func contentIndexWorker(
 				addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
+				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
 				return err
 			}
@@ -1145,19 +1195,15 @@ func (s *remoteStore) Flush(asyncCompleteAPI longtaillib.Longtail_AsyncFlushAPI)
 			s.workerFlushChan <- 1
 		}
 		for i := 0; i < s.workerCount; i++ {
-			select {
-			case errno := <-s.workerFlushReplyChan:
-				if errno != 0 && any_errno == 0 {
-					any_errno = errno
-				}
-			}
-		}
-		s.indexFlushChan <- 1
-		select {
-		case errno := <-s.indexFlushReplyChan:
+			errno := <-s.workerFlushReplyChan
 			if errno != 0 && any_errno == 0 {
 				any_errno = errno
 			}
+		}
+		s.indexFlushChan <- 1
+		errno := <-s.indexFlushReplyChan
+		if errno != 0 && any_errno == 0 {
+			any_errno = errno
 		}
 		asyncCompleteAPI.OnComplete(any_errno)
 	}()
@@ -1168,19 +1214,15 @@ func (s *remoteStore) Flush(asyncCompleteAPI longtaillib.Longtail_AsyncFlushAPI)
 func (s *remoteStore) Close() {
 	close(s.putBlockChan)
 	for i := 0; i < s.workerCount; i++ {
-		select {
-		case err := <-s.workerErrorChan:
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-	}
-	close(s.blockIndexChan)
-	select {
-	case err := <-s.workerErrorChan:
+		err := <-s.workerErrorChan
 		if err != nil {
 			log.Fatal(err)
 		}
+	}
+	close(s.blockIndexChan)
+	err := <-s.workerErrorChan
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	s.defaultClient.Close()

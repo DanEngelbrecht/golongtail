@@ -43,7 +43,7 @@ func (l *loggerData) OnLog(file string, function string, line int, level int, lo
 	}
 	fmt.Fprintf(&b, ", \"msg\": \"%s\"", message)
 	fmt.Fprintf(&b, "}")
-	log.Printf(b.String())
+	log.Printf("%s", b.String())
 }
 
 func parseLevel(lvl string) (int, error) {
@@ -101,18 +101,6 @@ func (p *progressData) OnProgress(totalCount uint32, doneCount uint32) {
 func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
 	baseProgress := longtaillib.CreateProgressAPI(&progressData{task: task})
 	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 5)
-}
-
-type getIndexCompletionAPI struct {
-	wg         sync.WaitGroup
-	storeIndex longtaillib.Longtail_StoreIndex
-	err        int
-}
-
-func (a *getIndexCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err int) {
-	a.err = err
-	a.storeIndex = storeIndex
-	a.wg.Done()
 }
 
 type timeStat struct {
@@ -190,6 +178,7 @@ func getExistingStoreIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, ch
 	errno := indexStore.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if errno != 0 {
 		getExistingContentComplete.wg.Done()
+		getExistingContentComplete.wg.Wait()
 		return longtaillib.Longtail_StoreIndex{}, errno
 	}
 	getExistingContentComplete.wg.Wait()
@@ -231,9 +220,9 @@ func createBlockStoreForURI(uri string, optionalStoreIndexPath string, jobAPI lo
 			}
 			return longtaillib.CreateBlockStoreAPI(s3BlockStore), nil
 		case "abfs":
-			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen1 storage not yet implemented")
+			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("azure Gen1 storage not yet implemented")
 		case "abfss":
-			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("Azure Gen2 storage not yet implemented")
+			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("azure Gen2 storage not yet implemented")
 		case "file":
 			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], targetBlockSize, maxChunksPerBlock), nil
 		}
@@ -268,7 +257,7 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	case "zstd_max":
 		return longtaillib.GetZStdMaxCompressionType(), nil
 	}
-	return 0, fmt.Errorf("Unsupported compression algorithm: `%s`", *compressionAlgorithm)
+	return 0, fmt.Errorf("unsupported compression algorithm: `%s`", *compressionAlgorithm)
 }
 
 func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {
@@ -736,7 +725,6 @@ func downSyncVersion(
 	targetFolderPath string,
 	targetIndexPath *string,
 	localCachePath *string,
-	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	retainPermissions bool,
@@ -803,7 +791,7 @@ func downSyncVersion(
 	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
 
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
-	targetChunkSize = sourceVersionIndex.GetTargetChunkSize()
+	targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
 
 	targetIndexReader := asyncVersionIndexReader{}
 	targetIndexReader.read(targetFolderPath,
@@ -881,6 +869,9 @@ func downSyncVersion(
 	chunkHashes, errno := longtaillib.GetRequiredChunkHashes(
 		sourceVersionIndex,
 		versionDiff)
+	if errno != 0 {
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.GetRequiredChunkHashes() failed")
+	}
 
 	retargettedVersionStoreIndex, errno := getExistingStoreIndexSync(indexStore, chunkHashes, 0)
 	if errno != 0 {
@@ -1073,7 +1064,7 @@ func downSyncVersion(
 			validatePath := validateVersionIndex.GetAssetPath(uint32(i))
 			validateHash := validateAssetHashes[i]
 			size, exists := assetSizeLookup[validatePath]
-			hash, _ := assetHashLookup[validatePath]
+			hash := assetHashLookup[validatePath]
 			if !exists {
 				return storeStats, timeStats, fmt.Errorf("downSyncVersion: failed validation: invalid path %s", validatePath)
 			}
@@ -1383,8 +1374,6 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]storeStat, [
 			assetSize := versionIndex.GetAssetSize(i)
 			permissions := versionIndex.GetAssetPermissions(i)
 			detailsString := getDetailsString(path, assetSize, permissions, isDir, sizePadding)
-			sizeString := fmt.Sprintf("%d", assetSize)
-			sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
 			fmt.Printf("%s\n", detailsString)
 		} else {
 			fmt.Printf("%s\n", path)
@@ -1509,6 +1498,9 @@ func cpVersionIndex(
 	defer blockStoreFS.CloseFile(inFile)
 
 	size, errno := blockStoreFS.GetSize(inFile)
+	if errno != 0 {
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: blockStoreFS.GetSize() failed")
+	}
 
 	offset := uint64(0)
 	for offset < size {
@@ -1761,7 +1753,7 @@ func lsVersionIndex(
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: hashRegistry.StartFind() failed")
 	}
 	defer blockStoreFS.CloseFind(iterator)
-	for true {
+	for {
 		properties, errno := blockStoreFS.GetEntryProperties(iterator)
 		if errno != 0 {
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: GetEntryProperties.GetEntryProperties() failed")
@@ -1910,7 +1902,7 @@ func stats(
 		for c := chunkIndexOffset; c < chunkIndexOffset+chunkCount; c++ {
 			chunkIndex := assetChunkIndexes[c]
 			chunkHash := chunkHashes[chunkIndex]
-			blockIndex, _ := blockLookup[chunkHash]
+			blockIndex := blockLookup[chunkHash]
 			if blockIndex != lastBlockIndex {
 				uniqueBlockCount++
 				lastBlockIndex = blockIndex
@@ -2053,7 +2045,6 @@ func cloneStore(
 	sourcePaths string,
 	sourceZipPaths string,
 	targetPaths string,
-	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	retainPermissions bool,
@@ -2192,7 +2183,7 @@ func cloneStore(
 		}
 
 		hashIdentifier := sourceVersionIndex.GetHashIdentifier()
-		targetChunkSize = sourceVersionIndex.GetTargetChunkSize()
+		targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
 
 		targetIndexReader := asyncVersionIndexReader{}
 		targetIndexReader.read(targetPath,
@@ -2225,6 +2216,11 @@ func cloneStore(
 		chunkHashes, errno := longtaillib.GetRequiredChunkHashes(
 			sourceVersionIndex,
 			versionDiff)
+		if errno != 0 {
+			targetVersionIndex.Dispose()
+			sourceVersionIndex.Dispose()
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.GetRequiredChunkHashes() failed")
+		}
 
 		existingStoreIndex, errno := getExistingStoreIndexSync(sourceStore, chunkHashes, 0)
 		if errno != 0 {
@@ -2264,6 +2260,9 @@ func cloneStore(
 			}
 
 			r, err := zip.OpenReader("tmp.zip")
+			if err != nil {
+				return storeStats, timeStats, errors.Wrapf(err, "cloneStore: zip.OpenReader() failed")
+			}
 			os.RemoveAll(targetPath)
 			os.MkdirAll(targetPath, 0755)
 			// Closure to address file descriptors issue with all the deferred .Close() methods
@@ -2526,7 +2525,6 @@ var (
 	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").Required().String()
 	commandDownsyncTargetIndexPath            = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	commandDownsyncSourcePath                 = commandDownsync.Flag("source-path", "Source file uri").Required().String()
-	commandDownsyncTargetChunkSize            = commandDownsync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	commandDownsyncTargetBlockSize            = commandDownsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandDownsyncMaxChunksPerBlock          = commandDownsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	commandDownsyncNoRetainPermissions        = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
@@ -2588,7 +2586,6 @@ var (
 	commandCloneStoreSourcePaths                  = commandCloneStore.Flag("source-paths", "File containing list of source longtail uris").Required().String()
 	commandCloneStoreSourceZipPaths               = commandCloneStore.Flag("source-zip-paths", "File containing list of source zip uris").Required().String()
 	commandCloneStoreTargetPaths                  = commandCloneStore.Flag("target-paths", "File containing list of target longtail uris").Required().String()
-	commandCloneStoreTargetChunkSize              = commandCloneStore.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
 	commandCloneStoreTargetBlockSize              = commandCloneStore.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandCloneStoreMaxChunksPerBlock            = commandCloneStore.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	commandCloneStoreNoRetainPermissions          = commandCloneStore.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
@@ -2713,7 +2710,6 @@ func main() {
 			*commandDownsyncTargetPath,
 			commandDownsyncTargetIndexPath,
 			commandDownsyncCachePath,
-			*commandDownsyncTargetChunkSize,
 			*commandDownsyncTargetBlockSize,
 			*commandDownsyncMaxChunksPerBlock,
 			!(*commandDownsyncNoRetainPermissions),
@@ -2767,7 +2763,6 @@ func main() {
 			*commandCloneStoreSourcePaths,
 			*commandCloneStoreSourceZipPaths,
 			*commandCloneStoreTargetPaths,
-			*commandCloneStoreTargetChunkSize,
 			*commandCloneStoreTargetBlockSize,
 			*commandCloneStoreMaxChunksPerBlock,
 			!(*commandCloneStoreNoRetainPermissions),

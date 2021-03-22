@@ -2379,7 +2379,7 @@ func cloneStore(
 
 		targetStoreFlushComplete := &flushCompletionAPI{}
 		targetStoreFlushComplete.wg.Add(1)
-		errno = targetStore.Flush(longtaillib.CreateAsyncFlushAPI(targetStoreFlushComplete))
+		errno = targetRemoteStore.Flush(longtaillib.CreateAsyncFlushAPI(targetStoreFlushComplete))
 		if errno != 0 {
 			versionMissingStoreIndex.Dispose()
 			existingStoreIndex.Dispose()

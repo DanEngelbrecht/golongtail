@@ -116,14 +116,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **UPDATE** Longtail to 0.2.2
-          - **CHANGED** Delay read of remote store index until we know we need it
-          - **ADDED** Consistent output of `--show-stats` and `--show-store-stats`
-          - **FIXED** longtail memtracer stats are now output using logging instead of C print in library
-          - **FIXED** Memory leak in remote store
-          - **ADDED** `version-local-store-index-path` option to downsync
-          - **ADDED** `version-local-store-index-path` option to upsync
-          - **ADDED** `createVersionStoreIndex` command
+          - **FIXED** Make sure flush also flushes store index, empties preflight memory and flushes any pending preflight blocks.
+          - **ADDED** `cloneStore` command to copy all versions from one store to a new store
+          - **CHANGED** Removed unused `target-chunk-size` option for `downsync`
         draft: false
         prerelease: false
     - name: Download Linux artifacts

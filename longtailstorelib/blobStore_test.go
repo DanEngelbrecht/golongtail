@@ -49,13 +49,15 @@ func (blobClient *testBlobClient) NewObject(filepath string) (BlobObject, error)
 	return &testBlobObject{client: blobClient, path: filepath}, nil
 }
 
-func (blobClient *testBlobClient) GetObjects() ([]BlobProperties, error) {
+func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
 	blobClient.store.blobsMutex.RLock()
 	defer blobClient.store.blobsMutex.RUnlock()
 	properties := make([]BlobProperties, len(blobClient.store.blobs))
 	i := 0
 	for key, blob := range blobClient.store.blobs {
-		properties[i] = BlobProperties{Name: key, Size: int64(len(blob.data))}
+		if strings.HasPrefix(key, pathPrefix)) {
+			properties[i] = BlobProperties{Name: key, Size: int64(len(blob.data))}
+		}
 		i++
 	}
 	return properties, nil
@@ -158,7 +160,7 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	blobStore, _ := NewTestBlobStore("the_path")
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	objects, err := client.GetObjects()
+	objects, err := client.GetObjects("")
 	if err != nil {
 		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects()) %v != %v", err, nil)
 	}
@@ -218,7 +220,7 @@ func TestListObjects(t *testing.T) {
 	obj.Write([]byte("my-fine-object2.txt"))
 	obj, _ = client.NewObject("my-fine-object3.txt")
 	obj.Write([]byte("my-fine-object3.txt"))
-	objects, err := client.GetObjects()
+	objects, err := client.GetObjects("")
 	if err != nil {
 		t.Errorf("TestListObjects() client.GetObjects()) %v != %v", err, nil)
 	}

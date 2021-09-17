@@ -606,7 +606,6 @@ func tryAddRemoteStoreIndexWithLocking(
 
 func tryWriteRemoteStoreIndex(
 	ctx context.Context,
-	s *remoteStore,
 	storeIndex longtaillib.Longtail_StoreIndex,
 	existingIndexItems []string,
 	blobClient BlobClient) (bool, error) {
@@ -672,7 +671,7 @@ func tryAddRemoteStoreIndex(
 	}
 
 	if !storeIndex.IsValid() {
-		ok, err := tryWriteRemoteStoreIndex(ctx, s, addStoreIndex, items, blobClient)
+		ok, err := tryWriteRemoteStoreIndex(ctx, addStoreIndex, items, blobClient)
 		return ok, longtaillib.Longtail_StoreIndex{}, err
 	}
 
@@ -682,7 +681,7 @@ func tryAddRemoteStoreIndex(
 		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.MergeStoreIndex() failed")
 	}
 
-	ok, err := tryWriteRemoteStoreIndex(ctx, s, mergedStoreIndex, items, blobClient)
+	ok, err := tryWriteRemoteStoreIndex(ctx, mergedStoreIndex, items, blobClient)
 	return ok, mergedStoreIndex, err
 }
 

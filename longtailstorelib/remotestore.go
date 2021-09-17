@@ -2,6 +2,7 @@ package longtailstorelib
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net/url"
@@ -542,10 +543,16 @@ func remoteWorker(
 	return nil
 }
 
-func tryAddRemoteStoreIndex(
+func tryAddRemoteStoreIndexWithLocking(
 	ctx context.Context,
 	addStoreIndex longtaillib.Longtail_StoreIndex,
-	objHandle BlobObject) (bool, longtaillib.Longtail_StoreIndex, error) {
+	blobClient BlobClient) (bool, longtaillib.Longtail_StoreIndex, error) {
+
+	key := "store.lsi"
+	objHandle, err := blobClient.NewObject(key)
+	if err != nil {
+		return false, longtaillib.Longtail_StoreIndex{}, err
+	}
 
 	exists, err := objHandle.LockWriteVersion()
 	if err != nil {
@@ -563,7 +570,7 @@ func tryAddRemoteStoreIndex(
 		}
 		defer remoteStoreIndex.Dispose()
 
-		newStoreIndex, errno := longtaillib.MergeStoreIndex(addStoreIndex, remoteStoreIndex)
+		newStoreIndex, errno := longtaillib.MergeStoreIndex(remoteStoreIndex, addStoreIndex)
 		if errno != 0 {
 			return false, longtaillib.Longtail_StoreIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: longtaillib.MergeStoreIndex() failed")
 		}
@@ -597,34 +604,114 @@ func tryAddRemoteStoreIndex(
 	return ok, longtaillib.Longtail_StoreIndex{}, nil
 }
 
+func tryWriteRemoteStoreIndex(
+	ctx context.Context,
+	s *remoteStore,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	existingIndexItems []string,
+	blobClient BlobClient) (bool, error) {
+	storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	if errno != 0 {
+		return false, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.WriteStoreIndexToBuffer() failed")
+	}
+
+	sha256 := sha256.Sum256(storeBlob)
+	key := fmt.Sprintf("store_%x.lsi", sha256)
+
+	for _, item := range existingIndexItems {
+		if item == key {
+			return true, nil
+		}
+	}
+
+	objHandle, err := blobClient.NewObject(key)
+	if err != nil {
+		return false, err
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	exists, err := objHandle.Exists()
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return false, nil
+	}
+
+	ok, err := objHandle.Write(storeBlob)
+	if !ok || err != nil {
+		return ok, err
+	}
+
+	for _, item := range existingIndexItems {
+		objHandle, err := blobClient.NewObject(item)
+		if err != nil {
+			continue
+		}
+		err = objHandle.Delete()
+		if err != nil {
+			continue
+		}
+	}
+
+	return true, nil
+}
+
+func tryAddRemoteStoreIndex(
+	ctx context.Context,
+	s *remoteStore,
+	addStoreIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) (bool, longtaillib.Longtail_StoreIndex, error) {
+
+	storeIndex, items, err := readStoreStoreIndex(ctx, s, blobClient)
+	if err != nil {
+		return false, longtaillib.Longtail_StoreIndex{}, err
+	}
+
+	if !storeIndex.IsValid() {
+		ok, err := tryWriteRemoteStoreIndex(ctx, s, addStoreIndex, items, blobClient)
+		return ok, longtaillib.Longtail_StoreIndex{}, err
+	}
+
+	mergedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, addStoreIndex)
+	storeIndex.Dispose()
+	if errno != 0 {
+		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.MergeStoreIndex() failed")
+	}
+
+	ok, err := tryWriteRemoteStoreIndex(ctx, s, mergedStoreIndex, items, blobClient)
+	return ok, mergedStoreIndex, err
+}
+
 func addToRemoteStoreIndex(
 	ctx context.Context,
+	s *remoteStore,
 	blobClient BlobClient,
 	addStoreIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
 
-	key := "store.lsi"
-	objHandle, err := blobClient.NewObject(key)
-	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, "addRemoteStoreIndex: blobClient.NewObject(%s) failed", key)
-	}
 	for {
 		ok, newStoreIndex, err := tryAddRemoteStoreIndex(
 			ctx,
+			s,
 			addStoreIndex,
-			objHandle)
+			blobClient)
 		if ok {
 			return newStoreIndex, nil
 		}
 		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, "addRemoteStoreIndex: tryAddRemoteStoreIndex(%s) failed", key)
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, "addRemoteStoreIndex: tryAddRemoteStoreIndex() failed")
 		}
-		log.Printf("Retrying updating remote store index %s\n", key)
+		log.Printf("Retrying updating remote store index\n")
 	}
 	return longtaillib.Longtail_StoreIndex{}, nil
 }
 
 func addBlocksToRemoteStoreIndex(
 	ctx context.Context,
+	s *remoteStore,
 	blobClient BlobClient,
 	addedBlockIndexes []longtaillib.Longtail_BlockIndex) (longtaillib.Longtail_StoreIndex, error) {
 
@@ -633,7 +720,7 @@ func addBlocksToRemoteStoreIndex(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
 	}
 	defer addedStoreIndex.Dispose()
-	return addToRemoteStoreIndex(ctx, blobClient, addedStoreIndex)
+	return addToRemoteStoreIndex(ctx, s, blobClient, addedStoreIndex)
 }
 
 func getStoreIndexFromBlocks(
@@ -787,12 +874,12 @@ func storeIndexWorkerReplyErrorState(
 	}
 }
 
-func readStoreStoreIndex(
+func readStoreStoreIndexFromPath(
 	ctx context.Context,
 	s *remoteStore,
+	key string,
 	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
 
-	key := "store.lsi"
 	blobData, _, err := readBlobWithRetry(ctx, s, client, key)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, err
@@ -805,6 +892,58 @@ func readStoreStoreIndex(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "contentIndexWorker: longtaillib.ReadStoreIndexFromBuffer() for %s", key)
 	}
 	return storeIndex, nil
+}
+
+func readStoreStoreIndexWithLocking(
+	ctx context.Context,
+	s *remoteStore,
+	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
+	return readStoreStoreIndexFromPath(ctx, s, "store.lsi", client)
+}
+
+func readStoreStoreIndex(
+	ctx context.Context,
+	s *remoteStore,
+	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
+
+	var items []string
+	blobs, err := client.GetObjects("store")
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, nil, err
+	}
+
+	for _, blob := range blobs {
+		if blob.Size == 0 {
+			continue
+		}
+		if strings.HasSuffix(blob.Name, ".lsi") {
+			items = append(items, blob.Name)
+		}
+	}
+
+	if len(items) == 0 {
+		return longtaillib.Longtail_StoreIndex{}, nil, nil
+	}
+
+	storeIndex := longtaillib.Longtail_StoreIndex{}
+	for _, item := range items {
+		tmpStoreIndex, err := readStoreStoreIndexFromPath(ctx, s, item, client)
+		if err != nil {
+			continue
+		}
+		if !storeIndex.IsValid() {
+			storeIndex = tmpStoreIndex
+			continue
+		}
+		mergedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, tmpStoreIndex)
+		tmpStoreIndex.Dispose()
+		storeIndex.Dispose()
+		if errno != 0 {
+			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.MergeStoreIndex() failed")
+		}
+		storeIndex = mergedStoreIndex
+	}
+	return storeIndex, items, nil
 }
 
 func onPreflighMessage(
@@ -842,7 +981,7 @@ func addBlocksToStoreIndex(
 	if !storeIndex.IsValid() {
 		return addedStoreIndex, nil
 	}
-	updatedStoreIndex, errno := longtaillib.MergeStoreIndex(addedStoreIndex, storeIndex)
+	updatedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, addedStoreIndex)
 	addedStoreIndex.Dispose()
 	if errno != 0 {
 		updatedStoreIndex.Dispose()
@@ -863,17 +1002,17 @@ func readRemoteStoreIndex(
 	if accessType != Init {
 		if accessType == ReadOnly && len(optionalStoreIndexPath) > 0 {
 			sbuffer, err := ReadFromURI(optionalStoreIndexPath)
-			if err == nil {
+			if sbuffer != nil && err == nil {
 				storeIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
 				if errno != 0 {
 					log.Printf("Failed parsing local store index from %s: %d\n", optionalStoreIndexPath, errno)
 				}
-			} else {
+			} else if err != nil {
 				log.Printf("Failed reading local store index: %v\n", err)
 			}
 		}
 		if !storeIndex.IsValid() {
-			storeIndex, err = readStoreStoreIndex(ctx, s, client)
+			storeIndex, _, err = readStoreStoreIndex(ctx, s, client)
 			if err != nil {
 				log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
 			}
@@ -889,24 +1028,25 @@ func readRemoteStoreIndex(
 		if errno != 0 {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
 		}
-	} else if !storeIndex.IsValid() {
-		storeIndex, err = buildStoreIndexFromStoreBlocks(
-			ctx,
-			s,
-			client)
+		return storeIndex, nil
+	}
 
-		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
-		}
-		log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
-		newStoreIndex, err := addToRemoteStoreIndex(ctx, client, storeIndex)
-		if err != nil {
-			log.Printf("Failed to update store index in store %s\n", s.String())
-		}
-		if newStoreIndex.IsValid() {
-			storeIndex.Dispose()
-			storeIndex = newStoreIndex
-		}
+	storeIndex, err = buildStoreIndexFromStoreBlocks(
+		ctx,
+		s,
+		client)
+
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
+	}
+	log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
+	newStoreIndex, err := addToRemoteStoreIndex(ctx, s, client, storeIndex)
+	if err != nil {
+		log.Printf("Failed to update store index in store %s\n", s.String())
+	}
+	if newStoreIndex.IsValid() {
+		storeIndex.Dispose()
+		storeIndex = newStoreIndex
 	}
 	return storeIndex, nil
 }
@@ -1017,7 +1157,7 @@ func contentIndexWorker(
 		select {
 		case <-flushMessages:
 			if len(addedBlockIndexes) > 0 && accessType != ReadOnly {
-				newStoreIndex, err := addBlocksToRemoteStoreIndex(ctx, client, addedBlockIndexes)
+				newStoreIndex, err := addBlocksToRemoteStoreIndex(ctx, s, client, addedBlockIndexes)
 				if err != nil {
 					flushReplyMessages <- longtaillib.ErrorToErrno(err, longtaillib.ENOMEM)
 					continue
@@ -1072,7 +1212,7 @@ func contentIndexWorker(
 	}
 
 	if accessType == Init || len(addedBlockIndexes) > 0 {
-		newIndex, err := addBlocksToRemoteStoreIndex(ctx, client, addedBlockIndexes)
+		newIndex, err := addBlocksToRemoteStoreIndex(ctx, s, client, addedBlockIndexes)
 		storeIndex.Dispose()
 		if err != nil {
 			return err

@@ -20,6 +20,7 @@ type BlobProperties struct {
 type BlobClient interface {
 	NewObject(path string) (BlobObject, error)
 	GetObjects(pathPrefix string) ([]BlobProperties, error)
+	SupportsLocking() bool
 	String() string
 	Close()
 }

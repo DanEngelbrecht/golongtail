@@ -45,6 +45,10 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 	return make([]BlobProperties, 0), nil
 }
 
+func (blobClient *fsBlobClient) SupportsLocking() bool {
+	return true
+}
+
 func (blobClient *fsBlobClient) Close() {
 }
 

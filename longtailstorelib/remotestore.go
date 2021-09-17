@@ -665,7 +665,11 @@ func tryAddRemoteStoreIndex(
 	addStoreIndex longtaillib.Longtail_StoreIndex,
 	blobClient BlobClient) (bool, longtaillib.Longtail_StoreIndex, error) {
 
-	storeIndex, items, err := readStoreStoreIndex(ctx, s, blobClient)
+	if blobClient.SupportsLocking() {
+		return tryAddRemoteStoreIndexWithLocking(ctx, addStoreIndex, blobClient)
+	}
+
+	storeIndex, items, err := readStoreStoreIndexWithItems(ctx, s, blobClient)
 	if err != nil {
 		return false, longtaillib.Longtail_StoreIndex{}, err
 	}
@@ -900,7 +904,7 @@ func readStoreStoreIndexWithLocking(
 	return readStoreStoreIndexFromPath(ctx, s, "store.lsi", client)
 }
 
-func readStoreStoreIndex(
+func readStoreStoreIndexWithItems(
 	ctx context.Context,
 	s *remoteStore,
 	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
@@ -943,6 +947,17 @@ func readStoreStoreIndex(
 		storeIndex = mergedStoreIndex
 	}
 	return storeIndex, items, nil
+}
+
+func readStoreStoreIndex(
+	ctx context.Context,
+	s *remoteStore,
+	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
+	if client.SupportsLocking() {
+		return readStoreStoreIndexWithLocking(ctx, s, client)
+	}
+	storeIndex, _, err := readStoreStoreIndexWithItems(ctx, s, client)
+	return storeIndex, err
 }
 
 func onPreflighMessage(
@@ -1011,7 +1026,7 @@ func readRemoteStoreIndex(
 			}
 		}
 		if !storeIndex.IsValid() {
-			storeIndex, _, err = readStoreStoreIndex(ctx, s, client)
+			storeIndex, err = readStoreStoreIndex(ctx, s, client)
 			if err != nil {
 				log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
 			}

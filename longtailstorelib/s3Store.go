@@ -49,6 +49,10 @@ func (blobClient *s3BlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 	return nil, fmt.Errorf("S3 storage not yet implemented")
 }
 
+func (blobClient *s3BlobClient) SupportsLocking() bool {
+	return false
+}
+
 func (blobClient *s3BlobClient) Close() {
 }
 

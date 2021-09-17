@@ -63,6 +63,10 @@ func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobPropertie
 	return properties, nil
 }
 
+func (blobClient *testBlobClient) SupportsLocking() bool {
+	return true
+}
+
 func (blobClient *testBlobClient) Close() {
 }
 

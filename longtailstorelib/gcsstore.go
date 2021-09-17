@@ -102,6 +102,10 @@ func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties
 	return items, nil
 }
 
+func (blobClient *gcsBlobClient) SupportsLocking() bool {
+	return true
+}
+
 func (blobClient *gcsBlobClient) Close() {
 	blobClient.client.Close()
 }

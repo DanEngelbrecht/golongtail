@@ -55,7 +55,7 @@ func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobPropertie
 	properties := make([]BlobProperties, len(blobClient.store.blobs))
 	i := 0
 	for key, blob := range blobClient.store.blobs {
-		if strings.HasPrefix(key, pathPrefix)) {
+		if strings.HasPrefix(key, pathPrefix) {
 			properties[i] = BlobProperties{Name: key, Size: int64(len(blob.data))}
 		}
 		i++

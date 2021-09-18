@@ -7,8 +7,6 @@ import (
 	"sync"
 	"testing"
 
-	"cloud.google.com/go/storage"
-
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
@@ -140,7 +138,7 @@ func (blobObject *testBlobObject) Delete() error {
 	if blobObject.lockedGeneration != nil {
 		blob, exists := blobObject.client.store.blobs[blobObject.path]
 		if !exists {
-			return storage.ErrObjectNotExist
+			return longtaillib.ErrENOENT
 		}
 		if blob.generation != *blobObject.lockedGeneration {
 			return fmt.Errorf("testBlobObject: generation lock mismatch %s", blobObject.path)

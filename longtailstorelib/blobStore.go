@@ -1,6 +1,8 @@
 package longtailstorelib
 
-import "context"
+import (
+	"context"
+)
 
 // BlobObject
 type BlobObject interface {

@@ -11,13 +11,15 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 func TestGCSBlobStore(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-storage/test-storage/store")
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -46,7 +48,7 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-storage/test-storage/store")
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -103,6 +105,14 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 		t.Errorf("object.Read() err == %q", err)
 	}
 	err = object.Delete()
+	if err == nil {
+		t.Error("object.Delete() err != nil")
+	}
+	exists, err = object.LockWriteVersion()
+	if err != nil {
+		t.Errorf("object.LockWriteVersion() err == %q", err)
+	}
+	err = object.Delete()
 	if err != nil {
 		t.Errorf("object.Delete() err == %q", err)
 	}
@@ -129,7 +139,7 @@ func writeANumberWithRetry(number int, blobStore BlobStore) error {
 			if err != nil {
 				return err
 			}
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(30 * time.Millisecond)
 			sliceData = strings.Split(string(data), "\n")
 		}
 		sliceData = append(sliceData, fmt.Sprintf("%05d", number))
@@ -152,7 +162,7 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-storage/test-storage/store")
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
@@ -198,6 +208,124 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 		expected := fmt.Sprintf("%05d", i+1)
 		if sliceData[i] != expected {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestGCSStoreIndexSync(t *testing.T) {
+	// This test uses hardcoded paths in S3 and is disabled
+	t.Skip()
+
+	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
+	if err != nil {
+		t.Errorf("url.Parse() err == %q", err)
+	}
+
+	blobStore, err := NewGCSBlobStore(u)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+
+	blockGenerateCount := 4
+	workerCount := 21
+
+	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
+
+	var wg sync.WaitGroup
+	for n := 0; n < workerCount; n++ {
+		wg.Add(1)
+		seedBase := blockGenerateCount * n
+		go func(blockGenerateCount int, seedBase int) {
+			client, _ := blobStore.NewClient(context.Background())
+			defer client.Close()
+
+			{
+				blocks := []longtaillib.Longtail_BlockIndex{}
+				for i := 0; i < blockGenerateCount-1; i++ {
+					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
+					blocks = append(blocks, block.GetBlockIndex())
+				}
+
+				newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
+				if errno != 0 {
+					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
+				}
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
+				newBlocksIndex.Dispose()
+				if err != nil {
+					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
+				}
+				newStoreIndex.Dispose()
+			}
+
+			readStoreIndex, err := readStoreStoreIndex(context.Background(), client)
+			if err != nil {
+				t.Errorf("readStoreStoreIndex() failed with %q", err)
+			}
+			readStoreIndex.Dispose()
+
+			{
+				blocks := []longtaillib.Longtail_BlockIndex{}
+				for i := blockGenerateCount - 1; i < blockGenerateCount; i++ {
+					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
+					blocks = append(blocks, block.GetBlockIndex())
+				}
+				newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
+				if errno != 0 {
+					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
+				}
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
+				newBlocksIndex.Dispose()
+				if err != nil {
+					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
+				}
+				newStoreIndex.Dispose()
+			}
+
+			storeIndex, err := readStoreStoreIndex(context.Background(), client)
+			if err != nil {
+				t.Errorf("readStoreStoreIndex() failed with %q", err)
+			}
+			lookup := map[uint64]bool{}
+			for _, h := range storeIndex.GetBlockHashes() {
+				lookup[h] = true
+			}
+
+			blockHashes := storeIndex.GetBlockHashes()
+			for n := 0; n < blockGenerateCount; n++ {
+				h := blockHashes[n]
+				generatedBlockHashes <- h
+				_, exists := lookup[h]
+				if !exists {
+					storeIndex.Dispose()
+					t.Errorf("Missing direct block %d", h)
+				}
+			}
+			storeIndex.Dispose()
+
+			wg.Done()
+		}(blockGenerateCount, seedBase)
+	}
+	wg.Wait()
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	storeIndex, err := readStoreStoreIndex(context.Background(), client)
+	if err != nil {
+		t.Errorf("readStoreStoreIndex() failed with %q", err)
+	}
+	defer storeIndex.Dispose()
+	if len(storeIndex.GetBlockHashes()) != blockGenerateCount*workerCount {
+		t.Errorf("Not all blockes were stored in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
+	}
+	lookup := map[uint64]bool{}
+	for _, h := range storeIndex.GetBlockHashes() {
+		lookup[h] = true
+	}
+	for n := 0; n < workerCount*blockGenerateCount; n++ {
+		h := <-generatedBlockHashes
+		_, exists := lookup[h]
+		if !exists {
+			t.Errorf("Missing block %d", h)
 		}
 	}
 }

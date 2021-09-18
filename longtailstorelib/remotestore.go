@@ -173,7 +173,6 @@ func (s *remoteStore) String() string {
 
 func readBlobWithRetry(
 	ctx context.Context,
-	s *remoteStore,
 	client BlobClient,
 	key string) ([]byte, int, error) {
 	retryCount := 0
@@ -190,18 +189,18 @@ func readBlobWithRetry(
 	}
 	blobData, err := objHandle.Read()
 	if err != nil {
-		log.Printf("Retrying getBlob %s in store %s\n", key, s.String())
+		log.Printf("Retrying getBlob %s in store %s\n", key, client.String())
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
 	if err != nil {
-		log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", key, s.String())
+		log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", key, client.String())
 		time.Sleep(500 * time.Millisecond)
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
 	if err != nil {
-		log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", key, s.String())
+		log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", key, client.String())
 		time.Sleep(2 * time.Second)
 		retryCount++
 		blobData, err = objHandle.Read()
@@ -282,7 +281,7 @@ func getStoredBlock(
 
 	key := GetBlockPath("chunks", blockHash)
 
-	storedBlockData, retryCount, err := readBlobWithRetry(ctx, s, blobClient, key)
+	storedBlockData, retryCount, err := readBlobWithRetry(ctx, blobClient, key)
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], uint64(retryCount))
 
 	if err != nil || storedBlockData == nil {
@@ -661,7 +660,6 @@ func tryWriteRemoteStoreIndex(
 
 func tryAddRemoteStoreIndex(
 	ctx context.Context,
-	s *remoteStore,
 	addStoreIndex longtaillib.Longtail_StoreIndex,
 	blobClient BlobClient) (bool, longtaillib.Longtail_StoreIndex, error) {
 
@@ -669,7 +667,7 @@ func tryAddRemoteStoreIndex(
 		return tryAddRemoteStoreIndexWithLocking(ctx, addStoreIndex, blobClient)
 	}
 
-	storeIndex, items, err := readStoreStoreIndexWithItems(ctx, s, blobClient)
+	storeIndex, items, err := readStoreStoreIndexWithItems(ctx, blobClient)
 	if err != nil {
 		return false, longtaillib.Longtail_StoreIndex{}, err
 	}
@@ -691,21 +689,25 @@ func tryAddRemoteStoreIndex(
 
 func addToRemoteStoreIndex(
 	ctx context.Context,
-	s *remoteStore,
 	blobClient BlobClient,
 	addStoreIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
 
+	errorRetries := 0
 	for {
 		ok, newStoreIndex, err := tryAddRemoteStoreIndex(
 			ctx,
-			s,
 			addStoreIndex,
 			blobClient)
 		if ok {
 			return newStoreIndex, nil
 		}
 		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, "addRemoteStoreIndex: tryAddRemoteStoreIndex() failed")
+			errorRetries++
+			if errorRetries == 3 {
+				return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, "addRemoteStoreIndex: tryAddRemoteStoreIndex() failed")
+			} else {
+				log.Printf("Error from tryAddRemoteStoreIndex %q\n", err)
+			}
 		}
 		log.Printf("Retrying updating remote store index\n")
 	}
@@ -723,13 +725,14 @@ func addBlocksToRemoteStoreIndex(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.CreateStoreIndexFromBlocks() failed")
 	}
 	defer addedStoreIndex.Dispose()
-	return addToRemoteStoreIndex(ctx, s, blobClient, addedStoreIndex)
+	return addToRemoteStoreIndex(ctx, blobClient, addedStoreIndex)
 }
 
 func getStoreIndexFromBlocks(
 	ctx context.Context,
-	s *remoteStore,
+	blobStore BlobStore,
 	blobClient BlobClient,
+	workerCount int,
 	blockKeys []string) (longtaillib.Longtail_StoreIndex, error) {
 
 	storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
@@ -737,7 +740,7 @@ func getStoreIndexFromBlocks(
 		return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
 	}
 
-	batchCount := s.workerCount
+	batchCount := workerCount
 	batchStart := 0
 
 	if batchCount > len(blockKeys) {
@@ -745,7 +748,7 @@ func getStoreIndexFromBlocks(
 	}
 	clients := make([]BlobClient, batchCount)
 	for c := 0; c < batchCount; c++ {
-		client, err := s.blobStore.NewClient(ctx)
+		client, err := blobStore.NewClient(ctx)
 		if err != nil {
 			storeIndex.Dispose()
 			return longtaillib.Longtail_StoreIndex{}, err
@@ -768,7 +771,6 @@ func getStoreIndexFromBlocks(
 			go func(client BlobClient, batchPos int, blockKey string) {
 				storedBlockData, _, err := readBlobWithRetry(
 					ctx,
-					s,
 					client,
 					blockKey)
 
@@ -837,8 +839,9 @@ func getStoreIndexFromBlocks(
 
 func buildStoreIndexFromStoreBlocks(
 	ctx context.Context,
-	s *remoteStore,
-	blobClient BlobClient) (longtaillib.Longtail_StoreIndex, error) {
+	blobStore BlobStore,
+	blobClient BlobClient,
+	workerCount int) (longtaillib.Longtail_StoreIndex, error) {
 
 	var items []string
 	blobs, err := blobClient.GetObjects("")
@@ -855,7 +858,7 @@ func buildStoreIndexFromStoreBlocks(
 		}
 	}
 
-	return getStoreIndexFromBlocks(ctx, s, blobClient, items)
+	return getStoreIndexFromBlocks(ctx, blobStore, blobClient, workerCount, items)
 }
 
 func storeIndexWorkerReplyErrorState(
@@ -879,11 +882,10 @@ func storeIndexWorkerReplyErrorState(
 
 func readStoreStoreIndexFromPath(
 	ctx context.Context,
-	s *remoteStore,
 	key string,
 	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
 
-	blobData, _, err := readBlobWithRetry(ctx, s, client, key)
+	blobData, _, err := readBlobWithRetry(ctx, client, key)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, err
 	}
@@ -897,22 +899,13 @@ func readStoreStoreIndexFromPath(
 	return storeIndex, nil
 }
 
-func readStoreStoreIndexWithLocking(
+func getStoreStoreIndexes(
 	ctx context.Context,
-	s *remoteStore,
-	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
-	return readStoreStoreIndexFromPath(ctx, s, "store.lsi", client)
-}
-
-func readStoreStoreIndexWithItems(
-	ctx context.Context,
-	s *remoteStore,
-	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
-
+	client BlobClient) ([]string, error) {
 	var items []string
 	blobs, err := client.GetObjects("store")
 	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, nil, err
+		return nil, err
 	}
 
 	for _, blob := range blobs {
@@ -923,19 +916,35 @@ func readStoreStoreIndexWithItems(
 			items = append(items, blob.Name)
 		}
 	}
+	return items, nil
+}
+
+func readStoreStoreIndexWithItems(
+	ctx context.Context,
+	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
+
+	items, err := getStoreStoreIndexes(ctx, client)
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, nil, err
+	}
 
 	if len(items) == 0 {
 		return longtaillib.Longtail_StoreIndex{}, nil, nil
 	}
 
+	var usedItems []string
 	storeIndex := longtaillib.Longtail_StoreIndex{}
 	for _, item := range items {
-		tmpStoreIndex, err := readStoreStoreIndexFromPath(ctx, s, item, client)
+		tmpStoreIndex, err := readStoreStoreIndexFromPath(ctx, item, client)
 		if err != nil {
+			continue
+		}
+		if !tmpStoreIndex.IsValid() {
 			continue
 		}
 		if !storeIndex.IsValid() {
 			storeIndex = tmpStoreIndex
+			usedItems = append(usedItems, item)
 			continue
 		}
 		mergedStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, tmpStoreIndex)
@@ -945,18 +954,15 @@ func readStoreStoreIndexWithItems(
 			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.MergeStoreIndex() failed")
 		}
 		storeIndex = mergedStoreIndex
+		usedItems = append(usedItems, item)
 	}
-	return storeIndex, items, nil
+	return storeIndex, usedItems, nil
 }
 
 func readStoreStoreIndex(
 	ctx context.Context,
-	s *remoteStore,
 	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
-	if client.SupportsLocking() {
-		return readStoreStoreIndexWithLocking(ctx, s, client)
-	}
-	storeIndex, _, err := readStoreStoreIndexWithItems(ctx, s, client)
+	storeIndex, _, err := readStoreStoreIndexWithItems(ctx, client)
 	return storeIndex, err
 }
 
@@ -1006,10 +1012,11 @@ func addBlocksToStoreIndex(
 
 func readRemoteStoreIndex(
 	ctx context.Context,
-	s *remoteStore,
 	optionalStoreIndexPath string,
+	blobStore BlobStore,
 	client BlobClient,
-	accessType AccessType) (longtaillib.Longtail_StoreIndex, error) {
+	accessType AccessType,
+	workerCount int) (longtaillib.Longtail_StoreIndex, error) {
 	var err error
 	var errno int
 	var storeIndex longtaillib.Longtail_StoreIndex
@@ -1026,7 +1033,7 @@ func readRemoteStoreIndex(
 			}
 		}
 		if !storeIndex.IsValid() {
-			storeIndex, err = readStoreStoreIndex(ctx, s, client)
+			storeIndex, err = readStoreStoreIndex(ctx, client)
 			if err != nil {
 				log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
 			}
@@ -1047,16 +1054,17 @@ func readRemoteStoreIndex(
 
 	storeIndex, err = buildStoreIndexFromStoreBlocks(
 		ctx,
-		s,
-		client)
+		blobStore,
+		client,
+		workerCount)
 
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: buildStoreIndexFromStoreBlocks() failed")
 	}
 	log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
-	newStoreIndex, err := addToRemoteStoreIndex(ctx, s, client, storeIndex)
+	newStoreIndex, err := addToRemoteStoreIndex(ctx, client, storeIndex)
 	if err != nil {
-		log.Printf("Failed to update store index in store %s\n", s.String())
+		log.Printf("Failed to update store index in store %s\n", blobStore.String())
 	}
 	if newStoreIndex.IsValid() {
 		storeIndex.Dispose()
@@ -1075,7 +1083,7 @@ func getCurrentStoreIndex(
 	addedBlockIndexes []longtaillib.Longtail_BlockIndex) (longtaillib.Longtail_StoreIndex, longtaillib.Longtail_StoreIndex, error) {
 	var err error = nil
 	if !storeIndex.IsValid() {
-		storeIndex, err = readRemoteStoreIndex(ctx, s, optionalStoreIndexPath, client, accessType)
+		storeIndex, err = readRemoteStoreIndex(ctx, optionalStoreIndexPath, s.blobStore, client, accessType, s.workerCount)
 		if err != nil {
 			return storeIndex, longtaillib.Longtail_StoreIndex{}, err
 		}

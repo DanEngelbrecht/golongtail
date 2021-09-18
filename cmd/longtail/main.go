@@ -2492,7 +2492,7 @@ var (
 	workerCount        = kingpin.Flag("worker-count", "Limit number of workers created, defaults to match number of logical CPUs").Int()
 
 	commandUpsync           = kingpin.Command("upsync", "Upload a folder")
-	commandUpsyncStorageURI = commandUpsync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandUpsyncStorageURI = commandUpsync.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandUpsyncHashing    = commandUpsync.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
 				Default("blake3").
 				Enum("meow", "blake2", "blake3")
@@ -2520,7 +2520,7 @@ var (
 	commandUpsyncVersionLocalStoreIndexPath = commandUpsync.Flag("version-local-store-index-path", "Generate an store index optimized for this particular version").String()
 
 	commandDownsync                           = kingpin.Command("downsync", "Download a folder")
-	commandDownsyncStorageURI                 = commandDownsync.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandDownsyncStorageURI                 = commandDownsync.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandDownsyncCachePath                  = commandDownsync.Flag("cache-path", "Location for cached blocks").String()
 	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").Required().String()
 	commandDownsyncTargetIndexPath            = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
@@ -2532,7 +2532,7 @@ var (
 	commandDownsyncVersionLocalStoreIndexPath = commandDownsync.Flag("version-local-store-index-path", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").String()
 
 	commandValidate                         = kingpin.Command("validate", "Validate a version index against a content store")
-	commandValidateStorageURI               = commandValidate.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandValidateStorageURI               = commandValidate.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandValidateVersionIndexPath         = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
 	commandValidateVersionTargetBlockSize   = commandValidate.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
 	commandValidateVersionMaxChunksPerBlock = commandValidate.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
@@ -2555,7 +2555,7 @@ var (
 
 	commandCPVersion           = kingpin.Command("cp", "list the content of a path inside a version index")
 	commandCPVersionIndexPath  = commandCPVersion.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandCPStorageURI        = commandCPVersion.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandCPStorageURI        = commandCPVersion.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandCPCachePath         = commandCPVersion.Flag("cache-path", "Location for cached blocks").String()
 	commandCPSourcePath        = commandCPVersion.Arg("source path", "source path inside the version index to list").String()
 	commandCPTargetPath        = commandCPVersion.Arg("target path", "target uri path").String()
@@ -2563,24 +2563,24 @@ var (
 	commandCPMaxChunksPerBlock = commandCPVersion.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 
 	commandInitRemoteStore           = kingpin.Command("init", "open/create a remote store and force rebuild the store index")
-	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
 						Default("blake3").
 						Enum("meow", "blake2", "blake3")
 
 	commandStats                 = kingpin.Command("stats", "Show fragmenation stats about a version index")
-	commandStatsStorageURI       = commandStats.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandStatsStorageURI       = commandStats.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandStatsVersionIndexPath = commandStats.Flag("version-index-path", "Path to a version index file").Required().String()
 	commandStatsCachePath        = commandStats.Flag("cache-path", "Location for cached blocks").String()
 
 	commandCreateVersionStoreIndex           = kingpin.Command("createVersionStoreIndex", "Create a store index optimized for a version index")
-	commandCreateVersionStoreIndexStorageURI = commandCreateVersionStoreIndex.Flag("storage-uri", "Storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandCreateVersionStoreIndexStorageURI = commandCreateVersionStoreIndex.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandCreateVersionStoreIndexSourcePath = commandCreateVersionStoreIndex.Flag("source-path", "Source file uri").Required().String()
 	commandCreateVersionStoreIndexPath       = commandCreateVersionStoreIndex.Flag("version-local-store-index-path", "Generate an store index optimized for this particular version").String()
 
 	commandCloneStore                             = kingpin.Command("cloneStore", "Clone all the data needed to cover a set of versions from one store into a new store")
-	commandCloneStoreSourceStoreURI               = commandCloneStore.Flag("source-storage-uri", "Source storage URI (only local file system and GCS bucket URI supported)").Required().String()
-	commandCloneStoreTargetStoreURI               = commandCloneStore.Flag("target-storage-uri", "Target storage URI (only local file system and GCS bucket URI supported)").Required().String()
+	commandCloneStoreSourceStoreURI               = commandCloneStore.Flag("source-storage-uri", "Source storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
+	commandCloneStoreTargetStoreURI               = commandCloneStore.Flag("target-storage-uri", "Target storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	ommandCloneStoreCachePath                     = commandCloneStore.Flag("cache-path", "Location for cached blocks").String()
 	commandCloneStoreTargetPath                   = commandCloneStore.Flag("target-path", "Target folder path").Required().String()
 	commandCloneStoreSourcePaths                  = commandCloneStore.Flag("source-paths", "File containing list of source longtail uris").Required().String()

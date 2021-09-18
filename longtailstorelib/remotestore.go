@@ -756,6 +756,12 @@ func getStoreIndexFromBlocks(
 		clients[c] = client
 	}
 
+	defer func(clients []BlobClient) {
+		for _, client := range clients {
+			client.Close()
+		}
+	}(clients)
+
 	var wg sync.WaitGroup
 
 	for batchStart < len(blockKeys) {
@@ -828,10 +834,6 @@ func getStoreIndexFromBlocks(
 		//		blockIndexes = append(blockIndexes, batchBlockIndexes[:writeIndex]...)
 		batchStart += batchLength
 		log.Printf("Scanned %d/%d blocks in %s\n", batchStart, len(blockKeys), blobClient.String())
-	}
-
-	for c := 0; c < batchCount; c++ {
-		clients[c].Close()
 	}
 
 	return storeIndex, nil

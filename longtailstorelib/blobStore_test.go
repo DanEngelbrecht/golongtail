@@ -417,11 +417,7 @@ func TestGenerationWrite(t *testing.T) {
 	}
 }
 
-func testStoreIndexSync(useLocking bool, t *testing.T) {
-	blobStore, err := NewTestBlobStore("locking_store", useLocking)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
+func testStoreIndexSync(blobStore BlobStore, t *testing.T) {
 
 	blockGenerateCount := 4
 	workerCount := 21
@@ -540,9 +536,17 @@ func testStoreIndexSync(useLocking bool, t *testing.T) {
 }
 
 func TestStoreIndexSyncWithLocking(t *testing.T) {
-	testStoreIndexSync(true, t)
+	blobStore, err := NewTestBlobStore("locking_store", true)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	testStoreIndexSync(blobStore, t)
 }
 
 func TestStoreIndexSyncWithoutLocking(t *testing.T) {
-	testStoreIndexSync(false, t)
+	blobStore, err := NewTestBlobStore("locking_store", false)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	testStoreIndexSync(blobStore, t)
 }

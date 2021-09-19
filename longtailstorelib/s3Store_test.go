@@ -2,10 +2,8 @@ package longtailstorelib
 
 import (
 	"net/url"
-	"sync"
 	"testing"
 
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"golang.org/x/net/context"
 )
 
@@ -88,122 +86,5 @@ func TestS3StoreIndexSync(t *testing.T) {
 	}
 
 	blobStore, _ := NewS3BlobStore(u)
-
-	blockGenerateCount := 4
-	workerCount := 21
-
-	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
-
-	var wg sync.WaitGroup
-	for n := 0; n < workerCount; n++ {
-		wg.Add(1)
-		seedBase := blockGenerateCount * n
-		go func(blockGenerateCount int, seedBase int) {
-			client, _ := blobStore.NewClient(context.Background())
-			defer client.Close()
-
-			{
-				blocks := []longtaillib.Longtail_BlockIndex{}
-				for i := 0; i < blockGenerateCount-1; i++ {
-					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
-					blocks = append(blocks, block.GetBlockIndex())
-				}
-
-				newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
-				if errno != 0 {
-					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
-				}
-				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
-				newBlocksIndex.Dispose()
-				if err != nil {
-					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
-				}
-				newStoreIndex.Dispose()
-			}
-
-			readStoreIndex, err := readStoreStoreIndex(context.Background(), client)
-			if err != nil {
-				t.Errorf("readStoreStoreIndex() failed with %q", err)
-			}
-			readStoreIndex.Dispose()
-
-			{
-				blocks := []longtaillib.Longtail_BlockIndex{}
-				for i := blockGenerateCount - 1; i < blockGenerateCount; i++ {
-					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
-					blocks = append(blocks, block.GetBlockIndex())
-				}
-				newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
-				if errno != 0 {
-					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
-				}
-				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
-				newBlocksIndex.Dispose()
-				if err != nil {
-					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
-				}
-				newStoreIndex.Dispose()
-			}
-
-			storeIndex, err := readStoreStoreIndex(context.Background(), client)
-			if err != nil {
-				t.Errorf("readStoreStoreIndex() failed with %q", err)
-			}
-			lookup := map[uint64]bool{}
-			for _, h := range storeIndex.GetBlockHashes() {
-				lookup[h] = true
-			}
-
-			blockHashes := storeIndex.GetBlockHashes()
-			for n := 0; n < blockGenerateCount; n++ {
-				h := blockHashes[n]
-				generatedBlockHashes <- h
-				_, exists := lookup[h]
-				if !exists {
-					storeIndex.Dispose()
-					t.Errorf("Missing direct block %d", h)
-				}
-			}
-			storeIndex.Dispose()
-
-			wg.Done()
-		}(blockGenerateCount, seedBase)
-	}
-	wg.Wait()
-	client, _ := blobStore.NewClient(context.Background())
-	defer client.Close()
-
-	// Update the index one last time to converge on one index file
-	{
-		newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-		if errno != 0 {
-			t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
-		}
-		newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
-		newBlocksIndex.Dispose()
-		if err != nil {
-			t.Errorf("addToRemoteStoreIndex() failed with %q", err)
-		}
-		newStoreIndex.Dispose()
-	}
-
-	storeIndex, err := readStoreStoreIndex(context.Background(), client)
-	if err != nil {
-		t.Errorf("readStoreStoreIndex() failed with %q", err)
-	}
-	defer storeIndex.Dispose()
-	if len(storeIndex.GetBlockHashes()) != blockGenerateCount*workerCount {
-		t.Errorf("Not all blockes were stored in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
-	}
-	lookup := map[uint64]bool{}
-	for _, h := range storeIndex.GetBlockHashes() {
-		lookup[h] = true
-	}
-	for n := 0; n < workerCount*blockGenerateCount; n++ {
-		h := <-generatedBlockHashes
-		_, exists := lookup[h]
-		if !exists {
-			t.Errorf("Missing block %d", h)
-		}
-	}
+	testStoreIndexSync(blobStore, t)
 }

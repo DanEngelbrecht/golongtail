@@ -118,6 +118,7 @@ jobs:
           Changes in this Release
           - **FIXED** Make sure flush also flushes store index, empties preflight memory and flushes any pending preflight blocks.
           - **ADDED** `cloneStore` command to copy all versions from one store to a new store
+          - **ADDED** s3-blobstore, use the uri format s3:// for Amazon S3 stores
           - **CHANGED** Removed unused `target-chunk-size` option for `downsync`
         draft: false
         prerelease: false

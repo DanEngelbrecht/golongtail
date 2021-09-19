@@ -355,7 +355,7 @@ func storeBlock(blobClient BlobClient, storedBlock longtaillib.Longtail_StoredBl
 	bytes, _ := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 	blockIndex := storedBlock.GetBlockIndex()
 	storedBlockHash := blockIndex.GetBlockHash() + blockHashOffset
-	path := GetBlockPath("chunks", storedBlockHash)
+	path := getBlockPath("chunks", storedBlockHash)
 	if len(parentPath) > 0 {
 		path = parentPath + "/" + path
 	}

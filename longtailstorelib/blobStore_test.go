@@ -453,10 +453,10 @@ func testStoreIndexSync(blobStore BlobStore, t *testing.T) {
 				newStoreIndex.Dispose()
 			}
 
-			readStoreIndex, err := readStoreStoreIndex(context.Background(), client)
+			readStoreIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
 			if err != nil {
 				wg.Done()
-				t.Errorf("readStoreStoreIndex() failed with %q", err)
+				t.Errorf("readStoreStoreIndexWithItems() failed with %q", err)
 			}
 			readStoreIndex.Dispose()
 
@@ -480,20 +480,20 @@ func testStoreIndexSync(blobStore BlobStore, t *testing.T) {
 				newStoreIndex.Dispose()
 			}
 
-			storeIndex, err := readStoreStoreIndex(context.Background(), client)
+			storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
 			if err != nil {
 				wg.Done()
-				t.Errorf("readStoreStoreIndex() failed with %q", err)
+				t.Errorf("readStoreStoreIndexWithItems() failed with %q", err)
 			}
 			if !storeIndex.IsValid() {
 				wg.Done()
-				t.Error("readStoreStoreIndex() returned invalid store index")
+				t.Error("readStoreStoreIndexWithItems() returned invalid store index")
 			}
-			storeIndex.Dispose()
 			lookup := map[uint64]bool{}
-			for _, h := range generatedBlocksIndex.GetBlockHashes() {
+			for _, h := range storeIndex.GetBlockHashes() {
 				lookup[h] = true
 			}
+			storeIndex.Dispose()
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
@@ -514,18 +514,31 @@ func testStoreIndexSync(blobStore BlobStore, t *testing.T) {
 	wg.Wait()
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	storeIndex, err := readStoreStoreIndex(context.Background(), client)
+
+	if !client.SupportsLocking() {
+		// Consolidate indexes
+		updateIndex, _ := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+		newStoreIndex, _ := addToRemoteStoreIndex(context.Background(), client, updateIndex)
+		updateIndex.Dispose()
+		newStoreIndex.Dispose()
+	}
+
+	storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
 	if err != nil {
-		t.Errorf("readStoreStoreIndex() failed with %q", err)
+		t.Errorf("readStoreStoreIndexWithItems() failed with %q", err)
 	}
 	defer storeIndex.Dispose()
 	if len(storeIndex.GetBlockHashes()) != blockGenerateCount*workerCount {
-		t.Errorf("Not all blockes were stored in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
+		t.Errorf("Unexpected number of blocks in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
 	}
 	lookup := map[uint64]bool{}
 	for _, h := range storeIndex.GetBlockHashes() {
 		lookup[h] = true
 	}
+	if len(lookup) != blockGenerateCount*workerCount {
+		t.Errorf("Unexpected unique block hashes in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
+	}
+
 	for n := 0; n < workerCount*blockGenerateCount; n++ {
 		h := <-generatedBlockHashes
 		_, exists := lookup[h]

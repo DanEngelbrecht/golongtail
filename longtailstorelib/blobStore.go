@@ -13,10 +13,32 @@ import (
 
 // BlobObject
 type BlobObject interface {
+	// returns false, nil if the object does not exist
+	// returns false, err on error
+	// returns true, nil if the object exists
 	Exists() (bool, error)
+
+	// Locked the version for Write and Delete operations
+	// If the underlying file has changed between the LockWriteVersion call
+	// and a Write or Delete operation the operation will fail
 	LockWriteVersion() (bool, error)
+
+	// returns nil, error on error
+	// returns []byte, nil on success
+	// returns nil, nil if the underlying file no longer exists
 	Read() ([]byte, error)
+
+	// If no write condition is set:
+	//   returns true, nil on success
+	//   returns false, err on failure
+	// If a write condition is set:
+	//   returns true, nil if a version locked write succeeded
+	//   returns false, nil if the write was prevented due to a version change
+	//   returns false, err on error
 	Write(data []byte) (bool, error)
+
+	// Will return an error if a version lock is set with LockWriteVersion()
+	// and the underlying file has changed
 	Delete() error
 }
 
@@ -45,7 +67,7 @@ func createBlobStoreForURI(uri string) (BlobStore, error) {
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			return NewGCSBlobStore(blobStoreURL)
+			return NewGCSBlobStore(blobStoreURL, false)
 		case "s3":
 			return NewS3BlobStore(blobStoreURL)
 		case "abfs":

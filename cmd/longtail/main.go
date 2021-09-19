@@ -190,7 +190,7 @@ func createBlockStoreForURI(uri string, optionalStoreIndexPath string, jobAPI lo
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
-			gcsBlobStore, err := longtailstorelib.NewGCSBlobStore(blobStoreURL)
+			gcsBlobStore, err := longtailstorelib.NewGCSBlobStore(blobStoreURL, false)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, err
 			}

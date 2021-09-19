@@ -21,7 +21,7 @@ func TestGCSBlobStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %q", err)
 	}
@@ -50,7 +50,7 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %q", err)
 	}
@@ -164,7 +164,7 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %q", err)
 	}
@@ -219,9 +219,35 @@ func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
 		t.Errorf("url.Parse() err == %q", err)
 	}
 
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
+	testStoreIndexSync(blobStore, t)
+}
+
+func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
+	// This test uses hardcoded paths in S3 and is disabled
+	t.Skip()
+
+	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
+	if err != nil {
+		t.Errorf("url.Parse() err == %q", err)
+	}
+
+	blobStore, err := NewGCSBlobStore(u, true)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
 	testStoreIndexSync(blobStore, t)
 }

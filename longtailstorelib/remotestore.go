@@ -1120,32 +1120,18 @@ func getStoreStoreIndexes(
 	return items, nil
 }
 
-func readStoreStoreIndexWithItems(
+func mergeStoreIndexItems(
 	ctx context.Context,
-	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
-
-	items, err := getStoreStoreIndexes(ctx, client)
-	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, nil, err
-	}
-
-	if len(items) == 0 {
-		storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-		if errno != 0 {
-			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
-		}
-		return storeIndex, nil, nil
-	}
-
+	client BlobClient,
+	items []string) (longtaillib.Longtail_StoreIndex, []string, error) {
 	var usedItems []string
 	storeIndex := longtaillib.Longtail_StoreIndex{}
 	for _, item := range items {
 		tmpStoreIndex, err := readStoreStoreIndexFromPath(ctx, item, client)
-		if err != nil {
-			continue
-		}
-		if !tmpStoreIndex.IsValid() {
-			continue
+		if err != nil || (!tmpStoreIndex.IsValid()) {
+			// The file we expected is no longer there, tell caller that we need to try again
+			storeIndex.Dispose()
+			return longtaillib.Longtail_StoreIndex{}, nil, nil
 		}
 		if !storeIndex.IsValid() {
 			storeIndex = tmpStoreIndex
@@ -1161,22 +1147,39 @@ func readStoreStoreIndexWithItems(
 		storeIndex = mergedStoreIndex
 		usedItems = append(usedItems, item)
 	}
-
-	if storeIndex.IsValid() {
-		return storeIndex, usedItems, nil
-	}
-	storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-	if errno != 0 {
-		return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
-	}
-	return storeIndex, nil, nil
+	return storeIndex, usedItems, nil
 }
 
-func readStoreStoreIndex(
+func readStoreStoreIndexWithItems(
 	ctx context.Context,
-	client BlobClient) (longtaillib.Longtail_StoreIndex, error) {
-	storeIndex, _, err := readStoreStoreIndexWithItems(ctx, client)
-	return storeIndex, err
+	client BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
+	for {
+		items, err := getStoreStoreIndexes(ctx, client)
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, nil, err
+		}
+
+		if len(items) == 0 {
+			storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+			if errno != 0 {
+				return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
+			}
+			return storeIndex, nil, nil
+		}
+
+		storeIndex, usedItems, err := mergeStoreIndexItems(ctx, client, items)
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, nil, err
+		}
+		if len(usedItems) == 0 {
+			// The underlying index files changed as we were scanning them, abort and try again
+			continue
+		}
+		if storeIndex.IsValid() {
+			return storeIndex, usedItems, nil
+		}
+		log.Printf("Retrying reading remote store index\n")
+	}
 }
 
 func addBlocksToStoreIndex(
@@ -1222,9 +1225,9 @@ func readRemoteStoreIndex(
 			}
 		}
 		if !storeIndex.IsValid() {
-			storeIndex, err = readStoreStoreIndex(ctx, client)
+			storeIndex, _, err = readStoreStoreIndexWithItems(ctx, client)
 			if err != nil {
-				log.Printf("contentIndexWorker: readStoreStoreIndex() failed with %v", err)
+				log.Printf("contentIndexWorker: readStoreStoreIndexWithItems() failed with %v", err)
 			}
 		}
 	}

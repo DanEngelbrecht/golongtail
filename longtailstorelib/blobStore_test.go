@@ -436,20 +436,22 @@ func testStoreIndexSync(useLocking bool, t *testing.T) {
 			client, _ := blobStore.NewClient(context.Background())
 			defer client.Close()
 
+			blocks := []longtaillib.Longtail_BlockIndex{}
 			{
-				blocks := []longtaillib.Longtail_BlockIndex{}
 				for i := 0; i < blockGenerateCount-1; i++ {
 					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
 					blocks = append(blocks, block.GetBlockIndex())
 				}
 
-				newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
+				blocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
 				if errno != 0 {
+					wg.Done()
 					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
 				}
-				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
-				newBlocksIndex.Dispose()
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, blocksIndex)
+				blocksIndex.Dispose()
 				if err != nil {
+					wg.Done()
 					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
 				}
 				newStoreIndex.Dispose()
@@ -457,23 +459,26 @@ func testStoreIndexSync(useLocking bool, t *testing.T) {
 
 			readStoreIndex, err := readStoreStoreIndex(context.Background(), client)
 			if err != nil {
+				wg.Done()
 				t.Errorf("readStoreStoreIndex() failed with %q", err)
 			}
 			readStoreIndex.Dispose()
 
+			generatedBlocksIndex := longtaillib.Longtail_StoreIndex{}
 			{
-				blocks := []longtaillib.Longtail_BlockIndex{}
 				for i := blockGenerateCount - 1; i < blockGenerateCount; i++ {
 					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
 					blocks = append(blocks, block.GetBlockIndex())
 				}
-				newBlocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
+				errno := 0
+				generatedBlocksIndex, errno = longtaillib.CreateStoreIndexFromBlocks(blocks)
 				if errno != 0 {
+					wg.Done()
 					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
 				}
-				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, newBlocksIndex)
-				newBlocksIndex.Dispose()
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, generatedBlocksIndex)
 				if err != nil {
+					wg.Done()
 					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
 				}
 				newStoreIndex.Dispose()
@@ -481,24 +486,31 @@ func testStoreIndexSync(useLocking bool, t *testing.T) {
 
 			storeIndex, err := readStoreStoreIndex(context.Background(), client)
 			if err != nil {
+				wg.Done()
 				t.Errorf("readStoreStoreIndex() failed with %q", err)
 			}
+			if !storeIndex.IsValid() {
+				wg.Done()
+				t.Error("readStoreStoreIndex() returned invalid store index")
+			}
+			storeIndex.Dispose()
 			lookup := map[uint64]bool{}
-			for _, h := range storeIndex.GetBlockHashes() {
+			for _, h := range generatedBlocksIndex.GetBlockHashes() {
 				lookup[h] = true
 			}
 
-			blockHashes := storeIndex.GetBlockHashes()
+			blockHashes := generatedBlocksIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
 				generatedBlockHashes <- h
 				_, exists := lookup[h]
 				if !exists {
-					storeIndex.Dispose()
+					generatedBlocksIndex.Dispose()
+					wg.Done()
 					t.Errorf("Missing direct block %d", h)
 				}
 			}
-			storeIndex.Dispose()
+			generatedBlocksIndex.Dispose()
 
 			wg.Done()
 		}(blockGenerateCount, seedBase)

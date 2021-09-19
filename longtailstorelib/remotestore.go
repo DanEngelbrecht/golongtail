@@ -931,7 +931,11 @@ func readStoreStoreIndexWithItems(
 	}
 
 	if len(items) == 0 {
-		return longtaillib.Longtail_StoreIndex{}, nil, nil
+		storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+		if errno != 0 {
+			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
+		}
+		return storeIndex, nil, nil
 	}
 
 	var usedItems []string
@@ -958,7 +962,15 @@ func readStoreStoreIndexWithItems(
 		storeIndex = mergedStoreIndex
 		usedItems = append(usedItems, item)
 	}
-	return storeIndex, usedItems, nil
+
+	if storeIndex.IsValid() {
+		return storeIndex, usedItems, nil
+	}
+	storeIndex, errno := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+	if errno != 0 {
+		return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EACCES, longtaillib.ErrEACCES), "contentIndexWorker: CreateStoreIndexFromBlocks() failed")
+	}
+	return storeIndex, nil, nil
 }
 
 func readStoreStoreIndex(

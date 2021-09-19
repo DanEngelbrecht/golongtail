@@ -17,11 +17,11 @@ func TestGCSBlobStore(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-storage/test-storage/store")
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %q", err)
 	}
@@ -46,11 +46,11 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-storage/test-storage/store")
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %q", err)
 	}
@@ -103,6 +103,14 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 		t.Errorf("object.Read() err == %q", err)
 	}
 	err = object.Delete()
+	if err == nil {
+		t.Error("object.Delete() err != nil")
+	}
+	exists, err = object.LockWriteVersion()
+	if err != nil {
+		t.Errorf("object.LockWriteVersion() err == %q", err)
+	}
+	err = object.Delete()
 	if err != nil {
 		t.Errorf("object.Delete() err == %q", err)
 	}
@@ -129,7 +137,7 @@ func writeANumberWithRetry(number int, blobStore BlobStore) error {
 			if err != nil {
 				return err
 			}
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(30 * time.Millisecond)
 			sliceData = strings.Split(string(data), "\n")
 		}
 		sliceData = append(sliceData, fmt.Sprintf("%05d", number))
@@ -152,11 +160,11 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
 
-	u, err := url.Parse("gs://longtail-storage/test-storage/store")
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-	blobStore, err := NewGCSBlobStore(u)
+	blobStore, err := NewGCSBlobStore(u, false)
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %q", err)
 	}
@@ -200,4 +208,46 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
+	// This test uses hardcoded paths in S3 and is disabled
+	t.Skip()
+
+	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
+	if err != nil {
+		t.Errorf("url.Parse() err == %q", err)
+	}
+
+	blobStore, err := NewGCSBlobStore(u, false)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
+	testStoreIndexSync(blobStore, t)
+}
+
+func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
+	// This test uses hardcoded paths in S3 and is disabled
+	t.Skip()
+
+	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
+	if err != nil {
+		t.Errorf("url.Parse() err == %q", err)
+	}
+
+	blobStore, err := NewGCSBlobStore(u, true)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
+	testStoreIndexSync(blobStore, t)
 }

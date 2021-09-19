@@ -1072,6 +1072,10 @@ func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
 	return carray2sliceByte((*C.char)(storedBlock.cStoredBlock.m_BlockData), size)
 }
 
+func (storedBlock *Longtail_StoredBlock) GetBlockHash() uint64 {
+	return uint64(*storedBlock.cStoredBlock.m_BlockIndex.m_BlockHash)
+}
+
 func (storedBlock *Longtail_StoredBlock) Dispose() {
 	if storedBlock.cStoredBlock != nil {
 		C.Longtail_StoredBlock_Dispose(storedBlock.cStoredBlock)

@@ -3,10 +3,11 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
-	"cloud.google.com/go/storage"
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 type testBlob struct {
@@ -16,9 +17,10 @@ type testBlob struct {
 }
 
 type testBlobStore struct {
-	blobs      map[string]*testBlob
-	blobsMutex sync.RWMutex
-	prefix     string
+	blobs           map[string]*testBlob
+	blobsMutex      sync.RWMutex
+	prefix          string
+	supportsLocking bool
 }
 
 type testBlobClient struct {
@@ -32,8 +34,8 @@ type testBlobObject struct {
 }
 
 // NewTestBlobStore ...
-func NewTestBlobStore(prefix string) (BlobStore, error) {
-	s := &testBlobStore{prefix: prefix, blobs: make(map[string]*testBlob)}
+func NewTestBlobStore(prefix string, supportsLocking bool) (BlobStore, error) {
+	s := &testBlobStore{prefix: prefix, blobs: make(map[string]*testBlob), supportsLocking: supportsLocking}
 	return s, nil
 }
 
@@ -49,16 +51,20 @@ func (blobClient *testBlobClient) NewObject(filepath string) (BlobObject, error)
 	return &testBlobObject{client: blobClient, path: filepath}, nil
 }
 
-func (blobClient *testBlobClient) GetObjects() ([]BlobProperties, error) {
+func (blobClient *testBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
 	blobClient.store.blobsMutex.RLock()
 	defer blobClient.store.blobsMutex.RUnlock()
-	properties := make([]BlobProperties, len(blobClient.store.blobs))
-	i := 0
+	properties := make([]BlobProperties, 0)
 	for key, blob := range blobClient.store.blobs {
-		properties[i] = BlobProperties{Name: key, Size: int64(len(blob.data))}
-		i++
+		if strings.HasPrefix(key, pathPrefix) {
+			properties = append(properties, BlobProperties{Name: key, Size: int64(len(blob.data))})
+		}
 	}
 	return properties, nil
+}
+
+func (blobClient *testBlobClient) SupportsLocking() bool {
+	return blobClient.store.supportsLocking
 }
 
 func (blobClient *testBlobClient) Close() {
@@ -80,7 +86,7 @@ func (blobObject *testBlobObject) Read() ([]byte, error) {
 	defer blobObject.client.store.blobsMutex.RUnlock()
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
 	if !exists {
-		return nil, fmt.Errorf("testBlobObject object does not exist: %s", blobObject.path)
+		return nil, nil
 	}
 	return blob.data, nil
 }
@@ -132,7 +138,7 @@ func (blobObject *testBlobObject) Delete() error {
 	if blobObject.lockedGeneration != nil {
 		blob, exists := blobObject.client.store.blobs[blobObject.path]
 		if !exists {
-			return storage.ErrObjectNotExist
+			return longtaillib.ErrENOENT
 		}
 		if blob.generation != *blobObject.lockedGeneration {
 			return fmt.Errorf("testBlobObject: generation lock mismatch %s", blobObject.path)
@@ -142,8 +148,96 @@ func (blobObject *testBlobObject) Delete() error {
 	return nil
 }
 
+func generateStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_StoredBlock, int) {
+	chunkHashes := []uint64{uint64(seed) + 1, uint64(seed) + 2, uint64(seed) + 3}
+	chunkSizes := []uint32{uint32(seed) + 10, uint32(seed) + 20, uint32(seed) + 30}
+
+	blockDataLen := (int)(chunkSizes[0] + chunkSizes[1] + chunkSizes[2])
+	blockData := make([]uint8, blockDataLen)
+	for p := 0; p < blockDataLen; p++ {
+		blockData[p] = seed
+	}
+
+	return longtaillib.CreateStoredBlock(
+		uint64(seed)+21412151,
+		997,
+		2,
+		chunkHashes,
+		chunkSizes,
+		blockData,
+		false)
+}
+
+func generateUniqueStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_StoredBlock, int) {
+	chunkHashes := []uint64{uint64(seed)<<8 + 1, uint64(seed)<<8 + 2, uint64(seed)<<8 + 3}
+	chunkSizes := []uint32{uint32(seed)<<8 + 10, uint32(seed)<<8 + 20, uint32(seed)<<8 + 30}
+
+	blockDataLen := (int)(chunkSizes[0] + chunkSizes[1] + chunkSizes[2])
+	blockData := make([]uint8, blockDataLen)
+	for p := 0; p < blockDataLen; p++ {
+		blockData[p] = seed
+	}
+
+	return longtaillib.CreateStoredBlock(
+		uint64(seed)<<16+21412151,
+		997,
+		2,
+		chunkHashes,
+		chunkSizes,
+		blockData,
+		false)
+}
+
+func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (longtaillib.Longtail_StoredBlock, int) {
+	storedBlock, errno := generateStoredBlock(t, seed)
+	if errno != 0 {
+		return longtaillib.Longtail_StoredBlock{}, errno
+	}
+
+	p := &putStoredBlockCompletionAPI{}
+	p.wg.Add(1)
+	errno = storeAPI.PutStoredBlock(storedBlock, longtaillib.CreateAsyncPutStoredBlockAPI(p))
+	if errno != 0 {
+		p.wg.Done()
+		storedBlock.Dispose()
+		return longtaillib.Longtail_StoredBlock{}, errno
+	}
+	p.wg.Wait()
+
+	return storedBlock, p.err
+}
+
+func fetchBlockFromStore(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, blockHash uint64) (longtaillib.Longtail_StoredBlock, int) {
+	g := &getStoredBlockCompletionAPI{}
+	g.wg.Add(1)
+	errno := storeAPI.GetStoredBlock(blockHash, longtaillib.CreateAsyncGetStoredBlockAPI(g))
+	if errno != 0 {
+		g.wg.Done()
+		return longtaillib.Longtail_StoredBlock{}, errno
+	}
+	g.wg.Wait()
+
+	return g.storedBlock, g.err
+}
+
+func validateBlockFromSeed(t *testing.T, seed uint8, storedBlock longtaillib.Longtail_StoredBlock) {
+	if !storedBlock.IsValid() {
+		t.Errorf("validateBlockFromSeed() g.err %t != %t", storedBlock.IsValid(), true)
+	}
+
+	storedBlockIndex := storedBlock.GetBlockIndex()
+
+	if storedBlockIndex.GetBlockHash() != uint64(seed)+21412151 {
+		t.Errorf("validateBlockFromSeed() storedBlockIndex.GetBlockHash() %d != %d", storedBlockIndex.GetBlockHash(), uint64(seed)+21412151)
+	}
+
+	if storedBlockIndex.GetChunkCount() != 3 {
+		t.Errorf("validateBlockFromSeed() storedBlockIndex.GetChunkCount() %d != %d", storedBlockIndex.GetChunkCount(), 3)
+	}
+}
+
 func TestCreateStoreAndClient(t *testing.T) {
-	blobStore, err := NewTestBlobStore("the_path")
+	blobStore, err := NewTestBlobStore("the_path", true)
 	if err != nil {
 		t.Errorf("TestCreateStoreAndClient() NewTestBlobStore() %v != %v", err, nil)
 	}
@@ -155,28 +249,25 @@ func TestCreateStoreAndClient(t *testing.T) {
 }
 
 func TestListObjectsInEmptyStore(t *testing.T) {
-	blobStore, _ := NewTestBlobStore("the_path")
+	blobStore, _ := NewTestBlobStore("the_path", true)
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	objects, err := client.GetObjects()
+	objects, err := client.GetObjects("")
 	if err != nil {
-		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects()) %v != %v", err, nil)
+		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %v != %v", err, nil)
 	}
 	if len(objects) != 0 {
-		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects()) %d != %d", len(objects), 0)
+		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %d != %d", len(objects), 0)
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if err == nil {
+	if err != nil || data != nil {
 		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", fmt.Errorf("testBlobObject object does not exist: should-not-exist"), err)
-	}
-	if data != nil {
-		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", nil, data)
 	}
 }
 
 func TestSingleObjectStore(t *testing.T) {
-	blobStore, _ := NewTestBlobStore("the_path")
+	blobStore, _ := NewTestBlobStore("the_path", true)
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 	obj, err := client.NewObject("my-fine-object.txt")
@@ -208,8 +299,21 @@ func TestSingleObjectStore(t *testing.T) {
 	}
 }
 
+func TestDeleteObject(t *testing.T) {
+	blobStore, _ := NewTestBlobStore("the_path", true)
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	obj, _ := client.NewObject("my-fine-object.txt")
+	testContent := "the content of the object"
+	_, _ = obj.Write([]byte(testContent))
+	obj.Delete()
+	if exists, _ := obj.Exists(); exists {
+		t.Errorf("TestSingleObjectStore() obj.Exists()) %t != %t", exists, false)
+	}
+}
+
 func TestListObjects(t *testing.T) {
-	blobStore, _ := NewTestBlobStore("the_path")
+	blobStore, _ := NewTestBlobStore("the_path", true)
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 	obj, _ := client.NewObject("my-fine-object1.txt")
@@ -218,12 +322,12 @@ func TestListObjects(t *testing.T) {
 	obj.Write([]byte("my-fine-object2.txt"))
 	obj, _ = client.NewObject("my-fine-object3.txt")
 	obj.Write([]byte("my-fine-object3.txt"))
-	objects, err := client.GetObjects()
+	objects, err := client.GetObjects("")
 	if err != nil {
-		t.Errorf("TestListObjects() client.GetObjects()) %v != %v", err, nil)
+		t.Errorf("TestListObjects() client.GetObjects(\"\")) %v != %v", err, nil)
 	}
 	if len(objects) != 3 {
-		t.Errorf("TestListObjects() client.GetObjects()) %d != %d", len(objects), 3)
+		t.Errorf("TestListObjects() client.GetObjects(\"\")) %d != %d", len(objects), 3)
 	}
 	for _, o := range objects {
 		readObj, err := client.NewObject(o.Name)
@@ -245,7 +349,7 @@ func TestListObjects(t *testing.T) {
 }
 
 func TestGenerationWrite(t *testing.T) {
-	blobStore, _ := NewTestBlobStore("the_path")
+	blobStore, _ := NewTestBlobStore("the_path", true)
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 	obj, _ := client.NewObject("my-fine-object.txt")
@@ -311,4 +415,151 @@ func TestGenerationWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("TestGenerationWrite() obj.Delete()) %v != %v", err, nil)
 	}
+}
+
+func testStoreIndexSync(blobStore BlobStore, t *testing.T) {
+
+	blockGenerateCount := 4
+	workerCount := 21
+
+	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
+
+	var wg sync.WaitGroup
+	for n := 0; n < workerCount; n++ {
+		wg.Add(1)
+		seedBase := blockGenerateCount * n
+		go func(blockGenerateCount int, seedBase int) {
+			client, _ := blobStore.NewClient(context.Background())
+			defer client.Close()
+
+			blocks := []longtaillib.Longtail_BlockIndex{}
+			{
+				for i := 0; i < blockGenerateCount-1; i++ {
+					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
+					blocks = append(blocks, block.GetBlockIndex())
+				}
+
+				blocksIndex, errno := longtaillib.CreateStoreIndexFromBlocks(blocks)
+				if errno != 0 {
+					wg.Done()
+					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
+				}
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, blocksIndex)
+				blocksIndex.Dispose()
+				if err != nil {
+					wg.Done()
+					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
+				}
+				newStoreIndex.Dispose()
+			}
+
+			readStoreIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+			if err != nil {
+				wg.Done()
+				t.Errorf("readStoreStoreIndexWithItems() failed with %q", err)
+			}
+			readStoreIndex.Dispose()
+
+			generatedBlocksIndex := longtaillib.Longtail_StoreIndex{}
+			{
+				for i := blockGenerateCount - 1; i < blockGenerateCount; i++ {
+					block, _ := generateUniqueStoredBlock(t, uint8(seedBase+i))
+					blocks = append(blocks, block.GetBlockIndex())
+				}
+				errno := 0
+				generatedBlocksIndex, errno = longtaillib.CreateStoreIndexFromBlocks(blocks)
+				if errno != 0 {
+					wg.Done()
+					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %q", longtaillib.ErrnoToError(errno, longtaillib.ErrEIO))
+				}
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, generatedBlocksIndex)
+				if err != nil {
+					wg.Done()
+					t.Errorf("addToRemoteStoreIndex() failed with %q", err)
+				}
+				newStoreIndex.Dispose()
+			}
+
+			storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+			if err != nil {
+				wg.Done()
+				t.Errorf("readStoreStoreIndexWithItems() failed with %q", err)
+			}
+			if !storeIndex.IsValid() {
+				wg.Done()
+				t.Error("readStoreStoreIndexWithItems() returned invalid store index")
+			}
+			lookup := map[uint64]bool{}
+			for _, h := range storeIndex.GetBlockHashes() {
+				lookup[h] = true
+			}
+			storeIndex.Dispose()
+
+			blockHashes := generatedBlocksIndex.GetBlockHashes()
+			for n := 0; n < blockGenerateCount; n++ {
+				h := blockHashes[n]
+				generatedBlockHashes <- h
+				_, exists := lookup[h]
+				if !exists {
+					generatedBlocksIndex.Dispose()
+					wg.Done()
+					t.Errorf("Missing direct block %d", h)
+				}
+			}
+			generatedBlocksIndex.Dispose()
+
+			wg.Done()
+		}(blockGenerateCount, seedBase)
+	}
+	wg.Wait()
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+
+	if !client.SupportsLocking() {
+		// Consolidate indexes
+		updateIndex, _ := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+		newStoreIndex, _ := addToRemoteStoreIndex(context.Background(), client, updateIndex)
+		updateIndex.Dispose()
+		newStoreIndex.Dispose()
+	}
+
+	storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+	if err != nil {
+		t.Errorf("readStoreStoreIndexWithItems() failed with %q", err)
+	}
+	defer storeIndex.Dispose()
+	if len(storeIndex.GetBlockHashes()) != blockGenerateCount*workerCount {
+		t.Errorf("Unexpected number of blocks in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
+	}
+	lookup := map[uint64]bool{}
+	for _, h := range storeIndex.GetBlockHashes() {
+		lookup[h] = true
+	}
+	if len(lookup) != blockGenerateCount*workerCount {
+		t.Errorf("Unexpected unique block hashes in index, expected %d, got %d", blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
+	}
+
+	for n := 0; n < workerCount*blockGenerateCount; n++ {
+		h := <-generatedBlockHashes
+		_, exists := lookup[h]
+		if !exists {
+			t.Errorf("Missing block %d", h)
+		}
+	}
+}
+
+func TestStoreIndexSyncWithLocking(t *testing.T) {
+	blobStore, err := NewTestBlobStore("locking_store", true)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	testStoreIndexSync(blobStore, t)
+}
+
+func TestStoreIndexSyncWithoutLocking(t *testing.T) {
+	blobStore, err := NewTestBlobStore("locking_store", false)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	testStoreIndexSync(blobStore, t)
 }

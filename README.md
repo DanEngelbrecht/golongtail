@@ -4,9 +4,9 @@
 
 # golongtail
 
-A Go wrapper for [longtail](https://github.com/DanEngelbrecht/longtail), both module that hides the C interface and a module that provides a simple command line interface for up/down loading content.
+A Go wrapper for [longtail](https://github.com/DanEngelbrecht/longtail), both a module that hides the C interface and a module that provides a simple command line interface for up/down loading content.
 
-The command line tool can upload and download to a GCS bucket but requires that you are already logged in to gcloud, no authentication code is in place yet. It can also upload/download to a regular folder path.
+The command line tool can upload and download to a GCS or S3 bucket but requires that you are already logged in to gcloud, no authentication code is in place yet. It can also upload/download to a regular folder path.
 
 ## Performance numbers
 Using a well known Unreal based game comparing longtail with the preferred distribution application for the game. The final installation of the game is 80.6 Gb on disk.
@@ -71,8 +71,8 @@ Build the command line and run it for a breif description of commands/options.
 ### Upload to a local folder
 `longtail.exe upsync --source-path "my_folder" --target-path "local_store/index/my_folder.lvi" --storage-uri "local_store"`
 
-### Download from GCS
-`longtail.exe downsync --source-path "gs://test_block_storage/store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "gs://test_block_storage/store" --cache-path "cache"`
+### Download from S3
+`longtail.exe downsync --source-path "s3://test_block_storage/store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "s3://test_block_storage/store" --cache-path "cache"`
 
 ### Download from a local folder
 `longtail.exe downsync --source-path "local_store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "local_store"`

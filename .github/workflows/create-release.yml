@@ -116,7 +116,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **UPDATE** Update dependencies, in particular GCS dependency to fix oath compatability
+          - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
         draft: false
         prerelease: false
     - name: Download Linux artifacts

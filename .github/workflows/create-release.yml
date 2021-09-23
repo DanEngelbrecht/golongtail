@@ -9,7 +9,7 @@ on:
 jobs:
   build-linux:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
       - name: Set up Go 1.17.1
@@ -99,7 +99,7 @@ jobs:
 
   create-release:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     needs: [build-linux, build-macos, build-win32]
 
@@ -116,10 +116,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **FIXED** Make sure flush also flushes store index, empties preflight memory and flushes any pending preflight blocks.
-          - **ADDED** `cloneStore` command to copy all versions from one store to a new store
-          - **ADDED** s3-blobstore, use the uri format s3:// for Amazon S3 stores
-          - **CHANGED** Removed unused `target-chunk-size` option for `downsync`
+          - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
+          - **UPDATE** Build using Golang 1.17.1
+          - **FIX** Build Linux executable using Ubuntu 18.04 to avoid forcing update of GLIBC dependency
         draft: false
         prerelease: false
     - name: Download Linux artifacts

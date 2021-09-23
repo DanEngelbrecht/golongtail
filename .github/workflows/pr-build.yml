@@ -2,12 +2,12 @@ name: Validate PR
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [ main, release/** ]
 
 jobs:
   linux:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
       - name: Set up Go 1.17.1

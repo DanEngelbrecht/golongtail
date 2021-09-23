@@ -30,7 +30,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build .
+          CGO_ENABLED=0 go build .
           popd
 
   macos:
@@ -58,7 +58,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build .
+          CGO_ENABLED=0 go build .
           popd
 
   win32:
@@ -86,5 +86,5 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build .
+          CGO_ENABLED=0 go build .
           popd

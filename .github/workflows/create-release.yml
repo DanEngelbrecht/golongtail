@@ -10,7 +10,8 @@ jobs:
   build-linux:
 
     runs-on: ubuntu-latest
-
+    env: 
+      CGO_ENABLED: 0
     steps:
       - name: Set up Go 1.15.8
         uses: actions/setup-go@v1
@@ -23,7 +24,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          CGO_ENABLED=0 go build -ldflags="-s -w" .
+          go build -ldflags="-s -w" .
           popd
 
       - name: build dist
@@ -40,6 +41,8 @@ jobs:
   build-macos:
 
     runs-on: macos-latest
+    env: 
+      CGO_ENABLED: 0
 
     steps:
       - name: Set up Go 1.15.8
@@ -53,7 +56,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          CGO_ENABLED=0 go build -ldflags="-s -w" .
+          go build -ldflags="-s -w" .
           popd
 
       - name: build dist
@@ -70,6 +73,8 @@ jobs:
   build-win32:
 
     runs-on: windows-latest
+    env: 
+      CGO_ENABLED: 0
 
     steps:
       - name: Set up Go 1.15.8
@@ -83,7 +88,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          CGO_ENABLED=0 go build -ldflags="-s -w" .
+          go build -ldflags="-s -w" .
           popd
 
       - name: build dist

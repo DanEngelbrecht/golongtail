@@ -7,7 +7,7 @@ on:
 jobs:
   linux:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
       - name: Set up Go 1.15.8
@@ -32,8 +32,6 @@ jobs:
           pushd ./cmd/longtail
           go build .
           popd
-        env: 
-          CGO_ENABLED: 0
 
   macos:
 
@@ -62,8 +60,6 @@ jobs:
           pushd ./cmd/longtail
           go build .
           popd
-        env: 
-          CGO_ENABLED: 0
 
   win32:
 
@@ -92,5 +88,3 @@ jobs:
           pushd ./cmd/longtail
           go build .
           popd
-        env: 
-          CGO_ENABLED: 0

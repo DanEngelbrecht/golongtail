@@ -2635,8 +2635,6 @@ var (
 	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").Required().String()
 	commandDownsyncTargetIndexPath            = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	commandDownsyncSourcePath                 = commandDownsync.Flag("source-path", "Source file uri").Required().String()
-	commandDownsyncTargetBlockSize            = commandDownsync.Flag("target-block-size", "Target block size [OBSOLETE]").Default("8388608").Uint32()
-	commandDownsyncMaxChunksPerBlock          = commandDownsync.Flag("max-chunks-per-block", "Max chunks per block [OBSOLETE]").Default("1024").Uint32()
 	commandDownsyncNoRetainPermissions        = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 	commandDownsyncValidate                   = commandDownsync.Flag("validate", "Validate target path once completed").Bool()
 	commandDownsyncVersionLocalStoreIndexPath = commandDownsync.Flag("version-local-store-index-path", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").String()

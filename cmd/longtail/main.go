@@ -802,20 +802,10 @@ func getVersion(
 	readGetConfigTime := time.Since(readGetConfigStartTime)
 	timeStats = append(timeStats, timeStat{"Read get config", readGetConfigTime})
 
-	resolvedTargetFolderPath := ""
-	if targetFolderPath == nil || len(*targetFolderPath) == 0 {
-		urlSplit := strings.Split(normalizePath(sourceFilePath), "/")
-		sourceName := urlSplit[len(urlSplit)-1]
-		sourceNameSplit := strings.Split(sourceName, ".")
-		resolvedTargetFolderPath = sourceNameSplit[0]
-	} else {
-		resolvedTargetFolderPath = *targetFolderPath
-	}
-
 	downSyncStoreStats, downSyncTimeStats, err := downSyncVersion(
 		blobStoreURI,
 		sourceFilePath,
-		resolvedTargetFolderPath,
+		targetFolderPath,
 		targetIndexPath,
 		localCachePath,
 		retainPermissions,
@@ -833,7 +823,7 @@ func getVersion(
 func downSyncVersion(
 	blobStoreURI string,
 	sourceFilePath string,
-	targetFolderPath string,
+	targetFolderPath *string,
 	targetIndexPath *string,
 	localCachePath *string,
 	retainPermissions bool,
@@ -873,12 +863,25 @@ func downSyncVersion(
 		}
 	}
 
+	resolvedTargetFolderPath := ""
+	if targetFolderPath == nil || len(*targetFolderPath) == 0 {
+		urlSplit := strings.Split(normalizePath(sourceFilePath), "/")
+		sourceName := urlSplit[len(urlSplit)-1]
+		sourceNameSplit := strings.Split(sourceName, ".")
+		resolvedTargetFolderPath = sourceNameSplit[0]
+		if resolvedTargetFolderPath == "" {
+			return storeStats, timeStats, fmt.Errorf("downSyncVersion: unable to resolve target path using `%s` as base", sourceFilePath)
+		}
+	} else {
+		resolvedTargetFolderPath = *targetFolderPath
+	}
+
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
 	targetFolderScanner := asyncFolderScanner{}
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		targetFolderScanner.scan(targetFolderPath, pathFilter, fs)
+		targetFolderScanner.scan(resolvedTargetFolderPath, pathFilter, fs)
 	}
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
@@ -903,7 +906,7 @@ func downSyncVersion(
 	targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
 
 	targetIndexReader := asyncVersionIndexReader{}
-	targetIndexReader.read(targetFolderPath,
+	targetIndexReader.read(resolvedTargetFolderPath,
 		targetIndexPath,
 		targetChunkSize,
 		noCompressionType,
@@ -1003,7 +1006,7 @@ func downSyncVersion(
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		normalizePath(targetFolderPath),
+		normalizePath(resolvedTargetFolderPath),
 		retainPermissions)
 	if errno != 0 {
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ChangeVersion() failed")
@@ -1125,7 +1128,7 @@ func downSyncVersion(
 		validateFileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			normalizePath(targetFolderPath))
+			normalizePath(resolvedTargetFolderPath))
 		if errno != 0 {
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetFilesRecursively() failed")
 		}
@@ -1142,7 +1145,7 @@ func downSyncVersion(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			normalizePath(targetFolderPath),
+			normalizePath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
 			targetChunkSize)
@@ -2632,7 +2635,7 @@ var (
 	commandDownsync                           = kingpin.Command("downsync", "Download a folder")
 	commandDownsyncStorageURI                 = commandDownsync.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandDownsyncCachePath                  = commandDownsync.Flag("cache-path", "Location for cached blocks").String()
-	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").Required().String()
+	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").String()
 	commandDownsyncTargetIndexPath            = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	commandDownsyncSourcePath                 = commandDownsync.Flag("source-path", "Source file uri").Required().String()
 	commandDownsyncNoRetainPermissions        = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
@@ -2825,7 +2828,7 @@ func main() {
 		commandStoreStat, commandTimeStat, err = downSyncVersion(
 			*commandDownsyncStorageURI,
 			*commandDownsyncSourcePath,
-			*commandDownsyncTargetPath,
+			commandDownsyncTargetPath,
 			commandDownsyncTargetIndexPath,
 			commandDownsyncCachePath,
 			!(*commandDownsyncNoRetainPermissions),

@@ -22,8 +22,6 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 type loggerData struct {
@@ -1217,9 +1215,7 @@ func hashIdentifierToString(hashIdentifier uint32) string {
 
 func validateVersion(
 	blobStoreURI string,
-	versionIndexPath string,
-	targetBlockSize uint32,
-	maxChunksPerBlock uint32) ([]storeStat, []timeStat, error) {
+	versionIndexPath string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -1500,8 +1496,6 @@ func cpVersionIndex(
 	blobStoreURI string,
 	versionIndexPath string,
 	localCachePath *string,
-	targetBlockSize uint32,
-	maxChunksPerBlock uint32,
 	sourcePath string,
 	targetPath string) ([]storeStat, []timeStat, error) {
 
@@ -2606,12 +2600,20 @@ type HashingOption struct {
 	Hashing string `name:"hash-algorithm" help:"Hash algorithm [meow blake2 blake3]" enum:"meow,blake2,blake3" default:"blake3"`
 }
 
-type IncludeRegExOption struct {
-	IncludeFilterRegEx string `name:"include-filter-regex" help:"Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **"`
+type UpsyncIncludeRegExOption struct {
+	IncludeFilterRegEx string `name:"include-filter-regex" help:"Optional include regex filter for assets in --source-path. Separate regexes with **"`
 }
 
-type ExcludeRegExOption struct {
-	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **"`
+type DownsyncIncludeRegExOption struct {
+	IncludeFilterRegEx string `name:"include-filter-regex" help:"Optional include regex filter for assets in --target-path on downsync. Separate regexes with **"`
+}
+
+type UpsyncExcludeRegExOption struct {
+	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --source-path on upsync. Separate regexes with **"`
+}
+
+type DownsyncExcludeRegExOption struct {
+	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --target-path on downsync. Separate regexes with **"`
 }
 
 type StorageURIOption struct {
@@ -2646,21 +2648,49 @@ type VersionLocalStoreIndexPathOption struct {
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index"`
 }
 
+type VersionIndexPathOption struct {
+	VersionIndexPath string `name:"version-index-path" help:"URI to version index (local file system, GCS and S3 bucket URI supported)"`
+}
+
+type CompactOption struct {
+	Compact bool `name:"compact" help:"Show info in compact layout"`
+}
+
+type StoreIndexPathOption struct {
+	StoreIndexPath string `name:"store-index-path" help:"URI to store index (local file system, GCS and S3 bucket URI supported)"`
+}
+
+type MinBlockUsagePercentOption struct {
+	MinBlockUsagePercent uint32 `name:"min-block-usage-percent" help:"Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all" default:"0"`
+}
+
+type TargetChunkSizeOption struct {
+	TargetChunkSize uint32 `name:"target-chunk-size" help:"Target chunk size" default:"32768"`
+}
+
+type MaxChunksPerBlockOption struct {
+	MaxChunksPerBlock uint32 `name:"max-chunks-per-block" help:"Max chunks per block" default:"1024"`
+}
+
+type TargetBlockSizeOption struct {
+	TargetBlockSize uint32 `name:"target-block-size" help:"Target block size" default:"8388608"`
+}
+
 type UpsyncCmd struct {
-	TargetChunkSize            uint32 `name:"target-chunk-size" help:"Target chunk size" default:"32768"`
-	TargetBlockSize            uint32 `name:"target-block-size" help:"Target block size" default:"8388608"`
-	MaxChunksPerBlock          uint32 `name:"max-chunks-per-block" help:"Max chunks per block" default:"1024"`
 	SourcePath                 string `name:"source-path" help:"Source folder path" required:""`
 	SourceIndexPath            string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	TargetPath                 string `name:"target-path" help:"Target file uri" required:""`
-	MinBlockUsagePercent       uint32 `name:"min-block-usage-percent" help:"Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all" default:"0"`
-	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Generate an store index optimized for this particular version"`
-	GetConfigPath              string `name:"get-config-path" help:"File uri for json formatted get-config file"`
+	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
+	GetConfigPath              string `name:"get-config-path" help:"Target file uri for json formatted get-config file"`
+	TargetChunkSizeOption
+	MaxChunksPerBlockOption
+	TargetBlockSizeOption
+	MinBlockUsagePercentOption
 	StorageURIOption
 	CompressionOption
 	HashingOption
-	IncludeRegExOption
-	ExcludeRegExOption
+	UpsyncIncludeRegExOption
+	UpsyncExcludeRegExOption
 }
 
 func (r *UpsyncCmd) Run(ctx *Context) error {
@@ -2685,16 +2715,16 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 }
 
 type DownsyncCmd struct {
+	StorageURIOption
+	SourceUriOption
 	TargetPathOption
 	TargetIndexUriOption
-	SourceUriOption
-	ValidateTargetOption
-	VersionLocalStoreIndexPathOption
-	StorageURIOption
 	CachePathOption
 	RetainPermissionsOption
-	IncludeRegExOption
-	ExcludeRegExOption
+	ValidateTargetOption
+	VersionLocalStoreIndexPathOption
+	DownsyncIncludeRegExOption
+	DownsyncExcludeRegExOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -2723,8 +2753,8 @@ type GetCmd struct {
 	StorageURIOption
 	CachePathOption
 	RetainPermissionsOption
-	IncludeRegExOption
-	ExcludeRegExOption
+	DownsyncIncludeRegExOption
+	DownsyncExcludeRegExOption
 }
 
 func (r *GetCmd) Run(ctx *Context) error {
@@ -2742,98 +2772,202 @@ func (r *GetCmd) Run(ctx *Context) error {
 	return err
 }
 
-var cli struct {
-	LogLevel         string      `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
-	ShowStats        bool        `name:"show-stats" help:"Output brief stats summary"`
-	ShowStoreStats   bool        `name:"show-store-stats" help:"Output detailed stats for block stores"`
-	MemTrace         bool        `name:"mem-trace" help:"Output summary memory statistics from longtail"`
-	MemTraceDetailed bool        `name:"mem-trace-detailed" help:"Output detailed memory statistics from longtail"`
-	MemTraceCSV      string      `name:"mem-trace-csv" help:"Output path for detailed memory statistics from longtail in csv format"`
-	WorkerCount      int         `name:"worker-count" help:"Limit number of workers created, defaults to match number of logical CPUs (zero for default count)" default:"0"`
-	Upsync           UpsyncCmd   `cmd:"upsync" help:"Upload a folder"`
-	Downsync         DownsyncCmd `cmd:"downsync" help:"Download a folder"`
-	Get              GetCmd      `cmd:"get" help:"Download a folder using a get-config"`
+type ValidateCmd struct {
+	StorageURIOption
+	VersionIndexPathOption
 }
 
-var (
-	commandValidate                         = kingpin.Command("validate", "Validate a version index against a content store")
-	commandValidateStorageURI               = commandValidate.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandValidateVersionIndexPath         = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandValidateVersionTargetBlockSize   = commandValidate.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	commandValidateVersionMaxChunksPerBlock = commandValidate.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+func (r *ValidateCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := validateVersion(
+		r.StorageURI,
+		r.VersionIndexPath)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
 
-	commandPrintVersionIndex        = kingpin.Command("printVersionIndex", "Print info about a file")
-	commandPrintVersionIndexPath    = commandPrintVersionIndex.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandPrintVersionIndexCompact = commandPrintVersionIndex.Flag("compact", "Show info in compact layout").Bool()
+type PrintVersionIndexCmd struct {
+	VersionIndexPathOption
+	CompactOption
+}
 
-	commandPrintStoreIndex        = kingpin.Command("printStoreIndex", "Print info about a file")
-	commandPrintStoreIndexPath    = commandPrintStoreIndex.Flag("store-index-path", "Path to a store index file").Required().String()
-	commandPrintStoreIndexCompact = commandPrintStoreIndex.Flag("compact", "Show info in compact layout").Bool()
+func (r *PrintVersionIndexCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := showVersionIndex(
+		r.VersionIndexPath,
+		r.Compact)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
 
-	commandDump                 = kingpin.Command("dump", "Dump the asset paths inside a version index")
-	commandDumpVersionIndexPath = commandDump.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandDumpDetails          = commandDump.Flag("details", "Show details about assets").Bool()
+type PrintStoreIndexCmd struct {
+	StoreIndexPathOption
+	CompactOption
+}
 
-	commandLSVersion          = kingpin.Command("ls", "list the content of a path inside a version index")
-	commandLSVersionIndexPath = commandLSVersion.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandLSVersionDir       = commandLSVersion.Arg("path", "path inside the version index to list").String()
+func (r *PrintStoreIndexCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := showStoreIndex(
+		r.StoreIndexPath,
+		r.Compact)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
 
-	commandCPVersion           = kingpin.Command("cp", "list the content of a path inside a version index")
-	commandCPVersionIndexPath  = commandCPVersion.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandCPStorageURI        = commandCPVersion.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandCPCachePath         = commandCPVersion.Flag("cache-path", "Location for cached blocks").String()
-	commandCPSourcePath        = commandCPVersion.Arg("source path", "source path inside the version index to list").String()
-	commandCPTargetPath        = commandCPVersion.Arg("target path", "target uri path").String()
-	commandCPTargetBlockSize   = commandCPVersion.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	commandCPMaxChunksPerBlock = commandCPVersion.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
+type DumpCmd struct {
+	VersionIndexPathOption
+	Details bool `name:"details" help:"Show details about assets"`
+}
 
-	commandInitRemoteStore           = kingpin.Command("init", "open/create a remote store and force rebuild the store index")
-	commandInitRemoteStoreStorageURI = commandInitRemoteStore.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandInitRemoteStoreHashing    = commandInitRemoteStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
-						Default("blake3").
-						Enum("meow", "blake2", "blake3")
+func (r *DumpCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := dumpVersionIndex(
+		r.VersionIndexPath,
+		r.Details)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
 
-	commandStats                 = kingpin.Command("stats", "Show fragmenation stats about a version index")
-	commandStatsStorageURI       = commandStats.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandStatsVersionIndexPath = commandStats.Flag("version-index-path", "Path to a version index file").Required().String()
-	commandStatsCachePath        = commandStats.Flag("cache-path", "Location for cached blocks").String()
+type LsCmd struct {
+	VersionIndexPathOption
+	Path string `name:"path" arg:"" optional:"" help:"Path inside the version index to list"`
+}
 
-	commandCreateVersionStoreIndex           = kingpin.Command("createVersionStoreIndex", "Create a store index optimized for a version index")
-	commandCreateVersionStoreIndexStorageURI = commandCreateVersionStoreIndex.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandCreateVersionStoreIndexSourcePath = commandCreateVersionStoreIndex.Flag("source-path", "Source file uri").Required().String()
-	commandCreateVersionStoreIndexPath       = commandCreateVersionStoreIndex.Flag("version-local-store-index-path", "Generate an store index optimized for this particular version").String()
+func (r *LsCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := lsVersionIndex(
+		r.VersionIndexPath,
+		&r.Path)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
 
-	commandCloneStore                             = kingpin.Command("cloneStore", "Clone all the data needed to cover a set of versions from one store into a new store")
-	commandCloneStoreSourceStoreURI               = commandCloneStore.Flag("source-storage-uri", "Source storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandCloneStoreTargetStoreURI               = commandCloneStore.Flag("target-storage-uri", "Target storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	ommandCloneStoreCachePath                     = commandCloneStore.Flag("cache-path", "Location for cached blocks").String()
-	commandCloneStoreTargetPath                   = commandCloneStore.Flag("target-path", "Target folder path").Required().String()
-	commandCloneStoreSourcePaths                  = commandCloneStore.Flag("source-paths", "File containing list of source longtail uris").Required().String()
-	commandCloneStoreSourceZipPaths               = commandCloneStore.Flag("source-zip-paths", "File containing list of source zip uris").Required().String()
-	commandCloneStoreTargetPaths                  = commandCloneStore.Flag("target-paths", "File containing list of target longtail uris").Required().String()
-	commandCloneStoreTargetBlockSize              = commandCloneStore.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	commandCloneStoreMaxChunksPerBlock            = commandCloneStore.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	commandCloneStoreNoRetainPermissions          = commandCloneStore.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
-	commandCloneStoreCreateVersionLocalStoreIndex = commandCloneStore.Flag("create-version-local-store-index", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").Bool()
-	commandCloneStoreHashing                      = commandCloneStore.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
-							Default("blake3").
-							Enum("meow", "blake2", "blake3")
-	commandCloneStoreCompression = commandCloneStore.Flag("compression-algorithm", "compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
-					Default("zstd").
-					Enum(
-			"none",
-			"brotli",
-			"brotli_min",
-			"brotli_max",
-			"brotli_text",
-			"brotli_text_min",
-			"brotli_text_max",
-			"lz4",
-			"zstd",
-			"zstd_min",
-			"zstd_max")
-	commandCloneStoreMinBlockUsagePercent = commandCloneStore.Flag("min-block-usage-percent", "Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all").Default("0").Uint32()
-)
+type CpCmd struct {
+	StorageURIOption
+	VersionIndexPathOption
+	CachePathOption
+	SourcePath string `name:"source path" arg:"" help:"Source path inside the version index to copy"`
+	TargetPath string `name:"target path" arg:"" help:"Target uri path"`
+}
+
+func (r *CpCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := cpVersionIndex(
+		r.StorageURI,
+		r.VersionIndexPath,
+		&r.CachePath,
+		r.SourcePath,
+		r.TargetPath)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+type InitRemoteStoreCmd struct {
+	StorageURIOption
+	HashingOption
+}
+
+func (r *InitRemoteStoreCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := initRemoteStore(
+		r.StorageURI,
+		&r.Hashing)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+type StatsCmd struct {
+	StorageURIOption
+	VersionIndexPathOption
+	CachePathOption
+}
+
+func (r *StatsCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := stats(
+		r.StorageURI,
+		r.VersionIndexPath,
+		&r.CachePath)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+type CreateVersionStoreIndexCmd struct {
+	StorageURIOption
+	SourceUriOption
+	VersionLocalStoreIndexPathOption
+}
+
+func (r *CreateVersionStoreIndexCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := createVersionStoreIndex(
+		r.StorageURI,
+		r.SourcePath,
+		r.VersionLocalStoreIndexPath)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+type CloneStoreCmd struct {
+	SourceStorageURI             string `name:"source-storage-uri" help:"Source storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
+	TargetStorageURI             string `name:"target-storage-uri" help:"Target storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
+	TargetPath                   string `name:"target-path" help:"Target folder path" required:""`
+	SourcePaths                  string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
+	SourceZipPaths               string `name:"source-zip-paths" help:"File containing list of source zip uris" required:""`
+	TargetPaths                  string `name:"target-paths" help:"File containing list of target longtail uris" required:""`
+	CreateVersionLocalStoreIndex bool   `name:"create-version-local-store-index" help:"Generate an store index optimized for the versions"`
+	CachePathOption
+	RetainPermissionsOption
+	MaxChunksPerBlockOption
+	TargetBlockSizeOption
+	HashingOption
+	CompressionOption
+	MinBlockUsagePercentOption
+}
+
+func (r *CloneStoreCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := cloneStore(
+		r.SourceStorageURI,
+		r.TargetStorageURI,
+		r.CachePath,
+		r.TargetPath,
+		r.SourcePaths,
+		r.SourceZipPaths,
+		r.TargetPaths,
+		r.TargetBlockSize,
+		r.MaxChunksPerBlock,
+		r.RetainPermissions,
+		r.CreateVersionLocalStoreIndex,
+		r.Hashing,
+		r.Compression,
+		r.MinBlockUsagePercent)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+var cli struct {
+	LogLevel                string                     `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
+	ShowStats               bool                       `name:"show-stats" help:"Output brief stats summary"`
+	ShowStoreStats          bool                       `name:"show-store-stats" help:"Output detailed stats for block stores"`
+	MemTrace                bool                       `name:"mem-trace" help:"Output summary memory statistics from longtail"`
+	MemTraceDetailed        bool                       `name:"mem-trace-detailed" help:"Output detailed memory statistics from longtail"`
+	MemTraceCSV             string                     `name:"mem-trace-csv" help:"Output path for detailed memory statistics from longtail in csv format"`
+	WorkerCount             int                        `name:"worker-count" help:"Limit number of workers created, defaults to match number of logical CPUs (zero for default count)" default:"0"`
+	Upsync                  UpsyncCmd                  `cmd:"" name:"upsync" help:"Upload a folder"`
+	Downsync                DownsyncCmd                `cmd:"" name:"downsync" help:"Download a folder"`
+	Get                     GetCmd                     `cmd:"" name:"get" help:"Download a folder using a get-config"`
+	Validate                ValidateCmd                `cmd:"" name:"validate" help:"Validate a version index against a content store"`
+	PrintVersionIndex       PrintVersionIndexCmd       `cmd:"" name:"printVersionIndex" help:"Print info about a version index"`
+	PrintStoreIndex         PrintStoreIndexCmd         `cmd:"" name:"printStoreIndex" help:"Print info about a store index"`
+	Dump                    DumpCmd                    `cmd:"" name:"dump" help:"Dump the asset paths inside a version index"`
+	Ls                      LsCmd                      `cmd:"" name:"ls" help:"List the content of a path inside a version index"`
+	Cp                      CpCmd                      `cmd:"" name:"cp" help:"Copies a file from inside a version index"`
+	InitRemoteStore         InitRemoteStoreCmd         `cmd:"" name:"init" help:"Open/create a remote store and force rebuild the store index"`
+	Stats                   StatsCmd                   `cmd:"" name:"stats" help:"Show fragmenation stats about a version index"`
+	CreateVersionStoreIndex CreateVersionStoreIndexCmd `cmd:"" name:"createVersionStoreIndex" help:"Create a store index optimized for a version index"`
+	CloneStore              CloneStoreCmd              `cmd:"" name:"cloneStore" help:"Clone all the data needed to cover a set of versions from one store into a new store"`
+}
 
 func main() {
 	executionStartTime := time.Now()
@@ -2912,152 +3046,4 @@ func main() {
 	context.TimeStats = append([]timeStat{{"Init", initTime}}, context.TimeStats...)
 
 	ctx.FatalIfErrorf(err)
-	return
-	/*
-		kingpin.HelpFlag.Short('h')
-		kingpin.CommandLine.DefaultEnvars()
-		kingpin.Parse()
-
-		longtailLogLevel, err := parseLevel(*logLevel)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		longtaillib.SetLogger(&loggerData{})
-		defer longtaillib.SetLogger(nil)
-		longtaillib.SetLogLevel(longtailLogLevel)
-
-		longtaillib.SetAssert(&assertData{})
-		defer longtaillib.SetAssert(nil)
-
-		p := kingpin.Parse()
-
-		if *memTrace || *memTraceDetailed || *memTraceCSV != "" {
-			longtaillib.EnableMemtrace()
-			defer func() {
-				memTraceLogLevel := longtaillib.MemTraceSummary
-				if *memTraceDetailed {
-					memTraceLogLevel = longtaillib.MemTraceDetailed
-				}
-				if *memTraceCSV != "" {
-					longtaillib.MemTraceDumpStats(*memTraceCSV)
-				}
-				memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
-				memTraceLines := strings.Split(memTraceLog, "\n")
-				for _, l := range memTraceLines {
-					if l == "" {
-						continue
-					}
-					log.Printf("[MEM] %s", l)
-				}
-				longtaillib.DisableMemtrace()
-			}()
-		}
-
-		if *workerCount != 0 {
-			numWorkerCount = *workerCount
-		}
-
-		initTime := time.Since(initStartTime)
-
-		switch p {
-		case commandUpsync.FullCommand():
-			commandStoreStat, commandTimeStat, err = upSyncVersion(
-				*commandUpsyncStorageURI,
-				*commandUpsyncSourcePath,
-				commandUpsyncSourceIndexPath,
-				*commandUpsyncTargetPath,
-				*commandUpsyncTargetChunkSize,
-				*commandUpsyncTargetBlockSize,
-				*commandUpsyncMaxChunksPerBlock,
-				commandUpsyncCompression,
-				commandUpsyncHashing,
-				includeFilterRegEx,
-				excludeFilterRegEx,
-				*commandUpsyncMinBlockUsagePercent,
-				commandUpsyncVersionLocalStoreIndexPath,
-				commandUpsynceGetConfigPath)
-		case commandDownsync.FullCommand():
-			commandStoreStat, commandTimeStat, err = downSyncVersion(
-				*commandDownsyncStorageURI,
-				*commandDownsyncSourcePath,
-				commandDownsyncTargetPath,
-				commandDownsyncTargetIndexPath,
-				commandDownsyncCachePath,
-				!(*commandDownsyncNoRetainPermissions),
-				*commandDownsyncValidate,
-				commandDownsyncVersionLocalStoreIndexPath,
-				includeFilterRegEx,
-				excludeFilterRegEx)
-		case commandGet.FullCommand():
-			commandStoreStat, commandTimeStat, err = getVersion(
-				*commandGetConfigUriURI,
-				commandGetTargetPath,
-				commandGetTargetIndexPath,
-				commandGetCachePath,
-				!(*commandGetNoRetainPermissions),
-				*commandGetValidate,
-				includeFilterRegEx,
-				excludeFilterRegEx)
-		case commandValidate.FullCommand():
-			commandStoreStat, commandTimeStat, err = validateVersion(
-				*commandValidateStorageURI,
-				*commandValidateVersionIndexPath,
-				*commandValidateVersionTargetBlockSize,
-				*commandValidateVersionMaxChunksPerBlock)
-		case commandPrintVersionIndex.FullCommand():
-			commandStoreStat, commandTimeStat, err = showVersionIndex(*commandPrintVersionIndexPath, *commandPrintVersionIndexCompact)
-		case commandPrintStoreIndex.FullCommand():
-			commandStoreStat, commandTimeStat, err = showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
-		case commandDump.FullCommand():
-			commandStoreStat, commandTimeStat, err = dumpVersionIndex(*commandDumpVersionIndexPath, *commandDumpDetails)
-		case commandLSVersion.FullCommand():
-			commandStoreStat, commandTimeStat, err = lsVersionIndex(*commandLSVersionIndexPath, commandLSVersionDir)
-		case commandCPVersion.FullCommand():
-			commandStoreStat, commandTimeStat, err = cpVersionIndex(
-				*commandCPStorageURI,
-				*commandCPVersionIndexPath,
-				commandCPCachePath,
-				*commandCPTargetBlockSize,
-				*commandCPMaxChunksPerBlock,
-				*commandCPSourcePath,
-				*commandCPTargetPath)
-		case commandInitRemoteStore.FullCommand():
-			commandStoreStat, commandTimeStat, err = initRemoteStore(
-				*commandInitRemoteStoreStorageURI,
-				commandInitRemoteStoreHashing)
-		case commandStats.FullCommand():
-			commandStoreStat, commandTimeStat, err = stats(
-				*commandStatsStorageURI,
-				*commandStatsVersionIndexPath,
-				commandStatsCachePath)
-		case commandCreateVersionStoreIndex.FullCommand():
-			commandStoreStat, commandTimeStat, err = createVersionStoreIndex(
-				*commandCreateVersionStoreIndexStorageURI,
-				*commandCreateVersionStoreIndexSourcePath,
-				*commandCreateVersionStoreIndexPath)
-		case commandCloneStore.FullCommand():
-			commandStoreStat, commandTimeStat, err = cloneStore(
-				*commandCloneStoreSourceStoreURI,
-				*commandCloneStoreTargetStoreURI,
-				*ommandCloneStoreCachePath,
-				*commandCloneStoreTargetPath,
-				*commandCloneStoreSourcePaths,
-				*commandCloneStoreSourceZipPaths,
-				*commandCloneStoreTargetPaths,
-				*commandCloneStoreTargetBlockSize,
-				*commandCloneStoreMaxChunksPerBlock,
-				!(*commandCloneStoreNoRetainPermissions),
-				*commandCloneStoreCreateVersionLocalStoreIndex,
-				*commandCloneStoreHashing,
-				*commandCloneStoreCompression,
-				*commandCloneStoreMinBlockUsagePercent)
-		}
-
-		commandTimeStat = append([]timeStat{{"Init", initTime}}, commandTimeStat...)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-	*/
 }

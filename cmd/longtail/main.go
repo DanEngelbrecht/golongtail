@@ -2614,8 +2614,39 @@ type ExcludeRegExOption struct {
 	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **"`
 }
 
+type StorageURIOption struct {
+	StorageURI string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
+}
+
+type CachePathOption struct {
+	CachePath string `name:"cache-path" help:"Location for cached blocks"`
+}
+
+type RetainPermissionsOption struct {
+	RetainPermissions bool `name:"retain-permissions" negatable:"" help:"Set permission on file/directories from source" default:"true"`
+}
+
+type TargetPathOption struct {
+	TargetPath string `name:"target-path" help:"Target folder path"`
+}
+
+type TargetIndexUriOption struct {
+	TargetIndexPath string `name:"target-index-path" help:"Optional pre-computed index of target-path"`
+}
+
+type SourceUriOption struct {
+	SourcePath string `name:"source-path" help:"Source file uri" required:""`
+}
+
+type ValidateTargetOption struct {
+	Validate bool `name:"validate" help:"Validate target path once completed"`
+}
+
+type VersionLocalStoreIndexPathOption struct {
+	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index"`
+}
+
 type UpsyncCmd struct {
-	StorageURI                 string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
 	TargetChunkSize            uint32 `name:"target-chunk-size" help:"Target chunk size" default:"32768"`
 	TargetBlockSize            uint32 `name:"target-block-size" help:"Target block size" default:"8388608"`
 	MaxChunksPerBlock          uint32 `name:"max-chunks-per-block" help:"Max chunks per block" default:"1024"`
@@ -2625,6 +2656,7 @@ type UpsyncCmd struct {
 	MinBlockUsagePercent       uint32 `name:"min-block-usage-percent" help:"Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all" default:"0"`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Generate an store index optimized for this particular version"`
 	GetConfigPath              string `name:"get-config-path" help:"File uri for json formatted get-config file"`
+	StorageURIOption
 	CompressionOption
 	HashingOption
 	IncludeRegExOption
@@ -2652,72 +2684,78 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 	return err
 }
 
+type DownsyncCmd struct {
+	TargetPathOption
+	TargetIndexUriOption
+	SourceUriOption
+	ValidateTargetOption
+	VersionLocalStoreIndexPathOption
+	StorageURIOption
+	CachePathOption
+	RetainPermissionsOption
+	IncludeRegExOption
+	ExcludeRegExOption
+}
+
+func (r *DownsyncCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := downSyncVersion(
+		r.StorageURI,
+		r.SourcePath,
+		&r.TargetPath,
+		&r.TargetIndexPath,
+		&r.CachePath,
+		r.RetainPermissions,
+		r.Validate,
+		&r.VersionLocalStoreIndexPath,
+		&r.IncludeFilterRegEx,
+		&r.ExcludeFilterRegEx)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+type GetCmd struct {
+	GetConfigURI string `name:"get-config-path" help:"File uri for json formatted get-config file" required:""`
+	TargetPathOption
+	TargetIndexUriOption
+	ValidateTargetOption
+	VersionLocalStoreIndexPathOption
+	StorageURIOption
+	CachePathOption
+	RetainPermissionsOption
+	IncludeRegExOption
+	ExcludeRegExOption
+}
+
+func (r *GetCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := getVersion(
+		r.GetConfigURI,
+		&r.TargetPath,
+		&r.TargetIndexPath,
+		&r.CachePath,
+		r.RetainPermissions,
+		r.Validate,
+		&r.IncludeFilterRegEx,
+		&r.ExcludeFilterRegEx)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
 var cli struct {
-	LogLevel       string    `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
-	ShowStats      bool      `name:"show-stats" help:"Output brief stats summary"`
-	ShowStoreStats bool      `name:"show-store-stats" help:"Output detailed stats for block stores"`
-	Upsync         UpsyncCmd `cmd:"upsync" help:"Upload a folder"`
+	LogLevel         string      `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
+	ShowStats        bool        `name:"show-stats" help:"Output brief stats summary"`
+	ShowStoreStats   bool        `name:"show-store-stats" help:"Output detailed stats for block stores"`
+	MemTrace         bool        `name:"mem-trace" help:"Output summary memory statistics from longtail"`
+	MemTraceDetailed bool        `name:"mem-trace-detailed" help:"Output detailed memory statistics from longtail"`
+	MemTraceCSV      string      `name:"mem-trace-csv" help:"Output path for detailed memory statistics from longtail in csv format"`
+	WorkerCount      int         `name:"worker-count" help:"Limit number of workers created, defaults to match number of logical CPUs (zero for default count)" default:"0"`
+	Upsync           UpsyncCmd   `cmd:"upsync" help:"Upload a folder"`
+	Downsync         DownsyncCmd `cmd:"downsync" help:"Download a folder"`
+	Get              GetCmd      `cmd:"get" help:"Download a folder using a get-config"`
 }
 
 var (
-	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
-	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
-	showStoreStats     = kingpin.Flag("show-store-stats", "Output detailed stats for block stores").Bool()
-	includeFilterRegEx = kingpin.Flag("include-filter-regex", "Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
-	excludeFilterRegEx = kingpin.Flag("exclude-filter-regex", "Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **").String()
-	memTrace           = kingpin.Flag("mem-trace", "Output summary memory statistics from longtail").Bool()
-	memTraceDetailed   = kingpin.Flag("mem-trace-detailed", "Output detailed memory statistics from longtail").Bool()
-	memTraceCSV        = kingpin.Flag("mem-trace-csv", "Output path for detailed memory statistics from longtail in csv format").String()
-	workerCount        = kingpin.Flag("worker-count", "Limit number of workers created, defaults to match number of logical CPUs").Int()
-
-	commandUpsync           = kingpin.Command("upsync", "Upload a folder")
-	commandUpsyncStorageURI = commandUpsync.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandUpsyncHashing    = commandUpsync.Flag("hash-algorithm", "upsync hash algorithm: blake2, blake3, meow").
-				Default("blake3").
-				Enum("meow", "blake2", "blake3")
-	commandUpsyncTargetChunkSize   = commandUpsync.Flag("target-chunk-size", "Target chunk size").Default("32768").Uint32()
-	commandUpsyncTargetBlockSize   = commandUpsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	commandUpsyncMaxChunksPerBlock = commandUpsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
-	commandUpsyncSourcePath        = commandUpsync.Flag("source-path", "Source folder path").Required().String()
-	commandUpsyncSourceIndexPath   = commandUpsync.Flag("source-index-path", "Optional pre-computed index of source-path").String()
-	commandUpsyncTargetPath        = commandUpsync.Flag("target-path", "Target file uri").Required().String()
-	commandUpsyncCompression       = commandUpsync.Flag("compression-algorithm", "compression algorithm: none, brotli[_min|_max], brotli_text[_min|_max], lz4, ztd[_min|_max]").
-					Default("zstd").
-					Enum(
-			"none",
-			"brotli",
-			"brotli_min",
-			"brotli_max",
-			"brotli_text",
-			"brotli_text_min",
-			"brotli_text_max",
-			"lz4",
-			"zstd",
-			"zstd_min",
-			"zstd_max")
-	commandUpsyncMinBlockUsagePercent       = commandUpsync.Flag("min-block-usage-percent", "Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all").Default("0").Uint32()
-	commandUpsyncVersionLocalStoreIndexPath = commandUpsync.Flag("version-local-store-index-path", "Generate an store index optimized for this particular version").String()
-	commandUpsynceGetConfigPath             = commandUpsync.Flag("get-config-path", "File uri for json formatted get-config file").String()
-
-	commandDownsync                           = kingpin.Command("downsync", "Download a folder")
-	commandDownsyncStorageURI                 = commandDownsync.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
-	commandDownsyncCachePath                  = commandDownsync.Flag("cache-path", "Location for cached blocks").String()
-	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").String()
-	commandDownsyncTargetIndexPath            = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	commandDownsyncSourcePath                 = commandDownsync.Flag("source-path", "Source file uri").Required().String()
-	commandDownsyncNoRetainPermissions        = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
-	commandDownsyncValidate                   = commandDownsync.Flag("validate", "Validate target path once completed").Bool()
-	commandDownsyncVersionLocalStoreIndexPath = commandDownsync.Flag("version-local-store-index-path", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").String()
-
-	commandGet                           = kingpin.Command("get", "Download a folder using a get-config")
-	commandGetConfigUriURI               = commandGet.Flag("get-config-path", "File uri for json formatted get-config file").Required().String()
-	commandGetTargetPath                 = commandGet.Flag("target-path", "Target folder path").String()
-	commandGetTargetIndexPath            = commandGet.Flag("target-index-path", "Optional pre-computed index of target-path").String()
-	commandGetCachePath                  = commandGet.Flag("cache-path", "Location for cached blocks").String()
-	commandGetNoRetainPermissions        = commandGet.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
-	commandGetValidate                   = commandGet.Flag("validate", "Validate target path once completed").Bool()
-	commandGetVersionLocalStoreIndexPath = commandGet.Flag("version-local-store-index-path", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").String()
-
 	commandValidate                         = kingpin.Command("validate", "Validate a version index against a content store")
 	commandValidateStorageURI               = commandValidate.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandValidateVersionIndexPath         = commandValidate.Flag("version-index-path", "Path to a version index file").Required().String()
@@ -2841,32 +2879,32 @@ func main() {
 	longtaillib.SetAssert(&assertData{})
 	defer longtaillib.SetAssert(nil)
 
-	if *workerCount != 0 {
-		numWorkerCount = *workerCount
+	if cli.WorkerCount != 0 {
+		numWorkerCount = cli.WorkerCount
 	}
-	/*
-		if cli.MemTrace || cli.MemTraceDetailed || cli.MemTraceCSV != "" {
-			longtaillib.EnableMemtrace()
-			defer func() {
-				memTraceLogLevel := longtaillib.MemTraceSummary
-				if *memTraceDetailed {
-					memTraceLogLevel = longtaillib.MemTraceDetailed
+
+	if cli.MemTrace || cli.MemTraceDetailed || cli.MemTraceCSV != "" {
+		longtaillib.EnableMemtrace()
+		defer func() {
+			memTraceLogLevel := longtaillib.MemTraceSummary
+			if cli.MemTraceDetailed {
+				memTraceLogLevel = longtaillib.MemTraceDetailed
+			}
+			if cli.MemTraceCSV != "" {
+				longtaillib.MemTraceDumpStats(cli.MemTraceCSV)
+			}
+			memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
+			memTraceLines := strings.Split(memTraceLog, "\n")
+			for _, l := range memTraceLines {
+				if l == "" {
+					continue
 				}
-				if *memTraceCSV != "" {
-					longtaillib.MemTraceDumpStats(*memTraceCSV)
-				}
-				memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
-				memTraceLines := strings.Split(memTraceLog, "\n")
-				for _, l := range memTraceLines {
-					if l == "" {
-						continue
-					}
-					log.Printf("[MEM] %s", l)
-				}
-				longtaillib.DisableMemtrace()
-			}()
-		}
-	*/
+				log.Printf("[MEM] %s", l)
+			}
+			longtaillib.DisableMemtrace()
+		}()
+	}
+
 	initTime := time.Since(initStartTime)
 
 	err = ctx.Run(context)

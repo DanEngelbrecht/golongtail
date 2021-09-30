@@ -1350,7 +1350,7 @@ func showVersionIndex(versionIndexPath string, compact bool) ([]storeStat, []tim
 	return storeStats, timeStats, nil
 }
 
-func showStoreIndex(storeIndexPath string, compact bool) ([]storeStat, []timeStat, error) {
+func showStoreIndex(storeIndexPath string, compact bool, details bool) ([]storeStat, []timeStat, error) {
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
 
@@ -1368,18 +1368,46 @@ func showStoreIndex(storeIndexPath string, compact bool) ([]storeStat, []timeSta
 	readStoreIndexTime := time.Since(readStoreIndexStartTime)
 	timeStats = append(timeStats, timeStat{"Read store index", readStoreIndexTime})
 
+	storedChunksSizes := uint64(0)
+	uniqueStoredChunksSizes := uint64(0)
+	if details {
+		getChunkSizesStartTime := time.Now()
+		uniqueChunks := make(map[uint64]uint32)
+		chunkHashes := storeIndex.GetChunkHashes()
+		chunkSizes := storeIndex.GetChunkSizes()
+		for i, chunkHash := range chunkHashes {
+			uniqueChunks[chunkHash] = chunkSizes[i]
+			storedChunksSizes += uint64(chunkSizes[i])
+		}
+		for _, size := range uniqueChunks {
+			uniqueStoredChunksSizes += uint64(size)
+		}
+		getChunkSizesTime := time.Since(getChunkSizesStartTime)
+		timeStats = append(timeStats, timeStat{"Get chunk sizes", getChunkSizesTime})
+	}
+
 	if compact {
-		fmt.Printf("%s\t%d\t%s\t%d\t%d\n",
+		fmt.Printf("%s\t%d\t%s\t%d\t%d",
 			storeIndexPath,
 			storeIndex.GetVersion(),
 			hashIdentifierToString(storeIndex.GetHashIdentifier()),
 			storeIndex.GetBlockCount(),
 			storeIndex.GetChunkCount())
+		if details {
+			fmt.Printf("\t%d\t%d",
+				storedChunksSizes,
+				uniqueStoredChunksSizes)
+		}
+		fmt.Printf("\n")
 	} else {
 		fmt.Printf("Version:             %d\n", storeIndex.GetVersion())
 		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(storeIndex.GetHashIdentifier()))
 		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), byteCountDecimal(uint64(storeIndex.GetBlockCount())))
 		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), byteCountDecimal(uint64(storeIndex.GetChunkCount())))
+		if details {
+			fmt.Printf("Data size:           %d   (%s)\n", storedChunksSizes, byteCountBinary(storedChunksSizes))
+			fmt.Printf("Unique Data size:    %d   (%s)\n", uniqueStoredChunksSizes, byteCountBinary(uniqueStoredChunksSizes))
+		}
 	}
 
 	return storeStats, timeStats, nil
@@ -2803,12 +2831,14 @@ func (r *PrintVersionIndexCmd) Run(ctx *Context) error {
 type PrintStoreIndexCmd struct {
 	StoreIndexPathOption
 	CompactOption
+	Details bool `name:"details" help:"Show details about data sizes"`
 }
 
 func (r *PrintStoreIndexCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := showStoreIndex(
 		r.StoreIndexPath,
-		r.Compact)
+		r.Compact,
+		r.Details)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

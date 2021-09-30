@@ -19,6 +19,7 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+	"github.com/alecthomas/kong"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
@@ -2592,6 +2593,72 @@ func cloneStore(
 	return storeStats, timeStats, nil
 }
 
+type Context struct {
+	StoreStats []storeStat
+	TimeStats  []timeStat
+}
+
+type CompressionOption struct {
+	Compression string `name:"compression-algorithm" help:"Compression algorithm [none brotli brotli_min brotli_max brotli_text brotli_text_min brotli_text_max lz4 zstd zstd_min zstd_max]" enum:"none,brotli,brotli_min,brotli_max,brotli_text,brotli_text_min,brotli_text_max,lz4,zstd,zstd_min,zstd_max" default:"zstd"`
+}
+
+type HashingOption struct {
+	Hashing string `name:"hash-algorithm" help:"Hash algorithm [meow blake2 blake3]" enum:"meow,blake2,blake3" default:"blake3"`
+}
+
+type IncludeRegExOption struct {
+	IncludeFilterRegEx string `name:"include-filter-regex" help:"Optional include regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **"`
+}
+
+type ExcludeRegExOption struct {
+	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --source-path on upsync and --target-path on downsync. Separate regexes with **"`
+}
+
+type UpsyncCmd struct {
+	StorageURI                 string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
+	TargetChunkSize            uint32 `name:"target-chunk-size" help:"Target chunk size" default:"32768"`
+	TargetBlockSize            uint32 `name:"target-block-size" help:"Target block size" default:"8388608"`
+	MaxChunksPerBlock          uint32 `name:"max-chunks-per-block" help:"Max chunks per block" default:"1024"`
+	SourcePath                 string `name:"source-path" help:"Source folder path" required:""`
+	SourceIndexPath            string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
+	TargetPath                 string `name:"target-path" help:"Target file uri" required:""`
+	MinBlockUsagePercent       uint32 `name:"min-block-usage-percent" help:"Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all" default:"0"`
+	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Generate an store index optimized for this particular version"`
+	GetConfigPath              string `name:"get-config-path" help:"File uri for json formatted get-config file"`
+	CompressionOption
+	HashingOption
+	IncludeRegExOption
+	ExcludeRegExOption
+}
+
+func (r *UpsyncCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := upSyncVersion(
+		r.StorageURI,
+		r.SourcePath,
+		&r.SourceIndexPath,
+		r.TargetPath,
+		r.TargetChunkSize,
+		r.TargetBlockSize,
+		r.MaxChunksPerBlock,
+		&r.Compression,
+		&r.Hashing,
+		&r.IncludeFilterRegEx,
+		&r.ExcludeFilterRegEx,
+		r.MinBlockUsagePercent,
+		&r.VersionLocalStoreIndexPath,
+		&r.GetConfigPath)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
+var cli struct {
+	LogLevel       string    `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
+	ShowStats      bool      `name:"show-stats" help:"Output brief stats summary"`
+	ShowStoreStats bool      `name:"show-store-stats" help:"Output detailed stats for block stores"`
+	Upsync         UpsyncCmd `cmd:"upsync" help:"Upload a folder"`
+}
+
 var (
 	logLevel           = kingpin.Flag("log-level", "Log level").Default("warn").Enum("debug", "info", "warn", "error")
 	showStats          = kingpin.Flag("show-stats", "Output brief stats summary").Bool()
@@ -2734,38 +2801,35 @@ func main() {
 	executionStartTime := time.Now()
 	initStartTime := executionStartTime
 
-	commandStoreStat := []storeStat{}
-	commandTimeStat := []timeStat{}
+	context := &Context{}
 
 	defer func() {
 		executionTime := time.Since(executionStartTime)
-		commandTimeStat = append(commandTimeStat, timeStat{"Execution", executionTime})
+		context.TimeStats = append(context.TimeStats, timeStat{"Execution", executionTime})
 
-		if *showStoreStats {
-			for _, s := range commandStoreStat {
+		if cli.ShowStoreStats {
+			for _, s := range context.StoreStats {
 				printStats(s.name, s.stats)
 			}
 		}
 
-		if *showStats {
+		if cli.ShowStats {
 			maxLen := 0
-			for _, s := range commandTimeStat {
+			for _, s := range context.TimeStats {
 				if len(s.name) > maxLen {
 					maxLen = len(s.name)
 				}
 			}
-			for _, s := range commandTimeStat {
+			for _, s := range context.TimeStats {
 				name := fmt.Sprintf("%s:", s.name)
 				log.Printf("%-*s %s", maxLen+1, name, s.dur)
 			}
 		}
 	}()
 
-	kingpin.HelpFlag.Short('h')
-	kingpin.CommandLine.DefaultEnvars()
-	kingpin.Parse()
+	ctx := kong.Parse(&cli)
 
-	longtailLogLevel, err := parseLevel(*logLevel)
+	longtailLogLevel, err := parseLevel(cli.LogLevel)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -2777,133 +2841,185 @@ func main() {
 	longtaillib.SetAssert(&assertData{})
 	defer longtaillib.SetAssert(nil)
 
-	p := kingpin.Parse()
-
-	if *memTrace || *memTraceDetailed || *memTraceCSV != "" {
-		longtaillib.EnableMemtrace()
-		defer func() {
-			memTraceLogLevel := longtaillib.MemTraceSummary
-			if *memTraceDetailed {
-				memTraceLogLevel = longtaillib.MemTraceDetailed
-			}
-			if *memTraceCSV != "" {
-				longtaillib.MemTraceDumpStats(*memTraceCSV)
-			}
-			memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
-			memTraceLines := strings.Split(memTraceLog, "\n")
-			for _, l := range memTraceLines {
-				if l == "" {
-					continue
-				}
-				log.Printf("[MEM] %s", l)
-			}
-			longtaillib.DisableMemtrace()
-		}()
-	}
-
 	if *workerCount != 0 {
 		numWorkerCount = *workerCount
 	}
-
+	/*
+		if cli.MemTrace || cli.MemTraceDetailed || cli.MemTraceCSV != "" {
+			longtaillib.EnableMemtrace()
+			defer func() {
+				memTraceLogLevel := longtaillib.MemTraceSummary
+				if *memTraceDetailed {
+					memTraceLogLevel = longtaillib.MemTraceDetailed
+				}
+				if *memTraceCSV != "" {
+					longtaillib.MemTraceDumpStats(*memTraceCSV)
+				}
+				memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
+				memTraceLines := strings.Split(memTraceLog, "\n")
+				for _, l := range memTraceLines {
+					if l == "" {
+						continue
+					}
+					log.Printf("[MEM] %s", l)
+				}
+				longtaillib.DisableMemtrace()
+			}()
+		}
+	*/
 	initTime := time.Since(initStartTime)
 
-	switch p {
-	case commandUpsync.FullCommand():
-		commandStoreStat, commandTimeStat, err = upSyncVersion(
-			*commandUpsyncStorageURI,
-			*commandUpsyncSourcePath,
-			commandUpsyncSourceIndexPath,
-			*commandUpsyncTargetPath,
-			*commandUpsyncTargetChunkSize,
-			*commandUpsyncTargetBlockSize,
-			*commandUpsyncMaxChunksPerBlock,
-			commandUpsyncCompression,
-			commandUpsyncHashing,
-			includeFilterRegEx,
-			excludeFilterRegEx,
-			*commandUpsyncMinBlockUsagePercent,
-			commandUpsyncVersionLocalStoreIndexPath,
-			commandUpsynceGetConfigPath)
-	case commandDownsync.FullCommand():
-		commandStoreStat, commandTimeStat, err = downSyncVersion(
-			*commandDownsyncStorageURI,
-			*commandDownsyncSourcePath,
-			commandDownsyncTargetPath,
-			commandDownsyncTargetIndexPath,
-			commandDownsyncCachePath,
-			!(*commandDownsyncNoRetainPermissions),
-			*commandDownsyncValidate,
-			commandDownsyncVersionLocalStoreIndexPath,
-			includeFilterRegEx,
-			excludeFilterRegEx)
-	case commandGet.FullCommand():
-		commandStoreStat, commandTimeStat, err = getVersion(
-			*commandGetConfigUriURI,
-			commandGetTargetPath,
-			commandGetTargetIndexPath,
-			commandGetCachePath,
-			!(*commandGetNoRetainPermissions),
-			*commandGetValidate,
-			includeFilterRegEx,
-			excludeFilterRegEx)
-	case commandValidate.FullCommand():
-		commandStoreStat, commandTimeStat, err = validateVersion(
-			*commandValidateStorageURI,
-			*commandValidateVersionIndexPath,
-			*commandValidateVersionTargetBlockSize,
-			*commandValidateVersionMaxChunksPerBlock)
-	case commandPrintVersionIndex.FullCommand():
-		commandStoreStat, commandTimeStat, err = showVersionIndex(*commandPrintVersionIndexPath, *commandPrintVersionIndexCompact)
-	case commandPrintStoreIndex.FullCommand():
-		commandStoreStat, commandTimeStat, err = showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
-	case commandDump.FullCommand():
-		commandStoreStat, commandTimeStat, err = dumpVersionIndex(*commandDumpVersionIndexPath, *commandDumpDetails)
-	case commandLSVersion.FullCommand():
-		commandStoreStat, commandTimeStat, err = lsVersionIndex(*commandLSVersionIndexPath, commandLSVersionDir)
-	case commandCPVersion.FullCommand():
-		commandStoreStat, commandTimeStat, err = cpVersionIndex(
-			*commandCPStorageURI,
-			*commandCPVersionIndexPath,
-			commandCPCachePath,
-			*commandCPTargetBlockSize,
-			*commandCPMaxChunksPerBlock,
-			*commandCPSourcePath,
-			*commandCPTargetPath)
-	case commandInitRemoteStore.FullCommand():
-		commandStoreStat, commandTimeStat, err = initRemoteStore(
-			*commandInitRemoteStoreStorageURI,
-			commandInitRemoteStoreHashing)
-	case commandStats.FullCommand():
-		commandStoreStat, commandTimeStat, err = stats(
-			*commandStatsStorageURI,
-			*commandStatsVersionIndexPath,
-			commandStatsCachePath)
-	case commandCreateVersionStoreIndex.FullCommand():
-		commandStoreStat, commandTimeStat, err = createVersionStoreIndex(
-			*commandCreateVersionStoreIndexStorageURI,
-			*commandCreateVersionStoreIndexSourcePath,
-			*commandCreateVersionStoreIndexPath)
-	case commandCloneStore.FullCommand():
-		commandStoreStat, commandTimeStat, err = cloneStore(
-			*commandCloneStoreSourceStoreURI,
-			*commandCloneStoreTargetStoreURI,
-			*ommandCloneStoreCachePath,
-			*commandCloneStoreTargetPath,
-			*commandCloneStoreSourcePaths,
-			*commandCloneStoreSourceZipPaths,
-			*commandCloneStoreTargetPaths,
-			*commandCloneStoreTargetBlockSize,
-			*commandCloneStoreMaxChunksPerBlock,
-			!(*commandCloneStoreNoRetainPermissions),
-			*commandCloneStoreCreateVersionLocalStoreIndex,
-			*commandCloneStoreHashing,
-			*commandCloneStoreCompression,
-			*commandCloneStoreMinBlockUsagePercent)
-	}
+	err = ctx.Run(context)
 
-	commandTimeStat = append([]timeStat{{"Init", initTime}}, commandTimeStat...)
+	context.TimeStats = append([]timeStat{{"Init", initTime}}, context.TimeStats...)
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	ctx.FatalIfErrorf(err)
+	return
+	/*
+		kingpin.HelpFlag.Short('h')
+		kingpin.CommandLine.DefaultEnvars()
+		kingpin.Parse()
+
+		longtailLogLevel, err := parseLevel(*logLevel)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		longtaillib.SetLogger(&loggerData{})
+		defer longtaillib.SetLogger(nil)
+		longtaillib.SetLogLevel(longtailLogLevel)
+
+		longtaillib.SetAssert(&assertData{})
+		defer longtaillib.SetAssert(nil)
+
+		p := kingpin.Parse()
+
+		if *memTrace || *memTraceDetailed || *memTraceCSV != "" {
+			longtaillib.EnableMemtrace()
+			defer func() {
+				memTraceLogLevel := longtaillib.MemTraceSummary
+				if *memTraceDetailed {
+					memTraceLogLevel = longtaillib.MemTraceDetailed
+				}
+				if *memTraceCSV != "" {
+					longtaillib.MemTraceDumpStats(*memTraceCSV)
+				}
+				memTraceLog := longtaillib.GetMemTraceStats(memTraceLogLevel)
+				memTraceLines := strings.Split(memTraceLog, "\n")
+				for _, l := range memTraceLines {
+					if l == "" {
+						continue
+					}
+					log.Printf("[MEM] %s", l)
+				}
+				longtaillib.DisableMemtrace()
+			}()
+		}
+
+		if *workerCount != 0 {
+			numWorkerCount = *workerCount
+		}
+
+		initTime := time.Since(initStartTime)
+
+		switch p {
+		case commandUpsync.FullCommand():
+			commandStoreStat, commandTimeStat, err = upSyncVersion(
+				*commandUpsyncStorageURI,
+				*commandUpsyncSourcePath,
+				commandUpsyncSourceIndexPath,
+				*commandUpsyncTargetPath,
+				*commandUpsyncTargetChunkSize,
+				*commandUpsyncTargetBlockSize,
+				*commandUpsyncMaxChunksPerBlock,
+				commandUpsyncCompression,
+				commandUpsyncHashing,
+				includeFilterRegEx,
+				excludeFilterRegEx,
+				*commandUpsyncMinBlockUsagePercent,
+				commandUpsyncVersionLocalStoreIndexPath,
+				commandUpsynceGetConfigPath)
+		case commandDownsync.FullCommand():
+			commandStoreStat, commandTimeStat, err = downSyncVersion(
+				*commandDownsyncStorageURI,
+				*commandDownsyncSourcePath,
+				commandDownsyncTargetPath,
+				commandDownsyncTargetIndexPath,
+				commandDownsyncCachePath,
+				!(*commandDownsyncNoRetainPermissions),
+				*commandDownsyncValidate,
+				commandDownsyncVersionLocalStoreIndexPath,
+				includeFilterRegEx,
+				excludeFilterRegEx)
+		case commandGet.FullCommand():
+			commandStoreStat, commandTimeStat, err = getVersion(
+				*commandGetConfigUriURI,
+				commandGetTargetPath,
+				commandGetTargetIndexPath,
+				commandGetCachePath,
+				!(*commandGetNoRetainPermissions),
+				*commandGetValidate,
+				includeFilterRegEx,
+				excludeFilterRegEx)
+		case commandValidate.FullCommand():
+			commandStoreStat, commandTimeStat, err = validateVersion(
+				*commandValidateStorageURI,
+				*commandValidateVersionIndexPath,
+				*commandValidateVersionTargetBlockSize,
+				*commandValidateVersionMaxChunksPerBlock)
+		case commandPrintVersionIndex.FullCommand():
+			commandStoreStat, commandTimeStat, err = showVersionIndex(*commandPrintVersionIndexPath, *commandPrintVersionIndexCompact)
+		case commandPrintStoreIndex.FullCommand():
+			commandStoreStat, commandTimeStat, err = showStoreIndex(*commandPrintStoreIndexPath, *commandPrintStoreIndexCompact)
+		case commandDump.FullCommand():
+			commandStoreStat, commandTimeStat, err = dumpVersionIndex(*commandDumpVersionIndexPath, *commandDumpDetails)
+		case commandLSVersion.FullCommand():
+			commandStoreStat, commandTimeStat, err = lsVersionIndex(*commandLSVersionIndexPath, commandLSVersionDir)
+		case commandCPVersion.FullCommand():
+			commandStoreStat, commandTimeStat, err = cpVersionIndex(
+				*commandCPStorageURI,
+				*commandCPVersionIndexPath,
+				commandCPCachePath,
+				*commandCPTargetBlockSize,
+				*commandCPMaxChunksPerBlock,
+				*commandCPSourcePath,
+				*commandCPTargetPath)
+		case commandInitRemoteStore.FullCommand():
+			commandStoreStat, commandTimeStat, err = initRemoteStore(
+				*commandInitRemoteStoreStorageURI,
+				commandInitRemoteStoreHashing)
+		case commandStats.FullCommand():
+			commandStoreStat, commandTimeStat, err = stats(
+				*commandStatsStorageURI,
+				*commandStatsVersionIndexPath,
+				commandStatsCachePath)
+		case commandCreateVersionStoreIndex.FullCommand():
+			commandStoreStat, commandTimeStat, err = createVersionStoreIndex(
+				*commandCreateVersionStoreIndexStorageURI,
+				*commandCreateVersionStoreIndexSourcePath,
+				*commandCreateVersionStoreIndexPath)
+		case commandCloneStore.FullCommand():
+			commandStoreStat, commandTimeStat, err = cloneStore(
+				*commandCloneStoreSourceStoreURI,
+				*commandCloneStoreTargetStoreURI,
+				*ommandCloneStoreCachePath,
+				*commandCloneStoreTargetPath,
+				*commandCloneStoreSourcePaths,
+				*commandCloneStoreSourceZipPaths,
+				*commandCloneStoreTargetPaths,
+				*commandCloneStoreTargetBlockSize,
+				*commandCloneStoreMaxChunksPerBlock,
+				!(*commandCloneStoreNoRetainPermissions),
+				*commandCloneStoreCreateVersionLocalStoreIndex,
+				*commandCloneStoreHashing,
+				*commandCloneStoreCompression,
+				*commandCloneStoreMinBlockUsagePercent)
+		}
+
+		commandTimeStat = append([]timeStat{{"Init", initTime}}, commandTimeStat...)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	*/
 }

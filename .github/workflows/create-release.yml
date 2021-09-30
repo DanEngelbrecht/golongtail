@@ -123,6 +123,7 @@ jobs:
           - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync
           - **CHANGED** `--target-path` for `downsync` command is now optional and if not given a folder will be crated in the current directory based on the source name
           - **ADD** `cloneStore` command to copy all versions from one store to a new store
+          - **ADD** s3-blobstore, use the uri format s3:// for Amazon S3 stores
           - **ADD** `get` command to use json formatted config file to avoid specifying all the source information options, generate with `--get-config-path` option in `upsync` command
           - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
           - **UPDATE** Build using Golang 1.17.1

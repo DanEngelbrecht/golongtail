@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,6 +20,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -519,7 +521,8 @@ func upSyncVersion(
 	includeFilterRegEx *string,
 	excludeFilterRegEx *string,
 	minBlockUsagePercent uint32,
-	versionLocalStoreIndexPath *string) ([]storeStat, []timeStat, error) {
+	versionLocalStoreIndexPath *string,
+	getConfigPath *string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -716,17 +719,113 @@ func upSyncVersion(
 		timeStats = append(timeStats, timeStat{"Write version store index", writeVersionLocalStoreIndexTime})
 	}
 
+	if getConfigPath != nil && len(*getConfigPath) > 0 {
+		writeGetConfigStartTime := time.Now()
+
+		v := viper.New()
+		v.SetConfigType("json")
+		v.Set("storage-uri", blobStoreURI)
+		v.Set("source-path", targetFilePath)
+		if versionLocalStoreIndexPath != nil && len(*versionLocalStoreIndexPath) > 0 {
+			v.Set("version-local-store-index-path", *versionLocalStoreIndexPath)
+		}
+		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: ioutil.TempFile() failed")
+		}
+		tmpFilePath := tmpFile.Name()
+		tmpFile.Close()
+		fmt.Printf("tmp file: %s", tmpFilePath)
+		err = v.WriteConfigAs(tmpFilePath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: v.WriteConfigAs() failed")
+		}
+
+		bytes, err := ioutil.ReadFile(tmpFilePath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: ioutil.ReadFile(%s) failed", tmpFilePath)
+		}
+		os.Remove(tmpFilePath)
+
+		err = longtailstorelib.WriteToURI(*getConfigPath, bytes)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtailstorelib.WriteToURI(%s) failed", *getConfigPath)
+		}
+
+		writeGetConfigTime := time.Since(writeGetConfigStartTime)
+		timeStats = append(timeStats, timeStat{"Write get config", writeGetConfigTime})
+	}
+
 	return storeStats, timeStats, nil
+}
+
+func getVersion(
+	getConfigPath string,
+	targetFolderPath *string,
+	targetIndexPath *string,
+	localCachePath *string,
+	retainPermissions bool,
+	validate bool,
+	includeFilterRegEx *string,
+	excludeFilterRegEx *string) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	readGetConfigStartTime := time.Now()
+
+	vbuffer, err := longtailstorelib.ReadFromURI(getConfigPath)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrapf(err, "getVersion: longtailstorelib.ReadFromURI() failed")
+	}
+
+	v := viper.New()
+	v.SetConfigType("json")
+	err = v.ReadConfig(bytes.NewBuffer(vbuffer))
+	if err != nil {
+		return storeStats, timeStats, errors.Wrapf(err, "getVersion: v.ReadConfig() failed")
+	}
+
+	blobStoreURI := v.GetString("storage-uri")
+	if blobStoreURI == "" {
+		return storeStats, timeStats, fmt.Errorf("getVersion: missing storage-uri in get-config")
+	}
+	sourceFilePath := v.GetString("source-path")
+	if sourceFilePath == "" {
+		return storeStats, timeStats, fmt.Errorf("getVersion: missing source-path in get-config")
+	}
+	var versionLocalStoreIndexPath string
+	if v.IsSet("version-local-store-index-path") {
+		versionLocalStoreIndexPath = v.GetString("version-local-store-index-path")
+	}
+
+	readGetConfigTime := time.Since(readGetConfigStartTime)
+	timeStats = append(timeStats, timeStat{"Read get config", readGetConfigTime})
+
+	downSyncStoreStats, downSyncTimeStats, err := downSyncVersion(
+		blobStoreURI,
+		sourceFilePath,
+		targetFolderPath,
+		targetIndexPath,
+		localCachePath,
+		retainPermissions,
+		validate,
+		&versionLocalStoreIndexPath,
+		includeFilterRegEx,
+		excludeFilterRegEx)
+
+	storeStats = append(storeStats, downSyncStoreStats...)
+	timeStats = append(timeStats, downSyncTimeStats...)
+
+	return storeStats, timeStats, err
 }
 
 func downSyncVersion(
 	blobStoreURI string,
 	sourceFilePath string,
-	targetFolderPath string,
+	targetFolderPath *string,
 	targetIndexPath *string,
 	localCachePath *string,
-	targetBlockSize uint32,
-	maxChunksPerBlock uint32,
 	retainPermissions bool,
 	validate bool,
 	versionLocalStoreIndexPath *string,
@@ -764,12 +863,25 @@ func downSyncVersion(
 		}
 	}
 
+	resolvedTargetFolderPath := ""
+	if targetFolderPath == nil || len(*targetFolderPath) == 0 {
+		urlSplit := strings.Split(normalizePath(sourceFilePath), "/")
+		sourceName := urlSplit[len(urlSplit)-1]
+		sourceNameSplit := strings.Split(sourceName, ".")
+		resolvedTargetFolderPath = sourceNameSplit[0]
+		if resolvedTargetFolderPath == "" {
+			return storeStats, timeStats, fmt.Errorf("downSyncVersion: unable to resolve target path using `%s` as base", sourceFilePath)
+		}
+	} else {
+		resolvedTargetFolderPath = *targetFolderPath
+	}
+
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
 	targetFolderScanner := asyncFolderScanner{}
 	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
-		targetFolderScanner.scan(targetFolderPath, pathFilter, fs)
+		targetFolderScanner.scan(resolvedTargetFolderPath, pathFilter, fs)
 	}
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
@@ -794,7 +906,7 @@ func downSyncVersion(
 	targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
 
 	targetIndexReader := asyncVersionIndexReader{}
-	targetIndexReader.read(targetFolderPath,
+	targetIndexReader.read(resolvedTargetFolderPath,
 		targetIndexPath,
 		targetChunkSize,
 		noCompressionType,
@@ -894,7 +1006,7 @@ func downSyncVersion(
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		normalizePath(targetFolderPath),
+		normalizePath(resolvedTargetFolderPath),
 		retainPermissions)
 	if errno != 0 {
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ChangeVersion() failed")
@@ -1016,7 +1128,7 @@ func downSyncVersion(
 		validateFileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			normalizePath(targetFolderPath))
+			normalizePath(resolvedTargetFolderPath))
 		if errno != 0 {
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.GetFilesRecursively() failed")
 		}
@@ -1033,7 +1145,7 @@ func downSyncVersion(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			normalizePath(targetFolderPath),
+			normalizePath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
 			targetChunkSize)
@@ -2518,18 +2630,26 @@ var (
 			"zstd_max")
 	commandUpsyncMinBlockUsagePercent       = commandUpsync.Flag("min-block-usage-percent", "Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all").Default("0").Uint32()
 	commandUpsyncVersionLocalStoreIndexPath = commandUpsync.Flag("version-local-store-index-path", "Generate an store index optimized for this particular version").String()
+	commandUpsynceGetConfigPath             = commandUpsync.Flag("get-config-path", "File uri for json formatted get-config file").String()
 
 	commandDownsync                           = kingpin.Command("downsync", "Download a folder")
 	commandDownsyncStorageURI                 = commandDownsync.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
 	commandDownsyncCachePath                  = commandDownsync.Flag("cache-path", "Location for cached blocks").String()
-	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").Required().String()
+	commandDownsyncTargetPath                 = commandDownsync.Flag("target-path", "Target folder path").String()
 	commandDownsyncTargetIndexPath            = commandDownsync.Flag("target-index-path", "Optional pre-computed index of target-path").String()
 	commandDownsyncSourcePath                 = commandDownsync.Flag("source-path", "Source file uri").Required().String()
-	commandDownsyncTargetBlockSize            = commandDownsync.Flag("target-block-size", "Target block size").Default("8388608").Uint32()
-	commandDownsyncMaxChunksPerBlock          = commandDownsync.Flag("max-chunks-per-block", "Max chunks per block").Default("1024").Uint32()
 	commandDownsyncNoRetainPermissions        = commandDownsync.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
 	commandDownsyncValidate                   = commandDownsync.Flag("validate", "Validate target path once completed").Bool()
 	commandDownsyncVersionLocalStoreIndexPath = commandDownsync.Flag("version-local-store-index-path", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").String()
+
+	commandGet                           = kingpin.Command("get", "Download a folder using a get-config")
+	commandGetConfigUriURI               = commandGet.Flag("get-config-path", "File uri for json formatted get-config file").Required().String()
+	commandGetTargetPath                 = commandGet.Flag("target-path", "Target folder path").String()
+	commandGetTargetIndexPath            = commandGet.Flag("target-index-path", "Optional pre-computed index of target-path").String()
+	commandGetCachePath                  = commandGet.Flag("cache-path", "Location for cached blocks").String()
+	commandGetNoRetainPermissions        = commandGet.Flag("no-retain-permissions", "Disable setting permission on file/directories from source").Bool()
+	commandGetValidate                   = commandGet.Flag("validate", "Validate target path once completed").Bool()
+	commandGetVersionLocalStoreIndexPath = commandGet.Flag("version-local-store-index-path", "Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index").String()
 
 	commandValidate                         = kingpin.Command("validate", "Validate a version index against a content store")
 	commandValidateStorageURI               = commandValidate.Flag("storage-uri", "Storage URI (local file system, GCS and S3 bucket URI supported)").Required().String()
@@ -2702,19 +2822,28 @@ func main() {
 			includeFilterRegEx,
 			excludeFilterRegEx,
 			*commandUpsyncMinBlockUsagePercent,
-			commandUpsyncVersionLocalStoreIndexPath)
+			commandUpsyncVersionLocalStoreIndexPath,
+			commandUpsynceGetConfigPath)
 	case commandDownsync.FullCommand():
 		commandStoreStat, commandTimeStat, err = downSyncVersion(
 			*commandDownsyncStorageURI,
 			*commandDownsyncSourcePath,
-			*commandDownsyncTargetPath,
+			commandDownsyncTargetPath,
 			commandDownsyncTargetIndexPath,
 			commandDownsyncCachePath,
-			*commandDownsyncTargetBlockSize,
-			*commandDownsyncMaxChunksPerBlock,
 			!(*commandDownsyncNoRetainPermissions),
 			*commandDownsyncValidate,
 			commandDownsyncVersionLocalStoreIndexPath,
+			includeFilterRegEx,
+			excludeFilterRegEx)
+	case commandGet.FullCommand():
+		commandStoreStat, commandTimeStat, err = getVersion(
+			*commandGetConfigUriURI,
+			commandGetTargetPath,
+			commandGetTargetIndexPath,
+			commandGetCachePath,
+			!(*commandGetNoRetainPermissions),
+			*commandGetValidate,
 			includeFilterRegEx,
 			excludeFilterRegEx)
 	case commandValidate.FullCommand():

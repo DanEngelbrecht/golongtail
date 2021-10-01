@@ -2690,6 +2690,71 @@ func cloneStore(
 	return storeStats, timeStats, nil
 }
 
+func pruneStore(
+	storageURI string,
+	sourcePaths string,
+	createVersionLocalStoreIndex bool,
+	minBlockUsagePercent uint32) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
+	defer jobs.Dispose()
+
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	creg := longtaillib.CreateFullCompressionRegistry()
+	defer creg.Dispose()
+
+	sourceRemoteIndexStore, err := createBlockStoreForURI(storageURI, "", jobs, 8388608, 1024, longtailstorelib.ReadOnly)
+	if err != nil {
+		return storeStats, timeStats, err
+	}
+	defer sourceRemoteIndexStore.Dispose()
+
+	sourcesFile, err := os.Open(sourcePaths)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer sourcesFile.Close()
+
+	usedBlocks := make(map[uint64]uint32)
+
+	sourcesScanner := bufio.NewScanner(sourcesFile)
+	for sourcesScanner.Scan() {
+		sourceFilePath := sourcesScanner.Text()
+
+		vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+		if err != nil {
+			continue
+		}
+		sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		if errno != 0 {
+			continue
+		}
+
+		fmt.Printf("Getting blocks used by `%s`\n", sourceFilePath)
+
+		existingStoreIndex, errno := getExistingStoreIndexSync(sourceRemoteIndexStore, sourceVersionIndex.GetChunkHashes(), 0)
+		if errno != 0 {
+			sourceVersionIndex.Dispose()
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: getExistingStoreIndexSync() failed")
+		}
+
+		for _, h := range existingStoreIndex.GetBlockHashes() {
+			usedBlocks[h] += 1
+		}
+		existingStoreIndex.Dispose()
+		sourceVersionIndex.Dispose()
+
+		fmt.Printf("Located %d blocks\n", len(usedBlocks))
+	}
+
+	return storeStats, timeStats, nil
+}
+
 type Context struct {
 	StoreStats []storeStat
 	TimeStats  []timeStat
@@ -3053,6 +3118,24 @@ func (r *CloneStoreCmd) Run(ctx *Context) error {
 	return err
 }
 
+type PruneStoreCmd struct {
+	StorageURIOption
+	SourcePaths                  string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
+	CreateVersionLocalStoreIndex bool   `name:"create-version-local-store-index" help:"Generate an store index optimized for the versions"`
+	MinBlockUsagePercentOption
+}
+
+func (r *PruneStoreCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := pruneStore(
+		r.StorageURI,
+		r.SourcePaths,
+		r.CreateVersionLocalStoreIndex,
+		r.MinBlockUsagePercent)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
 var cli struct {
 	LogLevel                string                     `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
 	ShowStats               bool                       `name:"show-stats" help:"Output brief stats summary"`
@@ -3074,6 +3157,7 @@ var cli struct {
 	Stats                   StatsCmd                   `cmd:"" name:"stats" help:"Show fragmenation stats about a version index"`
 	CreateVersionStoreIndex CreateVersionStoreIndexCmd `cmd:"" name:"createVersionStoreIndex" help:"Create a store index optimized for a version index"`
 	CloneStore              CloneStoreCmd              `cmd:"" name:"cloneStore" help:"Clone all the data needed to cover a set of versions from one store into a new store"`
+	PruneStore              PruneStoreCmd              `cmd:"" name:"pruneStore" help:"Prune blocks in a store which are not used by the files in the input list"`
 }
 
 func main() {

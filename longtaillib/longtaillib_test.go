@@ -278,7 +278,7 @@ func TestFSBlockStore(t *testing.T) {
 	defer storageAPI.Dispose()
 	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobAPI.Dispose()
-	blockStoreAPI := CreateFSBlockStore(jobAPI, storageAPI, "content", 8388608, 1024)
+	blockStoreAPI := CreateFSBlockStore(jobAPI, storageAPI, "content")
 	defer blockStoreAPI.Dispose()
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
@@ -813,7 +813,7 @@ func TestRewriteVersion(t *testing.T) {
 		t.Errorf("TestRewriteVersion() CreateStoreIndex() %d != %d", errno, 0)
 	}
 	defer storeIndex.Dispose()
-	blockStorageAPI := CreateFSBlockStore(jobAPI, storageAPI, "block_store", 65536, 4096)
+	blockStorageAPI := CreateFSBlockStore(jobAPI, storageAPI, "block_store")
 	defer blockStorageAPI.Dispose()
 	compressionRegistry := CreateZStdCompressionRegistry()
 	compressionRegistry.Dispose()

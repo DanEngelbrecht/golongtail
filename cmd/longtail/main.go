@@ -225,10 +225,10 @@ func createBlockStoreForURI(uri string, optionalStoreIndexPath string, jobAPI lo
 		case "abfss":
 			return longtaillib.Longtail_BlockStoreAPI{}, fmt.Errorf("azure Gen2 storage not yet implemented")
 		case "file":
-			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], targetBlockSize, maxChunksPerBlock), nil
+			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
 		}
 	}
-	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, targetBlockSize, maxChunksPerBlock), nil
+	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri), nil
 }
 
 const noCompressionType = uint32(0)
@@ -934,7 +934,7 @@ func downSyncVersion(
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath), 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -1554,7 +1554,7 @@ func cpVersionIndex(
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath), 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -1852,7 +1852,7 @@ func lsVersionIndex(
 	fakeBlockStoreFS := longtaillib.CreateInMemStorageAPI()
 	defer fakeBlockStoreFS.Dispose()
 
-	fakeBlockStore := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store", 1024*1024*1024, 1024)
+	fakeBlockStore := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store")
 	defer fakeBlockStoreFS.Dispose()
 
 	storeIndex, errno := longtaillib.CreateStoreIndex(
@@ -1937,7 +1937,7 @@ func stats(
 
 	if localCachePath != nil && len(*localCachePath) > 0 {
 		localFS = longtaillib.CreateFSStorageAPI()
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath), 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -2216,7 +2216,7 @@ func cloneStore(
 	var sourceCompressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if len(localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath), 8388608, 1024)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, sourceRemoteIndexStore)
 
@@ -2250,12 +2250,12 @@ func cloneStore(
 
 	var sourcesZipScanner *bufio.Scanner
 	if sourceZipPaths != "" {
-		sourcesZipFile, err := os.Open(sourceZipPaths)
-		if err != nil {
-			log.Fatal(err)
-		}
+	sourcesZipFile, err := os.Open(sourceZipPaths)
+	if err != nil {
+		log.Fatal(err)
+	}
 		sourcesZipScanner = bufio.NewScanner(sourcesZipFile)
-		defer sourcesZipFile.Close()
+	defer sourcesZipFile.Close()
 	}
 
 	targetsFile, err := os.Open(targetPaths)
@@ -2277,9 +2277,9 @@ func cloneStore(
 		}
 		sourceFileZipPath := ""
 		if sourcesZipScanner != nil {
-			if !sourcesZipScanner.Scan() {
-				break
-			}
+		if !sourcesZipScanner.Scan() {
+			break
+		}
 			sourceFileZipPath = sourcesZipScanner.Text()
 		}
 		targetFolderScanner := asyncFolderScanner{}
@@ -2329,23 +2329,23 @@ func cloneStore(
 		targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
 
 		if !targetVersionIndex.IsValid() {
-			targetIndexReader := asyncVersionIndexReader{}
-			targetIndexReader.read(targetPath,
-				nil,
-				targetChunkSize,
-				noCompressionType,
-				hashIdentifier,
-				pathFilter,
-				fs,
-				jobs,
-				hashRegistry,
-				&targetFolderScanner)
+		targetIndexReader := asyncVersionIndexReader{}
+		targetIndexReader.read(targetPath,
+			nil,
+			targetChunkSize,
+			noCompressionType,
+			hashIdentifier,
+			pathFilter,
+			fs,
+			jobs,
+			hashRegistry,
+			&targetFolderScanner)
 
 			targetVersionIndex, hash, _, err = targetIndexReader.get()
-			if err != nil {
-				sourceVersionIndex.Dispose()
-				continue
-			}
+		if err != nil {
+			sourceVersionIndex.Dispose()
+			continue
+		}
 		}
 		versionDiff, errno := longtaillib.CreateVersionDiff(
 			hash,

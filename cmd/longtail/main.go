@@ -3045,5 +3045,7 @@ func main() {
 
 	context.TimeStats = append([]timeStat{{"Init", initTime}}, context.TimeStats...)
 
-	ctx.FatalIfErrorf(err)
+	if err != nil {
+		log.Fatal(err)
+	}
 }

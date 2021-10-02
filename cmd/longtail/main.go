@@ -2174,10 +2174,15 @@ func createVersionStoreIndex(
 
 func validateOneVersion(
 	targetStore longtaillib.Longtail_BlockStoreAPI,
-	targetFilePath string) error {
+	targetFilePath string,
+	skipValidate bool) error {
 	tbuffer, err := longtailstorelib.ReadFromURI(targetFilePath)
 	if err != nil {
 		return err
+	}
+	if skipValidate {
+		fmt.Printf("Skipping `%s`\n", targetFilePath)
+		return nil
 	}
 	fmt.Printf("Validating `%s`\n", targetFilePath)
 	targetVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(tbuffer)
@@ -2223,6 +2228,7 @@ func cloneOneVersion(
 	pathFilter longtaillib.Longtail_PathFilterAPI,
 	retainPermissions bool,
 	createVersionLocalStoreIndex bool,
+	skipValidate bool,
 	minBlockUsagePercent uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -2238,7 +2244,7 @@ func cloneOneVersion(
 	targetFolderScanner := asyncFolderScanner{}
 	targetFolderScanner.scan(targetPath, pathFilter, fs)
 
-	err := validateOneVersion(targetStore, targetFilePath)
+	err := validateOneVersion(targetStore, targetFilePath, skipValidate)
 	if err == nil {
 		return Clone(currentVersionIndex), nil
 	}
@@ -2542,7 +2548,8 @@ func cloneStore(
 	createVersionLocalStoreIndex bool,
 	hashing string,
 	compression string,
-	minBlockUsagePercent uint32) ([]storeStat, []timeStat, error) {
+	minBlockUsagePercent uint32,
+	skipValidate bool) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -2650,6 +2657,7 @@ func cloneStore(
 			pathFilter,
 			retainPermissions,
 			createVersionLocalStoreIndex,
+			skipValidate,
 			minBlockUsagePercent,
 			targetBlockSize,
 			maxChunksPerBlock,
@@ -3013,6 +3021,7 @@ type CloneStoreCmd struct {
 	SourceZipPaths               string `name:"source-zip-paths" help:"File containing list of source zip uris"`
 	TargetPaths                  string `name:"target-paths" help:"File containing list of target longtail uris" required:""`
 	CreateVersionLocalStoreIndex bool   `name:"create-version-local-store-index" help:"Generate an store index optimized for the versions"`
+	SkipValidate                 bool   `name"skip-validate" help:"Skip validation of already cloned versions"`
 	CachePathOption
 	RetainPermissionsOption
 	MaxChunksPerBlockOption
@@ -3037,7 +3046,8 @@ func (r *CloneStoreCmd) Run(ctx *Context) error {
 		r.CreateVersionLocalStoreIndex,
 		r.Hashing,
 		r.Compression,
-		r.MinBlockUsagePercent)
+		r.MinBlockUsagePercent,
+		r.SkipValidate)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

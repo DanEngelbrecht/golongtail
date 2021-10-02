@@ -2248,11 +2248,15 @@ func cloneStore(
 	}
 	defer sourcesFile.Close()
 
-	sourcesZipFile, err := os.Open(sourceZipPaths)
-	if err != nil {
-		log.Fatal(err)
+	var sourcesZipScanner *bufio.Scanner
+	if sourceZipPaths != "" {
+		sourcesZipFile, err := os.Open(sourceZipPaths)
+		if err != nil {
+			log.Fatal(err)
+		}
+		sourcesZipScanner = bufio.NewScanner(sourcesZipFile)
+		defer sourcesZipFile.Close()
 	}
-	defer sourcesZipFile.Close()
 
 	targetsFile, err := os.Open(targetPaths)
 	if err != nil {
@@ -2261,23 +2265,27 @@ func cloneStore(
 	defer targetsFile.Close()
 
 	sourcesScanner := bufio.NewScanner(sourcesFile)
-	sourcesZipScanner := bufio.NewScanner(sourcesZipFile)
 	targetsScanner := bufio.NewScanner(targetsFile)
 
 	var pathFilter longtaillib.Longtail_PathFilterAPI
+	var targetVersionIndex longtaillib.Longtail_VersionIndex
+	var hash longtaillib.Longtail_HashAPI
 
 	for sourcesScanner.Scan() {
 		if !targetsScanner.Scan() {
 			break
 		}
-		if !sourcesZipScanner.Scan() {
-			break
+		sourceFileZipPath := ""
+		if sourcesZipScanner != nil {
+			if !sourcesZipScanner.Scan() {
+				break
+			}
+			sourceFileZipPath = sourcesZipScanner.Text()
 		}
 		targetFolderScanner := asyncFolderScanner{}
 		targetFolderScanner.scan(targetPath, pathFilter, fs)
 
 		sourceFilePath := sourcesScanner.Text()
-		sourceFileZipPath := sourcesZipScanner.Text()
 		targetFilePath := targetsScanner.Text()
 
 		tbuffer, err := longtailstorelib.ReadFromURI(targetFilePath)
@@ -2292,7 +2300,7 @@ func cloneStore(
 					targetStoreIndex.Dispose()
 					targetVersionIndex.Dispose()
 					if errno == 0 {
-						fmt.Printf("Skipping `%s`, valid version stored as `%s`\n", sourceFilePath, targetFilePath)
+						//fmt.Printf("Skipping `%s`, valid version stored as `%s`\n", sourceFilePath, targetFilePath)
 						continue
 					}
 					targetStoreIndex.Dispose()
@@ -2320,24 +2328,25 @@ func cloneStore(
 		hashIdentifier := sourceVersionIndex.GetHashIdentifier()
 		targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
 
-		targetIndexReader := asyncVersionIndexReader{}
-		targetIndexReader.read(targetPath,
-			nil,
-			targetChunkSize,
-			noCompressionType,
-			hashIdentifier,
-			pathFilter,
-			fs,
-			jobs,
-			hashRegistry,
-			&targetFolderScanner)
+		if !targetVersionIndex.IsValid() {
+			targetIndexReader := asyncVersionIndexReader{}
+			targetIndexReader.read(targetPath,
+				nil,
+				targetChunkSize,
+				noCompressionType,
+				hashIdentifier,
+				pathFilter,
+				fs,
+				jobs,
+				hashRegistry,
+				&targetFolderScanner)
 
-		targetVersionIndex, hash, _, err := targetIndexReader.get()
-		if err != nil {
-			sourceVersionIndex.Dispose()
-			continue
+			targetVersionIndex, hash, _, err = targetIndexReader.get()
+			if err != nil {
+				sourceVersionIndex.Dispose()
+				continue
+			}
 		}
-
 		versionDiff, errno := longtaillib.CreateVersionDiff(
 			hash,
 			targetVersionIndex,
@@ -2381,6 +2390,10 @@ func cloneStore(
 		existingStoreIndex.Dispose()
 		targetVersionIndex.Dispose()
 		if errno != 0 {
+			if sourceFileZipPath == "" {
+				fmt.Printf("Skipping `%s` - unable to download from longtail: %s\n", sourceFilePath, longtaillib.ErrnoToError(errno, longtaillib.ErrEIO).Error())
+				continue
+			}
 			fmt.Printf("Falling back to reading ZIP source from `%s`\n", sourceFileZipPath)
 			sourceVersionIndex.Dispose()
 			zipBytes, err := longtailstorelib.ReadFromURI(sourceFileZipPath)
@@ -2590,7 +2603,8 @@ func cloneStore(
 
 		versionMissingStoreIndex.Dispose()
 		existingStoreIndex.Dispose()
-		sourceVersionIndex.Dispose()
+		targetVersionIndex.Dispose()
+		targetVersionIndex = sourceVersionIndex
 
 		targetStoreFlushComplete.wg.Wait()
 		if targetStoreFlushComplete.err != 0 {
@@ -2601,6 +2615,7 @@ func cloneStore(
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: indexStore.Flush: Failed for `%s` failed", sourceStoreURI)
 		}
 	}
+	targetVersionIndex.Dispose()
 
 	if err := sourcesScanner.Err(); err != nil {
 		log.Fatal(err)
@@ -2943,7 +2958,7 @@ type CloneStoreCmd struct {
 	TargetStorageURI             string `name:"target-storage-uri" help:"Target storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
 	TargetPath                   string `name:"target-path" help:"Target folder path" required:""`
 	SourcePaths                  string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
-	SourceZipPaths               string `name:"source-zip-paths" help:"File containing list of source zip uris" required:""`
+	SourceZipPaths               string `name:"source-zip-paths" help:"File containing list of source zip uris"`
 	TargetPaths                  string `name:"target-paths" help:"File containing list of target longtail uris" required:""`
 	CreateVersionLocalStoreIndex bool   `name:"create-version-local-store-index" help:"Generate an store index optimized for the versions"`
 	CachePathOption

@@ -691,6 +691,10 @@ func (storeIndex *Longtail_StoreIndex) GetChunkSizes() []uint32 {
 	return carray2slice32(storeIndex.cStoreIndex.m_ChunkSizes, size)
 }
 
+func (versionIndex *Longtail_VersionIndex) IsValid() bool {
+	return versionIndex.cVersionIndex != nil
+}
+
 func (versionIndex *Longtail_VersionIndex) Dispose() {
 	if versionIndex.cVersionIndex != nil {
 		C.Longtail_Free(unsafe.Pointer(versionIndex.cVersionIndex))

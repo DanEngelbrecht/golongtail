@@ -127,6 +127,8 @@ jobs:
           - **ADD** `get` command to use json formatted config file to avoid specifying all the source information options, generate with `--get-config-path` option in `upsync` command
           - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
           - **UPDATE** Build using Golang 1.17.1
+          - **CHANGE** Now uses Kong command line parser instead of Kingpin/v2
+          - **ADD** `printStoreIndex` now has `-details` option that shows how much data (both total and unique) is in a store
         draft: false
         prerelease: false
     - name: Download Linux artifacts

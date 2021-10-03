@@ -54,6 +54,7 @@ int BlockStoreAPIProxy_PutStoredBlock(struct Longtail_BlockStoreAPI* api, struct
 int BlockStoreAPIProxy_PreflightGet(struct Longtail_BlockStoreAPI* block_store_api, uint32_t block_count, TLongtail_Hash* block_hashes, struct Longtail_AsyncPreflightStartedAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStoredBlock(struct Longtail_BlockStoreAPI* api, uint64_t block_hash, struct Longtail_AsyncGetStoredBlockAPI* async_complete_api);
 int BlockStoreAPIProxy_GetExistingContent(struct Longtail_BlockStoreAPI* api, uint32_t chunk_count, TLongtail_Hash* chunk_hashes, uint32_t min_block_usage_percent, struct Longtail_AsyncGetExistingContentAPI* async_complete_api);
+int BlockStoreAPIProxy_PruneBlocks(struct Longtail_BlockStoreAPI* api, uint32_t block_keep_count, TLongtail_Hash* block_keep_hashes, struct Longtail_AsyncPruneBlocksAPI* async_complete_api);
 int BlockStoreAPIProxy_GetStats(struct Longtail_BlockStoreAPI* api, struct Longtail_BlockStore_Stats* out_stats);
 int BlockStoreAPIProxy_Flush(struct Longtail_BlockStoreAPI* api, struct Longtail_AsyncFlushAPI* async_complete_api);
 
@@ -68,6 +69,7 @@ static struct Longtail_BlockStoreAPI* CreateBlockStoreProxyAPI(void* context)
         (Longtail_BlockStore_PreflightGetFunc)BlockStoreAPIProxy_PreflightGet,
         BlockStoreAPIProxy_GetStoredBlock,
         (Longtail_BlockStore_GetExistingContentFunc)BlockStoreAPIProxy_GetExistingContent,
+        (Longtail_BlockStore_PruneBlocksFunc)BlockStoreAPIProxy_PruneBlocks,
         BlockStoreAPIProxy_GetStats,
         BlockStoreAPIProxy_Flush);
 }
@@ -180,6 +182,28 @@ static struct Longtail_AsyncGetExistingContentAPI* CreateAsyncGetExistingContent
         api,
         AsyncGetExistingContentAPIProxy_Dispose,
         AsyncGetExistingContentAPIProxy_OnComplete);
+}
+
+////////////// Longtail_AsyncPruneBlocksAPI
+
+struct AsyncPruneBlocksAPIProxy
+{
+    struct Longtail_AsyncPruneBlocksAPI m_API;
+    void* m_Context;
+};
+
+static void* AsyncPruneBlocksAPIProxy_GetContext(void* api) { return ((struct AsyncPruneBlocksAPIProxy*)api)->m_Context; }
+void AsyncPruneBlocksAPIProxy_OnComplete(struct Longtail_AsyncPruneBlocksAPI* async_complete_api, uint32_t pruned_block_count, int err);
+void AsyncPruneBlocksAPIProxy_Dispose(struct Longtail_API* api);
+
+static struct Longtail_AsyncPruneBlocksAPI* CreateAsyncPruneBlocksAPI(void* context)
+{
+    struct AsyncPruneBlocksAPIProxy* api    = (struct AsyncPruneBlocksAPIProxy*)Longtail_Alloc("AsyncPruneBlocksAPIProxy", sizeof(struct AsyncPruneBlocksAPIProxy));
+    api->m_Context = context;
+    return Longtail_MakeAsyncPruneBlocksAPI(
+        api,
+        AsyncPruneBlocksAPIProxy_Dispose,
+        AsyncPruneBlocksAPIProxy_OnComplete);
 }
 
 ////////////// Longtail_AsyncFlushAPI

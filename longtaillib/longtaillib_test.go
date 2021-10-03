@@ -532,6 +532,37 @@ func (b *TestBlockStore) GetExistingContent(
 	return 0
 }
 
+func (b *TestBlockStore) PruneBlocks(
+	keepBlockHashes []uint64,
+	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) int {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.stats[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count] += 1
+	keepMap := make(map[uint64]bool)
+	for _, b := range keepBlockHashes {
+		keepMap[b] = true
+	}
+	var removeBlocks []uint64
+	for h, _ := range b.blocks {
+		if _, exists := keepMap[h]; exists {
+			continue
+		}
+		removeBlocks = append(removeBlocks, h)
+	}
+	removeCount := uint32(0)
+	for _, h := range removeBlocks {
+		if _, exists := keepMap[h]; exists {
+			continue
+		}
+		storedBlock := b.blocks[h]
+		delete(b.blocks, h)
+		storedBlock.Dispose()
+		removeCount++
+	}
+	asyncCompleteAPI.OnComplete(removeCount, 0)
+	return 0
+}
+
 // GetStats ...
 func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
 	b.stats[Longtail_BlockStoreAPI_StatU64_GetStats_Count] += 1

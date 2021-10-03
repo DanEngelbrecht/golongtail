@@ -118,7 +118,6 @@ jobs:
           Changes in this Release
           - **FIX** Make sure flush also flushes store index, empties preflight memory and flushes any pending preflight blocks.
           - **FIX** Build Linux executable using Ubuntu 18.04 to avoid forcing update of GLIBC dependency
-          - **FIX** `cloneStore` no longer re-scans target folder between versions
           - **CHANGED** Removed unused `--target-chunk-size` option for downsync
           - **CHANGED** Removed unused `--target-block-size` option for downsync
           - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync

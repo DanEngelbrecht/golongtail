@@ -2702,12 +2702,6 @@ func pruneStore(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	hashRegistry := longtaillib.CreateFullHashRegistry()
-	defer hashRegistry.Dispose()
-
-	creg := longtaillib.CreateFullCompressionRegistry()
-	defer creg.Dispose()
-
 	sourceRemoteIndexStore, err := createBlockStoreForURI(storageURI, "", jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return storeStats, timeStats, err

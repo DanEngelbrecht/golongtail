@@ -2749,6 +2749,50 @@ func pruneStore(
 	return storeStats, timeStats, nil
 }
 
+func calcVersionsSize(
+	sourcePaths string) ([]storeStat, []timeStat, error) {
+
+	storeStats := []storeStat{}
+	timeStats := []timeStat{}
+
+	sourcesFile, err := os.Open(sourcePaths)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer sourcesFile.Close()
+
+	readCount := uint32(0)
+	totalSize := uint64(0)
+	sourcesScanner := bufio.NewScanner(sourcesFile)
+	for sourcesScanner.Scan() {
+		sourceFilePath := sourcesScanner.Text()
+
+		vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+		if err != nil {
+			continue
+		}
+		sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+		if errno != 0 {
+			continue
+		}
+
+		versionSize := uint64(0)
+		for _, s := range sourceVersionIndex.GetAssetSizes() {
+			versionSize += s
+		}
+		totalSize += versionSize
+		readCount += 1
+
+		sourceVersionIndex.Dispose()
+
+		fmt.Printf("`%s` size is %d\n", sourceFilePath, versionSize)
+	}
+
+	fmt.Printf("Total count: %d, size is %d\n", readCount, totalSize)
+
+	return storeStats, timeStats, nil
+}
+
 type Context struct {
 	StoreStats []storeStat
 	TimeStats  []timeStat
@@ -3130,6 +3174,18 @@ func (r *PruneStoreCmd) Run(ctx *Context) error {
 	return err
 }
 
+type CalcVersionsSizeCmd struct {
+	SourcePaths string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
+}
+
+func (r *CalcVersionsSizeCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := calcVersionsSize(
+		r.SourcePaths)
+	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
+	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
+	return err
+}
+
 var cli struct {
 	LogLevel                string                     `name:"log-level" help:"Log level [debug, info, warn, error]" enum:"debug, info, warn, error" default:"warn" `
 	ShowStats               bool                       `name:"show-stats" help:"Output brief stats summary"`
@@ -3152,6 +3208,7 @@ var cli struct {
 	CreateVersionStoreIndex CreateVersionStoreIndexCmd `cmd:"" name:"createVersionStoreIndex" help:"Create a store index optimized for a version index"`
 	CloneStore              CloneStoreCmd              `cmd:"" name:"cloneStore" help:"Clone all the data needed to cover a set of versions from one store into a new store"`
 	PruneStore              PruneStoreCmd              `cmd:"" name:"pruneStore" help:"Prune blocks in a store which are not used by the files in the input list"`
+	CalcVersionsSize        CalcVersionsSizeCmd        `cmd:"" name:"calcVersionsSize" help:"Calculate the total size of the versions listed in the input file"`
 }
 
 func main() {

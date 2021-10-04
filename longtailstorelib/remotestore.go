@@ -38,7 +38,8 @@ type getBlockMessage struct {
 }
 
 type deleteBlockMessage struct {
-	blockHash uint64
+	blockHash      uint64
+	completeSignal *sync.WaitGroup
 }
 
 type prefetchBlockMessage struct {
@@ -400,6 +401,7 @@ func remoteWorker(
 		case deleteMsg := <-deleteBlocksChan:
 			received++
 			deleteBlock(ctx, s, client, deleteMsg.blockHash)
+			deleteMsg.completeSignal.Done()
 		default:
 		}
 		if received == 0 {
@@ -425,6 +427,7 @@ func remoteWorker(
 					prefetchBlock(ctx, s, client, prefetchMsg)
 				case deleteMsg := <-deleteBlocksChan:
 					deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					deleteMsg.completeSignal.Done()
 				}
 			} else {
 				select {
@@ -446,6 +449,7 @@ func remoteWorker(
 					fetchBlock(ctx, s, client, getMsg)
 				case deleteMsg := <-deleteBlocksChan:
 					deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					deleteMsg.completeSignal.Done()
 				}
 			}
 		}
@@ -542,14 +546,18 @@ func onPruneBlocksMessage(
 		keepBlocksMap[blockHash] = true
 	}
 
+	var wg sync.WaitGroup
+
 	existingBlockHashes := storeIndex.GetBlockHashes()
 	for _, blockHash := range existingBlockHashes {
 		if _, exists := keepBlocksMap[blockHash]; exists {
 			continue
 		}
-		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash}
+		wg.Add(1)
+		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash, completeSignal: &wg}
 		prunedCount++
 	}
+	wg.Wait()
 
 	message.asyncCompleteAPI.OnComplete(prunedCount, 0)
 	return prunedIndex

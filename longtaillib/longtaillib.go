@@ -1007,6 +1007,24 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 	return int(errno)
 }
 
+// PruneBlocks() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
+	keepBlockHashes []uint64,
+	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) int {
+
+	blockCount := len(keepBlockHashes)
+	cBlockHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
+	if blockCount > 0 {
+		cBlockHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&keepBlockHashes[0]))
+	}
+	errno := C.Longtail_BlockStore_PruneBlocks(
+		blockStoreAPI.cBlockStoreAPI,
+		C.uint32_t(blockCount),
+		cBlockHashes,
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
+}
+
 // GetStats() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, int) {
 	if blockStoreAPI.cBlockStoreAPI == nil {

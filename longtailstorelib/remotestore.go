@@ -40,6 +40,7 @@ type getBlockMessage struct {
 type deleteBlockMessage struct {
 	blockHash      uint64
 	completeSignal *sync.WaitGroup
+	successCounter *uint32
 }
 
 type prefetchBlockMessage struct {
@@ -400,7 +401,10 @@ func remoteWorker(
 			fetchBlock(ctx, s, client, getMsg)
 		case deleteMsg := <-deleteBlocksChan:
 			received++
-			deleteBlock(ctx, s, client, deleteMsg.blockHash)
+			err := deleteBlock(ctx, s, client, deleteMsg.blockHash)
+			if err == nil {
+				atomic.AddUint32(deleteMsg.successCounter, 1)
+			}
 			deleteMsg.completeSignal.Done()
 		default:
 		}
@@ -426,7 +430,10 @@ func remoteWorker(
 				case prefetchMsg := <-prefetchBlockChan:
 					prefetchBlock(ctx, s, client, prefetchMsg)
 				case deleteMsg := <-deleteBlocksChan:
-					deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					err := deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					if err == nil {
+						atomic.AddUint32(deleteMsg.successCounter, 1)
+					}
 					deleteMsg.completeSignal.Done()
 				}
 			} else {
@@ -448,7 +455,10 @@ func remoteWorker(
 				case getMsg := <-getBlockMessages:
 					fetchBlock(ctx, s, client, getMsg)
 				case deleteMsg := <-deleteBlocksChan:
-					deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					err := deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					if err == nil {
+						atomic.AddUint32(deleteMsg.successCounter, 1)
+					}
 					deleteMsg.completeSignal.Done()
 				}
 			}
@@ -538,8 +548,6 @@ func onPruneBlocksMessage(
 		return longtaillib.Longtail_StoreIndex{}
 	}
 
-	prunedCount := uint32(0)
-
 	keepBlockHashes := prunedIndex.GetBlockHashes()
 	keepBlocksMap := make(map[uint64]bool)
 	for _, blockHash := range keepBlockHashes {
@@ -548,14 +556,14 @@ func onPruneBlocksMessage(
 
 	var wg sync.WaitGroup
 
+	prunedCount := uint32(0)
 	existingBlockHashes := storeIndex.GetBlockHashes()
 	for _, blockHash := range existingBlockHashes {
 		if _, exists := keepBlocksMap[blockHash]; exists {
 			continue
 		}
 		wg.Add(1)
-		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash, completeSignal: &wg}
-		prunedCount++
+		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash, completeSignal: &wg, successCounter: &prunedCount}
 	}
 	wg.Wait()
 

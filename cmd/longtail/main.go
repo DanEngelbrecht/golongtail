@@ -2726,11 +2726,11 @@ func pruneStore(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	sourceRemoteIndexStore, err := createBlockStoreForURI(storageURI, "", jobs, 8388608, 1024, longtailstorelib.ReadOnly)
+	remoteStore, err := createBlockStoreForURI(storageURI, "", jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return storeStats, timeStats, err
 	}
-	defer sourceRemoteIndexStore.Dispose()
+	defer remoteStore.Dispose()
 
 	sourcesFile, err := os.Open(sourcePaths)
 	if err != nil {
@@ -2740,33 +2740,69 @@ func pruneStore(
 
 	usedBlocks := make(map[uint64]uint32)
 
+	sourceFilePaths := make([]string, 0)
 	sourcesScanner := bufio.NewScanner(sourcesFile)
 	for sourcesScanner.Scan() {
 		sourceFilePath := sourcesScanner.Text()
+		sourceFilePaths = append(sourceFilePaths, sourceFilePath)
+	}
 
-		vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
-		if err != nil {
-			continue
+	batchCount := numWorkerCount
+	if batchCount > len(sourceFilePaths) {
+		batchCount = len(sourceFilePaths)
+	}
+	batchStart := 0
+
+	var wg sync.WaitGroup
+	for batchStart < len(sourceFilePaths) {
+		batchLength := batchCount
+		if batchStart+batchLength > len(sourceFilePaths) {
+			batchLength = len(sourceFilePaths) - batchStart
 		}
-		sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-		if errno != 0 {
-			continue
+		blockHashesPerBatch := make([][]uint64, batchLength)
+		wg.Add(batchLength)
+		for batchPos := 0; batchPos < batchLength; batchPos++ {
+			i := batchStart + batchPos
+			sourceFilePath := sourceFilePaths[i]
+			go func(remoteStore longtaillib.Longtail_BlockStoreAPI, batchPos int, sourceFilePath string) {
+
+				vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+				if err != nil {
+					wg.Done()
+					return
+				}
+				sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+				if errno != 0 {
+					wg.Done()
+					return
+				}
+
+				fmt.Printf("Getting blocks used by `%s`\n", sourceFilePath)
+
+				existingStoreIndex, errno := getExistingStoreIndexSync(remoteStore, sourceVersionIndex.GetChunkHashes(), 0)
+				if errno != 0 {
+					sourceVersionIndex.Dispose()
+					//					return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: getExistingStoreIndexSync() failed")
+					wg.Done()
+					return
+				}
+
+				blockHashesPerBatch[batchPos] = append(blockHashesPerBatch[batchPos], existingStoreIndex.GetBlockHashes()...)
+
+				existingStoreIndex.Dispose()
+				sourceVersionIndex.Dispose()
+
+				wg.Done()
+			}(remoteStore, batchPos, sourceFilePath)
 		}
+		wg.Wait()
 
-		fmt.Printf("Getting blocks used by `%s`\n", sourceFilePath)
-
-		existingStoreIndex, errno := getExistingStoreIndexSync(sourceRemoteIndexStore, sourceVersionIndex.GetChunkHashes(), 0)
-		if errno != 0 {
-			sourceVersionIndex.Dispose()
-			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: getExistingStoreIndexSync() failed")
+		for batchPos := 0; batchPos < batchLength; batchPos++ {
+			for _, h := range blockHashesPerBatch[batchPos] {
+				usedBlocks[h] += 1
+			}
 		}
-
-		for _, h := range existingStoreIndex.GetBlockHashes() {
-			usedBlocks[h] += 1
-		}
-		existingStoreIndex.Dispose()
-		sourceVersionIndex.Dispose()
-
+		batchStart += batchLength
 		fmt.Printf("Located %d blocks\n", len(usedBlocks))
 	}
 
@@ -2782,7 +2818,7 @@ func pruneStore(
 		i++
 	}
 
-	prunedBlockCount, errno := pruneBlocksSync(sourceRemoteIndexStore, blockHashes)
+	prunedBlockCount, errno := pruneBlocksSync(remoteStore, blockHashes)
 	if errno != 0 {
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "store.PruneBlocks() failed")
 	}

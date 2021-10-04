@@ -494,16 +494,54 @@ func onGetExistingContentMessage(
 	message.asyncCompleteAPI.OnComplete(existingStoreIndex, 0)
 }
 
-func onPruneBlocksMessage(
-	s *remoteStore,
+func tryOverwriteStoreIndexWithRetry(
+	ctx context.Context,
 	storeIndex longtaillib.Longtail_StoreIndex,
-	message pruneBlocksMessage) {
-	/*	existingStoreIndex, errno := longtaillib.GetExistingStoreIndex(storeIndex, message.chunkHashes, message.minBlockUsagePercent)
-		if errno != 0 {
-			message.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, errno)
-			return
-		}*/
-	message.asyncCompleteAPI.OnComplete(0, 0)
+	blobClient BlobClient) error {
+	errorRetries := 0
+	for {
+		ok, err := tryOverwriteRemoteStoreIndex(
+			ctx,
+			storeIndex,
+			blobClient)
+		if ok {
+			return nil
+		}
+		if err != nil {
+			errorRetries++
+			if errorRetries == 3 {
+				return errors.Wrapf(err, "addRemoteStoreIndex: tryOverwriteStoreIndexWithRetry() failed")
+			} else {
+				log.Printf("Error from tryOverwriteStoreIndexWithRetry %q\n", err)
+			}
+		}
+		log.Printf("Retrying updating remote store index\n")
+	}
+}
+
+func onPruneBlocksMessage(
+	ctx context.Context,
+	s *remoteStore,
+	blobClient BlobClient,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	message pruneBlocksMessage) longtaillib.Longtail_StoreIndex {
+
+	prunedIndex, errno := longtaillib.PruneStoreIndex(storeIndex, message.keepBlockHashes)
+	if errno != 0 {
+		message.asyncCompleteAPI.OnComplete(0, errno)
+		return longtaillib.Longtail_StoreIndex{}
+	}
+
+	err := tryOverwriteStoreIndexWithRetry(ctx, prunedIndex, blobClient)
+	if err != nil {
+		prunedIndex.Dispose()
+		return longtaillib.Longtail_StoreIndex{}
+	}
+
+	prunedCount := uint32(0)
+	// Figure out which blocks to delete and delete them
+	message.asyncCompleteAPI.OnComplete(prunedCount, 0)
+	return prunedIndex
 }
 
 func getCurrentStoreIndex(
@@ -612,11 +650,16 @@ func contentIndexWorker(
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
+			prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
 			if updatedStoreIndex.IsValid() {
-				onPruneBlocksMessage(s, updatedStoreIndex, pruneBlockMessage)
+				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlockMessage)
 				updatedStoreIndex.Dispose()
 			} else {
-				onPruneBlocksMessage(s, storeIndex, pruneBlockMessage)
+				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlockMessage)
+			}
+			if prunedStoreIndex.IsValid() {
+				storeIndex.Dispose()
+				storeIndex = prunedStoreIndex
 			}
 		default:
 		}
@@ -682,11 +725,16 @@ func contentIndexWorker(
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
+			prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
 			if updatedStoreIndex.IsValid() {
-				onPruneBlocksMessage(s, updatedStoreIndex, pruneBlockMessage)
+				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlockMessage)
 				updatedStoreIndex.Dispose()
 			} else {
-				onPruneBlocksMessage(s, storeIndex, pruneBlockMessage)
+				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlockMessage)
+			}
+			if prunedStoreIndex.IsValid() {
+				storeIndex.Dispose()
+				storeIndex = prunedStoreIndex
 			}
 		}
 	}
@@ -859,6 +907,30 @@ func (s *remoteStore) Close() {
 	}
 
 	s.defaultClient.Close()
+}
+
+func tryOverwriteRemoteStoreIndexWithLocking(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) (bool, error) {
+	return false, nil
+}
+
+func tryOverwriteRemoteStoreIndexWithoutLocking(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) (bool, error) {
+	return false, nil
+}
+
+func tryOverwriteRemoteStoreIndex(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) (bool, error) {
+	if blobClient.SupportsLocking() {
+		return tryOverwriteRemoteStoreIndexWithLocking(ctx, storeIndex, blobClient)
+	}
+	return tryOverwriteRemoteStoreIndexWithoutLocking(ctx, storeIndex, blobClient)
 }
 
 func tryAddRemoteStoreIndexWithLocking(

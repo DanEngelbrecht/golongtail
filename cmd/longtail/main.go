@@ -2718,8 +2718,7 @@ func cloneStore(
 func pruneStore(
 	storageURI string,
 	sourcePaths string,
-	createVersionLocalStoreIndex bool,
-	minBlockUsagePercent uint32) ([]storeStat, []timeStat, error) {
+	dryRun bool) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -2769,6 +2768,11 @@ func pruneStore(
 		sourceVersionIndex.Dispose()
 
 		fmt.Printf("Located %d blocks\n", len(usedBlocks))
+	}
+
+	if dryRun {
+		fmt.Printf("Prune would keep %d blocks\n", len(usedBlocks))
+		return storeStats, timeStats, nil
 	}
 
 	blockHashes := make([]uint64, len(usedBlocks))
@@ -3152,8 +3156,8 @@ func (r *CloneStoreCmd) Run(ctx *Context) error {
 
 type PruneStoreCmd struct {
 	StorageURIOption
-	SourcePaths                  string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
-	CreateVersionLocalStoreIndex bool   `name:"create-version-local-store-index" help:"Generate an store index optimized for the versions"`
+	SourcePaths string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
+	DryRun      bool   `name:"dry-run" help:"Don't prune, just show how many blocks would be kept if prune was run"`
 	MinBlockUsagePercentOption
 }
 
@@ -3161,8 +3165,7 @@ func (r *PruneStoreCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := pruneStore(
 		r.StorageURI,
 		r.SourcePaths,
-		r.CreateVersionLocalStoreIndex,
-		r.MinBlockUsagePercent)
+		r.DryRun)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

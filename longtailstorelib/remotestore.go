@@ -251,6 +251,20 @@ func fetchBlock(
 	getMsg.asyncCompleteAPI.OnComplete(storedBlock, longtaillib.ErrorToErrno(getStoredBlockErr, longtaillib.EIO))
 }
 
+func deleteBlock(
+	ctx context.Context,
+	s *remoteStore,
+	client BlobClient,
+	blockHash uint64) error {
+	key := getBlockPath("chunks", blockHash)
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return err
+	}
+	err = objHandle.Delete()
+	return err
+}
+
 func prefetchBlock(
 	ctx context.Context,
 	s *remoteStore,
@@ -383,6 +397,9 @@ func remoteWorker(
 		case getMsg := <-getBlockMessages:
 			received++
 			fetchBlock(ctx, s, client, getMsg)
+		case deleteMsg := <-deleteBlocksChan:
+			received++
+			deleteBlock(ctx, s, client, deleteMsg.blockHash)
 		default:
 		}
 		if received == 0 {
@@ -406,6 +423,8 @@ func remoteWorker(
 					fetchBlock(ctx, s, client, getMsg)
 				case prefetchMsg := <-prefetchBlockChan:
 					prefetchBlock(ctx, s, client, prefetchMsg)
+				case deleteMsg := <-deleteBlocksChan:
+					deleteBlock(ctx, s, client, deleteMsg.blockHash)
 				}
 			} else {
 				select {
@@ -425,6 +444,8 @@ func remoteWorker(
 					}
 				case getMsg := <-getBlockMessages:
 					fetchBlock(ctx, s, client, getMsg)
+				case deleteMsg := <-deleteBlocksChan:
+					deleteBlock(ctx, s, client, deleteMsg.blockHash)
 				}
 			}
 		}
@@ -539,7 +560,22 @@ func onPruneBlocksMessage(
 	}
 
 	prunedCount := uint32(0)
-	// Figure out which blocks to delete and delete them
+
+	keepBlockHashes := prunedIndex.GetBlockHashes()
+	keepBlocksMap := make(map[uint64]bool)
+	for _, blockHash := range keepBlockHashes {
+		keepBlocksMap[blockHash] = true
+	}
+
+	existingBlockHashes := storeIndex.GetBlockHashes()
+	for _, blockHash := range existingBlockHashes {
+		if _, exists := keepBlocksMap[blockHash]; exists {
+			continue
+		}
+		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash}
+		prunedCount++
+	}
+
 	message.asyncCompleteAPI.OnComplete(prunedCount, 0)
 	return prunedIndex
 }

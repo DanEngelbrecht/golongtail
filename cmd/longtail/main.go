@@ -126,6 +126,18 @@ func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Long
 	a.wg.Done()
 }
 
+type pruneBlocksCompletionAPI struct {
+	wg               sync.WaitGroup
+	prunedBlockCount uint32
+	err              int
+}
+
+func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err int) {
+	a.err = err
+	a.prunedBlockCount = prunedBlockCount
+	a.wg.Done()
+}
+
 type flushCompletionAPI struct {
 	wg  sync.WaitGroup
 	err int
@@ -184,6 +196,19 @@ func getExistingStoreIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, ch
 	}
 	getExistingContentComplete.wg.Wait()
 	return getExistingContentComplete.storeIndex, getExistingContentComplete.err
+}
+
+func pruneBlocksSync(indexStore longtaillib.Longtail_BlockStoreAPI, keepBlockHashes []uint64) (uint32, int) {
+	pruneBlocksComplete := &pruneBlocksCompletionAPI{}
+	pruneBlocksComplete.wg.Add(1)
+	errno := indexStore.PruneBlocks(keepBlockHashes, longtaillib.CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
+	if errno != 0 {
+		pruneBlocksComplete.wg.Done()
+		pruneBlocksComplete.wg.Wait()
+		return 0, errno
+	}
+	pruneBlocksComplete.wg.Wait()
+	return pruneBlocksComplete.prunedBlockCount, pruneBlocksComplete.err
 }
 
 func createBlockStoreForURI(uri string, optionalStoreIndexPath string, jobAPI longtaillib.Longtail_JobAPI, targetBlockSize uint32, maxChunksPerBlock uint32, accessType longtailstorelib.AccessType) (longtaillib.Longtail_BlockStoreAPI, error) {
@@ -2746,6 +2771,19 @@ func pruneStore(
 		fmt.Printf("Located %d blocks\n", len(usedBlocks))
 	}
 
+	blockHashes := make([]uint64, len(usedBlocks))
+	i := 0
+	for k := range usedBlocks {
+		blockHashes[i] = k
+		i++
+	}
+
+	prunedBlockCount, errno := pruneBlocksSync(sourceRemoteIndexStore, blockHashes)
+	if errno != 0 {
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "store.PruneBlocks() failed")
+	}
+
+	fmt.Printf("Pruned %d blocks\n", prunedBlockCount)
 	return storeStats, timeStats, nil
 }
 

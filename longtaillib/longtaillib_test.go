@@ -160,19 +160,19 @@ func TestAPICreate(t *testing.T) {
 	defer compressionRegistry.Dispose()
 }
 
-func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (Longtail_StoredBlock, int) {
+func createStoredBlock(chunkCount uint32, hashIdentifier uint32, hashOffset uint64) (Longtail_StoredBlock, int) {
 	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
 	chunkHashes := make([]uint64, chunkCount)
 	chunkSizes := make([]uint32, chunkCount)
 	blockOffset := uint32(0)
-	for index, _ := range chunkHashes {
-		chunkHashes[index] = uint64(index+1) * 4711
+	for index := range chunkHashes {
+		chunkHashes[index] = uint64(index+1)*4711 + hashOffset
 		chunkSizes[index] = uint32(index+1) * 10
 		blockOffset += uint32(chunkSizes[index])
 	}
 	blockData := make([]uint8, blockOffset)
 	blockOffset = 0
-	for chunkIndex, _ := range chunkHashes {
+	for chunkIndex := range chunkHashes {
 		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
 			blockData[blockOffset+index] = uint8(chunkIndex + 1)
 		}
@@ -245,7 +245,7 @@ func TestStoredblock(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
+	storedBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 	if errno != 0 {
 		t.Errorf("CreateStoredBlock() %d != %d", errno, 0)
 	}
@@ -259,7 +259,7 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	originalBlock, errno := createStoredBlock(2, 0xdeadbeef)
+	originalBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 	if errno != 0 {
 		t.Errorf("createStoredBlock() %d != %d", errno, 0)
 	}
@@ -295,19 +295,19 @@ func TestFSBlockStore(t *testing.T) {
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	block1, errno := createStoredBlock(1, blake3.GetIdentifier())
+	block1, errno := createStoredBlock(1, blake3.GetIdentifier(), 0)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block1.Dispose()
 
-	block2, errno := createStoredBlock(5, blake3.GetIdentifier())
+	block2, errno := createStoredBlock(5, blake3.GetIdentifier(), 0)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block2.Dispose()
 
-	block3, errno := createStoredBlock(9, blake3.GetIdentifier())
+	block3, errno := createStoredBlock(9, blake3.GetIdentifier(), 0)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -607,7 +607,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
 
-	storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
+	storedBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -672,7 +672,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 
 	allBlockHashes := [4]uint64{0, 0, 0, 0}
 	{
-		storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
+		storedBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 		if errno != 0 {
 			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 		}
@@ -696,7 +696,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 	}
 
 	{
-		storedBlock, errno := createStoredBlock(3, 0xdeadbeef)
+		storedBlock, errno := createStoredBlock(3, 0xdeadbeef, 10000)
 		if errno != 0 {
 			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 		}
@@ -719,7 +719,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 		}
 	}
 	{
-		storedBlock, errno := createStoredBlock(1, 0xdeadbeef)
+		storedBlock, errno := createStoredBlock(1, 0xdeadbeef, 20000)
 		if errno != 0 {
 			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 		}
@@ -742,7 +742,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 		}
 	}
 	{
-		storedBlock, errno := createStoredBlock(4, 0xdeadbeef)
+		storedBlock, errno := createStoredBlock(4, 0xdeadbeef, 30000)
 		if errno != 0 {
 			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 		}

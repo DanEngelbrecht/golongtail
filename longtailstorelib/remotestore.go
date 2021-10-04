@@ -515,31 +515,6 @@ func onGetExistingContentMessage(
 	message.asyncCompleteAPI.OnComplete(existingStoreIndex, 0)
 }
 
-func tryOverwriteStoreIndexWithRetry(
-	ctx context.Context,
-	storeIndex longtaillib.Longtail_StoreIndex,
-	blobClient BlobClient) error {
-	errorRetries := 0
-	for {
-		ok, err := tryOverwriteRemoteStoreIndex(
-			ctx,
-			storeIndex,
-			blobClient)
-		if ok {
-			return nil
-		}
-		if err != nil {
-			errorRetries++
-			if errorRetries == 3 {
-				return errors.Wrapf(err, "addRemoteStoreIndex: tryOverwriteStoreIndexWithRetry() failed")
-			} else {
-				log.Printf("Error from tryOverwriteStoreIndexWithRetry %q\n", err)
-			}
-		}
-		log.Printf("Retrying updating remote store index\n")
-	}
-}
-
 func onPruneBlocksMessage(
 	ctx context.Context,
 	s *remoteStore,
@@ -945,30 +920,6 @@ func (s *remoteStore) Close() {
 	s.defaultClient.Close()
 }
 
-func tryOverwriteRemoteStoreIndexWithLocking(
-	ctx context.Context,
-	storeIndex longtaillib.Longtail_StoreIndex,
-	blobClient BlobClient) (bool, error) {
-	return false, nil
-}
-
-func tryOverwriteRemoteStoreIndexWithoutLocking(
-	ctx context.Context,
-	storeIndex longtaillib.Longtail_StoreIndex,
-	blobClient BlobClient) (bool, error) {
-	return false, nil
-}
-
-func tryOverwriteRemoteStoreIndex(
-	ctx context.Context,
-	storeIndex longtaillib.Longtail_StoreIndex,
-	blobClient BlobClient) (bool, error) {
-	if blobClient.SupportsLocking() {
-		return tryOverwriteRemoteStoreIndexWithLocking(ctx, storeIndex, blobClient)
-	}
-	return tryOverwriteRemoteStoreIndexWithoutLocking(ctx, storeIndex, blobClient)
-}
-
 func tryAddRemoteStoreIndexWithLocking(
 	ctx context.Context,
 	addStoreIndex longtaillib.Longtail_StoreIndex,
@@ -1139,6 +1090,124 @@ func addToRemoteStoreIndex(
 		log.Printf("Retrying updating remote store index\n")
 	}
 	return longtaillib.Longtail_StoreIndex{}, nil
+}
+
+func tryOverwriteRemoteStoreIndexWithLocking(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	client BlobClient) (bool, error) {
+
+	storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	if errno != 0 {
+		return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: WriteStoreIndexToBuffer() failed")
+	}
+
+	key := "store.lsi"
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = objHandle.LockWriteVersion()
+	if err != nil {
+		return false, err
+	}
+
+	ok, err := objHandle.Write(storeBlob)
+	if err != nil {
+		return false, errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Write() failed")
+	}
+	return ok, nil
+}
+
+func tryOverwriteRemoteStoreIndexWithoutLocking(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	client BlobClient) (bool, error) {
+
+	items, err := getStoreStoreIndexes(ctx, client)
+	if err != nil {
+		return false, err
+	}
+
+	storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	if errno != 0 {
+		return false, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.WriteStoreIndexToBuffer() failed")
+	}
+
+	sha256 := sha256.Sum256(storeBlob)
+	key := fmt.Sprintf("store_%x.lsi", sha256)
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return false, err
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	exists, err := objHandle.Exists()
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		ok, err := objHandle.Write(storeBlob)
+		if !ok || err != nil {
+			return ok, err
+		}
+	}
+
+	for _, item := range items {
+		if item == key {
+			continue
+		}
+		objHandle, err := client.NewObject(item)
+		if err != nil {
+			continue
+		}
+		err = objHandle.Delete()
+		if err != nil {
+			continue
+		}
+	}
+
+	return true, nil
+}
+
+func tryOverwriteRemoteStoreIndex(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) (bool, error) {
+	if blobClient.SupportsLocking() {
+		return tryOverwriteRemoteStoreIndexWithLocking(ctx, storeIndex, blobClient)
+	}
+	return tryOverwriteRemoteStoreIndexWithoutLocking(ctx, storeIndex, blobClient)
+}
+
+func tryOverwriteStoreIndexWithRetry(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) error {
+	errorRetries := 0
+	for {
+		ok, err := tryOverwriteRemoteStoreIndex(
+			ctx,
+			storeIndex,
+			blobClient)
+		if ok {
+			return nil
+		}
+		if err != nil {
+			errorRetries++
+			if errorRetries == 3 {
+				return errors.Wrapf(err, "addRemoteStoreIndex: tryOverwriteStoreIndexWithRetry() failed")
+			} else {
+				log.Printf("Error from tryOverwriteStoreIndexWithRetry %q\n", err)
+			}
+		}
+		log.Printf("Retrying updating remote store index\n")
+	}
 }
 
 func getStoreIndexFromBlocks(

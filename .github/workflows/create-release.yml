@@ -128,6 +128,7 @@ jobs:
           - **ADD** s3-blobstore, use the uri format s3:// for Amazon S3 stores
           - **ADD** `get` command to use json formatted config file to avoid specifying all the source information options, generate with `--get-config-path` option in `upsync` command
           - **ADD** `printStoreIndex` now has `-details` option that shows how much data (both total and unique) is in a store
+          - **ADD** `pruneStore` command that removes blocks of data base on which blocks are used by a list of version indexes
           - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
           - **UPDATE** Build using Golang 1.17.1
           - **UPDATE** Update to longtail v0.2.3

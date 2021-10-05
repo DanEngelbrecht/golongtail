@@ -2840,7 +2840,6 @@ func pruneStore(
 					existingStoreIndex, errno = getExistingStoreIndexSync(remoteStore, sourceVersionIndex.GetChunkHashes(), 0)
 					if errno != 0 {
 						sourceVersionIndex.Dispose()
-						// TODO: Log error!
 						batchErrors <- err
 						return
 					}
@@ -2851,7 +2850,6 @@ func pruneStore(
 				if versionLocalStoreIndexFilePath != "" && versionLocalStoreIndexIsDirty && !dryRun {
 					sbuffer, errno := longtaillib.WriteStoreIndexToBuffer(existingStoreIndex)
 					if errno != 0 {
-						// TODO: Log error!
 						existingStoreIndex.Dispose()
 						sourceVersionIndex.Dispose()
 						batchErrors <- err
@@ -2859,7 +2857,6 @@ func pruneStore(
 					}
 					err = longtailstorelib.WriteToURI(versionLocalStoreIndexFilePath, sbuffer)
 					if err != nil {
-						// TODO: Log error!
 						existingStoreIndex.Dispose()
 						sourceVersionIndex.Dispose()
 						batchErrors <- err

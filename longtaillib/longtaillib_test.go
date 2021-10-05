@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"runtime"
+	"sort"
 	"sync"
 	"testing"
 )
@@ -809,11 +810,14 @@ func TestPruneStoredBlocks(t *testing.T) {
 		if len(blockHashes) != 2 {
 			t.Errorf("TestBlockStoreProxyFull() len(blockHashes) %d != %d", 2, len(blockHashes))
 		}
-		if blockHashes[0] != allBlockHashes[1] {
-			t.Errorf("TestBlockStoreProxyFull() blockHashes[0] %d != %d", blockHashes[1], blockHashes[0])
+		expectedBlockHashes := []uint64{allBlockHashes[1], allBlockHashes[3]}
+		sort.Slice(expectedBlockHashes, func(i, j int) bool { return expectedBlockHashes[i] < expectedBlockHashes[j] })
+		sort.Slice(blockHashes, func(i, j int) bool { return blockHashes[i] < blockHashes[j] })
+		if expectedBlockHashes[0] != blockHashes[0] {
+			t.Errorf("TestBlockStoreProxyFull() blockHashes[0] %d != %d", expectedBlockHashes[0], blockHashes[0])
 		}
-		if blockHashes[1] != allBlockHashes[3] {
-			t.Errorf("TestBlockStoreProxyFull() blockHashes[0] %d != %d", blockHashes[3], blockHashes[0])
+		if expectedBlockHashes[1] != blockHashes[1] {
+			t.Errorf("TestBlockStoreProxyFull() blockHashes[1] %d != %d", expectedBlockHashes[1], blockHashes[1])
 		}
 	}
 

@@ -534,24 +534,23 @@ func onPruneBlocksMessage(
 	s *remoteStore,
 	blobClient BlobClient,
 	storeIndex longtaillib.Longtail_StoreIndex,
-	message pruneBlocksMessage) longtaillib.Longtail_StoreIndex {
+	keepBlockHashes []uint64) (uint32, longtaillib.Longtail_StoreIndex, int) {
 
-	prunedIndex, errno := longtaillib.PruneStoreIndex(storeIndex, message.keepBlockHashes)
+	prunedIndex, errno := longtaillib.PruneStoreIndex(storeIndex, keepBlockHashes)
 	if errno != 0 {
-		message.asyncCompleteAPI.OnComplete(0, errno)
-		return longtaillib.Longtail_StoreIndex{}
+		return 0, longtaillib.Longtail_StoreIndex{}, errno
 	}
 
 	err := tryOverwriteStoreIndexWithRetry(ctx, prunedIndex, blobClient)
 	if err != nil {
 		prunedIndex.Dispose()
-		return longtaillib.Longtail_StoreIndex{}
+		return 0, longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO)
 	}
 
-	keepBlockHashes := prunedIndex.GetBlockHashes()
-	keepBlocksMap := make(map[uint64]bool)
-	for _, blockHash := range keepBlockHashes {
-		keepBlocksMap[blockHash] = true
+	keptBlockHashes := prunedIndex.GetBlockHashes()
+	keptBlocksMap := make(map[uint64]bool)
+	for _, blockHash := range keptBlockHashes {
+		keptBlocksMap[blockHash] = true
 	}
 
 	var wg sync.WaitGroup
@@ -559,16 +558,14 @@ func onPruneBlocksMessage(
 	prunedCount := uint32(0)
 	existingBlockHashes := storeIndex.GetBlockHashes()
 	for _, blockHash := range existingBlockHashes {
-		if _, exists := keepBlocksMap[blockHash]; exists {
+		if _, exists := keptBlocksMap[blockHash]; exists {
 			continue
 		}
 		wg.Add(1)
 		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash, completeSignal: &wg, successCounter: &prunedCount}
 	}
 	wg.Wait()
-
-	message.asyncCompleteAPI.OnComplete(prunedCount, 0)
-	return prunedIndex
+	return prunedCount, prunedIndex, 0
 }
 
 func getCurrentStoreIndex(
@@ -668,26 +665,33 @@ func contentIndexWorker(
 			} else {
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 			}
-		case pruneBlockMessage := <-pruneBlocksMessages:
+		case pruneBlocksMessage := <-pruneBlocksMessages:
+			if accessType == ReadOnly {
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.EACCES)
+				continue
+			}
 			received++
 			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, optionalStoreIndexPath, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
-				pruneBlockMessage.asyncCompleteAPI.OnComplete(0, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
+			errno := 0
+			prunedCount := uint32(0)
 			prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
 			if updatedStoreIndex.IsValid() {
-				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlockMessage)
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
 				updatedStoreIndex.Dispose()
 			} else {
-				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlockMessage)
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
 			}
 			if prunedStoreIndex.IsValid() {
 				storeIndex.Dispose()
 				storeIndex = prunedStoreIndex
 			}
+			pruneBlocksMessage.asyncCompleteAPI.OnComplete(prunedCount, errno)
 		default:
 		}
 
@@ -744,25 +748,32 @@ func contentIndexWorker(
 			} else {
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 			}
-		case pruneBlockMessage := <-pruneBlocksMessages:
+		case pruneBlocksMessage := <-pruneBlocksMessages:
+			if accessType == ReadOnly {
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.EACCES)
+				continue
+			}
 			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, optionalStoreIndexPath, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
-				pruneBlockMessage.asyncCompleteAPI.OnComplete(0, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.ErrorToErrno(err, longtaillib.EIO))
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
+			errno := 0
+			prunedCount := uint32(0)
 			prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
 			if updatedStoreIndex.IsValid() {
-				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlockMessage)
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
 				updatedStoreIndex.Dispose()
 			} else {
-				prunedStoreIndex = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlockMessage)
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
 			}
 			if prunedStoreIndex.IsValid() {
 				storeIndex.Dispose()
 				storeIndex = prunedStoreIndex
 			}
+			pruneBlocksMessage.asyncCompleteAPI.OnComplete(prunedCount, errno)
 		}
 	}
 

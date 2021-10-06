@@ -7,7 +7,7 @@ Incremental asset delivery tool - using techniques related to the casync project
 
 This repo is a Go wrapper for [longtail](https://github.com/DanEngelbrecht/longtail), both a module that hides the C interface and a module that provides a simple command line interface for up/down loading content as well as managing a "store".
 
-The command line tool can upload to and download from a GCS or S3 bucket but requires that you are already logged in to gcloud, authentication is handled by the GCS and S3 libraries. It can also upload and download to a regular folder path. It provides a well defined interface so adding new storage options is fairly straightforward - Azure block store is one thing on the to-do list.
+The command line tool can upload to and download from a GCS or S3 bucket but requires that you are already logged in, authentication is handled by the GCS and S3 libraries. It can also upload and download to a regular folder path. It provides a well defined interface so adding new storage options is fairly straightforward - Azure block store is one thing on the to-do list.
 
 The tool provides many options when it comes to both compression and hashing, defaulting to Blake3 for hashing and ZStd for compression, but others can be selected which will trade speed and or size depending on options.
 

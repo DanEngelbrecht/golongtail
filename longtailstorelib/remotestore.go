@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 )
 
@@ -1271,6 +1272,10 @@ func getStoreIndexFromBlocks(
 		}
 	}(clients)
 
+	baseProgress := longtaillib.CreateProgressAPI(longtailutils.NewProgress("Scanning blocks"))
+	progress := longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
+	defer progress.Dispose()
+
 	var wg sync.WaitGroup
 
 	for batchStart < len(blockKeys) {
@@ -1340,9 +1345,8 @@ func getStoreIndexFromBlocks(
 		batchStoreIndex.Dispose()
 		storeIndex.Dispose()
 		storeIndex = newStoreIndex
-		//		blockIndexes = append(blockIndexes, batchBlockIndexes[:writeIndex]...)
+		progress.OnProgress(uint32(len(blockKeys)), uint32(batchStart+batchLength))
 		batchStart += batchLength
-		log.Printf("Scanned %d/%d blocks in %s\n", batchStart, len(blockKeys), blobClient.String())
 	}
 
 	return storeIndex, nil

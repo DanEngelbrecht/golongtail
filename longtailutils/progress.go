@@ -23,14 +23,12 @@ func NewProgress(task string) *ProgressData {
 
 // ProgressData ...
 func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
-	endChar := ""
+	endChar := "\r"
 	if doneCount == totalCount {
 		if !p.inited {
 			return
-			//			fmt.Fprintf(os.Stderr, "\r%s: %d%%\n", p.task, 100)
 		}
 		endChar = "\n"
-		//		return
 	}
 
 	etaString := ""
@@ -59,7 +57,7 @@ func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
 	timeString := fmt.Sprintf("%s%s", elapsed, etaString)
 
 	fmt.Fprintf(os.Stderr,
-		"\r%s %3d%%: |%s%s|: [%s]        %s\r",
+		"\r%s %3d%%: |%s%s|: [%s]        %s",
 		p.task,
 		percentDone,
 		strings.Repeat("█", progressBarCount), strings.Repeat(" ", progressBarFullLength-progressBarCount),

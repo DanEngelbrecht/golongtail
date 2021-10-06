@@ -2898,6 +2898,7 @@ func pruneStore(
 
 		batchStart += batchLength
 	}
+	progress.OnProgress(uint32(len(sourceFilePaths)), uint32(len(sourceFilePaths)))
 
 	scanningForBlocksTime := time.Since(scanningForBlocksStartTime)
 	timeStats = append(timeStats, timeStat{"Scanning", scanningForBlocksTime})

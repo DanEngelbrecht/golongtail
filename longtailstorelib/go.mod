@@ -24,4 +24,4 @@ require (
 )
 
 replace github.com/DanEngelbrecht/golongtail/longtaillib => ../longtaillib
-replace github.com/DanEngelbrecht/golongtail/longtailutils => ../../longtailutils
+replace github.com/DanEngelbrecht/golongtail/longtailutils => ../longtailutils

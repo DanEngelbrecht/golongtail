@@ -3353,7 +3353,7 @@ var cli struct {
 	Stats                   StatsCmd                   `cmd:"" name:"stats" help:"Show fragmenation stats about a version index"`
 	CreateVersionStoreIndex CreateVersionStoreIndexCmd `cmd:"" name:"createVersionStoreIndex" help:"Create a store index optimized for a version index"`
 	CloneStore              CloneStoreCmd              `cmd:"" name:"cloneStore" help:"Clone all the data needed to cover a set of versions from one store into a new store"`
-	PruneStore              PruneStoreCmd              `cmd:"" name:"pruneStore" help:"Prune blocks in a store which are not used by the files in the input list"`
+	PruneStore              PruneStoreCmd              `cmd:"" name:"pruneStore" help:"Prune blocks in a store which are not used by the files in the input list. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
 }
 
 func main() {

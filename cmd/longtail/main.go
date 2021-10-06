@@ -84,16 +84,6 @@ func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
 	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
 }
 
-type timeStat struct {
-	name string
-	dur  time.Duration
-}
-
-type storeStat struct {
-	name  string
-	stats longtaillib.BlockStoreStats
-}
-
 type getExistingContentCompletionAPI struct {
 	wg         sync.WaitGroup
 	storeIndex longtaillib.Longtail_StoreIndex
@@ -138,31 +128,6 @@ func (a *getStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtai
 	a.err = err
 	a.storedBlock = storedBlock
 	a.wg.Done()
-}
-
-func printStats(name string, stats longtaillib.BlockStoreStats) {
-	log.Printf("%s:\n", name)
-	log.Printf("------------------\n")
-	log.Printf("GetStoredBlock_Count:          %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count]))
-	log.Printf("GetStoredBlock_RetryCount:     %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount]))
-	log.Printf("GetStoredBlock_FailCount:      %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount]))
-	log.Printf("GetStoredBlock_Chunk_Count:    %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count]))
-	log.Printf("GetStoredBlock_Byte_Count:     %s\n", byteCountBinary(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count]))
-	log.Printf("PutStoredBlock_Count:          %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count]))
-	log.Printf("PutStoredBlock_RetryCount:     %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount]))
-	log.Printf("PutStoredBlock_FailCount:      %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount]))
-	log.Printf("PutStoredBlock_Chunk_Count:    %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count]))
-	log.Printf("PutStoredBlock_Byte_Count:     %s\n", byteCountBinary(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count]))
-	log.Printf("GetExistingContent_Count:      %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetExistingContent_Count]))
-	log.Printf("GetExistingContent_RetryCount: %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetExistingContent_RetryCount]))
-	log.Printf("GetExistingContent_FailCount:  %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount]))
-	log.Printf("PreflightGet_Count:            %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_Count]))
-	log.Printf("PreflightGet_RetryCount:       %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount]))
-	log.Printf("PreflightGet_FailCount:        %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount]))
-	log.Printf("Flush_Count:                   %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_Flush_Count]))
-	log.Printf("Flush_FailCount:               %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_Flush_FailCount]))
-	log.Printf("GetStats_Count:                %s\n", byteCountDecimal(stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStats_Count]))
-	log.Printf("------------------\n")
 }
 
 func getExistingStoreIndexSync(indexStore longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64, minBlockUsagePercent uint32) (longtaillib.Longtail_StoreIndex, int) {
@@ -236,36 +201,6 @@ func createBlockStoreForURI(uri string, optionalStoreIndexPath string, jobAPI lo
 	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri), nil
 }
 
-const noCompressionType = uint32(0)
-
-func getCompressionType(compressionAlgorithm string) (uint32, error) {
-	switch compressionAlgorithm {
-	case "none":
-		return noCompressionType, nil
-	case "brotli":
-		return longtaillib.GetBrotliGenericDefaultCompressionType(), nil
-	case "brotli_min":
-		return longtaillib.GetBrotliGenericMinCompressionType(), nil
-	case "brotli_max":
-		return longtaillib.GetBrotliGenericMaxCompressionType(), nil
-	case "brotli_text":
-		return longtaillib.GetBrotliTextDefaultCompressionType(), nil
-	case "brotli_text_min":
-		return longtaillib.GetBrotliTextMinCompressionType(), nil
-	case "brotli_text_max":
-		return longtaillib.GetBrotliTextMaxCompressionType(), nil
-	case "lz4":
-		return longtaillib.GetLZ4DefaultCompressionType(), nil
-	case "zstd":
-		return longtaillib.GetZStdDefaultCompressionType(), nil
-	case "zstd_min":
-		return longtaillib.GetZStdMinCompressionType(), nil
-	case "zstd_max":
-		return longtaillib.GetZStdMaxCompressionType(), nil
-	}
-	return 0, fmt.Errorf("unsupported compression algorithm: `%s`", compressionAlgorithm)
-}
-
 func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)
@@ -275,42 +210,42 @@ func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compr
 	return compressionTypes
 }
 
+var (
+	compressionTypeMap = map[string]uint32{
+		"none":            noCompressionType,
+		"brotli":          longtaillib.GetBrotliGenericDefaultCompressionType(),
+		"brotli_min":      longtaillib.GetBrotliGenericMinCompressionType(),
+		"brotli_max":      longtaillib.GetBrotliGenericMaxCompressionType(),
+		"brotli_text":     longtaillib.GetBrotliTextDefaultCompressionType(),
+		"brotli_text_min": longtaillib.GetBrotliTextMinCompressionType(),
+		"brotli_text_max": longtaillib.GetBrotliTextMaxCompressionType(),
+		"lz4":             longtaillib.GetLZ4DefaultCompressionType(),
+		"zstd":            longtaillib.GetZStdDefaultCompressionType(),
+		"zstd_min":        longtaillib.GetZStdMinCompressionType(),
+		"zstd_max":        longtaillib.GetZStdMaxCompressionType(),
+	}
+
+	hashIdentifierMap = map[string]uint32{
+		"meow":   longtaillib.GetMeowHashIdentifier(),
+		"blake2": longtaillib.GetBlake2HashIdentifier(),
+		"blake3": longtaillib.GetBlake3HashIdentifier(),
+	}
+)
+
+const noCompressionType = uint32(0)
+
+func getCompressionType(compressionAlgorithm string) (uint32, error) {
+	if compressionType, exists := compressionTypeMap[compressionAlgorithm]; exists {
+		return compressionType, nil
+	}
+	return 0, fmt.Errorf("unsupported compression algorithm: `%s`", compressionAlgorithm)
+}
+
 func getHashIdentifier(hashAlgorithm string) (uint32, error) {
-	switch hashAlgorithm {
-	case "meow":
-		return longtaillib.GetMeowHashIdentifier(), nil
-	case "blake2":
-		return longtaillib.GetBlake2HashIdentifier(), nil
-	case "blake3":
-		return longtaillib.GetBlake3HashIdentifier(), nil
+	if identifier, exists := hashIdentifierMap[hashAlgorithm]; exists {
+		return identifier, nil
 	}
-	return 0, fmt.Errorf("not a supportd hash api: `%s`", hashAlgorithm)
-}
-
-func byteCountDecimal(b uint64) string {
-	const unit = 1000
-	if b < unit {
-		return fmt.Sprintf("%d", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %c", float64(b)/float64(div), "kMGTPE"[exp])
-}
-
-func byteCountBinary(b uint64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+	return 0, fmt.Errorf("not a supported hash api: `%s`", hashAlgorithm)
 }
 
 type regexPathFilter struct {
@@ -548,10 +483,10 @@ func upSyncVersion(
 	excludeFilterRegEx string,
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
-	getConfigPath string) ([]storeStat, []timeStat, error) {
+	getConfigPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 	pathFilter, err := makeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
@@ -582,7 +517,7 @@ func upSyncVersion(
 	}
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	sourceIndexReader := asyncVersionIndexReader{}
 	sourceIndexReader.read(sourceFolderPath,
@@ -613,7 +548,7 @@ func upSyncVersion(
 		return storeStats, timeStats, err
 	}
 	defer vindex.Dispose()
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceIndexTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceIndexTime})
 
 	getMissingContentStartTime := time.Now()
 	existingRemoteStoreIndex, errno := getExistingStoreIndexSync(indexStore, vindex.GetChunkHashes(), minBlockUsagePercent)
@@ -634,7 +569,7 @@ func upSyncVersion(
 	defer versionMissingStoreIndex.Dispose()
 
 	getMissingContentTime := time.Since(getMissingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get content index", getMissingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getMissingContentTime})
 
 	writeContentStartTime := time.Now()
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
@@ -654,7 +589,7 @@ func upSyncVersion(
 		}
 	}
 	writeContentTime := time.Since(writeContentStartTime)
-	timeStats = append(timeStats, timeStat{"Write version content", writeContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Write version content", writeContentTime})
 
 	flushStartTime := time.Now()
 
@@ -684,15 +619,15 @@ func upSyncVersion(
 	}
 
 	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
 	indexStoreStats, errno := indexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Compress", indexStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Compress", indexStoreStats})
 	}
 	remoteStoreStats, errno := remoteStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 
 	writeVersionIndexStartTime := time.Now()
@@ -706,7 +641,7 @@ func upSyncVersion(
 		return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtaillib.longtailstorelib.WriteToURL() failed")
 	}
 	writeVersionIndexTime := time.Since(writeVersionIndexStartTime)
-	timeStats = append(timeStats, timeStat{"Write version index", writeVersionIndexTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Write version index", writeVersionIndexTime})
 
 	if versionLocalStoreIndexPath != "" {
 		writeVersionLocalStoreIndexStartTime := time.Now()
@@ -724,7 +659,7 @@ func upSyncVersion(
 			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtailstorelib.WriteToURL() failed")
 		}
 		writeVersionLocalStoreIndexTime := time.Since(writeVersionLocalStoreIndexStartTime)
-		timeStats = append(timeStats, timeStat{"Write version store index", writeVersionLocalStoreIndexTime})
+		timeStats = append(timeStats, longtailutils.TimeStat{"Write version store index", writeVersionLocalStoreIndexTime})
 	}
 
 	if getConfigPath != "" {
@@ -761,7 +696,7 @@ func upSyncVersion(
 		}
 
 		writeGetConfigTime := time.Since(writeGetConfigStartTime)
-		timeStats = append(timeStats, timeStat{"Write get config", writeGetConfigTime})
+		timeStats = append(timeStats, longtailutils.TimeStat{"Write get config", writeGetConfigTime})
 	}
 
 	return storeStats, timeStats, nil
@@ -775,10 +710,10 @@ func getVersion(
 	retainPermissions bool,
 	validate bool,
 	includeFilterRegEx string,
-	excludeFilterRegEx string) ([]storeStat, []timeStat, error) {
+	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	readGetConfigStartTime := time.Now()
 
@@ -808,7 +743,7 @@ func getVersion(
 	}
 
 	readGetConfigTime := time.Since(readGetConfigStartTime)
-	timeStats = append(timeStats, timeStat{"Read get config", readGetConfigTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read get config", readGetConfigTime})
 
 	downSyncStoreStats, downSyncTimeStats, err := downSyncVersion(
 		blobStoreURI,
@@ -838,10 +773,10 @@ func downSyncVersion(
 	validate bool,
 	versionLocalStoreIndexPath string,
 	includeFilterRegEx string,
-	excludeFilterRegEx string) ([]storeStat, []timeStat, error) {
+	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 
@@ -890,7 +825,7 @@ func downSyncVersion(
 	defer sourceVersionIndex.Dispose()
 
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
 	targetChunkSize := sourceVersionIndex.GetTargetChunkSize()
@@ -949,14 +884,14 @@ func downSyncVersion(
 	}
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	targetVersionIndex, hash, readTargetIndexTime, err := targetIndexReader.get()
 	if err != nil {
 		return storeStats, timeStats, err
 	}
 	defer targetVersionIndex.Dispose()
-	timeStats = append(timeStats, timeStat{"Read target index", readTargetIndexTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read target index", readTargetIndexTime})
 
 	getExistingContentStartTime := time.Now()
 	versionDiff, errno := longtaillib.CreateVersionDiff(
@@ -981,7 +916,7 @@ func downSyncVersion(
 	}
 	defer retargettedVersionStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get content index", getExistingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
 
 	changeVersionStartTime := time.Now()
 	changeVersionProgress := CreateProgress("Updating version")
@@ -1003,7 +938,7 @@ func downSyncVersion(
 	}
 
 	changeVersionTime := time.Since(changeVersionStartTime)
-	timeStats = append(timeStats, timeStat{"Change version", changeVersionTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Change version", changeVersionTime})
 
 	flushStartTime := time.Now()
 
@@ -1086,31 +1021,31 @@ func downSyncVersion(
 	}
 
 	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
 	shareStoreStats, errno := indexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Share", shareStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Share", shareStoreStats})
 	}
 	lruStoreStats, errno := lruBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"LRU", lruStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"LRU", lruStoreStats})
 	}
 	compressStoreStats, errno := compressBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Compress", compressStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Compress", compressStoreStats})
 	}
 	cacheStoreStats, errno := cacheBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Cache", cacheStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Cache", cacheStoreStats})
 	}
 	localStoreStats, errno := localIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Local", localStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Local", localStoreStats})
 	}
 	remoteStoreStats, errno := remoteIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 
 	if validate {
@@ -1185,7 +1120,7 @@ func downSyncVersion(
 			}
 		}
 		validateTime := time.Since(validateStartTime)
-		timeStats = append(timeStats, timeStat{"Validate", validateTime})
+		timeStats = append(timeStats, longtailutils.TimeStat{"Validate", validateTime})
 	}
 
 	return storeStats, timeStats, nil
@@ -1206,10 +1141,10 @@ func hashIdentifierToString(hashIdentifier uint32) string {
 
 func validateVersion(
 	blobStoreURI string,
-	versionIndexPath string) ([]storeStat, []timeStat, error) {
+	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 
@@ -1223,7 +1158,7 @@ func validateVersion(
 	}
 	defer indexStore.Dispose()
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
@@ -1236,7 +1171,7 @@ func validateVersion(
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	getExistingContentStartTime := time.Now()
 	remoteStoreIndex, errno := getExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
@@ -1245,7 +1180,7 @@ func validateVersion(
 	}
 	defer remoteStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get content index", getExistingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
 
 	validateStartTime := time.Now()
 	errno = longtaillib.ValidateStore(remoteStoreIndex, versionIndex)
@@ -1253,14 +1188,14 @@ func validateVersion(
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: longtaillib.ValidateContent() failed")
 	}
 	validateTime := time.Since(validateStartTime)
-	timeStats = append(timeStats, timeStat{"Validate", validateTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Validate", validateTime})
 
 	return storeStats, timeStats, nil
 }
 
-func showVersionIndex(versionIndexPath string, compact bool) ([]storeStat, []timeStat, error) {
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+func showVersionIndex(versionIndexPath string, compact bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	readSourceStartTime := time.Now()
 
@@ -1274,7 +1209,7 @@ func showVersionIndex(versionIndexPath string, compact bool) ([]storeStat, []tim
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	var smallestChunkSize uint32
 	var largestChunkSize uint32
@@ -1329,21 +1264,21 @@ func showVersionIndex(versionIndexPath string, compact bool) ([]storeStat, []tim
 		fmt.Printf("Version:             %d\n", versionIndex.GetVersion())
 		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(versionIndex.GetHashIdentifier()))
 		fmt.Printf("Target Chunk Size:   %d\n", versionIndex.GetTargetChunkSize())
-		fmt.Printf("Asset Count:         %d   (%s)\n", versionIndex.GetAssetCount(), byteCountDecimal(uint64(versionIndex.GetAssetCount())))
-		fmt.Printf("Asset Total Size:    %d   (%s)\n", totalAssetSize, byteCountBinary(totalAssetSize))
-		fmt.Printf("Chunk Count:         %d   (%s)\n", versionIndex.GetChunkCount(), byteCountDecimal(uint64(versionIndex.GetChunkCount())))
-		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, byteCountBinary(totalChunkSize))
-		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, byteCountBinary(uint64(averageChunkSize)))
-		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, byteCountBinary(uint64(smallestChunkSize)))
-		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, byteCountBinary(uint64(largestChunkSize)))
+		fmt.Printf("Asset Count:         %d   (%s)\n", versionIndex.GetAssetCount(), longtailutils.ByteCountDecimal(uint64(versionIndex.GetAssetCount())))
+		fmt.Printf("Asset Total Size:    %d   (%s)\n", totalAssetSize, longtailutils.ByteCountBinary(totalAssetSize))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", versionIndex.GetChunkCount(), longtailutils.ByteCountDecimal(uint64(versionIndex.GetChunkCount())))
+		fmt.Printf("Chunk Total Size:    %d   (%s)\n", totalChunkSize, longtailutils.ByteCountBinary(totalChunkSize))
+		fmt.Printf("Average Chunk Size:  %d   (%s)\n", averageChunkSize, longtailutils.ByteCountBinary(uint64(averageChunkSize)))
+		fmt.Printf("Smallest Chunk Size: %d   (%s)\n", smallestChunkSize, longtailutils.ByteCountBinary(uint64(smallestChunkSize)))
+		fmt.Printf("Largest Chunk Size:  %d   (%s)\n", largestChunkSize, longtailutils.ByteCountBinary(uint64(largestChunkSize)))
 	}
 
 	return storeStats, timeStats, nil
 }
 
-func showStoreIndex(storeIndexPath string, compact bool, details bool) ([]storeStat, []timeStat, error) {
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+func showStoreIndex(storeIndexPath string, compact bool, details bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	readStoreIndexStartTime := time.Now()
 
@@ -1357,7 +1292,7 @@ func showStoreIndex(storeIndexPath string, compact bool, details bool) ([]storeS
 	}
 	defer storeIndex.Dispose()
 	readStoreIndexTime := time.Since(readStoreIndexStartTime)
-	timeStats = append(timeStats, timeStat{"Read store index", readStoreIndexTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read store index", readStoreIndexTime})
 
 	storedChunksSizes := uint64(0)
 	uniqueStoredChunksSizes := uint64(0)
@@ -1374,7 +1309,7 @@ func showStoreIndex(storeIndexPath string, compact bool, details bool) ([]storeS
 			uniqueStoredChunksSizes += uint64(size)
 		}
 		getChunkSizesTime := time.Since(getChunkSizesStartTime)
-		timeStats = append(timeStats, timeStat{"Get chunk sizes", getChunkSizesTime})
+		timeStats = append(timeStats, longtailutils.TimeStat{"Get chunk sizes", getChunkSizesTime})
 	}
 
 	if compact {
@@ -1393,81 +1328,20 @@ func showStoreIndex(storeIndexPath string, compact bool, details bool) ([]storeS
 	} else {
 		fmt.Printf("Version:             %d\n", storeIndex.GetVersion())
 		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(storeIndex.GetHashIdentifier()))
-		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), byteCountDecimal(uint64(storeIndex.GetBlockCount())))
-		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), byteCountDecimal(uint64(storeIndex.GetChunkCount())))
+		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), longtailutils.ByteCountDecimal(uint64(storeIndex.GetBlockCount())))
+		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), longtailutils.ByteCountDecimal(uint64(storeIndex.GetChunkCount())))
 		if details {
-			fmt.Printf("Data size:           %d   (%s)\n", storedChunksSizes, byteCountBinary(storedChunksSizes))
-			fmt.Printf("Unique Data size:    %d   (%s)\n", uniqueStoredChunksSizes, byteCountBinary(uniqueStoredChunksSizes))
+			fmt.Printf("Data size:           %d   (%s)\n", storedChunksSizes, longtailutils.ByteCountBinary(storedChunksSizes))
+			fmt.Printf("Unique Data size:    %d   (%s)\n", uniqueStoredChunksSizes, longtailutils.ByteCountBinary(uniqueStoredChunksSizes))
 		}
 	}
 
 	return storeStats, timeStats, nil
 }
 
-func getDetailsString(path string, size uint64, permissions uint16, isDir bool, sizePadding int) string {
-	sizeString := fmt.Sprintf("%d", size)
-	sizeString = strings.Repeat(" ", sizePadding-len(sizeString)) + sizeString
-	bits := ""
-	if isDir {
-		bits += "d"
-		path = strings.TrimRight(path, "/")
-	} else {
-		bits += "-"
-	}
-	if (permissions & 0400) == 0 {
-		bits += "-"
-	} else {
-		bits += "r"
-	}
-	if (permissions & 0200) == 0 {
-		bits += "-"
-	} else {
-		bits += "w"
-	}
-	if (permissions & 0100) == 0 {
-		bits += "-"
-	} else {
-		bits += "x"
-	}
-
-	if (permissions & 0040) == 0 {
-		bits += "-"
-	} else {
-		bits += "r"
-	}
-	if (permissions & 0020) == 0 {
-		bits += "-"
-	} else {
-		bits += "w"
-	}
-	if (permissions & 0010) == 0 {
-		bits += "-"
-	} else {
-		bits += "x"
-	}
-
-	if (permissions & 0004) == 0 {
-		bits += "-"
-	} else {
-		bits += "r"
-	}
-	if (permissions & 0002) == 0 {
-		bits += "-"
-	} else {
-		bits += "w"
-	}
-	if (permissions & 0001) == 0 {
-		bits += "-"
-	} else {
-		bits += "x"
-	}
-
-	return fmt.Sprintf("%s %s %s", bits, sizeString, path)
-}
-
-func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]storeStat, []timeStat, error) {
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
@@ -1480,7 +1354,7 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]storeStat, [
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	assetCount := versionIndex.GetAssetCount()
 
@@ -1501,7 +1375,7 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]storeStat, [
 			isDir := strings.HasSuffix(path, "/")
 			assetSize := versionIndex.GetAssetSize(i)
 			permissions := versionIndex.GetAssetPermissions(i)
-			detailsString := getDetailsString(path, assetSize, permissions, isDir, sizePadding)
+			detailsString := longtailutils.GetDetailsString(path, assetSize, permissions, isDir, sizePadding)
 			fmt.Printf("%s\n", detailsString)
 		} else {
 			fmt.Printf("%s\n", path)
@@ -1516,10 +1390,10 @@ func cpVersionIndex(
 	versionIndexPath string,
 	localCachePath string,
 	sourcePath string,
-	targetPath string) ([]storeStat, []timeStat, error) {
+	targetPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 
@@ -1564,7 +1438,7 @@ func cpVersionIndex(
 	defer indexStore.Dispose()
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
@@ -1577,7 +1451,7 @@ func cpVersionIndex(
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	hashIdentifier := versionIndex.GetHashIdentifier()
 
@@ -1593,7 +1467,7 @@ func cpVersionIndex(
 	}
 	defer storeIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get store index", getExistingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get store index", getExistingContentTime})
 
 	createBlockStoreFSStartTime := time.Now()
 	blockStoreFS := longtaillib.CreateBlockStoreStorageAPI(
@@ -1607,7 +1481,7 @@ func cpVersionIndex(
 	}
 	defer blockStoreFS.Dispose()
 	createBlockStoreFSTime := time.Since(createBlockStoreFSStartTime)
-	timeStats = append(timeStats, timeStat{"Create Blockstore FS", createBlockStoreFSTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Create Blockstore FS", createBlockStoreFSTime})
 
 	copyFileStartTime := time.Now()
 	// Only support writing to regular file path for now
@@ -1642,7 +1516,7 @@ func cpVersionIndex(
 		offset += left
 	}
 	copyFileTime := time.Since(copyFileStartTime)
-	timeStats = append(timeStats, timeStat{"Copy file", copyFileTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Copy file", copyFileTime})
 
 	flushStartTime := time.Now()
 
@@ -1724,31 +1598,31 @@ func cpVersionIndex(
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
 	shareStoreStats, errno := indexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Share", shareStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Share", shareStoreStats})
 	}
 	lruStoreStats, errno := lruBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"LRU", lruStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"LRU", lruStoreStats})
 	}
 	compressStoreStats, errno := compressBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Compress", compressStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Compress", compressStoreStats})
 	}
 	cacheStoreStats, errno := cacheBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Cache", cacheStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Cache", cacheStoreStats})
 	}
 	localStoreStats, errno := localIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Local", localStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Local", localStoreStats})
 	}
 	remoteStoreStats, errno := remoteIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 
 	return storeStats, timeStats, nil
@@ -1756,10 +1630,10 @@ func cpVersionIndex(
 
 func initRemoteStore(
 	blobStoreURI string,
-	hashAlgorithm string) ([]storeStat, []timeStat, error) {
+	hashAlgorithm string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 
@@ -1772,7 +1646,7 @@ func initRemoteStore(
 	}
 	defer remoteIndexStore.Dispose()
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	getExistingContentStartTime := time.Now()
 	retargetStoreIndex, errno := getExistingStoreIndexSync(remoteIndexStore, []uint64{}, 0)
@@ -1781,7 +1655,7 @@ func initRemoteStore(
 	}
 	defer retargetStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get store index", getExistingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get store index", getExistingContentTime})
 
 	flushStartTime := time.Now()
 
@@ -1798,11 +1672,11 @@ func initRemoteStore(
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: remoteStore.Flush: Failed for `%s` failed", blobStoreURI)
 	}
 	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
 	remoteStoreStats, errno := remoteIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 
 	return storeStats, timeStats, nil
@@ -1810,9 +1684,9 @@ func initRemoteStore(
 
 func lsVersionIndex(
 	versionIndexPath string,
-	commandLSVersionDir string) ([]storeStat, []timeStat, error) {
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	commandLSVersionDir string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
@@ -1830,7 +1704,7 @@ func lsVersionIndex(
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	setupStartTime := time.Now()
 	hashIdentifier := versionIndex.GetHashIdentifier()
@@ -1864,7 +1738,7 @@ func lsVersionIndex(
 	defer blockStoreFS.Dispose()
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	searchDir := ""
 	if commandLSVersionDir != "." {
@@ -1884,7 +1758,7 @@ func lsVersionIndex(
 		if errno != 0 {
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "lsVersionIndex: GetEntryProperties.GetEntryProperties() failed")
 		}
-		detailsString := getDetailsString(properties.Name, properties.Size, properties.Permissions, properties.IsDir, 16)
+		detailsString := longtailutils.GetDetailsString(properties.Name, properties.Size, properties.Permissions, properties.IsDir, 16)
 		fmt.Printf("%s\n", detailsString)
 
 		errno = blockStoreFS.FindNext(iterator)
@@ -1901,10 +1775,10 @@ func lsVersionIndex(
 func stats(
 	blobStoreURI string,
 	versionIndexPath string,
-	localCachePath string) ([]storeStat, []timeStat, error) {
+	localCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
@@ -1942,7 +1816,7 @@ func stats(
 	defer localFS.Dispose()
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
@@ -1955,7 +1829,7 @@ func stats(
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	getExistingContentStartTime := time.Now()
 	existingStoreIndex, errno := getExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
@@ -1964,7 +1838,7 @@ func stats(
 	}
 	defer existingStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get store index", getExistingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get store index", getExistingContentTime})
 
 	blockLookup := make(map[uint64]uint64)
 
@@ -2008,7 +1882,7 @@ func stats(
 	}
 
 	fetchingBlocksTime := time.Since(fetchingBlocksStartTime)
-	timeStats = append(timeStats, timeStat{"Fetching blocks", fetchingBlocksTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Fetching blocks", fetchingBlocksTime})
 
 	blockUsage := uint32(100)
 	if blockChunkCount > 0 {
@@ -2086,19 +1960,19 @@ func stats(
 	}
 
 	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
 	cacheStoreStats, errno := cacheBlockStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Cache", cacheStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Cache", cacheStoreStats})
 	}
 	localStoreStats, errno := localIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Local", localStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Local", localStoreStats})
 	}
 	remoteStoreStats, errno := remoteIndexStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 	return storeStats, timeStats, nil
 }
@@ -2106,9 +1980,9 @@ func stats(
 func createVersionStoreIndex(
 	blobStoreURI string,
 	sourceFilePath string,
-	versionLocalStoreIndexPath string) ([]storeStat, []timeStat, error) {
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	versionLocalStoreIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
 
@@ -2122,7 +1996,7 @@ func createVersionStoreIndex(
 	defer indexStore.Dispose()
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
@@ -2135,7 +2009,7 @@ func createVersionStoreIndex(
 	}
 	defer sourceVersionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
-	timeStats = append(timeStats, timeStat{"Read source index", readSourceTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	getExistingContentStartTime := time.Now()
 	chunkHashes := sourceVersionIndex.GetChunkHashes()
@@ -2146,7 +2020,7 @@ func createVersionStoreIndex(
 	}
 	defer retargettedVersionStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
-	timeStats = append(timeStats, timeStat{"Get content index", getExistingContentTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
 
 	writeVersionLocalStoreIndexStartTime := time.Now()
 	versionLocalStoreIndexBuffer, errno := longtaillib.WriteStoreIndexToBuffer(retargettedVersionStoreIndex)
@@ -2158,7 +2032,7 @@ func createVersionStoreIndex(
 		return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtaillib.longtailstorelib.WriteToURL() failed")
 	}
 	writeVersionLocalStoreIndexTime := time.Since(writeVersionLocalStoreIndexStartTime)
-	timeStats = append(timeStats, timeStat{"Write version store index", writeVersionLocalStoreIndexTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Write version store index", writeVersionLocalStoreIndexTime})
 
 	return storeStats, timeStats, nil
 }
@@ -2540,10 +2414,10 @@ func cloneStore(
 	hashing string,
 	compression string,
 	minBlockUsagePercent uint32,
-	skipValidate bool) ([]storeStat, []timeStat, error) {
+	skipValidate bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
@@ -2686,11 +2560,11 @@ func pruneStore(
 	sourcePaths string,
 	versionLocalStoreIndexesPath string,
 	writeVersionLocalStoreIndex bool,
-	dryRun bool) ([]storeStat, []timeStat, error) {
+	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 
 	setupStartTime := time.Now()
-	storeStats := []storeStat{}
-	timeStats := []timeStat{}
+	storeStats := []longtailutils.StoreStat{}
+	timeStats := []longtailutils.TimeStat{}
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
@@ -2707,7 +2581,7 @@ func pruneStore(
 	defer remoteStore.Dispose()
 
 	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, timeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	sourceFilePathsStartTime := time.Now()
 
@@ -2724,7 +2598,7 @@ func pruneStore(
 		sourceFilePaths = append(sourceFilePaths, sourceFilePath)
 	}
 	sourceFilePathsTime := time.Since(sourceFilePathsStartTime)
-	timeStats = append(timeStats, timeStat{"Read source file list", sourceFilePathsTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source file list", sourceFilePathsTime})
 
 	versionLocalStoreIndexFilePaths := make([]string, 0)
 	if strings.TrimSpace(versionLocalStoreIndexesPath) != "" {
@@ -2742,7 +2616,7 @@ func pruneStore(
 		}
 
 		versionLocalStoreIndexesPathsTime := time.Since(versionLocalStoreIndexesPathsStartTime)
-		timeStats = append(timeStats, timeStat{"Read version local store index file list", versionLocalStoreIndexesPathsTime})
+		timeStats = append(timeStats, longtailutils.TimeStat{"Read version local store index file list", versionLocalStoreIndexesPathsTime})
 
 		if len(sourceFilePaths) != len(versionLocalStoreIndexFilePaths) {
 			return storeStats, timeStats, fmt.Errorf("Number of files in `%s` does not match number of files in `%s`", sourcesFile, versionLocalStoreIndexesPath)
@@ -2867,7 +2741,7 @@ func pruneStore(
 	progress.OnProgress(uint32(len(sourceFilePaths)), uint32(len(sourceFilePaths)))
 
 	scanningForBlocksTime := time.Since(scanningForBlocksStartTime)
-	timeStats = append(timeStats, timeStat{"Scanning", scanningForBlocksTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Scanning", scanningForBlocksTime})
 
 	if dryRun {
 		fmt.Printf("Prune would keep %d blocks\n", len(usedBlocks))
@@ -2888,7 +2762,7 @@ func pruneStore(
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "store.PruneBlocks() failed")
 	}
 	pruneTime := time.Since(pruneStartTime)
-	timeStats = append(timeStats, timeStat{"Prune", pruneTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Prune", pruneTime})
 
 	fmt.Printf("Pruned %d blocks\n", prunedBlockCount)
 
@@ -2905,19 +2779,19 @@ func pruneStore(
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: remoteStore.Flush: Failed for `%s` failed", storageURI)
 	}
 	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, timeStat{"Flush", flushTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
 	remoteStoreStats, errno := remoteStore.GetStats()
 	if errno == 0 {
-		storeStats = append(storeStats, storeStat{"Remote", remoteStoreStats})
+		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 
 	return storeStats, timeStats, nil
 }
 
 type Context struct {
-	StoreStats []storeStat
-	TimeStats  []timeStat
+	StoreStats []longtailutils.StoreStat
+	TimeStats  []longtailutils.TimeStat
 }
 
 type CompressionOption struct {
@@ -3330,24 +3204,24 @@ func main() {
 
 	defer func() {
 		executionTime := time.Since(executionStartTime)
-		context.TimeStats = append(context.TimeStats, timeStat{"Execution", executionTime})
+		context.TimeStats = append(context.TimeStats, longtailutils.TimeStat{"Execution", executionTime})
 
 		if cli.ShowStoreStats {
 			for _, s := range context.StoreStats {
-				printStats(s.name, s.stats)
+				longtailutils.PrintStats(s.Name, s.Stats)
 			}
 		}
 
 		if cli.ShowStats {
 			maxLen := 0
 			for _, s := range context.TimeStats {
-				if len(s.name) > maxLen {
-					maxLen = len(s.name)
+				if len(s.Name) > maxLen {
+					maxLen = len(s.Name)
 				}
 			}
 			for _, s := range context.TimeStats {
-				name := fmt.Sprintf("%s:", s.name)
-				log.Printf("%-*s %s", maxLen+1, name, s.dur)
+				name := fmt.Sprintf("%s:", s.Name)
+				log.Printf("%-*s %s", maxLen+1, name, s.Dur)
 			}
 		}
 	}()
@@ -3396,7 +3270,7 @@ func main() {
 
 	err = ctx.Run(context)
 
-	context.TimeStats = append([]timeStat{{"Init", initTime}}, context.TimeStats...)
+	context.TimeStats = append([]longtailutils.TimeStat{{"Init", initTime}}, context.TimeStats...)
 
 	if err != nil {
 		log.Fatal(err)

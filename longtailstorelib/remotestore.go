@@ -37,6 +37,12 @@ type getBlockMessage struct {
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetStoredBlockAPI
 }
 
+type deleteBlockMessage struct {
+	blockHash      uint64
+	completeSignal *sync.WaitGroup
+	successCounter *uint32
+}
+
 type prefetchBlockMessage struct {
 	blockHash uint64
 }
@@ -56,6 +62,11 @@ type getExistingContentMessage struct {
 	asyncCompleteAPI     longtaillib.Longtail_AsyncGetExistingContentAPI
 }
 
+type pruneBlocksMessage struct {
+	keepBlockHashes  []uint64
+	asyncCompleteAPI longtaillib.Longtail_AsyncPruneBlocksAPI
+}
+
 type pendingPrefetchedBlock struct {
 	storedBlock       longtaillib.Longtail_StoredBlock
 	completeCallbacks []longtaillib.Longtail_AsyncGetStoredBlockAPI
@@ -72,8 +83,10 @@ type remoteStore struct {
 	getBlockChan           chan getBlockMessage
 	preflightGetChan       chan preflightGetMessage
 	prefetchBlockChan      chan prefetchBlockMessage
+	deleteBlockChan        chan deleteBlockMessage
 	blockIndexChan         chan blockIndexMessage
 	getExistingContentChan chan getExistingContentMessage
+	pruneBlocksChan        chan pruneBlocksMessage
 	workerFlushChan        chan int
 	workerFlushReplyChan   chan int
 	indexFlushChan         chan int
@@ -240,6 +253,20 @@ func fetchBlock(
 	getMsg.asyncCompleteAPI.OnComplete(storedBlock, longtaillib.ErrorToErrno(getStoredBlockErr, longtaillib.EIO))
 }
 
+func deleteBlock(
+	ctx context.Context,
+	s *remoteStore,
+	client BlobClient,
+	blockHash uint64) error {
+	key := getBlockPath("chunks", blockHash)
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return err
+	}
+	err = objHandle.Delete()
+	return err
+}
+
 func prefetchBlock(
 	ctx context.Context,
 	s *remoteStore,
@@ -343,6 +370,7 @@ func remoteWorker(
 	putBlockMessages <-chan putBlockMessage,
 	getBlockMessages <-chan getBlockMessage,
 	prefetchBlockChan <-chan prefetchBlockMessage,
+	deleteBlocksChan <-chan deleteBlockMessage,
 	blockIndexMessages chan<- blockIndexMessage,
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int,
@@ -371,6 +399,13 @@ func remoteWorker(
 		case getMsg := <-getBlockMessages:
 			received++
 			fetchBlock(ctx, s, client, getMsg)
+		case deleteMsg := <-deleteBlocksChan:
+			received++
+			err := deleteBlock(ctx, s, client, deleteMsg.blockHash)
+			if err == nil {
+				atomic.AddUint32(deleteMsg.successCounter, 1)
+			}
+			deleteMsg.completeSignal.Done()
 		default:
 		}
 		if received == 0 {
@@ -394,6 +429,12 @@ func remoteWorker(
 					fetchBlock(ctx, s, client, getMsg)
 				case prefetchMsg := <-prefetchBlockChan:
 					prefetchBlock(ctx, s, client, prefetchMsg)
+				case deleteMsg := <-deleteBlocksChan:
+					err := deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					if err == nil {
+						atomic.AddUint32(deleteMsg.successCounter, 1)
+					}
+					deleteMsg.completeSignal.Done()
 				}
 			} else {
 				select {
@@ -413,6 +454,12 @@ func remoteWorker(
 					}
 				case getMsg := <-getBlockMessages:
 					fetchBlock(ctx, s, client, getMsg)
+				case deleteMsg := <-deleteBlocksChan:
+					err := deleteBlock(ctx, s, client, deleteMsg.blockHash)
+					if err == nil {
+						atomic.AddUint32(deleteMsg.successCounter, 1)
+					}
+					deleteMsg.completeSignal.Done()
 				}
 			}
 		}
@@ -439,6 +486,7 @@ func addBlocksToRemoteStoreIndex(
 func storeIndexWorkerReplyErrorState(
 	blockIndexMessages <-chan blockIndexMessage,
 	getExistingContentMessages <-chan getExistingContentMessage,
+	pruneBlocksMessages <-chan pruneBlocksMessage,
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int) {
 	for {
@@ -451,6 +499,8 @@ func storeIndexWorkerReplyErrorState(
 			}
 		case getExistingContentMessage := <-getExistingContentMessages:
 			getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.EINVAL)
+		case pruneBlocksMessage := <-pruneBlocksMessages:
+			pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.EINVAL)
 		}
 	}
 }
@@ -477,6 +527,45 @@ func onGetExistingContentMessage(
 		return
 	}
 	message.asyncCompleteAPI.OnComplete(existingStoreIndex, 0)
+}
+
+func onPruneBlocksMessage(
+	ctx context.Context,
+	s *remoteStore,
+	blobClient BlobClient,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	keepBlockHashes []uint64) (uint32, longtaillib.Longtail_StoreIndex, int) {
+
+	prunedIndex, errno := longtaillib.PruneStoreIndex(storeIndex, keepBlockHashes)
+	if errno != 0 {
+		return 0, longtaillib.Longtail_StoreIndex{}, errno
+	}
+
+	err := tryOverwriteStoreIndexWithRetry(ctx, prunedIndex, blobClient)
+	if err != nil {
+		prunedIndex.Dispose()
+		return 0, longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO)
+	}
+
+	keptBlockHashes := prunedIndex.GetBlockHashes()
+	keptBlocksMap := make(map[uint64]bool)
+	for _, blockHash := range keptBlockHashes {
+		keptBlocksMap[blockHash] = true
+	}
+
+	var wg sync.WaitGroup
+
+	prunedCount := uint32(0)
+	existingBlockHashes := storeIndex.GetBlockHashes()
+	for _, blockHash := range existingBlockHashes {
+		if _, exists := keptBlocksMap[blockHash]; exists {
+			continue
+		}
+		wg.Add(1)
+		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash, completeSignal: &wg, successCounter: &prunedCount}
+	}
+	wg.Wait()
+	return prunedCount, prunedIndex, 0
 }
 
 func getCurrentStoreIndex(
@@ -513,13 +602,14 @@ func contentIndexWorker(
 	prefetchBlockMessages chan<- prefetchBlockMessage,
 	blockIndexMessages <-chan blockIndexMessage,
 	getExistingContentMessages <-chan getExistingContentMessage,
+	pruneBlocksMessages <-chan pruneBlocksMessage,
 	flushMessages <-chan int,
 	flushReplyMessages chan<- int,
 	accessType AccessType) error {
 
 	client, err := s.blobStore.NewClient(ctx)
 	if err != nil {
-		storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
+		storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 		return errors.Wrap(err, s.blobStore.String())
 	}
 	defer client.Close()
@@ -544,7 +634,7 @@ func contentIndexWorker(
 			if err != nil {
 				storeIndex.Dispose()
 				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
 			if updatedStoreIndex.IsValid() {
@@ -566,7 +656,7 @@ func contentIndexWorker(
 			if err != nil {
 				storeIndex.Dispose()
 				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
 			if updatedStoreIndex.IsValid() {
@@ -575,6 +665,33 @@ func contentIndexWorker(
 			} else {
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 			}
+		case pruneBlocksMessage := <-pruneBlocksMessages:
+			if accessType == ReadOnly {
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.EACCES)
+				continue
+			}
+			received++
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, optionalStoreIndexPath, client, accessType, storeIndex, addedBlockIndexes)
+			if err != nil {
+				storeIndex.Dispose()
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
+				return err
+			}
+			errno := 0
+			prunedCount := uint32(0)
+			prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
+			if updatedStoreIndex.IsValid() {
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
+				updatedStoreIndex.Dispose()
+			} else {
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
+			}
+			if prunedStoreIndex.IsValid() {
+				storeIndex.Dispose()
+				storeIndex = prunedStoreIndex
+			}
+			pruneBlocksMessage.asyncCompleteAPI.OnComplete(prunedCount, errno)
 		default:
 		}
 
@@ -602,7 +719,7 @@ func contentIndexWorker(
 			if err != nil {
 				storeIndex.Dispose()
 				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
 			if updatedStoreIndex.IsValid() {
@@ -622,7 +739,7 @@ func contentIndexWorker(
 			if err != nil {
 				storeIndex.Dispose()
 				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, longtaillib.ErrorToErrno(err, longtaillib.EIO))
-				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, flushMessages, flushReplyMessages)
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return err
 			}
 			if updatedStoreIndex.IsValid() {
@@ -631,6 +748,32 @@ func contentIndexWorker(
 			} else {
 				onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
 			}
+		case pruneBlocksMessage := <-pruneBlocksMessages:
+			if accessType == ReadOnly {
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.EACCES)
+				continue
+			}
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, optionalStoreIndexPath, client, accessType, storeIndex, addedBlockIndexes)
+			if err != nil {
+				storeIndex.Dispose()
+				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, longtaillib.ErrorToErrno(err, longtaillib.EIO))
+				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
+				return err
+			}
+			errno := 0
+			prunedCount := uint32(0)
+			prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
+			if updatedStoreIndex.IsValid() {
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
+				updatedStoreIndex.Dispose()
+			} else {
+				prunedCount, prunedStoreIndex, errno = onPruneBlocksMessage(ctx, s, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
+			}
+			if prunedStoreIndex.IsValid() {
+				storeIndex.Dispose()
+				storeIndex = prunedStoreIndex
+			}
+			pruneBlocksMessage.asyncCompleteAPI.OnComplete(prunedCount, errno)
 		}
 	}
 
@@ -672,9 +815,11 @@ func NewRemoteBlockStore(
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
 	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
 	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)
+	s.deleteBlockChan = make(chan deleteBlockMessage, s.workerCount*8)
 	s.preflightGetChan = make(chan preflightGetMessage, 16)
 	s.blockIndexChan = make(chan blockIndexMessage, s.workerCount*2048)
 	s.getExistingContentChan = make(chan getExistingContentMessage, 16)
+	s.pruneBlocksChan = make(chan pruneBlocksMessage, 1)
 	s.workerFlushChan = make(chan int, s.workerCount)
 	s.workerFlushReplyChan = make(chan int, s.workerCount)
 	s.indexFlushChan = make(chan int, 1)
@@ -687,13 +832,33 @@ func NewRemoteBlockStore(
 	s.prefetchBlocks = map[uint64]*pendingPrefetchedBlock{}
 
 	go func() {
-		err := contentIndexWorker(ctx, s, optionalStoreIndexPath, s.preflightGetChan, s.prefetchBlockChan, s.blockIndexChan, s.getExistingContentChan, s.indexFlushChan, s.indexFlushReplyChan, accessType)
+		err := contentIndexWorker(
+			ctx,
+			s,
+			optionalStoreIndexPath,
+			s.preflightGetChan,
+			s.prefetchBlockChan,
+			s.blockIndexChan,
+			s.getExistingContentChan,
+			s.pruneBlocksChan,
+			s.indexFlushChan,
+			s.indexFlushReplyChan,
+			accessType)
 		s.workerErrorChan <- err
 	}()
 
 	for i := 0; i < s.workerCount; i++ {
 		go func() {
-			err := remoteWorker(ctx, s, s.putBlockChan, s.getBlockChan, s.prefetchBlockChan, s.blockIndexChan, s.workerFlushChan, s.workerFlushReplyChan, accessType)
+			err := remoteWorker(ctx,
+				s,
+				s.putBlockChan,
+				s.getBlockChan,
+				s.prefetchBlockChan,
+				s.deleteBlockChan,
+				s.blockIndexChan,
+				s.workerFlushChan,
+				s.workerFlushReplyChan,
+				accessType)
 			s.workerErrorChan <- err
 		}()
 	}
@@ -725,6 +890,14 @@ func (s *remoteStore) GetExistingContent(
 	minBlockUsagePercent uint32,
 	asyncCompleteAPI longtaillib.Longtail_AsyncGetExistingContentAPI) int {
 	s.getExistingContentChan <- getExistingContentMessage{chunkHashes: chunkHashes, minBlockUsagePercent: minBlockUsagePercent, asyncCompleteAPI: asyncCompleteAPI}
+	return 0
+}
+
+// PruneBlocks ...
+func (s *remoteStore) PruneBlocks(
+	keepBlockHashes []uint64,
+	asyncCompleteAPI longtaillib.Longtail_AsyncPruneBlocksAPI) int {
+	s.pruneBlocksChan <- pruneBlocksMessage{keepBlockHashes: keepBlockHashes, asyncCompleteAPI: asyncCompleteAPI}
 	return 0
 }
 
@@ -944,6 +1117,124 @@ func addToRemoteStoreIndex(
 		log.Printf("Retrying updating remote store index\n")
 	}
 	return longtaillib.Longtail_StoreIndex{}, nil
+}
+
+func tryOverwriteRemoteStoreIndexWithLocking(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	client BlobClient) (bool, error) {
+
+	storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	if errno != 0 {
+		return false, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "updateRemoteStoreIndex: WriteStoreIndexToBuffer() failed")
+	}
+
+	key := "store.lsi"
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = objHandle.LockWriteVersion()
+	if err != nil {
+		return false, err
+	}
+
+	ok, err := objHandle.Write(storeBlob)
+	if err != nil {
+		return false, errors.Wrapf(err, "updateRemoteStoreIndex: objHandle.Write() failed")
+	}
+	return ok, nil
+}
+
+func tryOverwriteRemoteStoreIndexWithoutLocking(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	client BlobClient) (bool, error) {
+
+	items, err := getStoreStoreIndexes(ctx, client)
+	if err != nil {
+		return false, err
+	}
+
+	storeBlob, errno := longtaillib.WriteStoreIndexToBuffer(storeIndex)
+	if errno != 0 {
+		return false, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.WriteStoreIndexToBuffer() failed")
+	}
+
+	sha256 := sha256.Sum256(storeBlob)
+	key := fmt.Sprintf("store_%x.lsi", sha256)
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return false, err
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	exists, err := objHandle.Exists()
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		ok, err := objHandle.Write(storeBlob)
+		if !ok || err != nil {
+			return ok, err
+		}
+	}
+
+	for _, item := range items {
+		if item == key {
+			continue
+		}
+		objHandle, err := client.NewObject(item)
+		if err != nil {
+			continue
+		}
+		err = objHandle.Delete()
+		if err != nil {
+			continue
+		}
+	}
+
+	return true, nil
+}
+
+func tryOverwriteRemoteStoreIndex(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) (bool, error) {
+	if blobClient.SupportsLocking() {
+		return tryOverwriteRemoteStoreIndexWithLocking(ctx, storeIndex, blobClient)
+	}
+	return tryOverwriteRemoteStoreIndexWithoutLocking(ctx, storeIndex, blobClient)
+}
+
+func tryOverwriteStoreIndexWithRetry(
+	ctx context.Context,
+	storeIndex longtaillib.Longtail_StoreIndex,
+	blobClient BlobClient) error {
+	errorRetries := 0
+	for {
+		ok, err := tryOverwriteRemoteStoreIndex(
+			ctx,
+			storeIndex,
+			blobClient)
+		if ok {
+			return nil
+		}
+		if err != nil {
+			errorRetries++
+			if errorRetries == 3 {
+				return errors.Wrapf(err, "addRemoteStoreIndex: tryOverwriteStoreIndexWithRetry() failed")
+			} else {
+				log.Printf("Error from tryOverwriteStoreIndexWithRetry %q\n", err)
+			}
+		}
+		log.Printf("Retrying updating remote store index\n")
+	}
 }
 
 func getStoreIndexFromBlocks(

@@ -72,6 +72,31 @@ func getExistingContent(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAP
 	return g.storeIndex, g.err
 }
 
+type pruneBlocksCompletionAPI struct {
+	wg               sync.WaitGroup
+	prunedBlockCount uint32
+	err              int
+}
+
+func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err int) {
+	a.err = err
+	a.prunedBlockCount = prunedBlockCount
+	a.wg.Done()
+}
+
+func pruneBlocksSync(indexStore longtaillib.Longtail_BlockStoreAPI, keepBlockHashes []uint64) (uint32, int) {
+	pruneBlocksComplete := &pruneBlocksCompletionAPI{}
+	pruneBlocksComplete.wg.Add(1)
+	errno := indexStore.PruneBlocks(keepBlockHashes, longtaillib.CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
+	if errno != 0 {
+		pruneBlocksComplete.wg.Done()
+		pruneBlocksComplete.wg.Wait()
+		return 0, errno
+	}
+	pruneBlocksComplete.wg.Wait()
+	return pruneBlocksComplete.prunedBlockCount, pruneBlocksComplete.err
+}
+
 func TestEmptyGetExistingContent(t *testing.T) {
 	blobStore, _ := NewTestBlobStore("the_path", true)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
@@ -230,18 +255,26 @@ func TestRestoreStore(t *testing.T) {
 	}
 	storeAPI := longtaillib.CreateBlockStoreAPI(remoteStore)
 
-	_, errno := storeBlockFromSeed(t, storeAPI, 0)
+	blocks := make([]longtaillib.Longtail_StoredBlock, 3)
+
+	errno := 0
+
+	blocks[0], errno = storeBlockFromSeed(t, storeAPI, 0)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
 	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 10)
+	blocks[1], errno = storeBlockFromSeed(t, storeAPI, 10)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 10) %d != %d", errno, 0)
 	}
-	_, errno = storeBlockFromSeed(t, storeAPI, 20)
+	blocks[2], errno = storeBlockFromSeed(t, storeAPI, 20)
 	if errno != 0 {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 20) %d != %d", errno, 0)
 	}
+
+	defer blocks[0].Dispose()
+	defer blocks[1].Dispose()
+	defer blocks[1].Dispose()
 
 	storeAPI.Dispose()
 
@@ -435,4 +468,141 @@ func TestBlockScanning(t *testing.T) {
 	if len(existingContent.GetChunkHashes()) != len(goodBlockInCorrectPathIndex.GetChunkHashes()) {
 		t.Errorf("TestBlockScanning() getExistingContent(t, storeAPI, chunks, 0) %d!= %d", len(existingContent.GetChunkHashes()), len(goodBlockInCorrectPathIndex.GetChunkHashes()))
 	}
+}
+
+func PruneStoreTest(syncStore bool, t *testing.T) {
+	blobStore, _ := NewTestBlobStore("the_path", syncStore)
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobs.Dispose()
+	remoteStore, err := NewRemoteBlockStore(
+		jobs,
+		blobStore,
+		"",
+		runtime.NumCPU(),
+		ReadWrite)
+	if err != nil {
+		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
+	}
+	storeAPI := longtaillib.CreateBlockStoreAPI(remoteStore)
+
+	blocks := make([]longtaillib.Longtail_StoredBlock, 3)
+
+	errno := 0
+	blocks[0], errno = storeBlockFromSeed(t, storeAPI, 0)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %d != %d", errno, 0)
+	}
+	blocks[1], errno = storeBlockFromSeed(t, storeAPI, 10)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 10) %d != %d", errno, 0)
+	}
+	blocks[2], errno = storeBlockFromSeed(t, storeAPI, 20)
+	if errno != 0 {
+		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 20) %d != %d", errno, 0)
+	}
+
+	blockIndexes := []longtaillib.Longtail_BlockIndex{
+		blocks[0].GetBlockIndex(),
+		blocks[1].GetBlockIndex(),
+		blocks[2].GetBlockIndex()}
+
+	blockHashes := []uint64{
+		blockIndexes[0].GetBlockHash(),
+		blockIndexes[1].GetBlockHash(),
+		blockIndexes[2].GetBlockHash()}
+
+	chunkHashesPerBlock := [][]uint64{
+		blockIndexes[0].GetChunkHashes(),
+		blockIndexes[1].GetChunkHashes(),
+		blockIndexes[2].GetChunkHashes()}
+
+	var chunkHashes []uint64
+	chunkHashes = append(chunkHashes, chunkHashesPerBlock[0]...)
+	chunkHashes = append(chunkHashes, chunkHashesPerBlock[1]...)
+	chunkHashes = append(chunkHashes, chunkHashesPerBlock[2]...)
+
+	defer blocks[0].Dispose()
+	defer blocks[1].Dispose()
+	defer blocks[1].Dispose()
+
+	fullStoreIndex, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
+	if errno != 0 {
+		t.Errorf("getExistingContent() errno %d != %d", 0, errno)
+	}
+	if !fullStoreIndex.IsValid() {
+		t.Errorf("getExistingContent() errno %t != %t", true, fullStoreIndex.IsValid())
+	}
+	defer fullStoreIndex.Dispose()
+
+	storeAPI.Dispose()
+
+	remoteStore, err = NewRemoteBlockStore(
+		jobs,
+		blobStore,
+		"",
+		runtime.NumCPU(),
+		ReadWrite)
+	if err != nil {
+		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
+	}
+	storeAPI = longtaillib.CreateBlockStoreAPI(remoteStore)
+
+	keepBlockHashes := make([]uint64, 2)
+	keepBlockHashes[0] = blockHashes[0]
+	keepBlockHashes[1] = blockHashes[2]
+	pruneBlockCount, errno := pruneBlocksSync(storeAPI, keepBlockHashes)
+	if pruneBlockCount != 1 {
+		t.Errorf("pruneBlocksSync() pruneBlockCount %d != %d", 1, pruneBlockCount)
+	}
+
+	remoteStoreFlushComplete := &flushCompletionAPI{}
+	remoteStoreFlushComplete.wg.Add(1)
+	_ = remoteStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
+	remoteStoreFlushComplete.wg.Wait()
+
+	storeAPI.Dispose()
+
+	remoteStore, err = NewRemoteBlockStore(
+		jobs,
+		blobStore,
+		"",
+		runtime.NumCPU(),
+		ReadWrite)
+	if err != nil {
+		t.Errorf("TestPutGetStoredBlock() NewRemoteBlockStore()) %v != %v", err, nil)
+	}
+	storeAPI = longtaillib.CreateBlockStoreAPI(remoteStore)
+
+	prunedStoreIndex, errno := getExistingContent(t, storeAPI, chunkHashes, 0)
+	if errno != 0 {
+		t.Errorf("getExistingContent() errno %d != %d", 0, errno)
+	}
+	if !prunedStoreIndex.IsValid() {
+		t.Errorf("getExistingContent() errno %t != %t", true, prunedStoreIndex.IsValid())
+	}
+	defer prunedStoreIndex.Dispose()
+
+	if len(prunedStoreIndex.GetBlockHashes()) != 2 {
+		t.Errorf("len(prunedStoreIndex.GetBlockHashes() %d != %d", 2, len(prunedStoreIndex.GetBlockHashes()))
+	}
+
+	expectedChunkCount := len(chunkHashesPerBlock[0]) + len(chunkHashesPerBlock[2])
+	if len(prunedStoreIndex.GetChunkHashes()) != expectedChunkCount {
+		t.Errorf("len(prunedStoreIndex.GetChunkHashes() %d != %d", expectedChunkCount, len(prunedStoreIndex.GetChunkHashes()))
+	}
+
+	_, errno = fetchBlockFromStore(t, storeAPI, blockHashes[1])
+	if errno != longtaillib.ENOENT {
+		t.Errorf("fetchBlockFromStore() %d != %d", errno, longtaillib.ENOENT)
+	}
+
+	storeAPI.Dispose()
+}
+
+func TestPruneStoreWithLocking(t *testing.T) {
+	PruneStoreTest(true, t)
+}
+
+func TestPruneStoreWithoutLocking(t *testing.T) {
+	PruneStoreTest(false, t)
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"runtime"
+	"sort"
 	"sync"
 	"testing"
 )
@@ -66,6 +67,18 @@ type testGetExistingContentCompletionAPI struct {
 func (a *testGetExistingContentCompletionAPI) OnComplete(storeIndex Longtail_StoreIndex, errno int) {
 	a.errno = errno
 	a.storeIndex = storeIndex
+	a.wg.Done()
+}
+
+type testPruneBlocksCompletionAPI struct {
+	wg               sync.WaitGroup
+	prunedBlockCount uint32
+	errno            int
+}
+
+func (a *testPruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, errno int) {
+	a.errno = errno
+	a.prunedBlockCount = prunedBlockCount
 	a.wg.Done()
 }
 
@@ -148,19 +161,19 @@ func TestAPICreate(t *testing.T) {
 	defer compressionRegistry.Dispose()
 }
 
-func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (Longtail_StoredBlock, int) {
+func createStoredBlock(chunkCount uint32, hashIdentifier uint32, hashOffset uint64) (Longtail_StoredBlock, int) {
 	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
 	chunkHashes := make([]uint64, chunkCount)
 	chunkSizes := make([]uint32, chunkCount)
 	blockOffset := uint32(0)
-	for index, _ := range chunkHashes {
-		chunkHashes[index] = uint64(index+1) * 4711
+	for index := range chunkHashes {
+		chunkHashes[index] = uint64(index+1)*4711 + hashOffset
 		chunkSizes[index] = uint32(index+1) * 10
 		blockOffset += uint32(chunkSizes[index])
 	}
 	blockData := make([]uint8, blockOffset)
 	blockOffset = 0
-	for chunkIndex, _ := range chunkHashes {
+	for chunkIndex := range chunkHashes {
 		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
 			blockData[blockOffset+index] = uint8(chunkIndex + 1)
 		}
@@ -233,7 +246,7 @@ func TestStoredblock(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
+	storedBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 	if errno != 0 {
 		t.Errorf("CreateStoredBlock() %d != %d", errno, 0)
 	}
@@ -247,7 +260,7 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 	defer SetAssert(nil)
 	SetLogLevel(1)
 
-	originalBlock, errno := createStoredBlock(2, 0xdeadbeef)
+	originalBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 	if errno != 0 {
 		t.Errorf("createStoredBlock() %d != %d", errno, 0)
 	}
@@ -283,19 +296,19 @@ func TestFSBlockStore(t *testing.T) {
 	blake3 := CreateBlake3HashAPI()
 	defer blake3.Dispose()
 
-	block1, errno := createStoredBlock(1, blake3.GetIdentifier())
+	block1, errno := createStoredBlock(1, blake3.GetIdentifier(), 0)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block1.Dispose()
 
-	block2, errno := createStoredBlock(5, blake3.GetIdentifier())
+	block2, errno := createStoredBlock(5, blake3.GetIdentifier(), 0)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
 	defer block2.Dispose()
 
-	block3, errno := createStoredBlock(9, blake3.GetIdentifier())
+	block3, errno := createStoredBlock(9, blake3.GetIdentifier(), 0)
 	if errno != 0 {
 		t.Errorf("TestFSBlockStore() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -532,6 +545,37 @@ func (b *TestBlockStore) GetExistingContent(
 	return 0
 }
 
+func (b *TestBlockStore) PruneBlocks(
+	keepBlockHashes []uint64,
+	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) int {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.stats[Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count] += 1
+	keepMap := make(map[uint64]bool)
+	for _, b := range keepBlockHashes {
+		keepMap[b] = true
+	}
+	var removeBlocks []uint64
+	for h, _ := range b.blocks {
+		if _, exists := keepMap[h]; exists {
+			continue
+		}
+		removeBlocks = append(removeBlocks, h)
+	}
+	removeCount := uint32(0)
+	for _, h := range removeBlocks {
+		if _, exists := keepMap[h]; exists {
+			continue
+		}
+		storedBlock := b.blocks[h]
+		delete(b.blocks, h)
+		storedBlock.Dispose()
+		removeCount++
+	}
+	asyncCompleteAPI.OnComplete(removeCount, 0)
+	return 0
+}
+
 // GetStats ...
 func (b *TestBlockStore) GetStats() (BlockStoreStats, int) {
 	b.stats[Longtail_BlockStoreAPI_StatU64_GetStats_Count] += 1
@@ -552,7 +596,7 @@ func (b *TestBlockStore) Close() {
 	b.didClose = true
 }
 
-func TestBlockStoreProxy(t *testing.T) {
+func TestPutGetStoredBlock(t *testing.T) {
 	SetLogger(&testLogger{t: t})
 	defer SetLogger(nil)
 	SetAssert(&testAssert{t: t})
@@ -564,7 +608,7 @@ func TestBlockStoreProxy(t *testing.T) {
 	blockStore.blockStoreAPI = blockStoreProxy
 	defer blockStoreProxy.Dispose()
 
-	storedBlock, errno := createStoredBlock(2, 0xdeadbeef)
+	storedBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
 	if errno != 0 {
 		t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
 	}
@@ -613,6 +657,173 @@ func TestBlockStoreProxy(t *testing.T) {
 	blockStoreProxy.Dispose()
 }
 
+func TestPruneStoredBlocks(t *testing.T) {
+	SetLogger(&testLogger{t: t})
+	defer SetLogger(nil)
+	SetAssert(&testAssert{t: t})
+	defer SetAssert(nil)
+	SetLogLevel(1)
+
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), didClose: false}
+	blockStoreProxy := CreateBlockStoreAPI(blockStore)
+	blockStore.blockStoreAPI = blockStoreProxy
+	defer blockStoreProxy.Dispose()
+
+	var allChunkHashes []uint64
+
+	allBlockHashes := [4]uint64{0, 0, 0, 0}
+	{
+		storedBlock, errno := createStoredBlock(2, 0xdeadbeef, 0)
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
+		}
+		defer storedBlock.Dispose()
+		blockIndex := storedBlock.GetBlockIndex()
+		chunkHashes := blockIndex.GetChunkHashes()
+		allChunkHashes = append(allChunkHashes, chunkHashes...)
+		allBlockHashes[0] = storedBlock.GetBlockHash()
+
+		putStoredBlockComplete := &testPutBlockCompletionAPI{}
+		putStoredBlockComplete.wg.Add(1)
+		errno = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %d != %d", errno, 0)
+			putStoredBlockComplete.wg.Done()
+		}
+		putStoredBlockComplete.wg.Wait()
+		if putStoredBlockComplete.errno != 0 {
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.errno %d != %d", putStoredBlockComplete.errno, 0)
+		}
+	}
+
+	{
+		storedBlock, errno := createStoredBlock(3, 0xdeadbeef, 10000)
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
+		}
+		defer storedBlock.Dispose()
+		blockIndex := storedBlock.GetBlockIndex()
+		chunkHashes := blockIndex.GetChunkHashes()
+		allChunkHashes = append(allChunkHashes, chunkHashes...)
+		allBlockHashes[1] = storedBlock.GetBlockHash()
+
+		putStoredBlockComplete := &testPutBlockCompletionAPI{}
+		putStoredBlockComplete.wg.Add(1)
+		errno = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %d != %d", errno, 0)
+			putStoredBlockComplete.wg.Done()
+		}
+		putStoredBlockComplete.wg.Wait()
+		if putStoredBlockComplete.errno != 0 {
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.errno %d != %d", putStoredBlockComplete.errno, 0)
+		}
+	}
+	{
+		storedBlock, errno := createStoredBlock(1, 0xdeadbeef, 20000)
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
+		}
+		defer storedBlock.Dispose()
+		blockIndex := storedBlock.GetBlockIndex()
+		chunkHashes := blockIndex.GetChunkHashes()
+		allChunkHashes = append(allChunkHashes, chunkHashes...)
+		allBlockHashes[2] = storedBlock.GetBlockHash()
+
+		putStoredBlockComplete := &testPutBlockCompletionAPI{}
+		putStoredBlockComplete.wg.Add(1)
+		errno = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %d != %d", errno, 0)
+			putStoredBlockComplete.wg.Done()
+		}
+		putStoredBlockComplete.wg.Wait()
+		if putStoredBlockComplete.errno != 0 {
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.errno %d != %d", putStoredBlockComplete.errno, 0)
+		}
+	}
+	{
+		storedBlock, errno := createStoredBlock(4, 0xdeadbeef, 30000)
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %d != %d", errno, 0)
+		}
+		defer storedBlock.Dispose()
+		blockIndex := storedBlock.GetBlockIndex()
+		chunkHashes := blockIndex.GetChunkHashes()
+		allChunkHashes = append(allChunkHashes, chunkHashes...)
+		allBlockHashes[3] = storedBlock.GetBlockHash()
+
+		putStoredBlockComplete := &testPutBlockCompletionAPI{}
+		putStoredBlockComplete.wg.Add(1)
+		errno = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %d != %d", errno, 0)
+			putStoredBlockComplete.wg.Done()
+		}
+		putStoredBlockComplete.wg.Wait()
+		if putStoredBlockComplete.errno != 0 {
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.errno %d != %d", putStoredBlockComplete.errno, 0)
+		}
+	}
+
+	{
+		getExistingContentComplete := &testGetExistingContentCompletionAPI{}
+		getExistingContentComplete.wg.Add(1)
+		errno := blockStoreProxy.GetExistingContent(allChunkHashes, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %d != %d", errno, 0)
+			getExistingContentComplete.wg.Done()
+		}
+		getExistingContentComplete.wg.Wait()
+		fullStoreIndex := getExistingContentComplete.storeIndex
+		defer fullStoreIndex.Dispose()
+	}
+
+	keepBlockHashes := []uint64{allBlockHashes[1], allBlockHashes[3]}
+	pruneBlocksComplete := &testPruneBlocksCompletionAPI{}
+	pruneBlocksComplete.wg.Add(1)
+	errno := blockStoreProxy.PruneBlocks(keepBlockHashes, CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
+	if errno != 0 {
+		t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.PruneBlocks() %d != %d", errno, 0)
+		pruneBlocksComplete.wg.Done()
+	}
+	pruneBlocksComplete.wg.Wait()
+	if pruneBlocksComplete.errno != 0 {
+		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.errno %d != %d", errno, 0)
+	}
+	if pruneBlocksComplete.prunedBlockCount != 2 {
+		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.prunedBlockCount %d != %d", 2, pruneBlocksComplete.prunedBlockCount)
+	}
+
+	{
+		getExistingContentComplete := &testGetExistingContentCompletionAPI{}
+		getExistingContentComplete.wg.Add(1)
+		errno = blockStoreProxy.GetExistingContent(allChunkHashes, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+		if errno != 0 {
+			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %d != %d", errno, 0)
+			getExistingContentComplete.wg.Done()
+		}
+		getExistingContentComplete.wg.Wait()
+		prunedStoreIndex := getExistingContentComplete.storeIndex
+		defer prunedStoreIndex.Dispose()
+		blockHashes := prunedStoreIndex.GetBlockHashes()
+		if len(blockHashes) != 2 {
+			t.Errorf("TestBlockStoreProxyFull() len(blockHashes) %d != %d", 2, len(blockHashes))
+		}
+		expectedBlockHashes := []uint64{allBlockHashes[1], allBlockHashes[3]}
+		sort.Slice(expectedBlockHashes, func(i, j int) bool { return expectedBlockHashes[i] < expectedBlockHashes[j] })
+		sort.Slice(blockHashes, func(i, j int) bool { return blockHashes[i] < blockHashes[j] })
+		if expectedBlockHashes[0] != blockHashes[0] {
+			t.Errorf("TestBlockStoreProxyFull() blockHashes[0] %d != %d", expectedBlockHashes[0], blockHashes[0])
+		}
+		if expectedBlockHashes[1] != blockHashes[1] {
+			t.Errorf("TestBlockStoreProxyFull() blockHashes[1] %d != %d", expectedBlockHashes[1], blockHashes[1])
+		}
+	}
+
+	blockStoreProxy.Dispose()
+}
+
 type testPathFilter struct {
 }
 
@@ -620,7 +831,7 @@ func (p *testPathFilter) Include(rootPath string, assetFolder string, assetName 
 	return true
 }
 
-func TestBlockStoreProxyFull(t *testing.T) {
+func TestWriteContent(t *testing.T) {
 	storageAPI := createFilledStorage("content")
 	defer storageAPI.Dispose()
 	hashAPI := CreateBlake3HashAPI()

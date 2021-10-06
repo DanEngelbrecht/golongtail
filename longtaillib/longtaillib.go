@@ -242,6 +242,10 @@ type AsyncGetExistingContentAPI interface {
 	OnComplete(store_index Longtail_StoreIndex, errno int)
 }
 
+type AsyncPruneBlocksAPI interface {
+	OnComplete(prune_block_count uint32, errno int)
+}
+
 type AsyncFlushAPI interface {
 	OnComplete(errno int)
 }
@@ -271,6 +275,10 @@ type Longtail_AsyncGetExistingContentAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncGetExistingContentAPI
 }
 
+type Longtail_AsyncPruneBlocksAPI struct {
+	cAsyncCompleteAPI *C.struct_Longtail_AsyncPruneBlocksAPI
+}
+
 type Longtail_AsyncPreflightStartedAPI struct {
 	cAsyncCompleteAPI *C.struct_Longtail_AsyncPreflightStartedAPI
 }
@@ -296,15 +304,19 @@ const (
 	Longtail_BlockStoreAPI_StatU64_GetExistingContent_RetryCount = 11
 	Longtail_BlockStoreAPI_StatU64_GetExistingContent_FailCount  = 12
 
-	Longtail_BlockStoreAPI_StatU64_PreflightGet_Count      = 13
-	Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount = 14
-	Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount  = 15
+	Longtail_BlockStoreAPI_StatU64_PruneBlocks_Count      = 13
+	Longtail_BlockStoreAPI_StatU64_PruneBlocks_RetryCount = 14
+	Longtail_BlockStoreAPI_StatU64_PruneBlocks_FailCount  = 15
 
-	Longtail_BlockStoreAPI_StatU64_Flush_Count     = 16
-	Longtail_BlockStoreAPI_StatU64_Flush_FailCount = 17
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_Count      = 16
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_RetryCount = 17
+	Longtail_BlockStoreAPI_StatU64_PreflightGet_FailCount  = 18
 
-	Longtail_BlockStoreAPI_StatU64_GetStats_Count = 18
-	Longtail_BlockStoreAPI_StatU64_Count          = 19
+	Longtail_BlockStoreAPI_StatU64_Flush_Count     = 19
+	Longtail_BlockStoreAPI_StatU64_Flush_FailCount = 20
+
+	Longtail_BlockStoreAPI_StatU64_GetStats_Count = 21
+	Longtail_BlockStoreAPI_StatU64_Count          = 22
 )
 
 type BlockStoreStats struct {
@@ -316,6 +328,7 @@ type BlockStoreAPI interface {
 	PreflightGet(blockHashes []uint64, asyncCompleteAPI Longtail_AsyncPreflightStartedAPI) int
 	GetStoredBlock(blockHash uint64, asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) int
 	GetExistingContent(chunkHashes []uint64, minBlockUsagePercent uint32, asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) int
+	PruneBlocks(blockHashes []uint64, asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) int
 	GetStats() (BlockStoreStats, int)
 	Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) int
 	Close()
@@ -878,6 +891,11 @@ func (asyncCompleteAPI *Longtail_AsyncGetExistingContentAPI) OnComplete(store_in
 	C.Longtail_AsyncGetExistingContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, store_index.cStoreIndex, C.int(errno))
 }
 
+//// Longtail_AsyncPruneBlocksAPI::OnComplete() ...
+func (asyncCompleteAPI *Longtail_AsyncPruneBlocksAPI) OnComplete(pruned_block_count uint32, errno int) {
+	C.Longtail_AsyncPruneBlocks_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.uint32_t(pruned_block_count), C.int(errno))
+}
+
 //// Longtail_AsyncPreflightStartedAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncPreflightStartedAPI) OnComplete(blockHashes []uint64, errno int) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
@@ -985,6 +1003,24 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 		C.uint32_t(chunkCount),
 		cChunkHashes,
 		C.uint32_t(minBlockUsagePercent),
+		asyncCompleteAPI.cAsyncCompleteAPI)
+	return int(errno)
+}
+
+// PruneBlocks() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
+	keepBlockHashes []uint64,
+	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) int {
+
+	blockCount := len(keepBlockHashes)
+	cBlockHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
+	if blockCount > 0 {
+		cBlockHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&keepBlockHashes[0]))
+	}
+	errno := C.Longtail_BlockStore_PruneBlocks(
+		blockStoreAPI.cBlockStoreAPI,
+		C.uint32_t(blockCount),
+		cBlockHashes,
 		asyncCompleteAPI.cAsyncCompleteAPI)
 	return int(errno)
 }
@@ -1112,6 +1148,9 @@ func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, int) {
 }
 
 func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, int) {
+	if len(buffer) == 0 {
+		return Longtail_StoredBlock{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	size := C.size_t(len(buffer))
 	var stored_block *C.struct_Longtail_StoredBlock
@@ -1361,6 +1400,9 @@ func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, int) {
 
 // ReadBlockIndexFromBuffer ...
 func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, int) {
+	if len(buffer) == 0 {
+		return Longtail_BlockIndex{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var bindex *C.struct_Longtail_BlockIndex
@@ -1444,6 +1486,9 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 
 // ReadVersionIndexFromBuffer ...
 func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, int) {
+	if len(buffer) == 0 {
+		return Longtail_VersionIndex{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var vindex *C.struct_Longtail_VersionIndex
@@ -1531,6 +1576,26 @@ func GetExistingStoreIndex(
 	return Longtail_StoreIndex{cStoreIndex: cindex}, 0
 }
 
+func PruneStoreIndex(
+	storeIndex Longtail_StoreIndex,
+	keepBlockHashes []uint64) (Longtail_StoreIndex, int) {
+	blockCount := uint32(len(keepBlockHashes))
+	var cBlockHashes *C.TLongtail_Hash
+	if blockCount > 0 {
+		cBlockHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&keepBlockHashes[0]))
+	}
+	var cindex *C.struct_Longtail_StoreIndex
+	errno := C.Longtail_PruneStoreIndex(
+		storeIndex.cStoreIndex,
+		C.uint32_t(blockCount),
+		cBlockHashes,
+		&cindex)
+	if errno != 0 {
+		return Longtail_StoreIndex{cStoreIndex: nil}, int(errno)
+	}
+	return Longtail_StoreIndex{cStoreIndex: cindex}, 0
+}
+
 func GetRequiredChunkHashes(
 	versionIndex Longtail_VersionIndex,
 	versionDiff Longtail_VersionDiff) ([]uint64, int) {
@@ -1579,6 +1644,9 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, int) {
 
 // ReadStoreIndexFromBuffer ...
 func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, int) {
+	if len(buffer) == 0 {
+		return Longtail_StoreIndex{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var cindex *C.struct_Longtail_StoreIndex
@@ -1686,13 +1754,6 @@ func CreateAsyncGetExistingContentAPI(asyncComplete AsyncGetExistingContentAPI) 
 	return Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
-// // CreateAsyncPreflightStartedAPI ...
-//func CreateAsyncPreflightStartedAPI(asyncComplete AsyncPreflightStartedAPI) Longtail_AsyncPreflightStartedAPI {
-//	cContext := SavePointer(asyncComplete)
-//	asyncCompleteAPIProxy := C.CreateAsyncPreflightStartedAPI(cContext)
-//	return Longtail_AsyncPreflightStartedAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
-//}
-
 //export AsyncGetExistingContentAPIProxy_OnComplete
 func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI, store_index *C.struct_Longtail_StoreIndex, err C.int) {
 	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
@@ -1704,6 +1765,28 @@ func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Lon
 //export AsyncGetExistingContentAPIProxy_Dispose
 func AsyncGetExistingContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(api))
+	UnrefPointer(context)
+	C.Longtail_Free(unsafe.Pointer(api))
+}
+
+// CreateAsyncPruneBlocksAPI ...
+func CreateAsyncPruneBlocksAPI(asyncComplete AsyncPruneBlocksAPI) Longtail_AsyncPruneBlocksAPI {
+	cContext := SavePointer(asyncComplete)
+	asyncCompleteAPIProxy := C.CreateAsyncPruneBlocksAPI(cContext)
+	return Longtail_AsyncPruneBlocksAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+//export AsyncPruneBlocksAPIProxy_OnComplete
+func AsyncPruneBlocksAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncPruneBlocksAPI, pruned_block_count uint32, err C.int) {
+	context := C.AsyncPruneBlocksAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
+	asyncComplete := RestorePointer(context).(AsyncPruneBlocksAPI)
+	asyncComplete.OnComplete(pruned_block_count, int(err))
+	C.Longtail_DisposeAPI(&async_complete_api.m_API)
+}
+
+//export AsyncPruneBlocksAPIProxy_Dispose
+func AsyncPruneBlocksAPIProxy_Dispose(api *C.struct_Longtail_API) {
+	context := C.AsyncPruneBlocksAPIProxy_GetContext(unsafe.Pointer(api))
 	UnrefPointer(context)
 	C.Longtail_Free(unsafe.Pointer(api))
 }
@@ -1951,6 +2034,19 @@ func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI,
 		copyChunkHashes,
 		minBlockUsagePercent,
 		Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: async_complete_api})
+	return C.int(errno)
+}
+
+//export BlockStoreAPIProxy_PruneBlocks
+func BlockStoreAPIProxy_PruneBlocks(api *C.struct_Longtail_BlockStoreAPI, keep_block_count C.uint32_t, keep_block_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncPruneBlocksAPI) C.int {
+	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
+	blockStore := RestorePointer(context).(BlockStoreAPI)
+	keepBlockCount := int(keep_block_count)
+	keepBlockHashes := carray2slice64(keep_block_hashes, keepBlockCount)
+	copyBlockHashes := append([]uint64{}, keepBlockHashes...)
+	errno := blockStore.PruneBlocks(
+		copyBlockHashes,
+		Longtail_AsyncPruneBlocksAPI{cAsyncCompleteAPI: async_complete_api})
 	return C.int(errno)
 }
 

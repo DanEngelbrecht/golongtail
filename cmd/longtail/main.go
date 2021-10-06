@@ -19,6 +19,7 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/alecthomas/kong"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -78,30 +79,9 @@ func (a *assertData) OnAssert(expression string, file string, line int) {
 	log.Fatalf("ASSERT: %s %s:%d", expression, file, line)
 }
 
-type progressData struct {
-	inited bool
-	task   string
-}
-
-func (p *progressData) OnProgress(totalCount uint32, doneCount uint32) {
-	if doneCount == totalCount {
-		if p.inited {
-			fmt.Fprintf(os.Stderr, "100%%")
-			fmt.Fprintf(os.Stderr, " Done\n")
-		}
-		return
-	}
-	if !p.inited {
-		fmt.Fprintf(os.Stderr, "%s: ", p.task)
-		p.inited = true
-	}
-	percentDone := (100 * doneCount) / totalCount
-	fmt.Fprintf(os.Stderr, "%d%% ", percentDone)
-}
-
 func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
-	baseProgress := longtaillib.CreateProgressAPI(&progressData{task: task})
-	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 5)
+	baseProgress := longtaillib.CreateProgressAPI(longtailutils.NewProgress(task))
+	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
 }
 
 type timeStat struct {

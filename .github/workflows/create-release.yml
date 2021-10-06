@@ -122,8 +122,8 @@ jobs:
           - **CHANGED** Removed unused `--target-block-size` option for downsync
           - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync
           - **CHANGED** `--target-path` for `downsync` command is now optional and if not given a folder will be crated in the current directory based on the source name
-          - **CHANGED** `--source-zip-paths` option in `cloneStore` is no longer required
           - **CHANGED** Now uses Kong command line parser instead of Kingpin/v2
+          - **CHANGED** Nicer progress output in terminal with elapsed time and estimated time
           - **ADD** s3-blobstore, use the uri format s3:// for Amazon S3 stores
           - **ADD** `cloneStore` command to copy all versions from one store to a new store
           - **ADD** `pruneStore` command that removes blocks of data base on which blocks are used by a list of version indexes

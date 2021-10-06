@@ -1798,6 +1798,14 @@ func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
 	return Longtail_AsyncFlushAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
 
+// Dispose ...
+func (asyncCompleteAPI *Longtail_AsyncFlushAPI) Dispose() {
+	if asyncCompleteAPI.cAsyncCompleteAPI != nil {
+		C.Longtail_DisposeAPI(&asyncCompleteAPI.cAsyncCompleteAPI.m_API)
+		asyncCompleteAPI.cAsyncCompleteAPI = nil
+	}
+}
+
 //export AsyncFlushAPIProxy_OnComplete
 func AsyncFlushAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncFlushAPI, err C.int) {
 	context := C.AsyncFlushAPIProxy_GetContext(unsafe.Pointer(async_complete_api))

@@ -1148,6 +1148,9 @@ func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, int) {
 }
 
 func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, int) {
+	if len(buffer) == 0 {
+		return Longtail_StoredBlock{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	size := C.size_t(len(buffer))
 	var stored_block *C.struct_Longtail_StoredBlock
@@ -1397,6 +1400,9 @@ func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, int) {
 
 // ReadBlockIndexFromBuffer ...
 func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, int) {
+	if len(buffer) == 0 {
+		return Longtail_BlockIndex{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var bindex *C.struct_Longtail_BlockIndex
@@ -1480,6 +1486,9 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 
 // ReadVersionIndexFromBuffer ...
 func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, int) {
+	if len(buffer) == 0 {
+		return Longtail_VersionIndex{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var vindex *C.struct_Longtail_VersionIndex
@@ -1635,6 +1644,9 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, int) {
 
 // ReadStoreIndexFromBuffer ...
 func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, int) {
+	if len(buffer) == 0 {
+		return Longtail_StoreIndex{}, EBADF
+	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
 	var cindex *C.struct_Longtail_StoreIndex

@@ -2719,7 +2719,7 @@ func pruneStore(
 	storageURI string,
 	sourcePaths string,
 	versionLocalStoreIndexesPath string,
-	useVersionLocalStoreIndex bool,
+	writeVersionLocalStoreIndex bool,
 	dryRun bool) ([]storeStat, []timeStat, error) {
 
 	setupStartTime := time.Now()
@@ -2794,6 +2794,8 @@ func pruneStore(
 	scanningForBlocksStartTime := time.Now()
 
 	batchErrors := make(chan error, batchCount)
+	progress := CreateProgress("Processing versions")
+	defer progress.Dispose()
 	for batchStart < len(sourceFilePaths) {
 		batchLength := batchCount
 		if batchStart+batchLength > len(sourceFilePaths) {
@@ -2820,20 +2822,19 @@ func pruneStore(
 					return
 				}
 
-				fmt.Printf("Getting blocks used by `%s`\n", sourceFilePath)
-
-				versionLocalStoreIndexIsDirty := true
 				var existingStoreIndex longtaillib.Longtail_StoreIndex
-				if versionLocalStoreIndexFilePath != "" && useVersionLocalStoreIndex {
+				if versionLocalStoreIndexFilePath != "" && !writeVersionLocalStoreIndex {
 					sbuffer, err := longtailstorelib.ReadFromURI(versionLocalStoreIndexFilePath)
 					if err == nil {
 						existingStoreIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
 						if errno != 0 {
-							// TODO: Log error!
 							batchErrors <- err
 							return
 						}
-						versionLocalStoreIndexIsDirty = false
+						errno = longtaillib.ValidateStore(existingStoreIndex, sourceVersionIndex)
+						if errno != 0 {
+							existingStoreIndex.Dispose()
+						}
 					}
 				}
 				if !existingStoreIndex.IsValid() {
@@ -2843,11 +2844,23 @@ func pruneStore(
 						batchErrors <- err
 						return
 					}
+					errno = longtaillib.ValidateStore(existingStoreIndex, sourceVersionIndex)
+					if errno != 0 {
+						existingStoreIndex.Dispose()
+						sourceVersionIndex.Dispose()
+						if dryRun {
+							log.Printf("WARNING: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
+							batchErrors <- nil
+						} else {
+							batchErrors <- errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
+						}
+						return
+					}
 				}
 
 				blockHashesPerBatch[batchPos] = append(blockHashesPerBatch[batchPos], existingStoreIndex.GetBlockHashes()...)
 
-				if versionLocalStoreIndexFilePath != "" && versionLocalStoreIndexIsDirty && !dryRun {
+				if versionLocalStoreIndexFilePath != "" && writeVersionLocalStoreIndex && !dryRun {
 					sbuffer, errno := longtaillib.WriteStoreIndexToBuffer(existingStoreIndex)
 					if errno != 0 {
 						existingStoreIndex.Dispose()
@@ -2875,12 +2888,15 @@ func pruneStore(
 			if batchError != nil {
 				return storeStats, timeStats, batchError
 			}
+			progress.OnProgress(uint32(len(sourceFilePaths)), uint32(batchStart+batchPos))
+		}
+		for batchPos := 0; batchPos < batchLength; batchPos++ {
 			for _, h := range blockHashesPerBatch[batchPos] {
 				usedBlocks[h] += 1
 			}
 		}
+
 		batchStart += batchLength
-		fmt.Printf("Located %d blocks\n", len(usedBlocks))
 	}
 
 	scanningForBlocksTime := time.Since(scanningForBlocksStartTime)
@@ -3300,7 +3316,7 @@ type PruneStoreCmd struct {
 	SourcePaths                 string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
 	VersionLocalStoreIndexPaths string `name:"version-local-store-index-paths" help:"File containing list of version local store index longtail uris"`
 	DryRun                      bool   `name:"dry-run" help:"Don't prune, just show how many blocks would be kept if prune was run"`
-	WriteVersionLocalStoreIndex bool   `name:"rewrite-version-local-store-index" help:"Write a new version local store index for each version. This requires a valid version-local-store-index-paths input parameter"`
+	WriteVersionLocalStoreIndex bool   `name:"write-version-local-store-index" help:"Write a new version local store index for each version. This requires a valid version-local-store-index-paths input parameter"`
 }
 
 func (r *PruneStoreCmd) Run(ctx *Context) error {

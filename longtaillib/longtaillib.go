@@ -956,6 +956,11 @@ func CreateBlockStoreStorageAPI(
 		versionIndex.cVersionIndex)}
 }
 
+// Longtail_BlockStoreAPI.IsValid() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) IsValid() bool {
+	return blockStoreAPI.cBlockStoreAPI != nil
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	if blockStoreAPI.cBlockStoreAPI != nil {

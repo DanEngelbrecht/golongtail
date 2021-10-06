@@ -391,9 +391,9 @@ func upSyncVersion(
 
 	flushStartTime := time.Now()
 
-	stores := []*longtaillib.Longtail_BlockStoreAPI{
-		&indexStore,
-		&remoteStore,
+	stores := []longtaillib.Longtail_BlockStoreAPI{
+		indexStore,
+		remoteStore,
 	}
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {
@@ -728,13 +728,13 @@ func downSyncVersion(
 
 	flushStartTime := time.Now()
 
-	stores := []*longtaillib.Longtail_BlockStoreAPI{
-		&indexStore,
-		&lruBlockStore,
-		&compressBlockStore,
-		&cacheBlockStore,
-		&localIndexStore,
-		&remoteIndexStore,
+	stores := []longtaillib.Longtail_BlockStoreAPI{
+		indexStore,
+		lruBlockStore,
+		compressBlockStore,
+		cacheBlockStore,
+		localIndexStore,
+		remoteIndexStore,
 	}
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {
@@ -1245,13 +1245,13 @@ func cpVersionIndex(
 
 	flushStartTime := time.Now()
 
-	stores := []*longtaillib.Longtail_BlockStoreAPI{
-		&indexStore,
-		&lruBlockStore,
-		&compressBlockStore,
-		&cacheBlockStore,
-		&localIndexStore,
-		&remoteIndexStore,
+	stores := []longtaillib.Longtail_BlockStoreAPI{
+		indexStore,
+		lruBlockStore,
+		compressBlockStore,
+		cacheBlockStore,
+		localIndexStore,
+		remoteIndexStore,
 	}
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {
@@ -1582,10 +1582,10 @@ func stats(
 
 	flushStartTime := time.Now()
 
-	stores := []*longtaillib.Longtail_BlockStoreAPI{
-		&cacheBlockStore,
-		&localIndexStore,
-		&remoteIndexStore,
+	stores := []longtaillib.Longtail_BlockStoreAPI{
+		cacheBlockStore,
+		localIndexStore,
+		remoteIndexStore,
 	}
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {
@@ -1994,9 +1994,9 @@ func cloneOneVersion(
 		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailstorelib.WriteToURI() failed")
 	}
 
-	stores := []*longtaillib.Longtail_BlockStoreAPI{
-		&targetRemoteStore,
-		&sourceRemoteIndexStore,
+	stores := []longtaillib.Longtail_BlockStoreAPI{
+		targetRemoteStore,
+		sourceRemoteIndexStore,
 	}
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {

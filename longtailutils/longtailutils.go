@@ -105,16 +105,22 @@ type StoreFlush struct {
 }
 
 // FlushStores ...
-func FlushStores(stores []*longtaillib.Longtail_BlockStoreAPI) (*StoreFlush, int) {
+func FlushStores(stores []longtaillib.Longtail_BlockStoreAPI) (*StoreFlush, int) {
 	storeFlush := &StoreFlush{}
 	storeFlush.flushAPIs = make([]*flushCompletionAPI, len(stores))
 	for i, store := range stores {
+		if !store.IsValid() {
+			continue
+		}
 		errno := 0
-		storeFlush.flushAPIs[i], errno = FlushStore(store)
+		storeFlush.flushAPIs[i], errno = FlushStore(&store)
 		if errno != 0 {
 			for i > 0 {
 				i--
-				storeFlush.flushAPIs[i].Wait()
+				flushAPI := storeFlush.flushAPIs[i]
+				if flushAPI != nil {
+					flushAPI.Wait()
+				}
 			}
 			return nil, errno
 		}
@@ -126,6 +132,9 @@ func FlushStores(stores []*longtaillib.Longtail_BlockStoreAPI) (*StoreFlush, int
 func (s *StoreFlush) Wait() int {
 	result := 0
 	for _, flushAPI := range s.flushAPIs {
+		if flushAPI == nil {
+			continue
+		}
 		flushAPI.Wait()
 		if flushAPI.err != 0 {
 			result = flushAPI.err

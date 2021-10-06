@@ -238,8 +238,8 @@ func createBlockStoreForURI(uri string, optionalStoreIndexPath string, jobAPI lo
 
 const noCompressionType = uint32(0)
 
-func getCompressionType(compressionAlgorithm *string) (uint32, error) {
-	switch *compressionAlgorithm {
+func getCompressionType(compressionAlgorithm string) (uint32, error) {
+	switch compressionAlgorithm {
 	case "none":
 		return noCompressionType, nil
 	case "brotli":
@@ -263,7 +263,7 @@ func getCompressionType(compressionAlgorithm *string) (uint32, error) {
 	case "zstd_max":
 		return longtaillib.GetZStdMaxCompressionType(), nil
 	}
-	return 0, fmt.Errorf("unsupported compression algorithm: `%s`", *compressionAlgorithm)
+	return 0, fmt.Errorf("unsupported compression algorithm: `%s`", compressionAlgorithm)
 }
 
 func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {
@@ -275,8 +275,8 @@ func getCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compr
 	return compressionTypes
 }
 
-func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
-	switch *hashAlgorithm {
+func getHashIdentifier(hashAlgorithm string) (uint32, error) {
+	switch hashAlgorithm {
 	case "meow":
 		return longtaillib.GetMeowHashIdentifier(), nil
 	case "blake2":
@@ -284,7 +284,7 @@ func getHashIdentifier(hashAlgorithm *string) (uint32, error) {
 	case "blake3":
 		return longtaillib.GetBlake3HashIdentifier(), nil
 	}
-	return 0, fmt.Errorf("not a supportd hash api: `%s`", *hashAlgorithm)
+	return 0, fmt.Errorf("not a supportd hash api: `%s`", hashAlgorithm)
 }
 
 func byteCountDecimal(b uint64) string {
@@ -316,6 +316,28 @@ func byteCountBinary(b uint64) string {
 type regexPathFilter struct {
 	compiledIncludeRegexes []*regexp.Regexp
 	compiledExcludeRegexes []*regexp.Regexp
+}
+
+func makeRegexPathFilter(includeFilterRegEx string, excludeFilterRegEx string) (longtaillib.Longtail_PathFilterAPI, error) {
+	regexPathFilter := &regexPathFilter{}
+	if includeFilterRegEx != "" {
+		compiledIncludeRegexes, err := splitRegexes(includeFilterRegEx)
+		if err != nil {
+			return longtaillib.Longtail_PathFilterAPI{}, err
+		}
+		regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
+	}
+	if excludeFilterRegEx != "" {
+		compiledExcludeRegexes, err := splitRegexes(excludeFilterRegEx)
+		if err != nil {
+			return longtaillib.Longtail_PathFilterAPI{}, err
+		}
+		regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
+	}
+	if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
+		return longtaillib.CreatePathFilterAPI(regexPathFilter), nil
+	}
+	return longtaillib.Longtail_PathFilterAPI{}, nil
 }
 
 func (f *regexPathFilter) Include(rootPath string, assetPath string, assetName string, isDir bool, size uint64, permissions uint16) bool {
@@ -405,7 +427,7 @@ func (scanner *asyncFolderScanner) get() (longtaillib.Longtail_FileInfos, time.D
 
 func getFolderIndex(
 	sourceFolderPath string,
-	sourceIndexPath *string,
+	sourceIndexPath string,
 	targetChunkSize uint32,
 	compressionType uint32,
 	hashIdentifier uint32,
@@ -414,7 +436,7 @@ func getFolderIndex(
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
 	scanner *asyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
-	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
+	if sourceIndexPath == "" {
 		fileInfos, scanTime, err := scanner.get()
 		if err != nil {
 			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime, err
@@ -453,14 +475,14 @@ func getFolderIndex(
 	}
 	startTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(*sourceIndexPath)
+	vbuffer, err := longtailstorelib.ReadFromURI(sourceIndexPath)
 	if err != nil {
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
 	}
 	var errno int
 	vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", *sourceIndexPath)
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", sourceIndexPath)
 	}
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
@@ -481,7 +503,7 @@ type asyncVersionIndexReader struct {
 
 func (indexReader *asyncVersionIndexReader) read(
 	sourceFolderPath string,
-	sourceIndexPath *string,
+	sourceIndexPath string,
 	targetChunkSize uint32,
 	compressionType uint32,
 	hashIdentifier uint32,
@@ -515,51 +537,33 @@ func (indexReader *asyncVersionIndexReader) get() (longtaillib.Longtail_VersionI
 func upSyncVersion(
 	blobStoreURI string,
 	sourceFolderPath string,
-	sourceIndexPath *string,
+	sourceIndexPath string,
 	targetFilePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
-	compressionAlgorithm *string,
-	hashAlgorithm *string,
-	includeFilterRegEx *string,
-	excludeFilterRegEx *string,
+	compressionAlgorithm string,
+	hashAlgorithm string,
+	includeFilterRegEx string,
+	excludeFilterRegEx string,
 	minBlockUsagePercent uint32,
-	versionLocalStoreIndexPath *string,
-	getConfigPath *string) ([]storeStat, []timeStat, error) {
+	versionLocalStoreIndexPath string,
+	getConfigPath string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
 
 	setupStartTime := time.Now()
-	var pathFilter longtaillib.Longtail_PathFilterAPI
-
-	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
-		regexPathFilter := &regexPathFilter{}
-		if includeFilterRegEx != nil {
-			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
-			if err != nil {
-				return storeStats, timeStats, err
-			}
-			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
-		}
-		if excludeFilterRegEx != nil {
-			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
-			if err != nil {
-				return storeStats, timeStats, err
-			}
-			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
-		}
-		if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
-			pathFilter = longtaillib.CreatePathFilterAPI(regexPathFilter)
-		}
+	pathFilter, err := makeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
+	if err != nil {
+		return storeStats, timeStats, err
 	}
 
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
 	sourceFolderScanner := asyncFolderScanner{}
-	if sourceIndexPath == nil || len(*sourceIndexPath) == 0 {
+	if sourceIndexPath == "" {
 		sourceFolderScanner.scan(sourceFolderPath, pathFilter, fs)
 	}
 
@@ -704,7 +708,7 @@ func upSyncVersion(
 	writeVersionIndexTime := time.Since(writeVersionIndexStartTime)
 	timeStats = append(timeStats, timeStat{"Write version index", writeVersionIndexTime})
 
-	if versionLocalStoreIndexPath != nil && len(*versionLocalStoreIndexPath) > 0 {
+	if versionLocalStoreIndexPath != "" {
 		writeVersionLocalStoreIndexStartTime := time.Now()
 		versionLocalStoreIndex, errno := longtaillib.MergeStoreIndex(existingRemoteStoreIndex, versionMissingStoreIndex)
 		if errno != 0 {
@@ -715,7 +719,7 @@ func upSyncVersion(
 		if errno != 0 {
 			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "upSyncVersion: longtaillib.WriteStoreIndexToBuffer() failed")
 		}
-		err = longtailstorelib.WriteToURI(*versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+		err = longtailstorelib.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtailstorelib.WriteToURL() failed")
 		}
@@ -723,15 +727,15 @@ func upSyncVersion(
 		timeStats = append(timeStats, timeStat{"Write version store index", writeVersionLocalStoreIndexTime})
 	}
 
-	if getConfigPath != nil && len(*getConfigPath) > 0 {
+	if getConfigPath != "" {
 		writeGetConfigStartTime := time.Now()
 
 		v := viper.New()
 		v.SetConfigType("json")
 		v.Set("storage-uri", blobStoreURI)
 		v.Set("source-path", targetFilePath)
-		if versionLocalStoreIndexPath != nil && len(*versionLocalStoreIndexPath) > 0 {
-			v.Set("version-local-store-index-path", *versionLocalStoreIndexPath)
+		if versionLocalStoreIndexPath != "" {
+			v.Set("version-local-store-index-path", versionLocalStoreIndexPath)
 		}
 		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
 		if err != nil {
@@ -751,9 +755,9 @@ func upSyncVersion(
 		}
 		os.Remove(tmpFilePath)
 
-		err = longtailstorelib.WriteToURI(*getConfigPath, bytes)
+		err = longtailstorelib.WriteToURI(getConfigPath, bytes)
 		if err != nil {
-			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtailstorelib.WriteToURI(%s) failed", *getConfigPath)
+			return storeStats, timeStats, errors.Wrapf(err, "upSyncVersion: longtailstorelib.WriteToURI(%s) failed", getConfigPath)
 		}
 
 		writeGetConfigTime := time.Since(writeGetConfigStartTime)
@@ -765,13 +769,13 @@ func upSyncVersion(
 
 func getVersion(
 	getConfigPath string,
-	targetFolderPath *string,
-	targetIndexPath *string,
-	localCachePath *string,
+	targetFolderPath string,
+	targetIndexPath string,
+	localCachePath string,
 	retainPermissions bool,
 	validate bool,
-	includeFilterRegEx *string,
-	excludeFilterRegEx *string) ([]storeStat, []timeStat, error) {
+	includeFilterRegEx string,
+	excludeFilterRegEx string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -814,7 +818,7 @@ func getVersion(
 		localCachePath,
 		retainPermissions,
 		validate,
-		&versionLocalStoreIndexPath,
+		versionLocalStoreIndexPath,
 		includeFilterRegEx,
 		excludeFilterRegEx)
 
@@ -827,14 +831,14 @@ func getVersion(
 func downSyncVersion(
 	blobStoreURI string,
 	sourceFilePath string,
-	targetFolderPath *string,
-	targetIndexPath *string,
-	localCachePath *string,
+	targetFolderPath string,
+	targetIndexPath string,
+	localCachePath string,
 	retainPermissions bool,
 	validate bool,
-	versionLocalStoreIndexPath *string,
-	includeFilterRegEx *string,
-	excludeFilterRegEx *string) ([]storeStat, []timeStat, error) {
+	versionLocalStoreIndexPath string,
+	includeFilterRegEx string,
+	excludeFilterRegEx string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -844,31 +848,13 @@ func downSyncVersion(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	var pathFilter longtaillib.Longtail_PathFilterAPI
-
-	if includeFilterRegEx != nil || excludeFilterRegEx != nil {
-		regexPathFilter := &regexPathFilter{}
-		if includeFilterRegEx != nil {
-			compiledIncludeRegexes, err := splitRegexes(*includeFilterRegEx)
-			if err != nil {
-				return storeStats, timeStats, err
-			}
-			regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
-		}
-		if excludeFilterRegEx != nil {
-			compiledExcludeRegexes, err := splitRegexes(*excludeFilterRegEx)
-			if err != nil {
-				return storeStats, timeStats, err
-			}
-			regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
-		}
-		if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
-			pathFilter = longtaillib.CreatePathFilterAPI(regexPathFilter)
-		}
+	pathFilter, err := makeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
+	if err != nil {
+		return storeStats, timeStats, err
 	}
 
 	resolvedTargetFolderPath := ""
-	if targetFolderPath == nil || len(*targetFolderPath) == 0 {
+	if targetFolderPath == "" {
 		urlSplit := strings.Split(normalizePath(sourceFilePath), "/")
 		sourceName := urlSplit[len(urlSplit)-1]
 		sourceNameSplit := strings.Split(sourceName, ".")
@@ -877,14 +863,14 @@ func downSyncVersion(
 			return storeStats, timeStats, fmt.Errorf("downSyncVersion: unable to resolve target path using `%s` as base", sourceFilePath)
 		}
 	} else {
-		resolvedTargetFolderPath = *targetFolderPath
+		resolvedTargetFolderPath = targetFolderPath
 	}
 
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
 	targetFolderScanner := asyncFolderScanner{}
-	if targetIndexPath == nil || len(*targetIndexPath) == 0 {
+	if targetIndexPath == "" {
 		targetFolderScanner.scan(resolvedTargetFolderPath, pathFilter, fs)
 	}
 
@@ -928,7 +914,7 @@ func downSyncVersion(
 	defer localFS.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, *versionLocalStoreIndexPath, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
+	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPath, jobs, 8388608, 1024, longtailstorelib.ReadOnly)
 	if err != nil {
 		return storeStats, timeStats, err
 	}
@@ -938,14 +924,14 @@ func downSyncVersion(
 	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 
-	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath))
+	if localCachePath == "" {
+		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
+	} else {
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
 		compressBlockStore = longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
-	} else {
-		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	}
 
 	defer cacheBlockStore.Dispose()
@@ -1050,7 +1036,7 @@ func downSyncVersion(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: cacheStore.Flush: Failed for `%s` failed", localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -1058,7 +1044,7 @@ func downSyncVersion(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateVersion: localStore.Flush: Failed for `%s` failed", localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -1528,7 +1514,7 @@ func dumpVersionIndex(versionIndexPath string, showDetails bool) ([]storeStat, [
 func cpVersionIndex(
 	blobStoreURI string,
 	versionIndexPath string,
-	localCachePath *string,
+	localCachePath string,
 	sourcePath string,
 	targetPath string) ([]storeStat, []timeStat, error) {
 
@@ -1558,14 +1544,14 @@ func cpVersionIndex(
 	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
 	var compressBlockStore longtaillib.Longtail_BlockStoreAPI
 
-	if localCachePath != nil && len(*localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath))
+	if localCachePath == "" {
+		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
+	} else {
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
 		compressBlockStore = longtaillib.CreateCompressBlockStore(cacheBlockStore, creg)
-	} else {
-		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	}
 
 	defer cacheBlockStore.Dispose()
@@ -1689,7 +1675,7 @@ func cpVersionIndex(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: cacheStore.Flush: Failed for `%s` failed", localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -1697,7 +1683,7 @@ func cpVersionIndex(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: localStore.Flush: Failed for `%s` failed", localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -1770,7 +1756,7 @@ func cpVersionIndex(
 
 func initRemoteStore(
 	blobStoreURI string,
-	hashAlgorithm *string) ([]storeStat, []timeStat, error) {
+	hashAlgorithm string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -1824,7 +1810,7 @@ func initRemoteStore(
 
 func lsVersionIndex(
 	versionIndexPath string,
-	commandLSVersionDir *string) ([]storeStat, []timeStat, error) {
+	commandLSVersionDir string) ([]storeStat, []timeStat, error) {
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
 
@@ -1881,8 +1867,8 @@ func lsVersionIndex(
 	timeStats = append(timeStats, timeStat{"Setup", setupTime})
 
 	searchDir := ""
-	if commandLSVersionDir != nil && *commandLSVersionDir != "." {
-		searchDir = *commandLSVersionDir
+	if commandLSVersionDir != "." {
+		searchDir = commandLSVersionDir
 	}
 
 	iterator, errno := blockStoreFS.StartFind(searchDir)
@@ -1915,7 +1901,7 @@ func lsVersionIndex(
 func stats(
 	blobStoreURI string,
 	versionIndexPath string,
-	localCachePath *string) ([]storeStat, []timeStat, error) {
+	localCachePath string) ([]storeStat, []timeStat, error) {
 
 	storeStats := []storeStat{}
 	timeStats := []timeStat{}
@@ -1940,15 +1926,15 @@ func stats(
 	var localIndexStore longtaillib.Longtail_BlockStoreAPI
 	var cacheBlockStore longtaillib.Longtail_BlockStoreAPI
 
-	if localCachePath != nil && len(*localCachePath) > 0 {
+	if localCachePath == "" {
+		indexStore = remoteIndexStore
+	} else {
 		localFS = longtaillib.CreateFSStorageAPI()
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(*localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
 		indexStore = cacheBlockStore
-	} else {
-		indexStore = remoteIndexStore
 	}
 
 	defer cacheBlockStore.Dispose()
@@ -2065,7 +2051,7 @@ func stats(
 	errno = cacheBlockStore.Flush(longtaillib.CreateAsyncFlushAPI(cacheStoreFlushComplete))
 	if errno != 0 {
 		cacheStoreFlushComplete.wg.Done()
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: cacheStore.Flush: Failed for `%s` failed", localCachePath)
 	}
 
 	localStoreFlushComplete := &flushCompletionAPI{}
@@ -2073,7 +2059,7 @@ func stats(
 	errno = localIndexStore.Flush(longtaillib.CreateAsyncFlushAPI(localStoreFlushComplete))
 	if errno != 0 {
 		localStoreFlushComplete.wg.Done()
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", *localCachePath)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: localStore.Flush: Failed for `%s` failed", localCachePath)
 	}
 
 	remoteStoreFlushComplete := &flushCompletionAPI{}
@@ -2284,7 +2270,7 @@ func cloneOneVersion(
 	} else {
 		targetIndexReader := asyncVersionIndexReader{}
 		targetIndexReader.read(targetPath,
-			nil,
+			"",
 			targetChunkSize,
 			noCompressionType,
 			hashIdentifier,
@@ -3039,18 +3025,18 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := upSyncVersion(
 		r.StorageURI,
 		r.SourcePath,
-		&r.SourceIndexPath,
+		r.SourceIndexPath,
 		r.TargetPath,
 		r.TargetChunkSize,
 		r.TargetBlockSize,
 		r.MaxChunksPerBlock,
-		&r.Compression,
-		&r.Hashing,
-		&r.IncludeFilterRegEx,
-		&r.ExcludeFilterRegEx,
+		r.Compression,
+		r.Hashing,
+		r.IncludeFilterRegEx,
+		r.ExcludeFilterRegEx,
 		r.MinBlockUsagePercent,
-		&r.VersionLocalStoreIndexPath,
-		&r.GetConfigPath)
+		r.VersionLocalStoreIndexPath,
+		r.GetConfigPath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err
@@ -3073,14 +3059,14 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := downSyncVersion(
 		r.StorageURI,
 		r.SourcePath,
-		&r.TargetPath,
-		&r.TargetIndexPath,
-		&r.CachePath,
+		r.TargetPath,
+		r.TargetIndexPath,
+		r.CachePath,
 		r.RetainPermissions,
 		r.Validate,
-		&r.VersionLocalStoreIndexPath,
-		&r.IncludeFilterRegEx,
-		&r.ExcludeFilterRegEx)
+		r.VersionLocalStoreIndexPath,
+		r.IncludeFilterRegEx,
+		r.ExcludeFilterRegEx)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err
@@ -3102,13 +3088,13 @@ type GetCmd struct {
 func (r *GetCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := getVersion(
 		r.GetConfigURI,
-		&r.TargetPath,
-		&r.TargetIndexPath,
-		&r.CachePath,
+		r.TargetPath,
+		r.TargetIndexPath,
+		r.CachePath,
 		r.RetainPermissions,
 		r.Validate,
-		&r.IncludeFilterRegEx,
-		&r.ExcludeFilterRegEx)
+		r.IncludeFilterRegEx,
+		r.ExcludeFilterRegEx)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err
@@ -3180,7 +3166,7 @@ type LsCmd struct {
 func (r *LsCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := lsVersionIndex(
 		r.VersionIndexPath,
-		&r.Path)
+		r.Path)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err
@@ -3198,7 +3184,7 @@ func (r *CpCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := cpVersionIndex(
 		r.StorageURI,
 		r.VersionIndexPath,
-		&r.CachePath,
+		r.CachePath,
 		r.SourcePath,
 		r.TargetPath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
@@ -3214,7 +3200,7 @@ type InitRemoteStoreCmd struct {
 func (r *InitRemoteStoreCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := initRemoteStore(
 		r.StorageURI,
-		&r.Hashing)
+		r.Hashing)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err
@@ -3230,7 +3216,7 @@ func (r *StatsCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := stats(
 		r.StorageURI,
 		r.VersionIndexPath,
-		&r.CachePath)
+		r.CachePath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

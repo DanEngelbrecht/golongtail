@@ -1272,8 +1272,7 @@ func getStoreIndexFromBlocks(
 		}
 	}(clients)
 
-	baseProgress := longtaillib.CreateProgressAPI(longtailutils.NewProgress("Scanning blocks"))
-	progress := longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
+	progress := longtailutils.CreateProgress("Scanning blocks")
 	defer progress.Dispose()
 
 	var wg sync.WaitGroup

@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -25,63 +24,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-type loggerData struct {
-}
-
 var numWorkerCount = runtime.NumCPU()
-
-var logLevelNames = [...]string{"DEBUG", "INFO", "WARNING", "ERROR", "OFF"}
-
-func (l *loggerData) OnLog(file string, function string, line int, level int, logFields []longtaillib.LogField, message string) {
-	var b strings.Builder
-	b.Grow(32 + len(message))
-	fmt.Fprintf(&b, "{")
-	fmt.Fprintf(&b, "\"file\": \"%s\"", file)
-	fmt.Fprintf(&b, ", \"func\": \"%s\"", function)
-	fmt.Fprintf(&b, ", \"line\": \"%d\"", line)
-	fmt.Fprintf(&b, ", \"level\": \"%s\"", logLevelNames[level])
-	for _, field := range logFields {
-		fmt.Fprintf(&b, ", \"%s\": \"%s\"", field.Name, field.Value)
-	}
-	fmt.Fprintf(&b, ", \"msg\": \"%s\"", message)
-	fmt.Fprintf(&b, "}")
-	log.Printf("%s", b.String())
-}
-
-func parseLevel(lvl string) (int, error) {
-	switch strings.ToLower(lvl) {
-	case "debug":
-		return 0, nil
-	case "info":
-		return 1, nil
-	case "warn":
-		return 2, nil
-	case "error":
-		return 3, nil
-	case "off":
-		return 4, nil
-	}
-
-	return -1, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EIO, longtaillib.ErrEIO), "not a valid log Level: %s", lvl)
-}
 
 func normalizePath(path string) string {
 	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
 	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
 	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
 	return backwardRemoved
-}
-
-type assertData struct {
-}
-
-func (a *assertData) OnAssert(expression string, file string, line int) {
-	log.Fatalf("ASSERT: %s %s:%d", expression, file, line)
-}
-
-func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
-	baseProgress := longtaillib.CreateProgressAPI(longtailutils.NewProgress(task))
-	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
 }
 
 type getExistingContentCompletionAPI struct {
@@ -248,85 +197,6 @@ func getHashIdentifier(hashAlgorithm string) (uint32, error) {
 	return 0, fmt.Errorf("not a supported hash api: `%s`", hashAlgorithm)
 }
 
-type regexPathFilter struct {
-	compiledIncludeRegexes []*regexp.Regexp
-	compiledExcludeRegexes []*regexp.Regexp
-}
-
-func makeRegexPathFilter(includeFilterRegEx string, excludeFilterRegEx string) (longtaillib.Longtail_PathFilterAPI, error) {
-	regexPathFilter := &regexPathFilter{}
-	if includeFilterRegEx != "" {
-		compiledIncludeRegexes, err := splitRegexes(includeFilterRegEx)
-		if err != nil {
-			return longtaillib.Longtail_PathFilterAPI{}, err
-		}
-		regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
-	}
-	if excludeFilterRegEx != "" {
-		compiledExcludeRegexes, err := splitRegexes(excludeFilterRegEx)
-		if err != nil {
-			return longtaillib.Longtail_PathFilterAPI{}, err
-		}
-		regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
-	}
-	if len(regexPathFilter.compiledIncludeRegexes) > 0 || len(regexPathFilter.compiledExcludeRegexes) > 0 {
-		return longtaillib.CreatePathFilterAPI(regexPathFilter), nil
-	}
-	return longtaillib.Longtail_PathFilterAPI{}, nil
-}
-
-func (f *regexPathFilter) Include(rootPath string, assetPath string, assetName string, isDir bool, size uint64, permissions uint16) bool {
-	for _, r := range f.compiledExcludeRegexes {
-		if r.MatchString(assetPath) {
-			log.Printf("INFO: Skipping `%s`", assetPath)
-			return false
-		}
-	}
-	if len(f.compiledIncludeRegexes) == 0 {
-		return true
-	}
-	for _, r := range f.compiledIncludeRegexes {
-		if r.MatchString(assetPath) {
-			return true
-		}
-	}
-	log.Printf("INFO: Skipping `%s`", assetPath)
-	return false
-}
-
-func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
-	var compiledRegexes []*regexp.Regexp
-	m := 0
-	s := 0
-	for i := 0; i < len(regexes); i++ {
-		if (regexes)[i] == '\\' {
-			m = -1
-		} else if m == 0 && (regexes)[i] == '*' {
-			m++
-		} else if m == 1 && (regexes)[i] == '*' {
-			r := (regexes)[s:(i - 1)]
-			regex, err := regexp.Compile(r)
-			if err != nil {
-				return nil, err
-			}
-			compiledRegexes = append(compiledRegexes, regex)
-			s = i + 1
-			m = 0
-		} else {
-			m = 0
-		}
-	}
-	if s < len(regexes) {
-		r := (regexes)[s:]
-		regex, err := regexp.Compile(r)
-		if err != nil {
-			return nil, err
-		}
-		compiledRegexes = append(compiledRegexes, regex)
-	}
-	return compiledRegexes, nil
-}
-
 type asyncFolderScanner struct {
 	wg        sync.WaitGroup
 	fileInfos longtaillib.Longtail_FileInfos
@@ -390,7 +260,7 @@ func getFolderIndex(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := CreateProgress("Indexing version")
+		createVersionIndexProgress := longtailutils.CreateProgress("Indexing version")
 		defer createVersionIndexProgress.Dispose()
 		vindex, errno := longtaillib.CreateVersionIndex(
 			fs,
@@ -489,7 +359,7 @@ func upSyncVersion(
 	timeStats := []longtailutils.TimeStat{}
 
 	setupStartTime := time.Now()
-	pathFilter, err := makeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
+	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
 		return storeStats, timeStats, err
 	}
@@ -573,7 +443,7 @@ func upSyncVersion(
 
 	writeContentStartTime := time.Now()
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := CreateProgress("Writing content blocks")
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks")
 		defer writeContentProgress.Dispose()
 
 		errno = longtaillib.WriteContent(
@@ -783,7 +653,7 @@ func downSyncVersion(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	pathFilter, err := makeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
+	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
 		return storeStats, timeStats, err
 	}
@@ -919,7 +789,7 @@ func downSyncVersion(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := CreateProgress("Updating version")
+	changeVersionProgress := longtailutils.CreateProgress("Updating version")
 	defer changeVersionProgress.Dispose()
 	errno = longtaillib.ChangeVersion(
 		indexStore,
@@ -1062,7 +932,7 @@ func downSyncVersion(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := CreateProgress("Validating version")
+		createVersionIndexProgress := longtailutils.CreateProgress("Validating version")
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, errno := longtaillib.CreateVersionIndex(
 			fs,
@@ -1846,7 +1716,7 @@ func stats(
 
 	fetchingBlocksStartTime := time.Now()
 
-	progress := CreateProgress("Fetching blocks")
+	progress := longtailutils.CreateProgress("Fetching blocks")
 	defer progress.Dispose()
 
 	blockHashes := existingStoreIndex.GetBlockHashes()
@@ -2183,7 +2053,7 @@ func cloneOneVersion(
 	}
 	defer existingStoreIndex.Dispose()
 
-	changeVersionProgress := CreateProgress("Updating version")
+	changeVersionProgress := longtailutils.CreateProgress("Updating version")
 	defer changeVersionProgress.Dispose()
 
 	errno = longtaillib.ChangeVersion(
@@ -2290,7 +2160,7 @@ func cloneOneVersion(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := CreateProgress("Indexing version")
+		createVersionIndexProgress := longtailutils.CreateProgress("Indexing version")
 		defer createVersionIndexProgress.Dispose()
 		// Make sure to create an index of what we actually have on disk after update
 		newVersionIndex, errno = longtaillib.CreateVersionIndex(
@@ -2336,7 +2206,7 @@ func cloneOneVersion(
 	defer versionMissingStoreIndex.Dispose()
 
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := CreateProgress("Writing content blocks")
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks")
 
 		errno = longtaillib.WriteContent(
 			fs,
@@ -2634,7 +2504,7 @@ func pruneStore(
 	scanningForBlocksStartTime := time.Now()
 
 	batchErrors := make(chan error, batchCount)
-	progress := CreateProgress("Processing versions")
+	progress := longtailutils.CreateProgress("Processing versions")
 	defer progress.Dispose()
 	for batchStart < len(sourceFilePaths) {
 		batchLength := batchCount
@@ -3228,16 +3098,16 @@ func main() {
 
 	ctx := kong.Parse(&cli)
 
-	longtailLogLevel, err := parseLevel(cli.LogLevel)
+	longtailLogLevel, err := longtailutils.ParseLevel(cli.LogLevel)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	longtaillib.SetLogger(&loggerData{})
+	longtaillib.SetLogger(&longtailutils.LoggerData{})
 	defer longtaillib.SetLogger(nil)
 	longtaillib.SetLogLevel(longtailLogLevel)
 
-	longtaillib.SetAssert(&assertData{})
+	longtaillib.SetAssert(&longtailutils.AssertData{})
 	defer longtaillib.SetAssert(nil)
 
 	if cli.WorkerCount != 0 {

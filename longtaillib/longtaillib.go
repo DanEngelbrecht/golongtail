@@ -956,6 +956,11 @@ func CreateBlockStoreStorageAPI(
 		versionIndex.cVersionIndex)}
 }
 
+// Longtail_BlockStoreAPI.IsValid() ...
+func (blockStoreAPI *Longtail_BlockStoreAPI) IsValid() bool {
+	return blockStoreAPI.cBlockStoreAPI != nil
+}
+
 // Longtail_BlockStoreAPI.Dispose() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	if blockStoreAPI.cBlockStoreAPI != nil {
@@ -1796,6 +1801,14 @@ func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
 	cContext := SavePointer(asyncComplete)
 	asyncCompleteAPIProxy := C.CreateAsyncFlushAPI(cContext)
 	return Longtail_AsyncFlushAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
+}
+
+// Dispose ...
+func (asyncCompleteAPI *Longtail_AsyncFlushAPI) Dispose() {
+	if asyncCompleteAPI.cAsyncCompleteAPI != nil {
+		C.Longtail_DisposeAPI(&asyncCompleteAPI.cAsyncCompleteAPI.m_API)
+		asyncCompleteAPI.cAsyncCompleteAPI = nil
+	}
 }
 
 //export AsyncFlushAPIProxy_OnComplete

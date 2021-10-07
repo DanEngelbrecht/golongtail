@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 // ProgressData ...
@@ -14,11 +16,6 @@ type ProgressData struct {
 	lastTime  time.Time
 	last      uint32
 	task      string
-}
-
-// NewProgress ...
-func NewProgress(task string) *ProgressData {
-	return &ProgressData{task: task, startTime: time.Now()}
 }
 
 // ProgressData ...
@@ -65,4 +62,11 @@ func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
 		endChar)
 
 	p.last = doneCount
+}
+
+// CreateProgress ...
+func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
+	progress := &ProgressData{task: task, startTime: time.Now()}
+	baseProgress := longtaillib.CreateProgressAPI(progress)
+	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
 }

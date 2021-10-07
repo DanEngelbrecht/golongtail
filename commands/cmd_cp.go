@@ -1,13 +1,16 @@
-package main
+package commands
 
 import (
+	"context"
 	"os"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func cpVersionIndex(
@@ -17,6 +20,14 @@ func cpVersionIndex(
 	localCachePath string,
 	sourcePath string,
 	targetPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
+		"numWorkerCount":   numWorkerCount,
+		"blobStoreURI":     blobStoreURI,
+		"versionIndexPath": versionIndexPath,
+		"localCachePath":   localCachePath,
+		"sourcePath":       sourcePath,
+		"targetPath":       targetPath,
+	})
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -31,8 +42,9 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, longtailstorelib.ReadOnly)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
+		log.WithError(err).Error("Failed creating block store")
 		return storeStats, timeStats, err
 	}
 	defer remoteIndexStore.Dispose()
@@ -47,7 +59,7 @@ func cpVersionIndex(
 	if localCachePath == "" {
 		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	} else {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -69,7 +81,12 @@ func cpVersionIndex(
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
 	if err != nil {
+		err = errors.Wrapf(err, "File does not exist: %s", versionIndexPath)
 		return storeStats, timeStats, err
+	}
+	if vbuffer == nil {
+		err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", versionIndexPath)
+		return storeStats, timeStats, longtaillib.ErrENOENT
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
@@ -87,9 +104,10 @@ func cpVersionIndex(
 	}
 
 	getExistingContentStartTime := time.Now()
-	storeIndex, errno := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+	storeIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed getting store index for version")
+		return storeStats, timeStats, err
 	}
 	defer storeIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -113,6 +131,7 @@ func cpVersionIndex(
 	// Only support writing to regular file path for now
 	outFile, err := os.Create(targetPath)
 	if err != nil {
+		log.WithError(err).Error("Failed creating target file")
 		return storeStats, timeStats, err
 	}
 	defer outFile.Close()
@@ -154,9 +173,10 @@ func cpVersionIndex(
 		localIndexStore,
 		remoteIndexStore,
 	}
-	errno = longtailutils.FlushStoresSync(stores)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: longtailutils.FlushStoresSync: Failed for `%v`", stores)
+	err = longtailutils.FlushStoresSync(stores)
+	if err != nil {
+		log.WithError(err).Error("longtailutils.FlushStoresSync failed")
+		return storeStats, timeStats, err
 	}
 
 	flushTime := time.Since(flushStartTime)

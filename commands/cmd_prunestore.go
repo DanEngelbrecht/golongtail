@@ -1,9 +1,8 @@
-package main
+package commands
 
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -11,7 +10,9 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func pruneStore(
@@ -21,6 +22,14 @@ func pruneStore(
 	versionLocalStoreIndexesPath string,
 	writeVersionLocalStoreIndex bool,
 	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"numWorkerCount":               numWorkerCount,
+		"storageURI":                   storageURI,
+		"sourcePaths":                  sourcePaths,
+		"versionLocalStoreIndexesPath": versionLocalStoreIndexesPath,
+		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
+		"dryRun":                       dryRun,
+	})
 
 	setupStartTime := time.Now()
 	storeStats := []longtailutils.StoreStat{}
@@ -29,12 +38,12 @@ func pruneStore(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	storeMode := longtailstorelib.ReadOnly
+	storeMode := remotestore.ReadOnly
 	if !dryRun {
-		storeMode = longtailstorelib.ReadWrite
+		storeMode = remotestore.ReadWrite
 	}
 
-	remoteStore, err := createBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, storeMode)
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, storeMode)
 	if err != nil {
 		return storeStats, timeStats, err
 	}
@@ -79,7 +88,7 @@ func pruneStore(
 		timeStats = append(timeStats, longtailutils.TimeStat{"Read version local store index file list", versionLocalStoreIndexesPathsTime})
 
 		if len(sourceFilePaths) != len(versionLocalStoreIndexFilePaths) {
-			return storeStats, timeStats, fmt.Errorf("pruneStore: Number of files in `%s` does not match number of files in `%s`", sourcesFile, versionLocalStoreIndexesPath)
+			return storeStats, timeStats, fmt.Errorf("pruneStore: Number of files in `%s` does not match number of files in `%s`", sourcePaths, versionLocalStoreIndexesPath)
 		}
 	}
 
@@ -116,6 +125,10 @@ func pruneStore(
 					batchErrors <- err
 					return
 				}
+				if vbuffer == nil {
+					batchErrors <- longtaillib.ErrENOENT
+					return
+				}
 				sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 				if errno != 0 {
 					batchErrors <- err
@@ -126,6 +139,11 @@ func pruneStore(
 				if versionLocalStoreIndexFilePath != "" && !writeVersionLocalStoreIndex {
 					sbuffer, err := longtailstorelib.ReadFromURI(versionLocalStoreIndexFilePath)
 					if err == nil {
+						if vbuffer == nil {
+							err = errors.Errorf("Version index does not exist: %s", versionLocalStoreIndexFilePath)
+							batchErrors <- err
+							return
+						}
 						existingStoreIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
 						if errno != 0 {
 							batchErrors <- err
@@ -138,8 +156,9 @@ func pruneStore(
 					}
 				}
 				if !existingStoreIndex.IsValid() {
-					existingStoreIndex, errno = longtailutils.GetExistingStoreIndexSync(remoteStore, sourceVersionIndex.GetChunkHashes(), 0)
-					if errno != 0 {
+					existingStoreIndex, err = longtailutils.GetExistingStoreIndexSync(remoteStore, sourceVersionIndex.GetChunkHashes(), 0)
+					if err != nil {
+						err = errors.Wrapf(err, "Failed getting store index for source version")
 						sourceVersionIndex.Dispose()
 						batchErrors <- err
 						return
@@ -217,9 +236,10 @@ func pruneStore(
 		i++
 	}
 
-	prunedBlockCount, errno := longtailutils.PruneBlocksSync(remoteStore, blockHashes)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: store.PruneBlocks() failed")
+	prunedBlockCount, err := longtailutils.PruneBlocksSync(remoteStore, blockHashes)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed pruning blocks")
+		return storeStats, timeStats, err
 	}
 	pruneTime := time.Since(pruneStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Prune", pruneTime})
@@ -228,9 +248,10 @@ func pruneStore(
 
 	flushStartTime := time.Now()
 
-	errno = longtailutils.FlushStoreSync(&remoteStore)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: longtailutils.FlushStore: Failed for `%s`", remoteStore)
+	err = longtailutils.FlushStoreSync(&remoteStore)
+	if err != nil {
+		log.WithError(err).Error("longtailutils.FlushStoreSync failed")
+		return storeStats, timeStats, err
 	}
 
 	flushTime := time.Since(flushStartTime)

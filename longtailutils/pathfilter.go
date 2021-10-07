@@ -3,9 +3,17 @@ package longtailutils
 import (
 	"log"
 	"regexp"
+	"strings"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
+
+func NormalizePath(path string) string {
+	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
+	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
+	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
+	return backwardRemoved
+}
 
 type regexPathFilter struct {
 	compiledIncludeRegexes []*regexp.Regexp

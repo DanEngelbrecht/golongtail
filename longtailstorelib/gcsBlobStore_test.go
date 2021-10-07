@@ -2,13 +2,10 @@ package longtailstorelib
 
 import (
 	"fmt"
-	"log"
 	"net/url"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 )
@@ -116,46 +113,6 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	}
 }
 
-func writeANumberWithRetry(number int, blobStore BlobStore) error {
-	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	object, err := client.NewObject("test.txt")
-	if err != nil {
-		return err
-	}
-	for {
-		exists, err := object.LockWriteVersion()
-		if err != nil {
-			return err
-		}
-		var sliceData []string
-		if exists {
-			data, err := object.Read()
-			if err != nil {
-				return err
-			}
-			time.Sleep(30 * time.Millisecond)
-			sliceData = strings.Split(string(data), "\n")
-		}
-		sliceData = append(sliceData, fmt.Sprintf("%05d", number))
-		sort.Strings(sliceData)
-		newData := strings.Join(sliceData, "\n")
-
-		ok, err := object.Write([]byte(newData))
-		if err != nil {
-			return err
-		}
-		if ok {
-			log.Printf("Wrote %d\n", number)
-			return nil
-		}
-		log.Printf("Retrying %d\n", number)
-	}
-}
-
 func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
 	t.Skip()
@@ -208,46 +165,4 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-}
-
-func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
-	// This test uses hardcoded paths in S3 and is disabled
-	t.Skip()
-
-	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
-	if err != nil {
-		t.Errorf("url.Parse() err == %q", err)
-	}
-
-	blobStore, err := NewGCSBlobStore(u, false)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	client, _ := blobStore.NewClient(context.Background())
-	defer client.Close()
-	object, _ := client.NewObject("store.lsi")
-	object.Delete()
-
-	testStoreIndexSync(blobStore, t)
-}
-
-func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
-	// This test uses hardcoded paths in S3 and is disabled
-	t.Skip()
-
-	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
-	if err != nil {
-		t.Errorf("url.Parse() err == %q", err)
-	}
-
-	blobStore, err := NewGCSBlobStore(u, true)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	client, _ := blobStore.NewClient(context.Background())
-	defer client.Close()
-	object, _ := client.NewObject("store.lsi")
-	object.Delete()
-
-	testStoreIndexSync(blobStore, t)
 }

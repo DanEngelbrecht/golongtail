@@ -1,19 +1,26 @@
-package main
+package commands
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
-	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func printVersion(
 	numWorkerCount int,
 	versionIndexPath string,
 	compact bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"numWorkerCount":   numWorkerCount,
+		"versionIndexPath": versionIndexPath,
+		"compact":          compact,
+	})
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
@@ -23,9 +30,18 @@ func printVersion(
 	if err != nil {
 		return storeStats, timeStats, err
 	}
+
+	if vbuffer == nil {
+		err = errors.New("Version index does not exist")
+		log.WithError(err).Error("printVersion failed")
+		return storeStats, timeStats, err
+	}
+
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "printVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, "longtaillib.ReadVersionIndexFromBuffer failed")
+		log.WithError(err).Error("printVersion failed")
+		return storeStats, timeStats, err
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -71,7 +87,7 @@ func printVersion(
 		fmt.Printf("%s\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",
 			versionIndexPath,
 			versionIndex.GetVersion(),
-			hashIdentifierToString(versionIndex.GetHashIdentifier()),
+			longtailutils.HashIdentifierToString(versionIndex.GetHashIdentifier()),
 			versionIndex.GetTargetChunkSize(),
 			versionIndex.GetAssetCount(),
 			totalAssetSize,
@@ -82,7 +98,7 @@ func printVersion(
 			largestChunkSize)
 	} else {
 		fmt.Printf("Version:             %d\n", versionIndex.GetVersion())
-		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(versionIndex.GetHashIdentifier()))
+		fmt.Printf("Hash Identifier:     %s\n", longtailutils.HashIdentifierToString(versionIndex.GetHashIdentifier()))
 		fmt.Printf("Target Chunk Size:   %d\n", versionIndex.GetTargetChunkSize())
 		fmt.Printf("Asset Count:         %d   (%s)\n", versionIndex.GetAssetCount(), longtailutils.ByteCountDecimal(uint64(versionIndex.GetAssetCount())))
 		fmt.Printf("Asset Total Size:    %d   (%s)\n", totalAssetSize, longtailutils.ByteCountBinary(totalAssetSize))

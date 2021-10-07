@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func printStore(
@@ -15,6 +16,13 @@ func printStore(
 	storeIndexPath string,
 	compact bool,
 	details bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	_ = logrus.WithFields(logrus.Fields{
+		"numWorkerCount": numWorkerCount,
+		"storeIndexPath": storeIndexPath,
+		"compact":        compact,
+		"details":        details,
+	})
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
@@ -54,7 +62,7 @@ func printStore(
 		fmt.Printf("%s\t%d\t%s\t%d\t%d",
 			storeIndexPath,
 			storeIndex.GetVersion(),
-			hashIdentifierToString(storeIndex.GetHashIdentifier()),
+			longtailutils.HashIdentifierToString(storeIndex.GetHashIdentifier()),
 			storeIndex.GetBlockCount(),
 			storeIndex.GetChunkCount())
 		if details {
@@ -65,7 +73,7 @@ func printStore(
 		fmt.Printf("\n")
 	} else {
 		fmt.Printf("Version:             %d\n", storeIndex.GetVersion())
-		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(storeIndex.GetHashIdentifier()))
+		fmt.Printf("Hash Identifier:     %s\n", longtailutils.HashIdentifierToString(storeIndex.GetHashIdentifier()))
 		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), longtailutils.ByteCountDecimal(uint64(storeIndex.GetBlockCount())))
 		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), longtailutils.ByteCountDecimal(uint64(storeIndex.GetChunkCount())))
 		if details {

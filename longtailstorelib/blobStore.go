@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // BlobObject
@@ -62,7 +64,7 @@ type BlobStore interface {
 	String() string
 }
 
-func createBlobStoreForURI(uri string) (BlobStore, error) {
+func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -95,23 +97,28 @@ func splitURI(uri string) (string, string) {
 
 // ReadFromURI ...
 func ReadFromURI(uri string) ([]byte, error) {
+	log := logrus.WithField("uri", uri)
 	uriParent, uriName := splitURI(uri)
-	blobStore, err := createBlobStoreForURI(uriParent)
+	blobStore, err := CreateBlobStoreForURI(uriParent)
 	if err != nil {
-		return nil, err
+		log.WithError(err).Error("createBlobStoreForURI failed")
+		return nil, errors.Wrap(err, "ReadFromURI failed")
 	}
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
-		return nil, err
+		log.WithError(err).Error("blobStore.NewClient failed")
+		return nil, errors.Wrap(err, "ReadFromURI failed")
 	}
 	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
-		return nil, err
+		log.WithError(err).Error("client.NewObject failed")
+		return nil, errors.Wrap(err, "ReadFromURI failed")
 	}
 	vbuffer, err := object.Read()
 	if err != nil {
-		return nil, err
+		log.WithError(err).Error("object.Read failed")
+		return nil, errors.Wrap(err, "ReadFromURI failed")
 	}
 	return vbuffer, nil
 }
@@ -119,7 +126,7 @@ func ReadFromURI(uri string) ([]byte, error) {
 // ReadFromURI ...
 func WriteToURI(uri string, data []byte) error {
 	uriParent, uriName := splitURI(uri)
-	blobStore, err := createBlobStoreForURI(uriParent)
+	blobStore, err := CreateBlobStoreForURI(uriParent)
 	if err != nil {
 		return err
 	}
@@ -139,7 +146,7 @@ func WriteToURI(uri string, data []byte) error {
 	return nil
 }
 
-func readBlobWithRetry(
+func ReadBlobWithRetry(
 	ctx context.Context,
 	client BlobClient,
 	key string) ([]byte, int, error) {

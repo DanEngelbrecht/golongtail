@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"archive/zip"
@@ -6,60 +6,86 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+
+	"github.com/sirupsen/logrus"
 )
 
 func validateOneVersion(
 	targetStore longtaillib.Longtail_BlockStoreAPI,
 	targetFilePath string,
 	skipValidate bool) error {
-	tbuffer, err := longtailstorelib.ReadFromURI(targetFilePath)
+	log := logrus.WithFields(logrus.Fields{
+		"targetFilePath": targetFilePath,
+		"skipValidate":   skipValidate,
+	})
+	tbuffer, err := longtailutils.ReadFromURI(targetFilePath)
 	if err != nil {
 		return err
 	}
+	if tbuffer == nil {
+		err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", targetFilePath)
+		log.WithError(err).Debug("validateOneVersion")
+		return err
+	}
+
 	if skipValidate {
-		fmt.Printf("Skipping `%s`\n", targetFilePath)
+		log.Infof("Skipping `%s`", targetFilePath)
 		return nil
 	}
-	fmt.Printf("Validating `%s`\n", targetFilePath)
+	log.Infof("Validating `%s`", targetFilePath)
 	targetVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(tbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, "Can't parse version index "+targetFilePath)
+		log.WithError(err).Info("validateOneVersion")
+		return err
 	}
 	defer targetVersionIndex.Dispose()
 
-	targetStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(targetStore, targetVersionIndex.GetChunkHashes(), 0)
-	defer targetStoreIndex.Dispose()
-	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.GetExistingStoreIndexSync() failed")
+	targetStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+		targetStore,
+		targetVersionIndex.GetChunkHashes(),
+		0)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed getting store index for target "+targetFilePath)
+		log.WithError(err).Info("validateOneVersion")
+		return err
 	}
 	defer targetStoreIndex.Dispose()
 
 	errno = longtaillib.ValidateStore(targetStoreIndex, targetVersionIndex)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.ValidateStore() failed")
+		err = longtailutils.MakeError(errno, "Validate failed for version index "+targetFilePath)
+		log.WithError(err).Info("validateOneVersion")
+		return err
 	}
 	return nil
 }
 
-func Clone(v longtaillib.Longtail_VersionIndex) longtaillib.Longtail_VersionIndex {
+func CloneVersionIndex(v longtaillib.Longtail_VersionIndex) longtaillib.Longtail_VersionIndex {
 	if !v.IsValid() {
 		return longtaillib.Longtail_VersionIndex{}
 	}
+	log := logrus.WithFields(logrus.Fields{
+		"v": v,
+	})
 	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(v)
 	if errno != 0 {
+		err := longtailutils.MakeError(errno, "longtaillib.WriteVersionIndexToBuffer() failed")
+		log.WithError(err).Info("CloneVersionIndex failed")
 		return longtaillib.Longtail_VersionIndex{}
 	}
 	copy, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
+		err := longtailutils.MakeError(errno, "longtaillib.ReadVersionIndexFromBuffer() failed")
+		log.WithError(err).Info("CloneVersionIndex failed")
 		return longtaillib.Longtail_VersionIndex{}
 	}
 	return copy
@@ -85,28 +111,46 @@ func cloneOneVersion(
 	sourceFilePath string,
 	sourceFileZipPath string,
 	currentVersionIndex longtaillib.Longtail_VersionIndex) (longtaillib.Longtail_VersionIndex, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"targetPath":                   targetPath,
+		"retainPermissions":            retainPermissions,
+		"createVersionLocalStoreIndex": createVersionLocalStoreIndex,
+		"skipValidate":                 skipValidate,
+		"minBlockUsagePercent":         minBlockUsagePercent,
+		"targetBlockSize":              targetBlockSize,
+		"maxChunksPerBlock":            maxChunksPerBlock,
+		"targetFilePath":               targetFilePath,
+		"sourceFilePath":               sourceFilePath,
+		"sourceFileZipPath":            sourceFileZipPath,
+	})
 
-	targetFolderScanner := asyncFolderScanner{}
-	targetFolderScanner.scan(targetPath, pathFilter, fs)
+	targetFolderScanner := longtailutils.AsyncFolderScanner{}
+	targetFolderScanner.Scan(targetPath, pathFilter, fs)
 
 	err := validateOneVersion(targetStore, targetFilePath, skipValidate)
 	if err == nil {
-		return Clone(currentVersionIndex), nil
+		return CloneVersionIndex(currentVersionIndex), nil
 	}
 
 	fmt.Printf("`%s` -> `%s`\n", sourceFilePath, targetFilePath)
 
-	vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
-		fileInfos, _, _ := targetFolderScanner.get()
+		err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", sourceFilePath)
+		fileInfos, _, _ := targetFolderScanner.Get()
 		fileInfos.Dispose()
-		return Clone(currentVersionIndex), err
+		return CloneVersionIndex(currentVersionIndex), err
+	}
+	if vbuffer == nil {
+		fileInfos, _, _ := targetFolderScanner.Get()
+		fileInfos.Dispose()
+		return CloneVersionIndex(currentVersionIndex), err
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		fileInfos, _, _ := targetFolderScanner.get()
+		fileInfos, _, _ := targetFolderScanner.Get()
 		fileInfos.Dispose()
-		return Clone(currentVersionIndex), err
+		return CloneVersionIndex(currentVersionIndex), err
 	}
 
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
@@ -118,15 +162,15 @@ func cloneOneVersion(
 	if currentVersionIndex.IsValid() {
 		hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
-			return Clone(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
+			return CloneVersionIndex(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
 		}
-		targetVersionIndex = Clone(currentVersionIndex)
+		targetVersionIndex = CloneVersionIndex(currentVersionIndex)
 	} else {
-		targetIndexReader := asyncVersionIndexReader{}
-		targetIndexReader.read(targetPath,
+		targetIndexReader := longtailutils.AsyncVersionIndexReader{}
+		targetIndexReader.Read(targetPath,
 			"",
 			targetChunkSize,
-			noCompressionType,
+			longtailutils.NoCompressionType,
 			hashIdentifier,
 			pathFilter,
 			fs,
@@ -134,9 +178,10 @@ func cloneOneVersion(
 			hashRegistry,
 			&targetFolderScanner)
 
-		targetVersionIndex, hash, _, err = targetIndexReader.get()
+		targetVersionIndex, hash, _, err = targetIndexReader.Get()
 		if err != nil {
-			return Clone(currentVersionIndex), err
+			log.WithError(err).Errorf("Failed targetIndexReader.read")
+			return CloneVersionIndex(currentVersionIndex), err
 		}
 	}
 	defer targetVersionIndex.Dispose()
@@ -146,7 +191,7 @@ func cloneOneVersion(
 		targetVersionIndex,
 		sourceVersionIndex)
 	if errno != 0 {
-		return Clone(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.CreateVersionDiff() failed")
+		return CloneVersionIndex(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.CreateVersionDiff() failed")
 	}
 	defer versionDiff.Dispose()
 
@@ -154,12 +199,16 @@ func cloneOneVersion(
 		sourceVersionIndex,
 		versionDiff)
 	if errno != 0 {
-		return Clone(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.GetRequiredChunkHashes() failed")
+		return CloneVersionIndex(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.GetRequiredChunkHashes() failed")
 	}
 
-	existingStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(sourceStore, chunkHashes, 0)
-	if errno != 0 {
-		return Clone(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.GetExistingStoreIndexSync() failed")
+	existingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+		sourceStore,
+		chunkHashes,
+		0)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed getting store index for diff")
+		return CloneVersionIndex(currentVersionIndex), err
 	}
 	defer existingStoreIndex.Dispose()
 
@@ -176,29 +225,36 @@ func cloneOneVersion(
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		normalizePath(targetPath),
+		longtailutils.NormalizePath(targetPath),
 		retainPermissions)
 
 	var newVersionIndex longtaillib.Longtail_VersionIndex
 
 	if errno == 0 {
-		newVersionIndex = Clone(sourceVersionIndex)
+		newVersionIndex = CloneVersionIndex(sourceVersionIndex)
 	} else {
 		if sourceFileZipPath == "" {
 			fmt.Printf("Skipping `%s` - unable to download from longtail: %s\n", sourceFilePath, longtaillib.ErrnoToError(errno, longtaillib.ErrEIO).Error())
 			return longtaillib.Longtail_VersionIndex{}, err
 		}
 		fmt.Printf("Falling back to reading ZIP source from `%s`\n", sourceFileZipPath)
-		zipBytes, err := longtailstorelib.ReadFromURI(sourceFileZipPath)
+		zipBytes, err := longtailutils.ReadFromURI(sourceFileZipPath)
 		if err != nil {
-			return longtaillib.Longtail_VersionIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailstorelib.ReadFromURI() failed")
+			log.WithError(err).Errorf("Failed longtailutils.ReadFromURI")
+			return longtaillib.Longtail_VersionIndex{}, err
+		}
+
+		if zipBytes == nil {
+			err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", sourceFileZipPath)
+			return longtaillib.Longtail_VersionIndex{}, err
 		}
 
 		zipReader := bytes.NewReader(zipBytes)
 
 		r, err := zip.NewReader(zipReader, int64(len(zipBytes)))
 		if err != nil {
-			return longtaillib.Longtail_VersionIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: zip.OpenReader()  failed")
+			log.WithError(err).Errorf("Failed zip.NewReader")
+			return longtaillib.Longtail_VersionIndex{}, err
 		}
 		os.RemoveAll(targetPath)
 		os.MkdirAll(targetPath, 0755)
@@ -206,6 +262,7 @@ func cloneOneVersion(
 		extractAndWriteFile := func(f *zip.File) error {
 			rc, err := f.Open()
 			if err != nil {
+				log.WithError(err).Errorf("Failed f.Open()")
 				return err
 			}
 			defer func() {
@@ -228,6 +285,7 @@ func cloneOneVersion(
 				os.MkdirAll(filepath.Dir(path), 0777)
 				f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 				if err != nil {
+					log.WithError(err).Errorf("Failed os.OpenFile")
 					return err
 				}
 				defer func() {
@@ -238,6 +296,7 @@ func cloneOneVersion(
 
 				_, err = io.Copy(f, rc)
 				if err != nil {
+					log.WithError(err).Errorf("Failed io.Copy")
 					return err
 				}
 			}
@@ -247,6 +306,7 @@ func cloneOneVersion(
 		for _, f := range r.File {
 			err := extractAndWriteFile(f)
 			if err != nil {
+				log.WithError(err).Errorf("Failed extractAndWriteFile")
 				return longtaillib.Longtail_VersionIndex{}, err
 			}
 		}
@@ -254,13 +314,13 @@ func cloneOneVersion(
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			normalizePath(targetPath))
+			longtailutils.NormalizePath(targetPath))
 		if errno != 0 {
 			return longtaillib.Longtail_VersionIndex{}, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.GetFilesRecursively() failed")
 		}
 		defer fileInfos.Dispose()
 
-		compressionTypes := getCompressionTypesForFiles(fileInfos, noCompressionType)
+		compressionTypes := longtailutils.GetCompressionTypesForFiles(fileInfos, longtailutils.NoCompressionType)
 
 		hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
@@ -279,7 +339,7 @@ func cloneOneVersion(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			normalizePath(targetPath),
+			longtailutils.NormalizePath(targetPath),
 			fileInfos,
 			compressionTypes,
 			targetChunkSize)
@@ -298,9 +358,13 @@ func cloneOneVersion(
 	}
 	defer newVersionIndex.Dispose()
 
-	newExistingStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(targetStore, newVersionIndex.GetChunkHashes(), minBlockUsagePercent)
-	if errno != 0 {
-		return Clone(sourceVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.GetExistingStoreIndexSync() failed")
+	newExistingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+		targetStore,
+		newVersionIndex.GetChunkHashes(),
+		minBlockUsagePercent)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed getting store index for new version")
+		return CloneVersionIndex(sourceVersionIndex), err
 	}
 	defer newExistingStoreIndex.Dispose()
 
@@ -311,7 +375,7 @@ func cloneOneVersion(
 		targetBlockSize,
 		maxChunksPerBlock)
 	if errno != 0 {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: CreateMissingContent() failed")
+		return CloneVersionIndex(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: CreateMissingContent() failed")
 	}
 	defer versionMissingStoreIndex.Dispose()
 
@@ -325,10 +389,10 @@ func cloneOneVersion(
 			&writeContentProgress,
 			versionMissingStoreIndex,
 			newVersionIndex,
-			normalizePath(targetPath))
+			longtailutils.NormalizePath(targetPath))
 		writeContentProgress.Dispose()
 		if errno != 0 {
-			return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.WriteContent() failed")
+			return CloneVersionIndex(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.WriteContent() failed")
 		}
 	}
 
@@ -336,39 +400,43 @@ func cloneOneVersion(
 		targetRemoteStore,
 		sourceRemoteIndexStore,
 	}
-	f, errno := longtailutils.FlushStores(stores)
-	if errno != 0 {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.FlushStores: Failed for `%v`", stores)
+	f, err := longtailutils.FlushStores(stores)
+	if err != nil {
+		log.WithError(err).Errorf("Failed longtailutils.FlushStores")
+		return CloneVersionIndex(newVersionIndex), err
 	}
 
-	err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
+	err = longtailutils.WriteToURI(targetFilePath, vbuffer)
 	if err != nil {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailstorelib.WriteToURI() failed")
+		log.WithError(err).Errorf("longtailutils longtailutils.WriteToURI")
+		return CloneVersionIndex(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils: longtailutils.WriteToURI() failed")
 	}
 
 	if createVersionLocalStoreIndex {
 		versionLocalStoreIndex, errno := longtaillib.MergeStoreIndex(newExistingStoreIndex, versionMissingStoreIndex)
 		if errno != 0 {
-			return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.MergeStoreIndex() failed")
+			return CloneVersionIndex(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.MergeStoreIndex() failed")
 		}
 		versionLocalStoreIndexBuffer, errno := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
 		versionLocalStoreIndex.Dispose()
 		if errno != 0 {
-			return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.WriteStoreIndexToBuffer() failed")
+			return CloneVersionIndex(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.WriteStoreIndexToBuffer() failed")
 		}
 		versionLocalStoreIndexPath := strings.Replace(targetFilePath, ".lvi", ".lsi", -1) // TODO: This should use a file with path names instead of this rename hack!
-		err = longtailstorelib.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 		if err != nil {
-			return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailstorelib.WriteToURI() failed")
+			log.WithError(err).Errorf("longtailutils longtailutils.WriteToURI")
+			return CloneVersionIndex(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils: longtailutils.WriteToURI() failed")
 		}
 	}
 
-	errno = f.Wait()
-	if errno != 0 {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.FlushStores: Failed for `%v`", stores)
+	err = f.Wait()
+	if err != nil {
+		log.WithError(err).Errorf("Failed Wait for longtailutils.FlushStores")
+		return CloneVersionIndex(newVersionIndex), err
 	}
 
-	return Clone(newVersionIndex), nil
+	return CloneVersionIndex(newVersionIndex), nil
 }
 
 func cloneStore(
@@ -388,6 +456,24 @@ func cloneStore(
 	compression string,
 	minBlockUsagePercent uint32,
 	skipValidate bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"numWorkerCount":               numWorkerCount,
+		"sourceStoreURI":               sourceStoreURI,
+		"targetStoreURI":               targetStoreURI,
+		"localCachePath":               localCachePath,
+		"targetPath":                   targetPath,
+		"sourcePaths":                  sourcePaths,
+		"sourceZipPaths":               sourceZipPaths,
+		"targetPaths":                  targetPaths,
+		"targetBlockSize":              targetBlockSize,
+		"maxChunksPerBlock":            maxChunksPerBlock,
+		"retainPermissions":            retainPermissions,
+		"createVersionLocalStoreIndex": createVersionLocalStoreIndex,
+		"hashing":                      hashing,
+		"compression":                  compression,
+		"minBlockUsagePercent":         minBlockUsagePercent,
+		"skipValidate":                 skipValidate,
+	})
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -407,8 +493,9 @@ func cloneStore(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	sourceRemoteIndexStore, err := createBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, 8388608, 1024, longtailstorelib.ReadOnly)
+	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
+		log.WithError(err).Errorf("Failed remotestore.CreateBlockStoreForURI")
 		return storeStats, timeStats, err
 	}
 	defer sourceRemoteIndexStore.Dispose()
@@ -417,7 +504,7 @@ func cloneStore(
 	var sourceCompressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if len(localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, sourceRemoteIndexStore)
 
@@ -435,8 +522,9 @@ func cloneStore(
 	sourceStore := longtaillib.CreateShareBlockStore(sourceLRUBlockStore)
 	defer sourceStore.Dispose()
 
-	targetRemoteStore, err := createBlockStoreForURI(targetStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, longtailstorelib.ReadWrite)
+	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
 	if err != nil {
+		log.WithError(err).Errorf("Failed remotestore.CreateBlockStoreForURI")
 		return storeStats, timeStats, err
 	}
 	defer targetRemoteStore.Dispose()
@@ -445,6 +533,7 @@ func cloneStore(
 
 	sourcesFile, err := os.Open(sourcePaths)
 	if err != nil {
+		log.WithError(err).Errorf("Failed os.Open")
 		log.Fatal(err)
 	}
 	defer sourcesFile.Close()
@@ -453,6 +542,7 @@ func cloneStore(
 	if sourceZipPaths != "" {
 		sourcesZipFile, err := os.Open(sourceZipPaths)
 		if err != nil {
+			log.WithError(err).Errorf("Failed os.Open")
 			log.Fatal(err)
 		}
 		sourcesZipScanner = bufio.NewScanner(sourcesZipFile)
@@ -461,6 +551,7 @@ func cloneStore(
 
 	targetsFile, err := os.Open(targetPaths)
 	if err != nil {
+		log.WithError(err).Errorf("Failed os.Open")
 		log.Fatal(err)
 	}
 	defer targetsFile.Close()
@@ -511,17 +602,21 @@ func cloneStore(
 		currentVersionIndex = newCurrentVersionIndex
 
 		if err != nil {
+			log.WithError(err).Errorf("Failed cloneOneVersion")
 			return storeStats, timeStats, err
 		}
 	}
 
 	if err := sourcesScanner.Err(); err != nil {
+		log.WithError(err).Errorf("Failed sourcesScanner.Err()")
 		log.Fatal(err)
 	}
 	if err := sourcesZipScanner.Err(); err != nil {
+		log.WithError(err).Errorf("Failed sourcesZipScanner.Err()")
 		log.Fatal(err)
 	}
 	if err := targetsScanner.Err(); err != nil {
+		log.WithError(err).Errorf("Failed targetsScanner.Err()")
 		log.Fatal(err)
 	}
 

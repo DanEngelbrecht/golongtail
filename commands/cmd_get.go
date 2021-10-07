@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -21,6 +22,17 @@ func get(
 	validate bool,
 	includeFilterRegEx string,
 	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	_ = logrus.WithFields(logrus.Fields{
+		"numWorkerCount":     numWorkerCount,
+		"getConfigPath":      getConfigPath,
+		"targetFolderPath":   targetFolderPath,
+		"targetIndexPath":    targetIndexPath,
+		"localCachePath":     localCachePath,
+		"retainPermissions":  retainPermissions,
+		"validate":           validate,
+		"includeFilterRegEx": includeFilterRegEx,
+		"excludeFilterRegEx": excludeFilterRegEx,
+	})
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

@@ -1,23 +1,23 @@
-package main
+package longtailutils
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
-	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 )
 
-type asyncFolderScanner struct {
+type AsyncFolderScanner struct {
 	wg        sync.WaitGroup
 	fileInfos longtaillib.Longtail_FileInfos
 	elapsed   time.Duration
 	err       error
 }
 
-func (scanner *asyncFolderScanner) scan(
+func (scanner *AsyncFolderScanner) Scan(
 	sourceFolderPath string,
 	pathFilter longtaillib.Longtail_PathFilterAPI,
 	fs longtaillib.Longtail_StorageAPI) {
@@ -28,7 +28,7 @@ func (scanner *asyncFolderScanner) scan(
 		fileInfos, errno := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			normalizePath(sourceFolderPath))
+			NormalizePath(sourceFolderPath))
 		if errno != 0 {
 			scanner.err = errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.GetFilesRecursively(%s) failed", sourceFolderPath)
 		}
@@ -38,12 +38,12 @@ func (scanner *asyncFolderScanner) scan(
 	}()
 }
 
-func (scanner *asyncFolderScanner) get() (longtaillib.Longtail_FileInfos, time.Duration, error) {
+func (scanner *AsyncFolderScanner) Get() (longtaillib.Longtail_FileInfos, time.Duration, error) {
 	scanner.wg.Wait()
 	return scanner.fileInfos, scanner.elapsed, scanner.err
 }
 
-func getFolderIndex(
+func GetFolderIndex(
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetChunkSize uint32,
@@ -53,9 +53,9 @@ func getFolderIndex(
 	fs longtaillib.Longtail_StorageAPI,
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
-	scanner *asyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
+	scanner *AsyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
 	if sourceIndexPath == "" {
-		fileInfos, scanTime, err := scanner.get()
+		fileInfos, scanTime, err := scanner.Get()
 		if err != nil {
 			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime, err
 		}
@@ -63,7 +63,7 @@ func getFolderIndex(
 
 		startTime := time.Now()
 
-		compressionTypes := getCompressionTypesForFiles(fileInfos, compressionType)
+		compressionTypes := GetCompressionTypesForFiles(fileInfos, compressionType)
 
 		hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
@@ -73,7 +73,7 @@ func getFolderIndex(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtailutils.CreateProgress("Indexing version")
+		createVersionIndexProgress := CreateProgress("Indexing version")
 		defer createVersionIndexProgress.Dispose()
 		vindex, errno := longtaillib.CreateVersionIndex(
 			fs,
@@ -81,7 +81,7 @@ func getFolderIndex(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			normalizePath(sourceFolderPath),
+			NormalizePath(sourceFolderPath),
 			fileInfos,
 			compressionTypes,
 			targetChunkSize)
@@ -95,6 +95,10 @@ func getFolderIndex(
 
 	vbuffer, err := longtailstorelib.ReadFromURI(sourceIndexPath)
 	if err != nil {
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
+	}
+	if vbuffer == nil {
+		err = fmt.Errorf("Version index does not exist: %s", sourceIndexPath)
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
 	}
 	var errno int
@@ -111,7 +115,7 @@ func getFolderIndex(
 	return vindex, hash, time.Since(startTime), nil
 }
 
-type asyncVersionIndexReader struct {
+type AsyncVersionIndexReader struct {
 	wg           sync.WaitGroup
 	versionIndex longtaillib.Longtail_VersionIndex
 	hashAPI      longtaillib.Longtail_HashAPI
@@ -119,7 +123,7 @@ type asyncVersionIndexReader struct {
 	err          error
 }
 
-func (indexReader *asyncVersionIndexReader) read(
+func (indexReader *AsyncVersionIndexReader) Read(
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetChunkSize uint32,
@@ -129,10 +133,10 @@ func (indexReader *asyncVersionIndexReader) read(
 	fs longtaillib.Longtail_StorageAPI,
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
-	scanner *asyncFolderScanner) {
+	scanner *AsyncFolderScanner) {
 	indexReader.wg.Add(1)
 	go func() {
-		indexReader.versionIndex, indexReader.hashAPI, indexReader.elapsedTime, indexReader.err = getFolderIndex(
+		indexReader.versionIndex, indexReader.hashAPI, indexReader.elapsedTime, indexReader.err = GetFolderIndex(
 			sourceFolderPath,
 			sourceIndexPath,
 			targetChunkSize,
@@ -147,7 +151,7 @@ func (indexReader *asyncVersionIndexReader) read(
 	}()
 }
 
-func (indexReader *asyncVersionIndexReader) get() (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
+func (indexReader *AsyncVersionIndexReader) Get() (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
 	indexReader.wg.Wait()
 	return indexReader.versionIndex, indexReader.hashAPI, indexReader.elapsedTime, indexReader.err
 }

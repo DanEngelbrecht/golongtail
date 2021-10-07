@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"fmt"
@@ -8,12 +8,18 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func ls(
 	numWorkerCount int,
 	versionIndexPath string,
 	commandLSVersionDir string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	_ = logrus.WithFields(logrus.Fields{
+		"numWorkerCount":      numWorkerCount,
+		"versionIndexPath":    versionIndexPath,
+		"commandLSVersionDir": commandLSVersionDir,
+	})
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 

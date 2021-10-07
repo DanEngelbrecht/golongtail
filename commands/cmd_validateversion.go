@@ -1,18 +1,26 @@
-package main
+package commands
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func validateVersion(
 	numWorkerCount int,
 	blobStoreURI string,
 	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	_ = logrus.WithFields(logrus.Fields{
+		"numWorkerCount":   numWorkerCount,
+		"blobStoreURI":     blobStoreURI,
+		"versionIndexPath": versionIndexPath,
+	})
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -23,7 +31,7 @@ func validateVersion(
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	indexStore, err := createBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, longtailstorelib.ReadOnly)
+	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
 		return storeStats, timeStats, err
 	}
@@ -36,6 +44,10 @@ func validateVersion(
 	if err != nil {
 		return storeStats, timeStats, err
 	}
+	if vbuffer == nil {
+		err = fmt.Errorf("Version index does not exist: %s", versionIndexPath)
+		return storeStats, timeStats, err
+	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validate: longtaillib.ReadVersionIndexFromBuffer() failed")
@@ -45,9 +57,10 @@ func validateVersion(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	getExistingContentStartTime := time.Now()
-	remoteStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validate: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+	remoteStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed getting store index for version")
+		return storeStats, timeStats, err
 	}
 	defer remoteStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)

@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func dump(
+func dumpVersionAssets(
 	numWorkerCount int,
 	versionIndexPath string,
 	showDetails bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
@@ -25,7 +25,7 @@ func dump(
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "dumpVersionAssets: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -60,13 +60,13 @@ func dump(
 	return storeStats, timeStats, nil
 }
 
-type DumpCmd struct {
+type DumpVersionAssetsCmd struct {
 	VersionIndexPathOption
 	Details bool `name:"details" help:"Show details about assets"`
 }
 
-func (r *DumpCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := dump(
+func (r *DumpVersionAssetsCmd) DumpVersionAssetsCmd(ctx *Context) error {
+	storeStats, timeStats, err := dumpVersionAssets(
 		ctx.NumWorkerCount,
 		r.VersionIndexPath,
 		r.Details)

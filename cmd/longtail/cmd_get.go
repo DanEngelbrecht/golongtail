@@ -55,7 +55,7 @@ func get(
 	readGetConfigTime := time.Since(readGetConfigStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read get config", readGetConfigTime})
 
-	downSyncStoreStats, downSyncTimeStats, err := downSyncVersion(
+	downSyncStoreStats, downSyncTimeStats, err := downsync(
 		numWorkerCount,
 		blobStoreURI,
 		sourceFilePath,

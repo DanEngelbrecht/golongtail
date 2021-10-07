@@ -112,17 +112,17 @@ var cli struct {
 	Upsync                  UpsyncCmd                  `cmd:"" name:"upsync" help:"Upload a folder"`
 	Downsync                DownsyncCmd                `cmd:"" name:"downsync" help:"Download a folder"`
 	Get                     GetCmd                     `cmd:"" name:"get" help:"Download a folder using a get-config"`
-	Validate                ValidateCmd                `cmd:"" name:"validate" help:"Validate a version index against a content store"`
-	PrintVersionIndex       PrintVersionIndexCmd       `cmd:"" name:"printVersionIndex" help:"Print info about a version index"`
-	PrintStoreIndex         PrintStoreIndexCmd         `cmd:"" name:"printStoreIndex" help:"Print info about a store index"`
-	Dump                    DumpCmd                    `cmd:"" name:"dump" help:"Dump the asset paths inside a version index"`
+	ValidateVersion         ValidateVersionCmd         `cmd:"" name:"validate-version" help:"Validate a version index against a content store making sure all content needed is in the store" aliases:"validate"`
+	PrintVersion            PrintVersionCmd            `cmd:"" name:"print-version" help:"Print info about a version index" aliases:"printVersionIndex"`
+	PrintStore              PrintStoreCmd              `cmd:"" name:"print-store" help:"Print info about a store index" aliases:"printStoreIndex"`
+	PrintVersionUsage       PrintVersionUsageCmd       `cmd:"" name:"print-version-usage" help:"Shows block usage and asset fragmentaiton stats about a version index" aliases:"stats"`
+	DumpVersionAssets       DumpVersionAssetsCmd       `cmd:"" name:"dump-version-assets" help:"Lists all the asset paths inside a version index" aliases:"dump"`
 	Ls                      LsCmd                      `cmd:"" name:"ls" help:"List the content of a path inside a version index"`
 	Cp                      CpCmd                      `cmd:"" name:"cp" help:"Copies a file from inside a version index"`
-	InitRemoteStore         InitRemoteStoreCmd         `cmd:"" name:"init" help:"Open/create a remote store and force rebuild the store index"`
-	Stats                   StatsCmd                   `cmd:"" name:"stats" help:"Show fragmenation stats about a version index"`
-	CreateVersionStoreIndex CreateVersionStoreIndexCmd `cmd:"" name:"createVersionStoreIndex" help:"Create a store index optimized for a version index"`
-	CloneStore              CloneStoreCmd              `cmd:"" name:"cloneStore" help:"Clone all the data needed to cover a set of versions from one store into a new store"`
-	PruneStore              PruneStoreCmd              `cmd:"" name:"pruneStore" help:"Prune blocks in a store which are not used by the files in the input list. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
+	InitRemoteStore         InitRemoteStoreCmd         `cmd:"" name:"init-remote-store" help:"Open/create a remote store and force rebuild the store index" aliases:"init"`
+	CreateVersionStoreIndex CreateVersionStoreIndexCmd `cmd:"" name:"create-version-store-index" help:"Create a store index optimized for a version index" aliases:"createVersionStoreIndex"`
+	CloneStore              CloneStoreCmd              `cmd:"" name:"clone-store" help:"Clone all the data needed to cover a set of versions from one store into a new store" aliases:"cloneStore"`
+	PruneStore              PruneStoreCmd              `cmd:"" name:"prune-store" help:"Prune blocks in a store which are not used by the files in the input list. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data" aliases:"pruneStore"`
 }
 
 func main() {

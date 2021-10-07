@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func init(
+func initRemoteStore(
 	numWorkerCount int,
 	blobStoreURI string,
 	hashAlgorithm string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
@@ -33,7 +33,7 @@ func init(
 	getExistingContentStartTime := time.Now()
 	retargetStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(remoteIndexStore, []uint64{}, 0)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "init: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
 	defer retargetStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -41,13 +41,9 @@ func init(
 
 	flushStartTime := time.Now()
 
-	f, errno := longtailutils.FlushStore(&remoteIndexStore)
+	errno = longtailutils.FlushStoreSync(&remoteIndexStore)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStore: Failed for `%v`", blobStoreURI)
-	}
-	errno = f.Wait()
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStore: Failed for `%v`", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: longtailutils.FlushStore: Failed for `%v`", blobStoreURI)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -61,13 +57,13 @@ func init(
 	return storeStats, timeStats, nil
 }
 
-type InitCmd struct {
+type InitRemoteStoreCmd struct {
 	StorageURIOption
 	HashingOption
 }
 
-func (r *InitCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := init(
+func (r *InitRemoteStoreCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := initRemoteStore(
 		ctx.NumWorkerCount,
 		r.StorageURI,
 		r.Hashing)

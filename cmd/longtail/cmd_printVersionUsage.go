@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func stats(
+func printVersionUsage(
 	numWorkerCount int,
 	blobStoreURI string,
 	versionIndexPath string,
@@ -166,7 +166,7 @@ func stats(
 	}
 	errno = longtailutils.FlushStoresSync(stores)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStoresSync: Failed for `%v`", stores)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtailutils.FlushStoresSync: Failed for `%v`", stores)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -187,14 +187,14 @@ func stats(
 	return storeStats, timeStats, nil
 }
 
-type StatsCmd struct {
+type PrintVersionUsageCmd struct {
 	StorageURIOption
 	VersionIndexPathOption
 	CachePathOption
 }
 
-func (r *StatsCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := stats(
+func (r *PrintVersionUsageCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := printVersionUsage(
 		ctx.NumWorkerCount,
 		r.StorageURI,
 		r.VersionIndexPath,

@@ -79,7 +79,7 @@ func pruneStore(
 		timeStats = append(timeStats, longtailutils.TimeStat{"Read version local store index file list", versionLocalStoreIndexesPathsTime})
 
 		if len(sourceFilePaths) != len(versionLocalStoreIndexFilePaths) {
-			return storeStats, timeStats, fmt.Errorf("Number of files in `%s` does not match number of files in `%s`", sourcesFile, versionLocalStoreIndexesPath)
+			return storeStats, timeStats, fmt.Errorf("pruneStore: Number of files in `%s` does not match number of files in `%s`", sourcesFile, versionLocalStoreIndexesPath)
 		}
 	}
 
@@ -152,7 +152,7 @@ func pruneStore(
 							log.Printf("WARNING: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 							batchErrors <- nil
 						} else {
-							batchErrors <- errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
+							batchErrors <- errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 						}
 						return
 					}
@@ -219,7 +219,7 @@ func pruneStore(
 
 	prunedBlockCount, errno := longtailutils.PruneBlocksSync(remoteStore, blockHashes)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "store.PruneBlocks() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: store.PruneBlocks() failed")
 	}
 	pruneTime := time.Since(pruneStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Prune", pruneTime})
@@ -230,7 +230,7 @@ func pruneStore(
 
 	errno = longtailutils.FlushStoreSync(&remoteStore)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStore: Failed for `%s`", remoteStore)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: longtailutils.FlushStore: Failed for `%s`", remoteStore)
 	}
 
 	flushTime := time.Since(flushStartTime)

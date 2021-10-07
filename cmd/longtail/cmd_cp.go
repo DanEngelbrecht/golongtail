@@ -73,7 +73,7 @@ func cpVersionIndex(
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -83,13 +83,13 @@ func cpVersionIndex(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.GetHashAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: hashRegistry.GetHashAPI() failed")
 	}
 
 	getExistingContentStartTime := time.Now()
 	storeIndex, errno := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
 	}
 	defer storeIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -103,7 +103,7 @@ func cpVersionIndex(
 		storeIndex,
 		versionIndex)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.CreateBlockStoreStorageAPI() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: hashRegistry.CreateBlockStoreStorageAPI() failed")
 	}
 	defer blockStoreFS.Dispose()
 	createBlockStoreFSTime := time.Since(createBlockStoreFSStartTime)
@@ -119,13 +119,13 @@ func cpVersionIndex(
 
 	inFile, errno := blockStoreFS.OpenReadFile(sourcePath)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.OpenReadFile() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: hashRegistry.OpenReadFile() failed")
 	}
 	defer blockStoreFS.CloseFile(inFile)
 
 	size, errno := blockStoreFS.GetSize(inFile)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: blockStoreFS.GetSize() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: blockStoreFS.GetSize() failed")
 	}
 
 	offset := uint64(0)
@@ -136,7 +136,7 @@ func cpVersionIndex(
 		}
 		data, errno := blockStoreFS.Read(inFile, offset, left)
 		if errno != 0 {
-			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cpVersionIndex: hashRegistry.Read() failed")
+			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: hashRegistry.Read() failed")
 		}
 		outFile.Write(data)
 		offset += left
@@ -156,7 +156,7 @@ func cpVersionIndex(
 	}
 	errno = longtailutils.FlushStoresSync(stores)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStoresSync: Failed for `%v`", stores)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cp: longtailutils.FlushStoresSync: Failed for `%v`", stores)
 	}
 
 	flushTime := time.Since(flushStartTime)

@@ -32,20 +32,20 @@ func validateOneVersion(
 	fmt.Printf("Validating `%s`\n", targetFilePath)
 	targetVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(tbuffer)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateOneVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer targetVersionIndex.Dispose()
 
 	targetStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(targetStore, targetVersionIndex.GetChunkHashes(), 0)
 	defer targetStoreIndex.Dispose()
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateOneVersion: longtailutils.GetExistingStoreIndexSync() failed")
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.GetExistingStoreIndexSync() failed")
 	}
 	defer targetStoreIndex.Dispose()
 
 	errno = longtaillib.ValidateStore(targetStoreIndex, targetVersionIndex)
 	if errno != 0 {
-		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validateOneVersion: longtaillib.ValidateStore() failed")
+		return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtaillib.ValidateStore() failed")
 	}
 	return nil
 }
@@ -118,7 +118,7 @@ func cloneOneVersion(
 	if currentVersionIndex.IsValid() {
 		hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
-			return Clone(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
+			return Clone(currentVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
 		}
 		targetVersionIndex = Clone(currentVersionIndex)
 	} else {
@@ -338,7 +338,7 @@ func cloneOneVersion(
 	}
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.FlushStores: Failed for `%v`", stores)
 	}
 
 	err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
@@ -365,7 +365,7 @@ func cloneOneVersion(
 
 	errno = f.Wait()
 	if errno != 0 {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailutils.FlushStores: Failed for `%v`", stores)
 	}
 
 	return Clone(newVersionIndex), nil

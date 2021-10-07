@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func printStoreIndex(
+func printStore(
 	numWorkerCount int,
 	storeIndexPath string,
 	compact bool,
@@ -26,7 +26,7 @@ func printStoreIndex(
 	}
 	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "printStoreIndex: longtaillib.ReadStoreIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "printStore: longtaillib.ReadStoreIndexFromBuffer() failed")
 	}
 	defer storeIndex.Dispose()
 	readStoreIndexTime := time.Since(readStoreIndexStartTime)
@@ -77,14 +77,14 @@ func printStoreIndex(
 	return storeStats, timeStats, nil
 }
 
-type PrintStoreIndexCmd struct {
+type PrintStoreCmd struct {
 	StoreIndexPathOption
 	CompactOption
 	Details bool `name:"details" help:"Show details about data sizes"`
 }
 
-func (r *PrintStoreIndexCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := printStoreIndex(
+func (r *PrintStoreCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := printStore(
 		ctx.NumWorkerCount,
 		r.StoreIndexPath,
 		r.Compact,

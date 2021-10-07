@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func printVersionIndex(
+func printVersion(
 	numWorkerCount int,
 	versionIndexPath string,
 	compact bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
@@ -25,7 +25,7 @@ func printVersionIndex(
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "downSyncVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "printVersion: longtaillib.ReadVersionIndexFromBuffer() failed")
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -96,13 +96,13 @@ func printVersionIndex(
 	return storeStats, timeStats, nil
 }
 
-type PrintVersionIndexCmd struct {
+type PrintVersionCmd struct {
 	VersionIndexPathOption
 	CompactOption
 }
 
-func (r *PrintVersionIndexCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := printVersionIndex(
+func (r *PrintVersionCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := printVersion(
 		ctx.NumWorkerCount,
 		r.VersionIndexPath,
 		r.Compact)

@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func validate(
+func validateVersion(
 	numWorkerCount int,
 	blobStoreURI string,
 	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
@@ -64,13 +64,13 @@ func validate(
 	return storeStats, timeStats, nil
 }
 
-type ValidateCmd struct {
+type ValidateVersionCmd struct {
 	StorageURIOption
 	VersionIndexPathOption
 }
 
-func (r *ValidateCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := validate(
+func (r *ValidateVersionCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := validateVersion(
 		ctx.NumWorkerCount,
 		r.StorageURI,
 		r.VersionIndexPath)

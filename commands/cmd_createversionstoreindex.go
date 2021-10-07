@@ -16,12 +16,13 @@ func createVersionStoreIndex(
 	blobStoreURI string,
 	sourceFilePath string,
 	versionLocalStoreIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	_ = logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":             numWorkerCount,
 		"blobStoreURI":               blobStoreURI,
 		"sourceFilePath":             sourceFilePath,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 	})
+	log.Debug("create-version-store-index")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

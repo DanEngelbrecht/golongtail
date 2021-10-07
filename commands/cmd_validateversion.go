@@ -16,11 +16,12 @@ func validateVersion(
 	numWorkerCount int,
 	blobStoreURI string,
 	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	_ = logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":   numWorkerCount,
 		"blobStoreURI":     blobStoreURI,
 		"versionIndexPath": versionIndexPath,
 	})
+	log.Debug("validate-version")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

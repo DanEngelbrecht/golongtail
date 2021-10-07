@@ -30,6 +30,7 @@ func pruneStore(
 		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
 		"dryRun":                       dryRun,
 	})
+	log.Debug("prune-store")
 
 	setupStartTime := time.Now()
 	storeStats := []longtailutils.StoreStat{}

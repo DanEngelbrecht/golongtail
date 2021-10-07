@@ -38,6 +38,7 @@ func downsync(
 		"includeFilterRegEx":         includeFilterRegEx,
 		"excludeFilterRegEx":         excludeFilterRegEx,
 	})
+	log.Debug("downsync")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

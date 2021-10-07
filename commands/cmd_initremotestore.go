@@ -19,6 +19,7 @@ func initRemoteStore(
 		"blobStoreURI":   blobStoreURI,
 		"hashAlgorithm":  hashAlgorithm,
 	})
+	log.Debug("init-remote-store")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

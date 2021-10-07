@@ -16,12 +16,13 @@ func printStore(
 	storeIndexPath string,
 	compact bool,
 	details bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	_ = logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount": numWorkerCount,
 		"storeIndexPath": storeIndexPath,
 		"compact":        compact,
 		"details":        details,
 	})
+	log.Debug("print-store")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -31,6 +32,9 @@ func printStore(
 	vbuffer, err := longtailstorelib.ReadFromURI(storeIndexPath)
 	if err != nil {
 		return storeStats, timeStats, err
+	}
+	if vbuffer == nil {
+		return storeStats, timeStats, longtaillib.ErrENOENT
 	}
 	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
 	if errno != 0 {

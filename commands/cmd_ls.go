@@ -15,11 +15,13 @@ func ls(
 	numWorkerCount int,
 	versionIndexPath string,
 	commandLSVersionDir string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	_ = logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":      numWorkerCount,
 		"versionIndexPath":    versionIndexPath,
 		"commandLSVersionDir": commandLSVersionDir,
 	})
+	log.Debug("ls")
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
@@ -32,6 +34,9 @@ func ls(
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
 	if err != nil {
 		return storeStats, timeStats, err
+	}
+	if vbuffer == nil {
+		return storeStats, timeStats, longtaillib.ErrENOENT
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {

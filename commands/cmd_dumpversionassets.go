@@ -16,11 +16,12 @@ func dumpVersionAssets(
 	numWorkerCount int,
 	versionIndexPath string,
 	showDetails bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	_ = logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":   numWorkerCount,
 		"versionIndexPath": versionIndexPath,
 		"showDetails":      showDetails,
 	})
+	log.Debug("dump-version-assets")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

@@ -23,6 +23,7 @@ func printVersionUsage(
 		"versionIndexPath": versionIndexPath,
 		"localCachePath":   localCachePath,
 	})
+	log.Debug("print-version-usage")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -69,6 +70,9 @@ func printVersionUsage(
 	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
 	if err != nil {
 		return storeStats, timeStats, err
+	}
+	if vbuffer == nil {
+		return storeStats, timeStats, longtaillib.ErrENOENT
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {

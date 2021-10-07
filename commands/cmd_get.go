@@ -23,7 +23,7 @@ func get(
 	validate bool,
 	includeFilterRegEx string,
 	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	_ = logrus.WithFields(logrus.Fields{
+	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":     numWorkerCount,
 		"getConfigPath":      getConfigPath,
 		"targetFolderPath":   targetFolderPath,
@@ -34,6 +34,7 @@ func get(
 		"includeFilterRegEx": includeFilterRegEx,
 		"excludeFilterRegEx": excludeFilterRegEx,
 	})
+	log.Debug("get")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

@@ -10,6 +10,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/alecthomas/kong"
+	"github.com/sirupsen/logrus"
 )
 
 var cli struct {
@@ -71,6 +72,17 @@ func main() {
 	longtailLogLevel, err := longtailutils.ParseLevel(cli.LogLevel)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	switch cli.LogLevel {
+	case "debug":
+		logrus.SetLevel(logrus.DebugLevel)
+	case "info":
+		logrus.SetLevel(logrus.InfoLevel)
+	case "warn":
+		logrus.SetLevel(logrus.WarnLevel)
+	case "error":
+		logrus.SetLevel(logrus.ErrorLevel)
 	}
 
 	longtaillib.SetLogger(&longtailutils.LoggerData{})

@@ -100,6 +100,15 @@ func (f *flushCompletionAPI) Wait() int {
 	return f.err
 }
 
+func FlushStoreSync(store *longtaillib.Longtail_BlockStoreAPI) int {
+	f, errno := FlushStore(store)
+	if errno != 0 {
+		return errno
+	}
+	errno = f.Wait()
+	return errno
+}
+
 type StoreFlush struct {
 	flushAPIs []*flushCompletionAPI
 }
@@ -143,4 +152,13 @@ func (s *StoreFlush) Wait() int {
 	}
 
 	return result
+}
+
+func FlushStoresSync(stores []longtaillib.Longtail_BlockStoreAPI) int {
+	f, errno := FlushStores(stores)
+	if errno != 0 {
+		return errno
+	}
+	errno = f.Wait()
+	return errno
 }

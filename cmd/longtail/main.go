@@ -395,13 +395,9 @@ func upSyncVersion(
 		indexStore,
 		remoteStore,
 	}
-	f, errno := longtailutils.FlushStores(stores)
+	errno = longtailutils.FlushStoresSync(stores)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
-	}
-	errno = f.Wait()
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStoresSync: Failed for `%v`", stores)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -736,13 +732,9 @@ func downSyncVersion(
 		localIndexStore,
 		remoteIndexStore,
 	}
-	f, errno := longtailutils.FlushStores(stores)
+	errno = longtailutils.FlushStoresSync(stores)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
-	}
-	errno = f.Wait()
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStoresSync: Failed for `%v`", stores)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -1253,13 +1245,9 @@ func cpVersionIndex(
 		localIndexStore,
 		remoteIndexStore,
 	}
-	f, errno := longtailutils.FlushStores(stores)
+	errno = longtailutils.FlushStoresSync(stores)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
-	}
-	errno = f.Wait()
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStoresSync: Failed for `%v`", stores)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -1326,11 +1314,11 @@ func initRemoteStore(
 
 	f, errno := longtailutils.FlushStore(&remoteIndexStore)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStore: Failed for `%v`", blobStoreURI)
 	}
 	errno = f.Wait()
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", blobStoreURI)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStore: Failed for `%v`", blobStoreURI)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -1587,13 +1575,9 @@ func stats(
 		localIndexStore,
 		remoteIndexStore,
 	}
-	f, errno := longtailutils.FlushStores(stores)
+	errno = longtailutils.FlushStoresSync(stores)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
-	}
-	errno = f.Wait()
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStoresSync: Failed for `%v`", stores)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -1989,11 +1973,6 @@ func cloneOneVersion(
 		}
 	}
 
-	err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
-	if err != nil {
-		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailstorelib.WriteToURI() failed")
-	}
-
 	stores := []longtaillib.Longtail_BlockStoreAPI{
 		targetRemoteStore,
 		sourceRemoteIndexStore,
@@ -2001,6 +1980,11 @@ func cloneOneVersion(
 	f, errno := longtailutils.FlushStores(stores)
 	if errno != 0 {
 		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%v`", stores)
+	}
+
+	err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
+	if err != nil {
+		return Clone(newVersionIndex), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "cloneStore: longtailstorelib.WriteToURI() failed")
 	}
 
 	if createVersionLocalStoreIndex {
@@ -2397,13 +2381,9 @@ func pruneStore(
 
 	flushStartTime := time.Now()
 
-	f, errno := longtailutils.FlushStore(&remoteStore)
+	errno = longtailutils.FlushStoreSync(&remoteStore)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%s`", remoteStore)
-	}
-	errno = f.Wait()
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStores: Failed for `%s`", remoteStore)
+		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtailutils.FlushStore: Failed for `%s`", remoteStore)
 	}
 
 	flushTime := time.Since(flushStartTime)

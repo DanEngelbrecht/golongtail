@@ -8,6 +8,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type AsyncFolderScanner struct {
@@ -54,9 +55,18 @@ func GetFolderIndex(
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
 	scanner *AsyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"sourceFolderPath": sourceFolderPath,
+		"sourceIndexPath":  sourceIndexPath,
+		"targetChunkSize":  targetChunkSize,
+		"compressionType":  compressionType,
+		"hashIdentifier":   hashIdentifier,
+	})
 	if sourceIndexPath == "" {
+		log.Debug("Using scanner result")
 		fileInfos, scanTime, err := scanner.Get()
 		if err != nil {
+			err = errors.Wrap(err, "Failed getting scanner result")
 			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime, err
 		}
 		defer fileInfos.Dispose()
@@ -67,7 +77,8 @@ func GetFolderIndex(
 
 		hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
+			err = MakeError(errno, fmt.Sprintf("Unsupported hash identifier: %d", hashIdentifier))
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), err
 		}
 
 		chunker := longtaillib.CreateHPCDCChunkerAPI()

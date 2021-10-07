@@ -1806,7 +1806,7 @@ func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
 // Dispose ...
 func (asyncCompleteAPI *Longtail_AsyncFlushAPI) Dispose() {
 	if asyncCompleteAPI.cAsyncCompleteAPI != nil {
-		C.Longtail_DisposeAPI(&asyncCompleteAPI.cAsyncCompleteAPI.m_API)
+		//		C.Longtail_DisposeAPI(&asyncCompleteAPI.cAsyncCompleteAPI.m_API)
 		asyncCompleteAPI.cAsyncCompleteAPI = nil
 	}
 }

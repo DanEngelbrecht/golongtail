@@ -50,6 +50,7 @@ func upsync(
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"getConfigPath":              getConfigPath,
 	})
+	log.Debug("upsync")
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -57,6 +58,8 @@ func upsync(
 	setupStartTime := time.Now()
 	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
+		err = errors.Wrapf(err, "Bad regexs: `%s`  `%s`", includeFilterRegEx, excludeFilterRegEx)
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 
@@ -75,10 +78,14 @@ func upsync(
 
 	compressionType, err := longtailutils.GetCompressionType(compressionAlgorithm)
 	if err != nil {
+		err = errors.Wrapf(err, "Unsupported compression type: `%s`", compressionAlgorithm)
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 	hashIdentifier, err := longtailutils.GetHashIdentifier(hashAlgorithm)
 	if err != nil {
+		err = errors.Wrapf(err, "Unsupported hash type: `%s`", hashAlgorithm)
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 
@@ -99,6 +106,8 @@ func upsync(
 
 	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
 	if err != nil {
+		err = errors.Wrapf(err, "Unsupported storage URI: `%s`", blobStoreURI)
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 	defer remoteStore.Dispose()
@@ -111,6 +120,8 @@ func upsync(
 
 	vindex, hash, readSourceIndexTime, err := sourceIndexReader.Get()
 	if err != nil {
+		err = errors.Wrapf(err, "Failed reading source index: `%s`", sourceFolderPath)
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 	defer vindex.Dispose()
@@ -120,6 +131,7 @@ func upsync(
 	existingRemoteStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, vindex.GetChunkHashes(), minBlockUsagePercent)
 	if err != nil {
 		err = errors.Wrapf(err, "Failed getting store index for source version")
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 	defer existingRemoteStoreIndex.Dispose()
@@ -132,7 +144,7 @@ func upsync(
 		maxChunksPerBlock)
 	if errno != 0 {
 		err = longtailutils.MakeError(errno, "longtaillib.CreateMissingContent failed")
-		log.WithError(err).Error("Upsync failed")
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 	defer versionMissingStoreIndex.Dispose()
@@ -155,7 +167,7 @@ func upsync(
 			longtailutils.NormalizePath(sourceFolderPath))
 		if errno != 0 {
 			err = longtailutils.MakeError(errno, "longtaillib.WriteContent failed")
-			log.WithError(err).Error("Upsync failed")
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 	}
@@ -171,6 +183,7 @@ func upsync(
 	err = longtailutils.FlushStoresSync(stores)
 	if err != nil {
 		log.WithError(err).Error("longtailutils.FlushStoresSync failed")
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 
@@ -190,14 +203,14 @@ func upsync(
 	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(vindex)
 	if errno != 0 {
 		err = longtailutils.MakeError(errno, "longtaillib.WriteVersionIndexToBuffer failed")
-		log.WithError(err).Error("Upsync failed")
+		log.WithError(err).Error("upsync failed")
 		return storeStats, timeStats, err
 	}
 
 	err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
 	if err != nil {
-		err = longtailutils.MakeError(errno, "longtailstorelib.WriteToURI failed")
-		log.WithError(err).Error("Upsync failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("longtailstorelib.WriteToURI failed for `%s`", targetFilePath))
+		log.WithError(err).Error("upsync failed")
 	}
 	writeVersionIndexTime := time.Since(writeVersionIndexStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Write version index", writeVersionIndexTime})
@@ -207,18 +220,20 @@ func upsync(
 		versionLocalStoreIndex, errno := longtaillib.MergeStoreIndex(existingRemoteStoreIndex, versionMissingStoreIndex)
 		if errno != 0 {
 			err = longtailutils.MakeError(errno, "longtaillib.MergeStoreIndex failed")
-			log.WithError(err).Error("Upsync failed")
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 		defer versionLocalStoreIndex.Dispose()
 		versionLocalStoreIndexBuffer, errno := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
 		if errno != 0 {
 			err = longtailutils.MakeError(errno, "longtaillib.WriteStoreIndexToBuffer failed")
-			log.WithError(err).Error("Upsync failed")
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 		err = longtailstorelib.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 		if err != nil {
+			err = errors.Wrapf(err, "Failed writing version local store index to %s", versionLocalStoreIndexPath)
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 		writeVersionLocalStoreIndexTime := time.Since(writeVersionLocalStoreIndexStartTime)
@@ -237,6 +252,8 @@ func upsync(
 		}
 		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
 		if err != nil {
+			err = errors.Wrap(err, "Failed get config temp file")
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 		tmpFilePath := tmpFile.Name()
@@ -244,17 +261,23 @@ func upsync(
 		fmt.Printf("tmp file: %s", tmpFilePath)
 		err = v.WriteConfigAs(tmpFilePath)
 		if err != nil {
+			err = errors.Wrapf(err, "Failed writing get config temp file %s", tmpFilePath)
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 
 		bytes, err := ioutil.ReadFile(tmpFilePath)
 		if err != nil {
+			err = errors.Wrapf(err, "Failed read get config temp file %s", tmpFilePath)
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 		os.Remove(tmpFilePath)
 
 		err = longtailstorelib.WriteToURI(getConfigPath, bytes)
 		if err != nil {
+			err = errors.Wrapf(err, "Failed writing get config index to %s", getConfigPath)
+			log.WithError(err).Error("upsync failed")
 			return storeStats, timeStats, err
 		}
 

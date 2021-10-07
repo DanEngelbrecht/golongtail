@@ -30,6 +30,9 @@ func dumpVersionAssets(
 	if err != nil {
 		return storeStats, timeStats, err
 	}
+	if vbuffer == nil {
+		return storeStats, timeStats, longtaillib.ErrENOENT
+	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
 		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "dumpVersionAssets: longtaillib.ReadVersionIndexFromBuffer() failed")

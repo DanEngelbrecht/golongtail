@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -32,14 +31,14 @@ func printVersion(
 	}
 
 	if vbuffer == nil {
-		err = errors.New("Version index does not exist")
+		err = fmt.Errorf("Version index does not exist: `%s`", versionIndexPath)
 		log.WithError(err).Error("printVersion failed")
 		return storeStats, timeStats, err
 	}
 
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "longtaillib.ReadVersionIndexFromBuffer failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to read version index from `%s`", versionIndexPath))
 		log.WithError(err).Error("printVersion failed")
 		return storeStats, timeStats, err
 	}

@@ -43,7 +43,7 @@ func validateOneVersion(
 	log.Infof("Validating `%s`", targetFilePath)
 	targetVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(tbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Can't parse version index "+targetFilePath)
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't parse version index from `%s`", targetFilePath))
 		log.WithError(err).Info("validateOneVersion")
 		return err
 	}
@@ -62,7 +62,7 @@ func validateOneVersion(
 
 	errno = longtaillib.ValidateStore(targetStoreIndex, targetVersionIndex)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Validate failed for version index "+targetFilePath)
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Validate failed for version index `%s`", targetFilePath))
 		log.WithError(err).Info("validateOneVersion")
 		return err
 	}

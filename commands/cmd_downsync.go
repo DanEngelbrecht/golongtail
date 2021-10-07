@@ -90,7 +90,7 @@ func downsync(
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Can't parse version index")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't parse version index from `%s`", sourceFilePath))
 		return storeStats, timeStats, err
 	}
 	defer sourceVersionIndex.Dispose()
@@ -152,7 +152,7 @@ func downsync(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Can't get hash api for "+longtailutils.HashIdentifierToString(hashIdentifier))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier %s ", hashIdentifier))
 		return storeStats, timeStats, err
 	}
 
@@ -210,7 +210,7 @@ func downsync(
 		longtailutils.NormalizePath(resolvedTargetFolderPath),
 		retainPermissions)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Failed writing local version")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed writing version to `%s`", targetFolderPath))
 		return storeStats, timeStats, err
 	}
 
@@ -268,7 +268,7 @@ func downsync(
 			pathFilter,
 			longtailutils.NormalizePath(resolvedTargetFolderPath))
 		if errno != 0 {
-			err = longtailutils.MakeError(errno, "Failed to scan "+resolvedTargetFolderPath)
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to scan `%s`", resolvedTargetFolderPath))
 			return storeStats, timeStats, err
 		}
 		defer validateFileInfos.Dispose()
@@ -289,7 +289,7 @@ func downsync(
 			nil,
 			targetChunkSize)
 		if errno != 0 {
-			err = longtailutils.MakeError(errno, "Failed to create version index for "+resolvedTargetFolderPath)
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to create version index for `%s`", resolvedTargetFolderPath))
 			return storeStats, timeStats, err
 		}
 		defer validateVersionIndex.Dispose()

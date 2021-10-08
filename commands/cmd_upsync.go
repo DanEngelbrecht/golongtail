@@ -32,7 +32,9 @@ func upsync(
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
 	getConfigPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "upsync"
 	log := log.WithContext(context.Background()).WithFields(log.Fields{
+		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
 		"blobStoreURI":               blobStoreURI,
 		"sourceFolderPath":           sourceFolderPath,
@@ -57,8 +59,7 @@ func upsync(
 	setupStartTime := time.Now()
 	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 
 	fs := longtaillib.CreateFSStorageAPI()
@@ -76,13 +77,11 @@ func upsync(
 
 	compressionType, err := longtailutils.GetCompressionType(compressionAlgorithm)
 	if err != nil {
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	hashIdentifier, err := longtailutils.GetHashIdentifier(hashAlgorithm)
 	if err != nil {
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 
 	setupTime := time.Since(setupStartTime)
@@ -102,8 +101,7 @@ func upsync(
 
 	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
 	if err != nil {
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	defer remoteStore.Dispose()
 
@@ -115,8 +113,7 @@ func upsync(
 
 	vindex, hash, readSourceIndexTime, err := sourceIndexReader.Get()
 	if err != nil {
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	defer vindex.Dispose()
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceIndexTime})
@@ -124,8 +121,7 @@ func upsync(
 	getMissingContentStartTime := time.Now()
 	existingRemoteStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, vindex.GetChunkHashes(), minBlockUsagePercent)
 	if err != nil {
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	defer existingRemoteStoreIndex.Dispose()
 
@@ -136,9 +132,8 @@ func upsync(
 		targetBlockSize,
 		maxChunksPerBlock)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "longtaillib.CreateMissingContent failed")
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed creating missing content store index for `%s`", sourceFolderPath))
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	defer versionMissingStoreIndex.Dispose()
 
@@ -159,9 +154,8 @@ func upsync(
 			vindex,
 			longtailutils.NormalizePath(sourceFolderPath))
 		if errno != 0 {
-			err = longtailutils.MakeError(errno, "longtaillib.WriteContent failed")
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed writing content from `%s`", sourceFolderPath))
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 	}
 	writeContentTime := time.Since(writeContentStartTime)
@@ -175,9 +169,7 @@ func upsync(
 	}
 	err = longtailutils.FlushStoresSync(stores)
 	if err != nil {
-		log.WithError(err).Error("longtailutils.FlushStoresSync failed")
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -195,16 +187,13 @@ func upsync(
 	writeVersionIndexStartTime := time.Now()
 	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(vindex)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "longtaillib.WriteVersionIndexToBuffer failed")
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed serializing version index for `%s`", targetFilePath))
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 
 	err = longtailutils.WriteToURI(targetFilePath, vbuffer)
 	if err != nil {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("longtailutils.WriteToURI failed for `%s`", targetFilePath))
-		log.WithError(err).Error("upsync")
-		return storeStats, timeStats, errors.Wrapf(err, "upsync")
+		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	writeVersionIndexTime := time.Since(writeVersionIndexStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Write version index", writeVersionIndexTime})
@@ -213,22 +202,18 @@ func upsync(
 		writeVersionLocalStoreIndexStartTime := time.Now()
 		versionLocalStoreIndex, errno := longtaillib.MergeStoreIndex(existingRemoteStoreIndex, versionMissingStoreIndex)
 		if errno != 0 {
-			err = longtailutils.MakeError(errno, "longtaillib.MergeStoreIndex failed")
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed merging store index for `%s`", versionLocalStoreIndexPath))
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 		defer versionLocalStoreIndex.Dispose()
 		versionLocalStoreIndexBuffer, errno := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
 		if errno != 0 {
-			err = longtailutils.MakeError(errno, "longtaillib.WriteStoreIndexToBuffer failed")
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed serializing store index for `%s`", versionLocalStoreIndexPath))
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 		if err != nil {
-			err = errors.Wrapf(err, "Failed writing version local store index to %s", versionLocalStoreIndexPath)
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 		writeVersionLocalStoreIndexTime := time.Since(writeVersionLocalStoreIndexStartTime)
 		timeStats = append(timeStats, longtailutils.TimeStat{"Write version store index", writeVersionLocalStoreIndexTime})
@@ -246,33 +231,25 @@ func upsync(
 		}
 		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
 		if err != nil {
-			err = errors.Wrap(err, "Failed get config temp file")
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 		tmpFilePath := tmpFile.Name()
 		tmpFile.Close()
 		fmt.Printf("tmp file: %s", tmpFilePath)
 		err = v.WriteConfigAs(tmpFilePath)
 		if err != nil {
-			err = errors.Wrapf(err, "Failed writing get config temp file %s", tmpFilePath)
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 
 		bytes, err := ioutil.ReadFile(tmpFilePath)
 		if err != nil {
-			err = errors.Wrapf(err, "Failed read get config temp file %s", tmpFilePath)
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 		os.Remove(tmpFilePath)
 
 		err = longtailutils.WriteToURI(getConfigPath, bytes)
 		if err != nil {
-			err = errors.Wrapf(err, "Failed writing get config index to %s", getConfigPath)
-			log.WithError(err).Error("upsync")
-			return storeStats, timeStats, errors.Wrapf(err, "upsync")
+			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 
 		writeGetConfigTime := time.Since(writeGetConfigStartTime)

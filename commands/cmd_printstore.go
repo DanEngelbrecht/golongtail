@@ -15,7 +15,9 @@ func printStore(
 	storeIndexPath string,
 	compact bool,
 	details bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "printStore"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":          fname,
 		"numWorkerCount": numWorkerCount,
 		"storeIndexPath": storeIndexPath,
 		"compact":        compact,
@@ -30,11 +32,12 @@ func printStore(
 
 	vbuffer, err := longtailutils.ReadFromURI(storeIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "printStore: longtaillib.ReadStoreIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse store index from `%s`", storeIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer storeIndex.Dispose()
 	readStoreIndexTime := time.Since(readStoreIndexStartTime)

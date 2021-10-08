@@ -6,6 +6,7 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -13,7 +14,9 @@ func printVersion(
 	numWorkerCount int,
 	versionIndexPath string,
 	compact bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "printVersion"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":            fname,
 		"numWorkerCount":   numWorkerCount,
 		"versionIndexPath": versionIndexPath,
 		"compact":          compact,
@@ -27,14 +30,13 @@ func printVersion(
 
 	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to read version index from `%s`", versionIndexPath))
-		log.WithError(err).Error("printVersion failed")
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)

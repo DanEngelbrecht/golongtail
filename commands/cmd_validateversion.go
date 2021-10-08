@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
@@ -14,6 +15,7 @@ func validateVersion(
 	numWorkerCount int,
 	blobStoreURI string,
 	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "validateVersion"
 	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":   numWorkerCount,
 		"blobStoreURI":     blobStoreURI,
@@ -32,7 +34,7 @@ func validateVersion(
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer indexStore.Dispose()
 	setupTime := time.Since(setupStartTime)
@@ -41,11 +43,12 @@ func validateVersion(
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validate: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -54,8 +57,7 @@ func validateVersion(
 	getExistingContentStartTime := time.Now()
 	remoteStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed getting store index for version")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer remoteStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -64,7 +66,8 @@ func validateVersion(
 	validateStartTime := time.Now()
 	errno = longtaillib.ValidateStore(remoteStoreIndex, versionIndex)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "validate: longtaillib.ValidateContent() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Validate failed for version index `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	validateTime := time.Since(validateStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Validate", validateTime})

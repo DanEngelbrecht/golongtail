@@ -16,7 +16,9 @@ func printVersionUsage(
 	blobStoreURI string,
 	versionIndexPath string,
 	localCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "printVersionUsage"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":            fname,
 		"numWorkerCount":   numWorkerCount,
 		"blobStoreURI":     blobStoreURI,
 		"versionIndexPath": versionIndexPath,
@@ -38,7 +40,7 @@ func printVersionUsage(
 
 	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer remoteIndexStore.Dispose()
 
@@ -68,11 +70,12 @@ func printVersionUsage(
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -81,8 +84,7 @@ func printVersionUsage(
 	getExistingContentStartTime := time.Now()
 	existingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed getting store index for version")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer existingStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)

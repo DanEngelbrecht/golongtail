@@ -21,7 +21,7 @@ func printVersion(
 		"versionIndexPath": versionIndexPath,
 		"compact":          compact,
 	})
-	log.Debug("print-version")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

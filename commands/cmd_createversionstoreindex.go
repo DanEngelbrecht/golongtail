@@ -24,7 +24,7 @@ func createVersionStoreIndex(
 		"sourceFilePath":             sourceFilePath,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 	})
-	log.Debug("create-version-store-index")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

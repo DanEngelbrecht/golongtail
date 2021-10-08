@@ -51,7 +51,7 @@ func upsync(
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"getConfigPath":              getConfigPath,
 	})
-	log.Debug("upsync")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

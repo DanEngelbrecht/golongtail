@@ -21,7 +21,7 @@ func validateVersion(
 		"blobStoreURI":     blobStoreURI,
 		"versionIndexPath": versionIndexPath,
 	})
-	log.Debug("validate-version")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

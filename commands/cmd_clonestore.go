@@ -483,7 +483,7 @@ func cloneStore(
 		"minBlockUsagePercent":         minBlockUsagePercent,
 		"skipValidate":                 skipValidate,
 	})
-	log.Debug("clone-store")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

@@ -22,7 +22,7 @@ func dumpVersionAssets(
 		"versionIndexPath": versionIndexPath,
 		"showDetails":      showDetails,
 	})
-	log.Debug("dump-version-assets")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

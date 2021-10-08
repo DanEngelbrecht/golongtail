@@ -21,7 +21,7 @@ func ls(
 		"versionIndexPath":    versionIndexPath,
 		"commandLSVersionDir": commandLSVersionDir,
 	})
-	log.Debug("ls")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

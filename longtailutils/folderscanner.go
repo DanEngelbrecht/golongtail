@@ -21,7 +21,7 @@ func (scanner *AsyncFolderScanner) Scan(
 	sourceFolderPath string,
 	pathFilter longtaillib.Longtail_PathFilterAPI,
 	fs longtaillib.Longtail_StorageAPI) {
-
+	const fname = "AsyncFolderScanner.Scan"
 	scanner.wg.Add(1)
 	go func() {
 		startTime := time.Now()
@@ -30,7 +30,8 @@ func (scanner *AsyncFolderScanner) Scan(
 			pathFilter,
 			NormalizePath(sourceFolderPath))
 		if errno != 0 {
-			scanner.err = errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.GetFilesRecursively(%s) failed", sourceFolderPath)
+			err := MakeError(errno, fmt.Sprintf("Failed getting folder structure for `%s`", sourceFolderPath))
+			scanner.err = errors.Wrap(err, fname)
 		}
 		scanner.fileInfos = fileInfos
 		scanner.elapsed = time.Since(startTime)
@@ -54,7 +55,9 @@ func GetFolderIndex(
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
 	scanner *AsyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
+	const fname = "GetFolderIndex"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":            fname,
 		"sourceFolderPath": sourceFolderPath,
 		"sourceIndexPath":  sourceIndexPath,
 		"targetChunkSize":  targetChunkSize,
@@ -62,11 +65,10 @@ func GetFolderIndex(
 		"hashIdentifier":   hashIdentifier,
 	})
 	if sourceIndexPath == "" {
-		log.Debug("Using scanner result")
+		log.Debug(fname)
 		fileInfos, scanTime, err := scanner.Get()
 		if err != nil {
-			err = errors.Wrap(err, "Failed getting scanner result")
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime, err
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime, errors.Wrap(err, fname)
 		}
 		defer fileInfos.Dispose()
 
@@ -76,8 +78,8 @@ func GetFolderIndex(
 
 		hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
-			err = MakeError(errno, fmt.Sprintf("Unsupported hash identifier: %d", hashIdentifier))
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), err
+			err = MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrap(err, fname)
 		}
 
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
@@ -96,7 +98,8 @@ func GetFolderIndex(
 			compressionTypes,
 			targetChunkSize)
 		if errno != 0 {
-			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.CreateVersionIndex(%s)", sourceFolderPath)
+			err = MakeError(errno, fmt.Sprintf("Failed creating version index for `%s`", sourceFolderPath))
+			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrap(err, fname)
 		}
 
 		return vindex, hash, scanTime + time.Since(startTime), nil
@@ -105,17 +108,19 @@ func GetFolderIndex(
 
 	vbuffer, err := ReadFromURI(sourceIndexPath)
 	if err != nil {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}
 	var errno int
 	vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "longtaillib.ReadVersionIndexFromBuffer(%s) failed", sourceIndexPath)
+		err = MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", sourceIndexPath))
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "hashRegistry.GetHashAPI(%d) failed", hashIdentifier)
+		err = MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}
 
 	return vindex, hash, time.Since(startTime), nil

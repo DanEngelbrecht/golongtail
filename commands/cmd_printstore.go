@@ -23,7 +23,7 @@ func printStore(
 		"compact":        compact,
 		"details":        details,
 	})
-	log.Debug("print-store")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

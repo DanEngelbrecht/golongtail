@@ -24,7 +24,7 @@ func printVersionUsage(
 		"versionIndexPath": versionIndexPath,
 		"localCachePath":   localCachePath,
 	})
-	log.Debug("print-version-usage")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

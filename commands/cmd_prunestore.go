@@ -31,7 +31,7 @@ func pruneStore(
 		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
 		"dryRun":                       dryRun,
 	})
-	log.Debug("prune-store")
+	log.Debug(fname)
 
 	setupStartTime := time.Now()
 	storeStats := []longtailutils.StoreStat{}
@@ -126,7 +126,7 @@ func pruneStore(
 				log := logrus.WithFields(logrus.Fields{
 					"fname": fname,
 				})
-				log.Debug("batch")
+				log.Debug(fname)
 				vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 				if err != nil {
 					batchErrors <- errors.Wrap(err, fname)

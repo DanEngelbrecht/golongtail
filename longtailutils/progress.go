@@ -1,12 +1,14 @@
 package longtailutils
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	log "github.com/sirupsen/logrus"
 )
 
 // ProgressData ...
@@ -66,6 +68,12 @@ func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
 
 // CreateProgress ...
 func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
+	const fname = "CreateProgress"
+	log := log.WithContext(context.Background()).WithFields(log.Fields{
+		"fname": fname,
+		"task":  task,
+	})
+	log.Debug(fname)
 	progress := &ProgressData{task: task, startTime: time.Now()}
 	baseProgress := longtaillib.CreateProgressAPI(progress)
 	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)

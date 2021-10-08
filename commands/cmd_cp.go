@@ -30,7 +30,7 @@ func cpVersionIndex(
 		"sourcePath":       sourcePath,
 		"targetPath":       targetPath,
 	})
-	log.Debug("cp")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

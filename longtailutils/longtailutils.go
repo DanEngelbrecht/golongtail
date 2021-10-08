@@ -27,7 +27,8 @@ type getExistingContentCompletionAPI struct {
 }
 
 func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err int) {
-	log.Debug("getExistingContentCompletionAPI.OnComplete")
+	const fname = "getExistingContentCompletionAPI.OnComplete"
+	log.Debug(fname)
 	a.err = err
 	a.storeIndex = storeIndex
 	a.wg.Done()
@@ -40,8 +41,8 @@ type pruneBlocksCompletionAPI struct {
 }
 
 func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err int) {
-	log.Debug("pruneBlocksCompletionAPI.OnComplete")
-	a.err = err
+	const fname = "pruneBlocksCompletionAPI.OnComplete"
+	log.Debug(fname)
 	a.prunedBlockCount = prunedBlockCount
 	a.wg.Done()
 }
@@ -53,7 +54,8 @@ type flushCompletionAPI struct {
 }
 
 func (a *flushCompletionAPI) OnComplete(err int) {
-	log.Debug("flushCompletionAPI.OnComplete")
+	const fname = "flushCompletionAPI.OnComplete"
+	log.Debug(fname)
 	a.err = err
 	a.wg.Done()
 }
@@ -66,7 +68,8 @@ type GetStoredBlockCompletionAPI struct {
 }
 
 func (a *GetStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtail_StoredBlock, err int) {
-	log.Debug("GetStoredBlockCompletionAPI.OnComplete")
+	const fname = "GetStoredBlockCompletionAPI.OnComplete"
+	log.Debug(fname)
 	a.Err = err
 	a.StoredBlock = storedBlock
 	a.Wg.Done()
@@ -77,11 +80,13 @@ func GetExistingStoreIndexSync(
 	indexStore longtaillib.Longtail_BlockStoreAPI,
 	chunkHashes []uint64,
 	minBlockUsagePercent uint32) (longtaillib.Longtail_StoreIndex, error) {
+	const fname = "GetExistingStoreIndexSync"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":                fname,
 		"len(chunkHashes)":     len(chunkHashes),
 		"minBlockUsagePercent": minBlockUsagePercent,
 	})
-	log.Debug("GetExistingStoreIndexSync")
+	log.Debug(fname)
 
 	getExistingContentComplete := &getExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
@@ -89,15 +94,13 @@ func GetExistingStoreIndexSync(
 	if errno != 0 {
 		getExistingContentComplete.wg.Done()
 		getExistingContentComplete.wg.Wait()
-		err := MakeError(errno, "indexStore.GetExistingContent failed")
-		log.WithError(err).Error("GetExistingStoreIndexSync")
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, "GetExistingStoreIndexSync")
+		err := MakeError(errno, "Failed getting existing content index")
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	getExistingContentComplete.wg.Wait()
 	if getExistingContentComplete.err != 0 {
-		err := MakeError(getExistingContentComplete.err, "GetExistingContent completion failed")
-		log.WithError(err).Error("GetExistingStoreIndexSync")
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, "GetExistingStoreIndexSync")
+		err := MakeError(getExistingContentComplete.err, "GetExistingStoreIndexSync completion failed")
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	return getExistingContentComplete.storeIndex, nil
 }
@@ -106,10 +109,12 @@ func GetExistingStoreIndexSync(
 func PruneBlocksSync(
 	indexStore longtaillib.Longtail_BlockStoreAPI,
 	keepBlockHashes []uint64) (uint32, error) {
+	const fname = "GetExistingStoreIndexSync"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":                fname,
 		"len(keepBlockHashes)": len(keepBlockHashes),
 	})
-	log.Debug("PruneBlocksSync")
+	log.Debug(fname)
 
 	pruneBlocksComplete := &pruneBlocksCompletionAPI{}
 	pruneBlocksComplete.wg.Add(1)
@@ -117,23 +122,25 @@ func PruneBlocksSync(
 	if errno != 0 {
 		pruneBlocksComplete.wg.Done()
 		pruneBlocksComplete.wg.Wait()
-		err := MakeError(errno, "indexStore.PruneBlocks failed")
-		log.WithError(err).Error("PruneBlocksSync")
-		return 0, errors.Wrap(err, "PruneBlocksSync")
+		err := MakeError(errno, "Failed pruning blocks in store")
+		return 0, errors.Wrap(err, fname)
 	}
 	pruneBlocksComplete.wg.Wait()
 	if pruneBlocksComplete.err != 0 {
-		err := MakeError(pruneBlocksComplete.err, "PruneBlocks failed")
-		log.WithError(err).Error("PruneBlocksSync")
-		return 0, errors.Wrap(err, "PruneBlocksSync")
+		err := MakeError(pruneBlocksComplete.err, "PruneBlocks completion failed")
+		return 0, errors.Wrap(err, fname)
 	}
 	return pruneBlocksComplete.prunedBlockCount, nil
 }
 
 // flushStore ...
 func FlushStore(store *longtaillib.Longtail_BlockStoreAPI) (*flushCompletionAPI, error) {
-	log := logrus.WithField("store", store)
-	log.Debug("FlushStore")
+	const fname = "FlushStore"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"store": store,
+	})
+	log.Debug(fname)
 
 	targetStoreFlushComplete := &flushCompletionAPI{}
 	targetStoreFlushComplete.wg.Add(1)
@@ -143,34 +150,38 @@ func FlushStore(store *longtaillib.Longtail_BlockStoreAPI) (*flushCompletionAPI,
 		return targetStoreFlushComplete, nil
 	}
 	targetStoreFlushComplete.wg.Done()
-	err := MakeError(errno, "store.Flush failed")
-	log.WithError(err).Error("FlushStore")
-	return nil, errors.Wrap(err, "FlushStore")
+	err := MakeError(errno, "Failed creating flush callback api")
+	return nil, errors.Wrap(err, fname)
 }
 
 func (f *flushCompletionAPI) Wait() error {
-	log.Debug("flushCompletionAPI.Wait")
+	const fname = "flushCompletionAPI.Wait"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+	})
+	log.Debug(fname)
 	f.wg.Wait()
 	if f.err != 0 {
 		err := MakeError(f.err, "Flush completion failed")
-		log.WithError(err).Error("flushCompletionAPI.Wait")
-		return errors.Wrap(err, "flushCompletionAPI.Wait")
+		return errors.Wrap(err, fname)
 	}
 	return nil
 }
 
 func FlushStoreSync(store *longtaillib.Longtail_BlockStoreAPI) error {
-	log := logrus.WithField("store", store)
-	log.Debug("FlushStoreSync")
+	const fname = "FlushStoreSync"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"store": store,
+	})
+	log.Debug(fname)
 	f, err := FlushStore(store)
 	if err != nil {
-		log.WithError(err).Error("FlushStoreSync")
-		return errors.Wrap(err, "FlushStoreSync")
+		return errors.Wrap(err, fname)
 	}
 	err = f.Wait()
 	if err != nil {
-		log.WithError(err).Error("FlushStoreSync")
-		return errors.Wrap(err, "FlushStoreSync")
+		return errors.Wrap(err, fname)
 	}
 	return nil
 }
@@ -181,8 +192,12 @@ type StoreFlush struct {
 
 // FlushStores ...
 func FlushStores(stores []longtaillib.Longtail_BlockStoreAPI) (*StoreFlush, error) {
-	log := logrus.WithField("stores", stores)
-	log.Debug("FlushStoreSync")
+	const fname = "FlushStores"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"stores": stores,
+	})
+	log.Debug(fname)
 	storeFlush := &StoreFlush{}
 	storeFlush.flushAPIs = make([]*flushCompletionAPI, len(stores))
 	for i, store := range stores {
@@ -199,8 +214,7 @@ func FlushStores(stores []longtaillib.Longtail_BlockStoreAPI) (*StoreFlush, erro
 					flushAPI.Wait()
 				}
 			}
-			log.WithError(err).Error("FlushStores")
-			return nil, errors.Wrap(err, "FlushStores")
+			return nil, errors.Wrap(err, fname)
 		}
 	}
 	return storeFlush, nil
@@ -208,7 +222,11 @@ func FlushStores(stores []longtaillib.Longtail_BlockStoreAPI) (*StoreFlush, erro
 
 // Wait
 func (s *StoreFlush) Wait() error {
-	log.Debug("StoreFlush.Wait")
+	const fname = "StoreFlush.Wait"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+	})
+	log.Debug(fname)
 	var err error
 	for _, f := range s.flushAPIs {
 		if f == nil {
@@ -217,66 +235,68 @@ func (s *StoreFlush) Wait() error {
 		f.Wait()
 		if f.err != 0 {
 			err = MakeError(f.err, "StoreFlush.Wait() failed")
-			log.WithError(err).Error("Wait failed")
+			err = errors.Wrap(err, fname)
+			log.WithError(err).Error("Flush failed")
 		}
 		f.asyncFlushAPI.Dispose()
 	}
 
 	if err != nil {
-		log.WithError(err).Error("StoreFlush.Wait")
-		errors.Wrap(err, "StoreFlush.Wait")
+		return errors.Wrap(err, fname)
 	}
 	return nil
 }
 
 func FlushStoresSync(stores []longtaillib.Longtail_BlockStoreAPI) error {
-	log := logrus.WithField("stores", stores)
-	log.Debug("FlushStoreSync")
+	const fname = "FlushStoresSync"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"stores": stores,
+	})
+	log.Debug(fname)
 	f, err := FlushStores(stores)
 	if err != nil {
-		return err
+		return errors.Wrap(err, fname)
 	}
 	err = f.Wait()
 	if err != nil {
-		log.WithError(err).Error("FlushStoresSync")
-		return errors.Wrap(err, "FlushStoresSync")
+		return errors.Wrap(err, fname)
 	}
 	return nil
 }
 
 func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
-	log := logrus.WithField("uri", uri)
-	log.Debug("createBlobStoreForURI")
+	const fname = "createBlobStoreForURI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"uri":   uri,
+	})
+	log.Debug(fname)
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
 			store, err := longtailstorelib.NewGCSBlobStore(blobStoreURL, false)
 			if err != nil {
-				log.WithError(err).Error("createBlobStoreForURI")
-				return nil, errors.Wrap(err, "createBlobStoreForURI")
+				return nil, errors.Wrap(err, fname)
 			}
 			return store, nil
 		case "s3":
 			store, err := longtailstorelib.NewS3BlobStore(blobStoreURL)
 			if err != nil {
-				log.WithError(err).Error("createBlobStoreForURI")
-				return nil, errors.Wrap(err, "createBlobStoreForURI")
+				return nil, errors.Wrap(err, fname)
 			}
 			return store, nil
 		case "abfs":
-			err := fmt.Errorf("azure Gen1 storage not yet implemented")
-			log.WithError(err).Error("createBlobStoreForURI")
-			return nil, errors.Wrap(err, "createBlobStoreForURI")
+			err := fmt.Errorf("azure Gen1 storage not yet implemented for `%s`", uri)
+			return nil, errors.Wrap(err, fname)
 		case "abfss":
-			err := fmt.Errorf("azure Gen2 storage not yet implemented")
-			log.WithError(err).Error("createBlobStoreForURI")
-			return nil, errors.Wrap(err, "createBlobStoreForURI")
+			err := fmt.Errorf("azure Gen2 storage not yet implemented for `%s`", uri)
+			return nil, errors.Wrap(err, fname)
 		case "file":
 			store, err := longtailstorelib.NewFSBlobStore(blobStoreURL.Path[1:])
 			if err != nil {
-				log.WithError(err).Error("createBlobStoreForURI")
-				return nil, errors.Wrap(err, "createBlobStoreForURI")
+				return nil, errors.Wrap(err, fname)
 			}
 			return store, nil
 		}
@@ -284,15 +304,18 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 
 	store, err := longtailstorelib.NewFSBlobStore(uri)
 	if err != nil {
-		log.WithError(err).Error("createBlobStoreForURI")
-		return nil, errors.Wrap(err, "createBlobStoreForURI")
+		return nil, errors.Wrap(err, fname)
 	}
 	return store, nil
 }
 
 func splitURI(uri string) (string, string) {
-	log := logrus.WithField("uri", uri)
-	log.Debug("splitURI")
+	const fname = "splitURI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"uri":   uri,
+	})
+	log.Debug(fname)
 	i := strings.LastIndex(uri, "/")
 	if i == -1 {
 		i = strings.LastIndex(uri, "\\")
@@ -305,58 +328,58 @@ func splitURI(uri string) (string, string) {
 
 // ReadFromURI ...
 func ReadFromURI(uri string) ([]byte, error) {
-	log := logrus.WithField("uri", uri)
-	log.Debug("ReadFromURI")
+	const fname = "ReadFromURI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"uri":   uri,
+	})
+	log.Debug(fname)
 	uriParent, uriName := splitURI(uri)
 	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent)
 	if err != nil {
-		log.WithError(err).Error("ReadFromURI")
-		return nil, errors.Wrap(err, "ReadFromURI")
+		return nil, errors.Wrap(err, fname)
 	}
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
-		log.WithError(err).Error("ReadFromURI")
-		return nil, errors.Wrap(err, "ReadFromURI")
+		return nil, errors.Wrap(err, fname)
 	}
 	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
-		log.WithError(err).Error("ReadFromURI")
-		return nil, errors.Wrap(err, "ReadFromURI")
+		return nil, errors.Wrap(err, fname)
 	}
 	vbuffer, err := object.Read()
 	if err != nil {
-		log.WithError(err).Error("ReadFromURI")
-		return nil, errors.Wrap(err, "ReadFromURI")
+		return nil, errors.Wrap(err, fname)
 	}
 	return vbuffer, nil
 }
 
 // ReadFromURI ...
 func WriteToURI(uri string, data []byte) error {
-	log := logrus.WithField("uri", uri)
-	log.Debug("WriteToURI")
+	const fname = "ReadFromURI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"uri":   uri,
+	})
+	log.Debug(fname)
 	uriParent, uriName := splitURI(uri)
 	blobStore, err := createBlobStoreForURI(uriParent)
 	if err != nil {
-		log.WithError(err).Error("WriteToURI")
-		return errors.Wrap(err, "WriteToURI")
+		return errors.Wrap(err, fname)
 	}
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
-		log.WithError(err).Error("WriteToURI")
-		return errors.Wrap(err, "WriteToURI")
+		return errors.Wrap(err, fname)
 	}
 	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
-		log.WithError(err).Error("WriteToURI")
-		return errors.Wrap(err, "WriteToURI")
+		return errors.Wrap(err, fname)
 	}
 	_, err = object.Write(data)
 	if err != nil {
-		log.WithError(err).Error("WriteToURI")
-		return errors.Wrap(err, "WriteToURI")
+		return errors.Wrap(err, fname)
 	}
 	return nil
 }
@@ -365,22 +388,22 @@ func ReadBlobWithRetry(
 	ctx context.Context,
 	client longtailstorelib.BlobClient,
 	key string) ([]byte, int, error) {
+	const fname = "ReadFromURI"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
 		"client": client,
 		"key":    key,
 	})
-	log.Debug("readBlobWithRetry")
+	log.Debug(fname)
 
 	retryCount := 0
 	objHandle, err := client.NewObject(key)
 	if err != nil {
-		log.WithError(err).Error("readBlobWithRetry")
-		return nil, retryCount, errors.Wrap(err, "readBlobWithRetry")
+		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	exists, err := objHandle.Exists()
 	if err != nil {
-		log.WithError(err).Error("readBlobWithRetry")
-		return nil, retryCount, errors.Wrap(err, "readBlobWithRetry")
+		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	if !exists {
 		return nil, retryCount, longtaillib.ErrENOENT
@@ -405,8 +428,7 @@ func ReadBlobWithRetry(
 	}
 
 	if err != nil {
-		log.WithError(err).Error("readBlobWithRetry")
-		return nil, retryCount, errors.Wrap(err, "readBlobWithRetry")
+		return nil, retryCount, errors.Wrap(err, fname)
 	}
 
 	return blobData, retryCount, nil
@@ -452,36 +474,40 @@ var (
 const NoCompressionType = uint32(0)
 
 func GetCompressionType(compressionAlgorithm string) (uint32, error) {
+	const fname = "GetCompressionType"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":                fname,
 		"compressionAlgorithm": compressionAlgorithm,
 	})
-	log.Debug("GetCompressionType")
+	log.Debug(fname)
 	if compressionType, exists := compressionTypeMap[compressionAlgorithm]; exists {
 		return compressionType, nil
 	}
-	err := fmt.Errorf("unsupported compression algorithm: `%s`", compressionAlgorithm)
-	log.WithError(err).Error("GetCompressionType")
-	return 0, errors.Wrap(err, "GetCompressionType")
+	err := fmt.Errorf("Unsupported compression algorithm: `%s`", compressionAlgorithm)
+	return 0, errors.Wrap(err, fname)
 }
 
 func GetHashIdentifier(hashAlgorithm string) (uint32, error) {
+	const fname = "GetHashIdentifier"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":         fname,
 		"hashAlgorithm": hashAlgorithm,
 	})
-	log.Debug("GetHashIdentifier")
+	log.Debug(fname)
 	if identifier, exists := hashIdentifierMap[hashAlgorithm]; exists {
 		return identifier, nil
 	}
 	err := fmt.Errorf("not a supported hash api: `%s`", hashAlgorithm)
-	log.WithError(err).Error("GetHashIdentifier")
-	return 0, errors.Wrap(err, "GetHashIdentifier")
+	return 0, errors.Wrap(err, fname)
 }
 
 func HashIdentifierToString(hashIdentifier uint32) string {
+	const fname = "GetCompressionType"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":          fname,
 		"hashIdentifier": hashIdentifier,
 	})
-	log.Debug("HashIdentifierToString")
+	log.Debug(fname)
 	if identifier, exists := reverseHashIdentifierMap[hashIdentifier]; exists {
 		return identifier
 	}

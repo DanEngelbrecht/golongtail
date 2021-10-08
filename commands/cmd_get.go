@@ -34,7 +34,7 @@ func get(
 		"includeFilterRegEx": includeFilterRegEx,
 		"excludeFilterRegEx": excludeFilterRegEx,
 	})
-	log.Debug("get")
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

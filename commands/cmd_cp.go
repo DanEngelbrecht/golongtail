@@ -87,7 +87,7 @@ func cpVersionIndex(
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't parse version index from `%s`", versionIndexPath))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
@@ -119,7 +119,7 @@ func cpVersionIndex(
 		storeIndex,
 		versionIndex)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't create block store for `%s` using `%s`", versionIndexPath, blobStoreURI))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant create block store for `%s` using `%s`", versionIndexPath, blobStoreURI))
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.Dispose()

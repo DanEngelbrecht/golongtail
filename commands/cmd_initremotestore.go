@@ -14,7 +14,9 @@ func initRemoteStore(
 	numWorkerCount int,
 	blobStoreURI string,
 	hashAlgorithm string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "initRemoteStore"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":          fname,
 		"numWorkerCount": numWorkerCount,
 		"blobStoreURI":   blobStoreURI,
 		"hashAlgorithm":  hashAlgorithm,
@@ -31,7 +33,7 @@ func initRemoteStore(
 
 	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.Init)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer remoteIndexStore.Dispose()
 	setupTime := time.Since(setupStartTime)
@@ -40,8 +42,8 @@ func initRemoteStore(
 	getExistingContentStartTime := time.Now()
 	retargetStoreIndex, err := longtailutils.GetExistingStoreIndexSync(remoteIndexStore, []uint64{}, 0)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed getting store index")
-		return storeStats, timeStats, err
+		err = errors.Wrapf(err, "Failed getting store index from store `%s`", blobStoreURI)
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer retargetStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -51,8 +53,7 @@ func initRemoteStore(
 
 	err = longtailutils.FlushStoreSync(&remoteIndexStore)
 	if err != nil {
-		log.WithError(err).Error("longtailutils.FlushStoreSync failed")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	flushTime := time.Since(flushStartTime)

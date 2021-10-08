@@ -40,7 +40,7 @@ func validateOneVersion(
 	log.Infof("Validating `%s`", targetFilePath)
 	targetVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(tbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't parse version index from `%s`", targetFilePath))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", targetFilePath))
 		return errors.Wrap(err, fname)
 	}
 	defer targetVersionIndex.Dispose()

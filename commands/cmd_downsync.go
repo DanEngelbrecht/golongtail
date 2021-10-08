@@ -24,7 +24,9 @@ func downsync(
 	versionLocalStoreIndexPath string,
 	includeFilterRegEx string,
 	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
 		"blobStoreURI":               blobStoreURI,
 		"sourceFilePath":             sourceFilePath,
@@ -49,8 +51,7 @@ func downsync(
 
 	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
-		err = errors.Wrap(err, "Invalid filter regex")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	resolvedTargetFolderPath := ""
@@ -60,7 +61,8 @@ func downsync(
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetFolderPath = sourceNameSplit[0]
 		if resolvedTargetFolderPath == "" {
-			return storeStats, timeStats, fmt.Errorf("downsync: unable to resolve target path using `%s` as base", sourceFilePath)
+			err = fmt.Errorf("Unable to resolve target path using `%s` as base", sourceFilePath)
+			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 	} else {
 		resolvedTargetFolderPath = targetFolderPath
@@ -81,13 +83,12 @@ func downsync(
 
 	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
-		err = errors.Wrapf(err, "Can't read %s", sourceFilePath)
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't parse version index from `%s`", sourceFilePath))
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", sourceFilePath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer sourceVersionIndex.Dispose()
 
@@ -118,8 +119,7 @@ func downsync(
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPath, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
-		err = errors.Wrapf(err, "Can't create block store for %s", blobStoreURI)
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer remoteIndexStore.Dispose()
 
@@ -148,8 +148,8 @@ func downsync(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d``", hashIdentifier))
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	setupTime := time.Since(setupStartTime)
@@ -157,7 +157,7 @@ func downsync(
 
 	targetVersionIndex, hash, readTargetIndexTime, err := targetIndexReader.Get()
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer targetVersionIndex.Dispose()
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read target index", readTargetIndexTime})
@@ -168,8 +168,8 @@ func downsync(
 		targetVersionIndex,
 		sourceVersionIndex)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Failed creating version diff")
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to create version diff. `%s` -> `%s`", targetFolderPath, sourceFilePath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionDiff.Dispose()
 
@@ -177,14 +177,13 @@ func downsync(
 		sourceVersionIndex,
 		versionDiff)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, "Getting required chunk hashes")
-		return storeStats, timeStats, err
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to get required chunk hashes. `%s` -> `%s`", targetFolderPath, sourceFilePath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	retargettedVersionStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, chunkHashes, 0)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed getting store index for diff")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer retargettedVersionStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -207,7 +206,7 @@ func downsync(
 		retainPermissions)
 	if errno != 0 {
 		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed writing version to `%s`", targetFolderPath))
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	changeVersionTime := time.Since(changeVersionStartTime)
@@ -225,8 +224,7 @@ func downsync(
 	}
 	err = longtailutils.FlushStoresSync(stores)
 	if err != nil {
-		log.WithError(err).Error("longtailutils.FlushStoresSync failed")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	flushTime := time.Since(flushStartTime)
@@ -265,7 +263,7 @@ func downsync(
 			longtailutils.NormalizePath(resolvedTargetFolderPath))
 		if errno != 0 {
 			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to scan `%s`", resolvedTargetFolderPath))
-			return storeStats, timeStats, err
+			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 		defer validateFileInfos.Dispose()
 
@@ -286,7 +284,7 @@ func downsync(
 			targetChunkSize)
 		if errno != 0 {
 			err = longtailutils.MakeError(errno, fmt.Sprintf("Failed to create version index for `%s`", resolvedTargetFolderPath))
-			return storeStats, timeStats, err
+			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 		defer validateVersionIndex.Dispose()
 		if validateVersionIndex.GetAssetCount() != sourceVersionIndex.GetAssetCount() {

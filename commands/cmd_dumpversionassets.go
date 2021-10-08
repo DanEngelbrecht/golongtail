@@ -15,7 +15,9 @@ func dumpVersionAssets(
 	numWorkerCount int,
 	versionIndexPath string,
 	showDetails bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "dumpVersionAssets"
 	log := logrus.WithFields(logrus.Fields{
+		"fname":            fname,
 		"numWorkerCount":   numWorkerCount,
 		"versionIndexPath": versionIndexPath,
 		"showDetails":      showDetails,
@@ -28,11 +30,12 @@ func dumpVersionAssets(
 	readSourceStartTime := time.Now()
 	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "dumpVersionAssets: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)

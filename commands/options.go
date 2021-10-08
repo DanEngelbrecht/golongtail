@@ -61,7 +61,7 @@ type ValidateTargetOption struct {
 }
 
 type VersionLocalStoreIndexPathOption struct {
-	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file can't be read it will fall back to the master store index"`
+	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file cant be read it will fall back to the master store index"`
 }
 
 type VersionIndexPathOption struct {

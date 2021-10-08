@@ -50,7 +50,7 @@ func createVersionStoreIndex(
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't parse version index from `%s`", sourceFilePath))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", sourceFilePath))
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer sourceVersionIndex.Dispose()
@@ -71,7 +71,7 @@ func createVersionStoreIndex(
 	writeVersionLocalStoreIndexStartTime := time.Now()
 	versionLocalStoreIndexBuffer, errno := longtaillib.WriteStoreIndexToBuffer(retargettedVersionStoreIndex)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't serialize store index for `%s`", sourceFilePath))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant serialize store index for `%s`", sourceFilePath))
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)

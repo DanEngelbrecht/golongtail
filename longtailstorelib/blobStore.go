@@ -102,46 +102,46 @@ func ReadFromURI(uri string) ([]byte, error) {
 	blobStore, err := CreateBlobStoreForURI(uriParent)
 	if err != nil {
 		log.WithError(err).Error("createBlobStoreForURI failed")
-		return nil, errors.Wrap(err, "ReadFromURI failed")
+		return nil, errors.Wrap(err, "ReadFromURI")
 	}
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
 		log.WithError(err).Error("blobStore.NewClient failed")
-		return nil, errors.Wrap(err, "ReadFromURI failed")
+		return nil, errors.Wrap(err, "ReadFromURI")
 	}
 	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
 		log.WithError(err).Error("client.NewObject failed")
-		return nil, errors.Wrap(err, "ReadFromURI failed")
+		return nil, errors.Wrap(err, "ReadFromURI")
 	}
 	vbuffer, err := object.Read()
 	if err != nil {
 		log.WithError(err).Error("object.Read failed")
-		return nil, errors.Wrap(err, "ReadFromURI failed")
+		return nil, errors.Wrap(err, "ReadFromURI")
 	}
 	return vbuffer, nil
 }
 
-// ReadFromURI ...
+// WriteToURI ...
 func WriteToURI(uri string, data []byte) error {
 	uriParent, uriName := splitURI(uri)
 	blobStore, err := CreateBlobStoreForURI(uriParent)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "WriteToURI")
 	}
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "WriteToURI")
 	}
 	defer client.Close()
 	object, err := client.NewObject(uriName)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "WriteToURI")
 	}
 	_, err = object.Write(data)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "WriteToURI")
 	}
 	return nil
 }
@@ -153,11 +153,11 @@ func ReadBlobWithRetry(
 	retryCount := 0
 	objHandle, err := client.NewObject(key)
 	if err != nil {
-		return nil, retryCount, err
+		return nil, retryCount, errors.Wrap(err, "ReadBlobWithRetry")
 	}
 	exists, err := objHandle.Exists()
 	if err != nil {
-		return nil, retryCount, err
+		return nil, retryCount, errors.Wrap(err, "ReadBlobWithRetry")
 	}
 	if !exists {
 		return nil, retryCount, longtaillib.ErrENOENT

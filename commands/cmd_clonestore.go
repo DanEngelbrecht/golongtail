@@ -28,10 +28,10 @@ func validateOneVersion(
 	})
 	tbuffer, err := longtailutils.ReadFromURI(targetFilePath)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "validateOneVersion")
 	}
 	if tbuffer == nil {
-		err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", targetFilePath)
+		err = os.ErrNotExist
 		log.WithError(err).Debug("validateOneVersion")
 		return err
 	}
@@ -132,14 +132,17 @@ func cloneOneVersion(
 		return CloneVersionIndex(currentVersionIndex), nil
 	}
 
+	if !os.IsNotExist(err) {
+		return CloneVersionIndex(currentVersionIndex), errors.Wrap(err, "cloneOneVersion")
+	}
+
 	fmt.Printf("`%s` -> `%s`\n", sourceFilePath, targetFilePath)
 
 	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
-		err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", sourceFilePath)
 		fileInfos, _, _ := targetFolderScanner.Get()
 		fileInfos.Dispose()
-		return CloneVersionIndex(currentVersionIndex), err
+		return CloneVersionIndex(currentVersionIndex), errors.Wrapf(err, "cloneVersion")
 	}
 	if vbuffer == nil {
 		fileInfos, _, _ := targetFolderScanner.Get()

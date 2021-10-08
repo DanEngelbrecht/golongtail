@@ -497,7 +497,7 @@ func cloneStore(
 	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
 		log.WithError(err).Errorf("Failed remotestore.CreateBlockStoreForURI")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, "cloneStore")
 	}
 	defer sourceRemoteIndexStore.Dispose()
 	var localIndexStore longtaillib.Longtail_BlockStoreAPI

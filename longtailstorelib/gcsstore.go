@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
@@ -117,22 +118,23 @@ func (blobClient *gcsBlobClient) String() string {
 }
 
 func (blobObject *gcsBlobObject) Read() ([]byte, error) {
+	const fname = "gcsBlobObject.Read"
 	reader, err := blobObject.objHandle.NewReader(blobObject.ctx)
 	if err == storage.ErrObjectNotExist {
-		return nil, nil
+		err = errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
 	data, err := ioutil.ReadAll(reader)
 	err2 := reader.Close()
-	if err == storage.ErrObjectNotExist || err2 == storage.ErrObjectNotExist {
-		return nil, nil
+	if err2 == storage.ErrObjectNotExist {
+		err = errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
-	if err != nil {
-		return nil, errors.Wrap(err, blobObject.path)
-	} else if err2 != nil {
-		return nil, err2
+	if err2 != nil {
+		return nil, errors.Wrap(err2, fname)
 	}
 	return data, nil
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -82,12 +81,8 @@ func cpVersionIndex(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-	if vbuffer == nil {
-		err = errors.Wrap(os.ErrNotExist, versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
@@ -103,7 +98,7 @@ func cpVersionIndex(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%s`", hashIdentifier))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 

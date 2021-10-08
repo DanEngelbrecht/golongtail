@@ -32,11 +32,6 @@ func validateOneVersion(
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
-	if tbuffer == nil {
-		err = errors.Wrap(os.ErrNotExist, targetFilePath)
-		log.WithError(err).Debug(fname)
-		return errors.Wrap(err, fname)
-	}
 
 	if skipValidate {
 		log.Infof("Skipping `%s`", targetFilePath)
@@ -145,12 +140,6 @@ func cloneOneVersion(
 		fileInfos.Dispose()
 		return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
 	}
-	if vbuffer == nil {
-		err = errors.Wrap(os.ErrNotExist, sourceFilePath)
-		fileInfos, _, _ := targetFolderScanner.Get()
-		fileInfos.Dispose()
-		return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
-	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
 		err := longtailutils.MakeError(errno, "longtaillib.ReadVersionIndexFromBuffer() failed")
@@ -168,7 +157,7 @@ func cloneOneVersion(
 	if currentVersionIndex.IsValid() {
 		hash, errno = hashRegistry.GetHashAPI(hashIdentifier)
 		if errno != 0 {
-			err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%s`", hashIdentifier))
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
 			return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
 		}
 		targetVersionIndex = cloneVersionIndex(currentVersionIndex)
@@ -248,11 +237,6 @@ func cloneOneVersion(
 		fmt.Printf("Falling back to reading ZIP source from `%s`\n", sourceFileZipPath)
 		zipBytes, err := longtailutils.ReadFromURI(sourceFileZipPath)
 		if err != nil {
-			return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
-		}
-
-		if zipBytes == nil {
-			err = errors.Wrap(os.ErrNotExist, sourceFileZipPath)
 			return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
 		}
 

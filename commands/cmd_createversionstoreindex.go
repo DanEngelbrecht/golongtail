@@ -2,11 +2,9 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -46,12 +44,8 @@ func createVersionStoreIndex(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-	if vbuffer == nil {
-		err = errors.Wrap(os.ErrNotExist, sourceFilePath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
@@ -80,7 +74,7 @@ func createVersionStoreIndex(
 		err = longtailutils.MakeError(errno, fmt.Sprintf("Can't serialize store index for `%s`", sourceFilePath))
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	err = longtailstorelib.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+	err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

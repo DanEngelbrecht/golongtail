@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -121,13 +120,9 @@ func pruneStore(
 			}
 			go func(batchPos int, sourceFilePath string, versionLocalStoreIndexFilePath string) {
 
-				vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+				vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 				if err != nil {
 					batchErrors <- err
-					return
-				}
-				if vbuffer == nil {
-					batchErrors <- longtaillib.ErrENOENT
 					return
 				}
 				sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
@@ -138,15 +133,11 @@ func pruneStore(
 
 				var existingStoreIndex longtaillib.Longtail_StoreIndex
 				if versionLocalStoreIndexFilePath != "" && !writeVersionLocalStoreIndex {
-					sbuffer, err := longtailstorelib.ReadFromURI(versionLocalStoreIndexFilePath)
+					sbuffer, err := longtailutils.ReadFromURI(versionLocalStoreIndexFilePath)
 					if err == nil {
-						if vbuffer == nil {
-							err = errors.Errorf("Version index does not exist: %s", versionLocalStoreIndexFilePath)
-							batchErrors <- err
-							return
-						}
 						existingStoreIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
 						if errno != 0 {
+							err = longtailutils.MakeError(errno, fmt.Sprintf("Failed parsing store index from `%s`", versionLocalStoreIndexFilePath))
 							batchErrors <- err
 							return
 						}
@@ -188,7 +179,7 @@ func pruneStore(
 						batchErrors <- err
 						return
 					}
-					err = longtailstorelib.WriteToURI(versionLocalStoreIndexFilePath, sbuffer)
+					err = longtailutils.WriteToURI(versionLocalStoreIndexFilePath, sbuffer)
 					if err != nil {
 						existingStoreIndex.Dispose()
 						sourceVersionIndex.Dispose()

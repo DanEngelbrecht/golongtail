@@ -3,10 +3,12 @@ package longtailstorelib
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
@@ -36,6 +38,34 @@ func TestGCSBlobStore(t *testing.T) {
 	}
 	if err != nil {
 		t.Errorf("object.Write() err == %q", err)
+	}
+}
+
+func TestListObjectsInEmptyGCSStore(t *testing.T) {
+	u, err := url.Parse("gs://longtail-test-de/test-storage/store-nonono")
+	if err != nil {
+		t.Errorf("url.Parse() err == %q", err)
+	}
+	blobStore, err := NewGCSBlobStore(u, false)
+	if err != nil {
+		t.Errorf("NewGCSBlobStore() err == %q", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	objects, err := client.GetObjects("")
+	if err != nil {
+		t.Errorf("TestListObjectsInEmptyGCSStore() client.GetObjects(\"\")) %v != %v", err, nil)
+	}
+	if len(objects) != 0 {
+		t.Errorf("TestListObjectsInEmptyGCSStore() client.GetObjects(\"\")) %d != %d", len(objects), 0)
+	}
+	obj, _ := client.NewObject("should-not-exist")
+	data, err := obj.Read()
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("TestListObjectsInEmptyGCSStore() obj.Read()) %v != %v", true, errors.Is(err, os.ErrNotExist))
+	}
+	if data != nil {
+		t.Errorf("TestListObjectsInEmptyGCSStore() obj.Read()) %v != %v", nil, data)
 	}
 }
 

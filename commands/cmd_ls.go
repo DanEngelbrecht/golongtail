@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -31,12 +30,9 @@ func ls(
 	defer hashRegistry.Dispose()
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
 		return storeStats, timeStats, err
-	}
-	if vbuffer == nil {
-		return storeStats, timeStats, longtaillib.ErrENOENT
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {

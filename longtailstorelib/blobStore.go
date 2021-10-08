@@ -3,14 +3,8 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
-	"time"
-
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // BlobObject
@@ -95,6 +89,7 @@ func splitURI(uri string) (string, string) {
 	return uri[:i], uri[i+1:]
 }
 
+/*
 // ReadFromURI ...
 func ReadFromURI(uri string) ([]byte, error) {
 	log := logrus.WithField("uri", uri)
@@ -187,3 +182,4 @@ func ReadBlobWithRetry(
 
 	return blobData, retryCount, nil
 }
+*/

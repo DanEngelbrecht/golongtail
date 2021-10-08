@@ -361,7 +361,7 @@ func WriteToURI(uri string, data []byte) error {
 	return nil
 }
 
-func readBlobWithRetry(
+func ReadBlobWithRetry(
 	ctx context.Context,
 	client longtailstorelib.BlobClient,
 	key string) ([]byte, int, error) {

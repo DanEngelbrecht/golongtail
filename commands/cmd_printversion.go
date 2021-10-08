@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/sirupsen/logrus"
 )
@@ -26,14 +25,8 @@ func printVersion(
 
 	readSourceStartTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
-	}
-
-	if vbuffer == nil {
-		err = fmt.Errorf("Version index does not exist: `%s`", versionIndexPath)
-		log.WithError(err).Error("printVersion failed")
 		return storeStats, timeStats, err
 	}
 

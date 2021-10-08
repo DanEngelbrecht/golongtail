@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 func TestCreateStoreAndClient(t *testing.T) {
@@ -35,8 +38,11 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if err != nil || data != nil {
-		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", fmt.Errorf("testBlobObject object does not exist: should-not-exist"), err)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", true, errors.Is(err, os.ErrNotExist))
+	}
+	if data != nil {
+		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", nil, data)
 	}
 }
 

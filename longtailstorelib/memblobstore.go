@@ -3,10 +3,12 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/pkg/errors"
 )
 
 type memBlob struct {
@@ -81,11 +83,13 @@ func (blobObject *memBlobObject) Exists() (bool, error) {
 }
 
 func (blobObject *memBlobObject) Read() ([]byte, error) {
+	const fname = "memBlobObject.Read"
 	blobObject.client.store.blobsMutex.RLock()
 	defer blobObject.client.store.blobsMutex.RUnlock()
 	blob, exists := blobObject.client.store.blobs[blobObject.path]
 	if !exists {
-		return nil, nil
+		err := errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
 	return blob.data, nil
 }

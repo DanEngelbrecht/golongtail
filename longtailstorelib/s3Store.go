@@ -3,16 +3,17 @@ package longtailstorelib
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/url"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/pkg/errors"
 )
 
 type s3BlobStore struct {
@@ -100,6 +101,7 @@ func (blobClient *s3BlobClient) String() string {
 }
 
 func (blobObject *s3BlobObject) Read() ([]byte, error) {
+	const fname = "s3BlobObject.Read()"
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(blobObject.client.store.bucketName),
 		Key:    aws.String(blobObject.path),
@@ -108,13 +110,13 @@ func (blobObject *s3BlobObject) Read() ([]byte, error) {
 	if err != nil {
 		var nsk *types.NoSuchKey
 		if errors.As(err, &nsk) {
-			return nil, nil
+			err = errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+			return nil, errors.Wrap(err, fname)
 		}
 		return nil, err
 	}
 	data, err := ioutil.ReadAll(result.Body)
 	if err != nil {
-		fmt.Println(err.Error())
 		return nil, err
 	}
 	result.Body.Close()
@@ -145,7 +147,6 @@ func (blobObject *s3BlobObject) Write(data []byte) (bool, error) {
 	}
 	_, err := blobObject.client.client.PutObject(blobObject.client.ctx, input)
 	if err != nil {
-		fmt.Println(err.Error())
 		return true, err
 	}
 	return true, nil

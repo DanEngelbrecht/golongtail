@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -41,13 +39,9 @@ func get(
 
 	readGetConfigStartTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(getConfigPath)
+	vbuffer, err := longtailutils.ReadFromURI(getConfigPath)
 	if err != nil {
-		return storeStats, timeStats, errors.Wrapf(err, "get: longtailstorelib.ReadFromURI() failed")
-	}
-	if vbuffer == nil {
-		err = longtailutils.MakeError(longtaillib.ENOENT, "get config does not exist")
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrapf(err, "get: longtailutils.ReadFromURI() failed")
 	}
 
 	v := viper.New()

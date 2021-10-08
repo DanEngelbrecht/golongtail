@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -104,12 +103,8 @@ func GetFolderIndex(
 	}
 	startTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(sourceIndexPath)
+	vbuffer, err := ReadFromURI(sourceIndexPath)
 	if err != nil {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
-	}
-	if vbuffer == nil {
-		err = fmt.Errorf("Version index does not exist: %s", sourceIndexPath)
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), err
 	}
 	var errno int

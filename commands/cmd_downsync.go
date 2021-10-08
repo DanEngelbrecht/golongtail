@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -80,13 +79,9 @@ func downsync(
 
 	readSourceStartTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
 		err = errors.Wrapf(err, "Can't read %s", sourceFilePath)
-		return storeStats, timeStats, err
-	}
-	if vbuffer == nil {
-		err = errors.Wrapf(longtaillib.ErrENOENT, "File does not exist: %s", sourceFilePath)
 		return storeStats, timeStats, err
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
@@ -153,7 +148,7 @@ func downsync(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier %s ", hashIdentifier))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d``", hashIdentifier))
 		return storeStats, timeStats, err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -177,7 +178,7 @@ func getStoredBlock(
 
 	key := getBlockPath("chunks", blockHash)
 
-	storedBlockData, retryCount, err := longtailstorelib.ReadBlobWithRetry(ctx, blobClient, key)
+	storedBlockData, retryCount, err := longtailutils.ReadBlobWithRetry(ctx, blobClient, key)
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_RetryCount], uint64(retryCount))
 
 	if err != nil || storedBlockData == nil {
@@ -1290,7 +1291,7 @@ func getStoreIndexFromBlocks(
 			i := batchStart + batchPos
 			blockKey := blockKeys[i]
 			go func(client longtailstorelib.BlobClient, batchPos int, blockKey string) {
-				storedBlockData, _, err := longtailstorelib.ReadBlobWithRetry(
+				storedBlockData, _, err := longtailutils.ReadBlobWithRetry(
 					ctx,
 					client,
 					blockKey)
@@ -1382,7 +1383,7 @@ func readStoreStoreIndexFromPath(
 	key string,
 	client longtailstorelib.BlobClient) (longtaillib.Longtail_StoreIndex, error) {
 
-	blobData, _, err := longtailstorelib.ReadBlobWithRetry(ctx, client, key)
+	blobData, _, err := longtailutils.ReadBlobWithRetry(ctx, client, key)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, err
 	}
@@ -1510,13 +1511,13 @@ func readRemoteStoreIndex(
 	var storeIndex longtaillib.Longtail_StoreIndex
 	if accessType != Init {
 		if accessType == ReadOnly && len(optionalStoreIndexPath) > 0 {
-			sbuffer, err := longtailstorelib.ReadFromURI(optionalStoreIndexPath)
-			if sbuffer != nil && err == nil {
+			sbuffer, err := longtailutils.ReadFromURI(optionalStoreIndexPath)
+			if err == nil {
 				storeIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
 				if errno != 0 {
 					log.Printf("Failed parsing local store index from %s: %d\n", optionalStoreIndexPath, errno)
 				}
-			} else if err != nil {
+			} else if !errors.Is(err, os.ErrNotExist) {
 				log.Printf("Failed reading local store index: %v\n", err)
 			}
 		}

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -29,12 +28,9 @@ func printStore(
 
 	readStoreIndexStartTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(storeIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(storeIndexPath)
 	if err != nil {
 		return storeStats, timeStats, err
-	}
-	if vbuffer == nil {
-		return storeStats, timeStats, longtaillib.ErrENOENT
 	}
 	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
 	if errno != 0 {

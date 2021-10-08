@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -201,9 +200,9 @@ func upsync(
 		return storeStats, timeStats, err
 	}
 
-	err = longtailstorelib.WriteToURI(targetFilePath, vbuffer)
+	err = longtailutils.WriteToURI(targetFilePath, vbuffer)
 	if err != nil {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("longtailstorelib.WriteToURI failed for `%s`", targetFilePath))
+		err = longtailutils.MakeError(errno, fmt.Sprintf("longtailutils.WriteToURI failed for `%s`", targetFilePath))
 		log.WithError(err).Error("upsync")
 		return storeStats, timeStats, errors.Wrapf(err, "upsync")
 	}
@@ -225,7 +224,7 @@ func upsync(
 			log.WithError(err).Error("upsync")
 			return storeStats, timeStats, errors.Wrapf(err, "upsync")
 		}
-		err = longtailstorelib.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed writing version local store index to %s", versionLocalStoreIndexPath)
 			log.WithError(err).Error("upsync")
@@ -269,7 +268,7 @@ func upsync(
 		}
 		os.Remove(tmpFilePath)
 
-		err = longtailstorelib.WriteToURI(getConfigPath, bytes)
+		err = longtailutils.WriteToURI(getConfigPath, bytes)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed writing get config index to %s", getConfigPath)
 			log.WithError(err).Error("upsync")

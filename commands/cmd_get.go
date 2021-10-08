@@ -96,7 +96,6 @@ type GetCmd struct {
 	TargetIndexUriOption
 	ValidateTargetOption
 	VersionLocalStoreIndexPathOption
-	StorageURIOption
 	CachePathOption
 	RetainPermissionsOption
 	DownsyncIncludeRegExOption

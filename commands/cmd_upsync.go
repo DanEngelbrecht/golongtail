@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 func upsync(
@@ -33,7 +33,7 @@ func upsync(
 	versionLocalStoreIndexPath string,
 	getConfigPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "upsync"
-	log := log.WithContext(context.Background()).WithFields(log.Fields{
+	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
 		"blobStoreURI":               blobStoreURI,
@@ -235,7 +235,7 @@ func upsync(
 		}
 		tmpFilePath := tmpFile.Name()
 		tmpFile.Close()
-		fmt.Printf("tmp file: %s", tmpFilePath)
+		log.WithField(tmpFilePath, "tmpFilePath").Debug("Writing get config temp file")
 		err = v.WriteConfigAs(tmpFilePath)
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)

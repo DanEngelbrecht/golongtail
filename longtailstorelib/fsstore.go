@@ -2,10 +2,13 @@ package longtailstorelib
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 type fsBlobStore struct {
@@ -56,23 +59,24 @@ func (blobClient *fsBlobClient) String() string {
 }
 
 func (blobObject *fsBlobObject) Exists() (bool, error) {
+	const fname = "fsBlobObject.Exists"
 	_, err := os.Stat(blobObject.path)
 	if os.IsNotExist(err) {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		err = errors.Wrap(err, fmt.Sprintf("Failed to check for existance `%s`", blobObject.path))
+		return false, errors.Wrap(err, fname)
 	}
 	return true, nil
 }
 
 func (blobObject *fsBlobObject) Read() ([]byte, error) {
+	const fname = "fsBlobObject.Exists"
 	data, err := ioutil.ReadFile(blobObject.path)
-	//	if e, ok := err.(*os.PathError); ok && e.Err == syscall.ENOENT {
-	//		return nil, nil
-	//	}
 	if err != nil {
-		return nil, err
+		err = errors.Wrap(err, fmt.Sprintf("Failed to read from `%s`", blobObject.path))
+		return nil, errors.Wrap(err, fname)
 	}
 	return data, nil
 }
@@ -82,17 +86,25 @@ func (blobObject *fsBlobObject) LockWriteVersion() (bool, error) {
 }
 
 func (blobObject *fsBlobObject) Write(data []byte) (bool, error) {
+	const fname = "fsBlobObject.Write"
 	err := os.MkdirAll(filepath.Dir(blobObject.path), os.ModePerm)
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, fname)
 	}
 	err = ioutil.WriteFile(blobObject.path, data, 0644)
 	if err != nil {
-		return false, err
+		err = errors.Wrap(err, fmt.Sprintf("Failed to write to `%s`", blobObject.path))
+		return false, errors.Wrap(err, fname)
 	}
-	return true, err
+	return true, nil
 }
 
 func (blobObject *fsBlobObject) Delete() error {
-	return os.Remove(blobObject.path)
+	const fname = "fsBlobObject.Delete"
+	err := os.Remove(blobObject.path)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Failed to delete `%s`", blobObject.path))
+		return errors.Wrap(err, fname)
+	}
+	return nil
 }

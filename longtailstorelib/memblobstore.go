@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
 )
 
@@ -135,16 +134,18 @@ func (blobObject *memBlobObject) Write(data []byte) (bool, error) {
 }
 
 func (blobObject *memBlobObject) Delete() error {
+	const fname = "memBlobObject.Delete"
 	blobObject.client.store.blobsMutex.Lock()
 	defer blobObject.client.store.blobsMutex.Unlock()
 
 	if blobObject.lockedGeneration != nil {
 		blob, exists := blobObject.client.store.blobs[blobObject.path]
 		if !exists {
-			return longtaillib.ErrENOENT
+			return nil
 		}
 		if blob.generation != *blobObject.lockedGeneration {
-			return fmt.Errorf("memBlobObject: generation lock mismatch %s", blobObject.path)
+			err := fmt.Errorf("memBlobObject: generation lock mismatch %s", blobObject.path)
+			return errors.Wrap(err, fname)
 		}
 	}
 	delete(blobObject.client.store.blobs, blobObject.path)

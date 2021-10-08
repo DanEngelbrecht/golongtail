@@ -72,7 +72,7 @@ func cloneVersionIndex(v longtaillib.Longtail_VersionIndex) longtaillib.Longtail
 	}
 	vbuffer, errno := longtaillib.WriteVersionIndexToBuffer(v)
 	if errno != 0 {
-		err := longtailutils.MakeError(errno, "longtaillib.WriteVersionIndexToBuffer() failed")
+		err := longtailutils.MakeError(errno, "Failed serializing version index")
 		log.WithError(err).Info(fname)
 		return longtaillib.Longtail_VersionIndex{}
 	}

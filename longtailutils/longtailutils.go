@@ -294,7 +294,7 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 			err := fmt.Errorf("azure Gen2 storage not yet implemented for `%s`", uri)
 			return nil, errors.Wrap(err, fname)
 		case "file":
-			store, err := longtailstorelib.NewFSBlobStore(blobStoreURL.Path[1:])
+			store, err := longtailstorelib.NewFSBlobStore(blobStoreURL.Path[1:], true)
 			if err != nil {
 				return nil, errors.Wrap(err, fname)
 			}
@@ -302,7 +302,7 @@ func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
 		}
 	}
 
-	store, err := longtailstorelib.NewFSBlobStore(uri)
+	store, err := longtailstorelib.NewFSBlobStore(uri, true)
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}

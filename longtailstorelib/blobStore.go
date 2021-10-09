@@ -71,11 +71,11 @@ func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 		case "abfss":
 			return nil, fmt.Errorf("azure Gen2 storage not yet implemented")
 		case "file":
-			return NewFSBlobStore(blobStoreURL.Path[1:])
+			return NewFSBlobStore(blobStoreURL.Path[1:], true)
 		}
 	}
 
-	return NewFSBlobStore(uri)
+	return NewFSBlobStore(uri, true)
 }
 
 func splitURI(uri string) (string, string) {

@@ -1,6 +1,8 @@
 // Copyright 2016 Canonical Ltd.
 // Licensed under the LGPLv3, see LICENCE file for details.
 
+// +build aix darwin dragonfly freebsd js,wasm linux nacl netbsd openbsd solaris
+
 package longtailstorelib
 
 import (
@@ -22,30 +24,38 @@ func NewFileLock(filename string) *Lock {
 
 // Lock locks the lock.  This call will block until the lock is available.
 func (l *Lock) Lock() error {
+	const fname = "Lock.open"
 	if err := l.open(); err != nil {
-		return err
+		return errors.Wrap(err, fname)
 	}
 	return syscall.Flock(l.fd, syscall.LOCK_EX)
 }
 
 func (l *Lock) open() error {
-	fd, err := syscall.Open(l.filename, syscall.O_CREAT|syscall.O_RDONLY, 0600)
+	const fname = "Lock.open"
+	l.fd, err := syscall.Open(l.filename, syscall.O_CREAT|syscall.O_RDONLY, 0600)
 	if err != nil {
-		return err
+		return errors.Wrap(err, fname)
 	}
 	return nil
 }
 
 // Unlock unlocks the lock.
 func (l *Lock) Unlock() error {
-	return syscall.Close(l.fd)
+	err := syscall.Close(l.fd)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	return nil
 }
 
 // LockWithTimeout tries to lock the lock until the timeout expires.  If the
 // timeout expires, this method will return ErrTimeout.
 func (l *Lock) LockWithTimeout(timeout time.Duration) error {
-	if err := l.open(); err != nil {
-		return err
+	const fname = "Lock.LockWithTimeout"
+	l.fd, err := syscall.Open(l.filename, syscall.O_CREAT|syscall.O_RDONLY, 0600)
+	if err != nil {
+		return errors.Wrap(err, fname)
 	}
 	result := make(chan error)
 	cancel := make(chan struct{})
@@ -61,7 +71,7 @@ func (l *Lock) LockWithTimeout(timeout time.Duration) error {
 	}()
 	select {
 	case err := <-result:
-		return err
+		return errors.Wrap(err, fname)
 	case <-time.After(timeout):
 		close(cancel)
 		return ErrTimeout

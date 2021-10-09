@@ -49,7 +49,7 @@ func (l *Lock) LockWithTimeout(timeout time.Duration) (err error) {
 	const fname = "Lock.LockWithTimeout"
 	name, err := syscall.UTF16PtrFromString(l.filename)
 	if err != nil {
-		return err
+		return errors.Wrap(err, fname)
 	}
 
 	l.handle, err = syscall.CreateFile(
@@ -86,5 +86,5 @@ func (l *Lock) LockWithTimeout(timeout time.Duration) (err error) {
 		}
 		retry_delay += 2000
 	}
-	return err
+	return errors.Wrap(err, fname)
 }

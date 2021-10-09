@@ -6,8 +6,11 @@
 package longtailstorelib
 
 import (
+	"fmt"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // Lock implements cross-process locks using syscalls.
@@ -33,10 +36,11 @@ func (l *Lock) Lock() error {
 
 func (l *Lock) open() error {
 	const fname = "Lock.open"
-	l.fd, err := syscall.Open(l.filename, syscall.O_CREAT|syscall.O_RDONLY, 0600)
+	fd, err := syscall.Open(l.filename, syscall.O_CREAT|syscall.O_RDONLY, 0600)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
+	l.fd = fd
 	return nil
 }
 
@@ -53,7 +57,7 @@ func (l *Lock) Unlock() error {
 // timeout expires, this method will return ErrTimeout.
 func (l *Lock) LockWithTimeout(timeout time.Duration) error {
 	const fname = "Lock.LockWithTimeout"
-	l.fd, err := syscall.Open(l.filename, syscall.O_CREAT|syscall.O_RDONLY, 0600)
+	err := ld.open()
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
@@ -74,6 +78,7 @@ func (l *Lock) LockWithTimeout(timeout time.Duration) error {
 		return errors.Wrap(err, fname)
 	case <-time.After(timeout):
 		close(cancel)
-		return ErrTimeout
+		err := fmt.Errorf("Retry timed out for lock file %s, waited %s", l.filename, timeout.String())
+		return errors.Wrap(err, fname)
 	}
 }

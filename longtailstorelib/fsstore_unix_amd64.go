@@ -46,6 +46,7 @@ func (l *Lock) open() error {
 
 // Unlock unlocks the lock.
 func (l *Lock) Unlock() error {
+	const fname = "Lock.Unlock"
 	err := syscall.Close(l.fd)
 	if err != nil {
 		return errors.Wrap(err, fname)
@@ -57,7 +58,7 @@ func (l *Lock) Unlock() error {
 // timeout expires, this method will return ErrTimeout.
 func (l *Lock) LockWithTimeout(timeout time.Duration) error {
 	const fname = "Lock.LockWithTimeout"
-	err := ld.open()
+	err := l.open()
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}

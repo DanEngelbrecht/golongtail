@@ -79,6 +79,9 @@ func TestS3BlobStore(t *testing.T) {
 }
 
 func TestListObjectsInEmptyS3Store(t *testing.T) {
+	// This test uses hardcoded paths in S3 and is disabled
+	t.Skip()
+
 	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-nonono")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)

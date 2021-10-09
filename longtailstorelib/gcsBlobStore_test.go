@@ -42,6 +42,9 @@ func TestGCSBlobStore(t *testing.T) {
 }
 
 func TestListObjectsInEmptyGCSStore(t *testing.T) {
+	// This test uses hardcoded paths in gcs and is disabled
+	t.Skip()
+
 	u, err := url.Parse("gs://longtail-test-de/test-storage/store-nonono")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)

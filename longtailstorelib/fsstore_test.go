@@ -13,7 +13,7 @@ import (
 )
 
 func TestFSBlobStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("fsstore", "test")
+	storePath, _ := ioutil.TempDir("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %q", err)
@@ -36,7 +36,7 @@ func TestFSBlobStore(t *testing.T) {
 }
 
 func TestListObjectsInEmptyFSStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("fsstore", "test")
+	storePath, _ := ioutil.TempDir("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %q", err)
@@ -61,7 +61,7 @@ func TestListObjectsInEmptyFSStore(t *testing.T) {
 }
 
 func TestFSBlobStoreVersioning(t *testing.T) {
-	storePath, _ := ioutil.TempDir("fsstore", "test")
+	storePath, _ := ioutil.TempDir("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %q", err)
@@ -129,7 +129,7 @@ func TestFSBlobStoreVersioning(t *testing.T) {
 }
 
 func TestFSBlobStoreVersioningStressTest(t *testing.T) {
-	storePath, _ := ioutil.TempDir("fsstore", "test")
+	storePath, _ := ioutil.TempDir("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %q", err)
@@ -174,5 +174,42 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 		if sliceData[i] != expected {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestFSGetObjects(t *testing.T) {
+	storePath, _ := ioutil.TempDir("", "test")
+	blobStore, err := NewFSBlobStore(storePath, true)
+	if err != nil {
+		t.Errorf("NewFSBlobStore() err == %q", err)
+	}
+
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		t.Errorf("blobStore.NewClient() err == %q", err)
+	}
+	files := []string{"first.txt", "second.txt", "third.txt", "fourth.txt", "nested/first_nested.txt", "nested/second_nested.txt"}
+	for _, name := range files {
+		object, err := client.NewObject(name)
+		if err != nil {
+			t.Errorf("client.NewObject() err == %q", err)
+		}
+		object.Write([]byte(name))
+	}
+
+	blobs, err := client.GetObjects("")
+	if err != nil {
+		t.Errorf("blobStore.GetObjects() err == %q", err)
+	}
+	if len(blobs) != len(files) {
+		t.Errorf("Can't find all written files with client.GetObjects()")
+	}
+
+	nestedBlobs, err := client.GetObjects("nest")
+	if err != nil {
+		t.Errorf("blobStore.GetObjects() err == %q", err)
+	}
+	if len(nestedBlobs) != 2 {
+		t.Errorf("Can't find all written files with client.GetObjects()")
 	}
 }

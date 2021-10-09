@@ -2,6 +2,7 @@ package remotestore
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"net/url"
 	"runtime"
@@ -774,7 +775,6 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 			for _, h := range storeIndex.GetBlockHashes() {
 				lookup[h] = true
 			}
-			storeIndex.Dispose()
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
@@ -782,11 +782,11 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				generatedBlockHashes <- h
 				_, exists := lookup[h]
 				if !exists {
-					generatedBlocksIndex.Dispose()
-					wg.Done()
 					t.Errorf("Missing direct block %d", h)
+					//					generatedBlocksIndex.Dispose()
 				}
 			}
+			storeIndex.Dispose()
 			generatedBlocksIndex.Dispose()
 
 			wg.Done()
@@ -897,5 +897,39 @@ func TestS3StoreIndexSync(t *testing.T) {
 	}
 
 	blobStore, _ := longtailstorelib.NewS3BlobStore(u)
+	testStoreIndexSync(blobStore, t)
+}
+
+func TestFSStoreIndexSyncWithLocking(t *testing.T) {
+	storePath, err := ioutil.TempDir("", "longtail-test")
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, true)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
+	testStoreIndexSync(blobStore, t)
+}
+
+func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
+	storePath, err := ioutil.TempDir("", "test")
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
 	testStoreIndexSync(blobStore, t)
 }

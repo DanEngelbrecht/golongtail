@@ -47,7 +47,29 @@ func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
 }
 
 func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
-	return make([]BlobProperties, 0), nil
+	const fname = "fsBlobObject.GetObjects"
+	searchPath := blobClient.store.prefix
+
+	objects := make([]BlobProperties, 0)
+	err := filepath.Walk(searchPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		leafPath := path[len(searchPath)+1:]
+		if leafPath[:len(pathPrefix)] == pathPrefix {
+			props := BlobProperties{Size: info.Size(), Name: leafPath}
+			objects = append(objects, props)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, fname)
+	}
+
+	return objects, nil
 }
 
 func (blobClient *fsBlobClient) SupportsLocking() bool {

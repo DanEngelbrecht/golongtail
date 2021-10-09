@@ -21,7 +21,7 @@ func get(
 	validate bool,
 	includeFilterRegEx string,
 	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	const fname = "dumpVersionAssets"
+	const fname = "get"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":              fname,
 		"numWorkerCount":     numWorkerCount,

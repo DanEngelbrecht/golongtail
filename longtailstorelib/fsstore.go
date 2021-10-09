@@ -72,10 +72,9 @@ func (blobObject *fsBlobObject) Exists() (bool, error) {
 }
 
 func (blobObject *fsBlobObject) Read() ([]byte, error) {
-	const fname = "fsBlobObject.Exists"
+	const fname = "fsBlobObject.Read"
 	data, err := ioutil.ReadFile(blobObject.path)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed to read from `%s`", blobObject.path))
 		return nil, errors.Wrap(err, fname)
 	}
 	return data, nil

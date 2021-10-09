@@ -179,7 +179,7 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 
 func TestFSGetObjects(t *testing.T) {
 	storePath, _ := ioutil.TempDir("", "test")
-	blobStore, err := NewFSBlobStore(storePath, true)
+	blobStore, err := NewFSBlobStore(storePath, false)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %q", err)
 	}

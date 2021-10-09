@@ -59,6 +59,9 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 			return nil
 		}
 		leafPath := path[len(searchPath)+1:]
+		if leafPath == "." || leafPath == ".." {
+			return nil
+		}
 		if leafPath[:len(pathPrefix)] == pathPrefix {
 			props := BlobProperties{Size: info.Size(), Name: leafPath}
 			objects = append(objects, props)

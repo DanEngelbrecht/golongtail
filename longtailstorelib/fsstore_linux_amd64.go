@@ -16,7 +16,7 @@ type Lock struct {
 }
 
 // New returns a new lock around the given file.
-func New(filename string) *Lock {
+func NewFileLock(filename string) *Lock {
 	return &Lock{filename: filename}
 }
 

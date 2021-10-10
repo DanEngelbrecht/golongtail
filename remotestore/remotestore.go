@@ -300,6 +300,7 @@ func deleteBlock(
 	})
 	log.Debug(fname)
 	s.fetchedBlocksSync.Lock()
+	defer s.fetchedBlocksSync.Unlock()
 	key := getBlockPath("chunks", blockHash)
 	objHandle, err := client.NewObject(key)
 	if err != nil {

@@ -170,7 +170,7 @@ func pruneStore(
 							log.Printf("WARNING: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 							batchErrors <- nil
 						} else {
-							err = errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "pruneStore: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
+							err = errors.Wrapf(longtaillib.ErrnoToError(errno), "pruneStore: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 							batchErrors <- errors.Wrap(err, fname)
 						}
 						return

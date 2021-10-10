@@ -17,7 +17,7 @@ import (
 )
 
 func MakeError(errno int, description string) error {
-	return errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), description)
+	return errors.Wrapf(longtaillib.ErrnoToError(errno), description)
 }
 
 type getExistingContentCompletionAPI struct {
@@ -406,7 +406,7 @@ func ReadBlobWithRetry(
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	if !exists {
-		return nil, retryCount, longtaillib.ErrENOENT
+		return nil, retryCount, errors.Wrap(MakeError(longtaillib.ENOENT, fmt.Sprintf("%s does not exist", key)), fname)
 	}
 	blobData, err := objHandle.Read()
 	if err != nil {

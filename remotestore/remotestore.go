@@ -142,7 +142,7 @@ func putStoredBlock(
 	if exists, err := objHandle.Exists(); err == nil && !exists {
 		blob, errno := longtaillib.WriteStoredBlockToBuffer(storedBlock)
 		if errno != 0 {
-			return longtaillib.ErrnoToError(errno, longtaillib.ErrEIO)
+			return longtaillib.ErrnoToError(errno)
 		}
 
 		ok, err := objHandle.Write(blob)
@@ -218,7 +218,7 @@ func getStoredBlock(
 	blockIndex := storedBlock.GetBlockIndex()
 	if blockIndex.GetBlockHash() != blockHash {
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1)
-		err = longtailutils.MakeError(longtaillib.EBADF, "Block hash does not path")
+		err = longtailutils.MakeError(longtaillib.EBADF, "Block hash does not match path")
 		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname)
 	}
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
@@ -1520,7 +1520,7 @@ func getStoreIndexFromBlocks(
 		if errno != 0 {
 			batchStoreIndex.Dispose()
 			storeIndex.Dispose()
-			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM)
+			return longtaillib.Longtail_StoreIndex{}, longtaillib.ErrnoToError(errno)
 		}
 		newStoreIndex, errno := longtaillib.MergeStoreIndex(storeIndex, batchStoreIndex)
 		if errno != 0 {
@@ -1650,7 +1650,7 @@ func mergeStoreIndexItems(
 		tmpStoreIndex.Dispose()
 		storeIndex.Dispose()
 		if errno != 0 {
-			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrap(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "contentIndexWorker: longtaillib.MergeStoreIndex() failed")
+			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrap(longtaillib.ErrnoToError(errno), "contentIndexWorker: longtaillib.MergeStoreIndex() failed")
 		}
 		storeIndex = mergedStoreIndex
 		usedItems = append(usedItems, item)

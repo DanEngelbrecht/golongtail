@@ -118,7 +118,7 @@ func printVersionUsage(
 		for offset := 0; offset < batchSize; offset++ {
 			completions[offset].Wg.Wait()
 			if completions[offset].Err != 0 {
-				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStoreIndex.GetStoredBlock() failed")
+				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno), "stats: remoteStoreIndex.GetStoredBlock() failed")
 			}
 			blockIndex := completions[offset].StoredBlock.GetBlockIndex()
 			for _, chunkHash := range blockIndex.GetChunkHashes() {

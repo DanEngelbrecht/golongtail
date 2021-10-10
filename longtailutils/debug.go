@@ -46,7 +46,7 @@ func ParseLevel(lvl string) (int, error) {
 		return 4, nil
 	}
 
-	return -1, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EIO, longtaillib.ErrEIO), "not a valid log Level: %s", lvl)
+	return -1, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EIO), "not a valid log Level: %s", lvl)
 }
 
 // AssertData ...

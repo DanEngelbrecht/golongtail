@@ -1,13 +1,14 @@
-package main
+package commands
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func printVersionUsage(
@@ -15,6 +16,15 @@ func printVersionUsage(
 	blobStoreURI string,
 	versionIndexPath string,
 	localCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "printVersionUsage"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":            fname,
+		"numWorkerCount":   numWorkerCount,
+		"blobStoreURI":     blobStoreURI,
+		"versionIndexPath": versionIndexPath,
+		"localCachePath":   localCachePath,
+	})
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -28,9 +38,9 @@ func printVersionUsage(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, longtailstorelib.ReadOnly)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer remoteIndexStore.Dispose()
 
@@ -43,7 +53,7 @@ func printVersionUsage(
 		indexStore = remoteIndexStore
 	} else {
 		localFS = longtaillib.CreateFSStorageAPI()
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, normalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -58,22 +68,23 @@ func printVersionUsage(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
 
 	getExistingContentStartTime := time.Now()
-	existingStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtailutils.GetExistingStoreIndexSync() failed")
+	existingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(), 0)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer existingStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -107,7 +118,7 @@ func printVersionUsage(
 		for offset := 0; offset < batchSize; offset++ {
 			completions[offset].Wg.Wait()
 			if completions[offset].Err != 0 {
-				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: remoteStoreIndex.GetStoredBlock() failed")
+				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno), "stats: remoteStoreIndex.GetStoredBlock() failed")
 			}
 			blockIndex := completions[offset].StoredBlock.GetBlockIndex()
 			for _, chunkHash := range blockIndex.GetChunkHashes() {
@@ -164,9 +175,10 @@ func printVersionUsage(
 		localIndexStore,
 		remoteIndexStore,
 	}
-	errno = longtailutils.FlushStoresSync(stores)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "stats: longtailutils.FlushStoresSync: Failed for `%v`", stores)
+	err = longtailutils.FlushStoresSync(stores)
+	if err != nil {
+		log.WithError(err).Error("longtailutils.FlushStoresSync failed")
+		return storeStats, timeStats, err
 	}
 
 	flushTime := time.Since(flushStartTime)

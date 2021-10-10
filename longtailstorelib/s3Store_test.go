@@ -2,8 +2,10 @@ package longtailstorelib
 
 import (
 	"net/url"
+	"os"
 	"testing"
 
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
@@ -76,15 +78,33 @@ func TestS3BlobStore(t *testing.T) {
 	}
 }
 
-func TestS3StoreIndexSync(t *testing.T) {
+func TestListObjectsInEmptyS3Store(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
-	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-sync")
+	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-nonono")
 	if err != nil {
 		t.Errorf("url.Parse() err == %q", err)
 	}
-
-	blobStore, _ := NewS3BlobStore(u)
-	testStoreIndexSync(blobStore, t)
+	blobStore, err := NewS3BlobStore(u)
+	if err != nil {
+		t.Errorf("NewS3BlobStore() err == %q", err)
+	}
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	objects, err := client.GetObjects("")
+	if err != nil {
+		t.Errorf("TestListObjectsInEmptyS3Store() client.GetObjects(\"\")) %v != %v", err, nil)
+	}
+	if len(objects) != 0 {
+		t.Errorf("TestListObjectsInEmptyS3Store() client.GetObjects(\"\")) %d != %d", len(objects), 0)
+	}
+	obj, _ := client.NewObject("should-not-exist")
+	data, err := obj.Read()
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("TestListObjectsInEmptyS3Store() obj.Read()) %v != %v", true, errors.Is(err, os.ErrNotExist))
+	}
+	if data != nil {
+		t.Errorf("TestListObjectsInEmptyS3Store() obj.Read()) %v != %v", nil, data)
+	}
 }

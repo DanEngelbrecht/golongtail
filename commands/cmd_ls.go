@@ -1,19 +1,28 @@
-package main
+package commands
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func ls(
 	numWorkerCount int,
 	versionIndexPath string,
 	commandLSVersionDir string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "ls"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":               fname,
+		"numWorkerCount":      numWorkerCount,
+		"versionIndexPath":    versionIndexPath,
+		"commandLSVersionDir": commandLSVersionDir,
+	})
+	log.Debug(fname)
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
@@ -23,13 +32,14 @@ func ls(
 	defer hashRegistry.Dispose()
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "ls: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -40,7 +50,8 @@ func ls(
 
 	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "ls: hashRegistry.GetHashAPI() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	fakeBlockStoreFS := longtaillib.CreateInMemStorageAPI()
@@ -62,7 +73,8 @@ func ls(
 		storeIndex,
 		versionIndex)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "ls: hashRegistry.CreateBlockStoreStorageAPI() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed creating block store storage for `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.Dispose()
 
@@ -79,13 +91,15 @@ func ls(
 		return storeStats, timeStats, nil
 	}
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "ls: hashRegistry.StartFind() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed scanning dir `%s`", searchDir))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.CloseFind(iterator)
 	for {
 		properties, errno := blockStoreFS.GetEntryProperties(iterator)
 		if errno != 0 {
-			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "ls: GetEntryProperties.GetEntryProperties() failed")
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Can't get properties of entry in `%s`", searchDir))
+			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 		detailsString := longtailutils.GetDetailsString(properties.Name, properties.Size, properties.Permissions, properties.IsDir, 16)
 		fmt.Printf("%s\n", detailsString)
@@ -95,7 +109,8 @@ func ls(
 			break
 		}
 		if errno != 0 {
-			return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "ls: GetEntryProperties.FindNext() failed")
+			err = longtailutils.MakeError(errno, fmt.Sprintf("Can't step to next entry in `%s`", searchDir))
+			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 	}
 	return storeStats, timeStats, nil

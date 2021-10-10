@@ -5,6 +5,7 @@ package longtaillib
 import "C"
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"sync/atomic"
 	"unsafe"
@@ -46,181 +47,70 @@ const EDOM = 33       /* Math arg out of domain of func */
 const ERANGE = 34     /* Math result not representable */
 const ECANCELED = 105 /* Operation canceled */
 
-var (
-	//ErrEPERM Not super-user
-	ErrEPERM = errors.New("Not super-user")
-	//ErrENOENT No such file or directory
-	ErrENOENT = errors.New("No such file or directory")
-	//ErrESRCH No such process
-	ErrESRCH = errors.New("No such process")
-	//ErrEINTR Interrupted system call
-	ErrEINTR = errors.New("Interrupted system call")
-	//ErrEIO I/O error
-	ErrEIO = errors.New("I/O error")
-	//ErrENXIO No such device or address
-	ErrENXIO = errors.New("No such device or address")
-	//ErrE2BIG Arg list too long
-	ErrE2BIG = errors.New("Arg list too long")
-	//ErrENOEXEC Exec format error
-	ErrENOEXEC = errors.New("Exec format error")
-	//ErrEBADF Bad file number
-	ErrEBADF = errors.New("Bad file number")
-	//ErrECHILD No children
-	ErrECHILD = errors.New("No children")
-	//ErrEAGAIN No more processes
-	ErrEAGAIN = errors.New("No more processes")
-	//ErrENOMEM Not enough core
-	ErrENOMEM = errors.New("Not enough core")
-	//ErrEACCES Permission denied
-	ErrEACCES = errors.New("Permission denied")
-	//ErrEFAULT Bad address
-	ErrEFAULT = errors.New("Bad address")
-	//ErrENOTBLK Block device required
-	ErrENOTBLK = errors.New("Block device required")
-	//ErrEBUSY Mount device busy
-	ErrEBUSY = errors.New("Mount device busy")
-	//ErrEEXIST File exists
-	ErrEEXIST = errors.New("File exists")
-	//ErrEXDEV Cross-device link
-	ErrEXDEV = errors.New("Cross-device link")
-	//ErrENODEV No such device
-	ErrENODEV = errors.New("No such device")
-	//ErrENOTDIR Not a directory
-	ErrENOTDIR = errors.New("Not a directory")
-	//ErrEISDIR Is a directory
-	ErrEISDIR = errors.New("Is a directory")
-	//ErrEINVAL Invalid argument
-	ErrEINVAL = errors.New("Invalid argument")
-	//ErrENFILE Too many open files in system
-	ErrENFILE = errors.New("Too many open files in system")
-	//ErrEMFILE Too many open files
-	ErrEMFILE = errors.New("Too many open files")
-	//ErrENOTTY Not a typewriter
-	ErrENOTTY = errors.New("Not a typewriter")
-	//ErrETXTBSY Text file busy
-	ErrETXTBSY = errors.New("Text file busy")
-	//ErrEFBIG File too large
-	ErrEFBIG = errors.New("File too large")
-	//ErrENOSPC No space left on device
-	ErrENOSPC = errors.New("No space left on device")
-	//ErrESPIPE Illegal seek
-	ErrESPIPE = errors.New("Illegal seek")
-	//ErrEROFS Read only file system
-	ErrEROFS = errors.New("Read only file system")
-	//ErrEMLINK Too many links
-	ErrEMLINK = errors.New("Too many links")
-	//ErrEPIPE Broken pipe
-	ErrEPIPE = errors.New("Broken pipe")
-	//ErrEDOM Math arg out of domain of func
-	ErrEDOM = errors.New("Math arg out of domain of func")
-	//ErrERANGE Math result not representable
-	ErrERANGE = errors.New("Math result not representable")
-	//ErrECANCELED Operation canceled
-	ErrECANCELED = errors.New("Operation canceled")
-)
-
-var errnoToError = map[int]error{
-	EPERM:     ErrEPERM,
-	ENOENT:    ErrENOENT,
-	ESRCH:     ErrESRCH,
-	EINTR:     ErrEINTR,
-	EIO:       ErrEIO,
-	ENXIO:     ErrENXIO,
-	E2BIG:     ErrE2BIG,
-	ENOEXEC:   ErrENOEXEC,
-	EBADF:     ErrEBADF,
-	ECHILD:    ErrECHILD,
-	EAGAIN:    ErrEAGAIN,
-	ENOMEM:    ErrENOMEM,
-	EACCES:    ErrEACCES,
-	EFAULT:    ErrEFAULT,
-	ENOTBLK:   ErrENOTBLK,
-	EBUSY:     ErrEBUSY,
-	EEXIST:    ErrEEXIST,
-	EXDEV:     ErrEXDEV,
-	ENODEV:    ErrENODEV,
-	ENOTDIR:   ErrENOTDIR,
-	EISDIR:    ErrEISDIR,
-	EINVAL:    ErrEINVAL,
-	ENFILE:    ErrENFILE,
-	EMFILE:    ErrEMFILE,
-	ENOTTY:    ErrENOTTY,
-	ETXTBSY:   ErrETXTBSY,
-	EFBIG:     ErrEFBIG,
-	ENOSPC:    ErrENOSPC,
-	ESPIPE:    ErrESPIPE,
-	EROFS:     ErrEROFS,
-	EMLINK:    ErrEMLINK,
-	EPIPE:     ErrEPIPE,
-	EDOM:      ErrEDOM,
-	ERANGE:    ErrERANGE,
-	ECANCELED: ErrECANCELED,
+var errnoToDescription = map[int]string{
+	EPERM:     "Not super-user",
+	ENOENT:    "No such file or directory",
+	ESRCH:     "No such process",
+	EINTR:     "Interrupted system call",
+	EIO:       "I/O error",
+	ENXIO:     "No such device or address",
+	E2BIG:     "Arg list too long",
+	ENOEXEC:   "Exec format error",
+	EBADF:     "Bad file number",
+	ECHILD:    "No children",
+	EAGAIN:    "No more processes",
+	ENOMEM:    "Not enough core",
+	EACCES:    "Permission denied",
+	EFAULT:    "Bad address",
+	ENOTBLK:   "Block device required",
+	EBUSY:     "Mount device busy",
+	EEXIST:    "File exists",
+	EXDEV:     "Cross-device link",
+	ENODEV:    "No such device",
+	ENOTDIR:   "Not a directory",
+	EISDIR:    "Is a directory",
+	EINVAL:    "Invalid argument",
+	ENFILE:    "Too many open files in system",
+	EMFILE:    "Too many open files",
+	ENOTTY:    "Not a typewriter",
+	ETXTBSY:   "Text file busy",
+	EFBIG:     "File too large",
+	ENOSPC:    "No space left on device",
+	ESPIPE:    "Illegal seek",
+	EROFS:     "Read only file system",
+	EMLINK:    "Too many links",
+	EPIPE:     "Broken pipe",
+	EDOM:      "Math arg out of domain of func",
+	ERANGE:    "Math result not representable",
+	ECANCELED: "Operation canceled",
 }
 
-var errorToErrno = map[error]int{
-	ErrEPERM:     EPERM,
-	ErrENOENT:    ENOENT,
-	ErrESRCH:     ESRCH,
-	ErrEINTR:     EINTR,
-	ErrEIO:       EIO,
-	ErrENXIO:     ENXIO,
-	ErrE2BIG:     E2BIG,
-	ErrENOEXEC:   ENOEXEC,
-	ErrEBADF:     EBADF,
-	ErrECHILD:    ECHILD,
-	ErrEAGAIN:    EAGAIN,
-	ErrENOMEM:    ENOMEM,
-	ErrEACCES:    EACCES,
-	ErrEFAULT:    EFAULT,
-	ErrENOTBLK:   ENOTBLK,
-	ErrEBUSY:     EBUSY,
-	ErrEEXIST:    EEXIST,
-	ErrEXDEV:     EXDEV,
-	ErrENODEV:    ENODEV,
-	ErrENOTDIR:   ENOTDIR,
-	ErrEISDIR:    EISDIR,
-	ErrEINVAL:    EINVAL,
-	ErrENFILE:    ENFILE,
-	ErrEMFILE:    EMFILE,
-	ErrENOTTY:    ENOTTY,
-	ErrETXTBSY:   ETXTBSY,
-	ErrEFBIG:     EFBIG,
-	ErrENOSPC:    ENOSPC,
-	ErrESPIPE:    ESPIPE,
-	ErrEROFS:     EROFS,
-	ErrEMLINK:    EMLINK,
-	ErrEPIPE:     EPIPE,
-	ErrEDOM:      EDOM,
-	ErrERANGE:    ERANGE,
-	ErrECANCELED: ECANCELED,
+type LongtailError struct {
+	Description string
+	Errno       int
 }
 
-// ErrnoToError Converts a longtail int errno to golang error
-func ErrnoToError(errno int, fallback error) error {
-	if errno == 0 {
-		return nil
+func (e *LongtailError) Error() string {
+	return fmt.Sprintf("%d: %s", e.Errno, e.Description)
+}
+
+func ErrnoToError(errno int) error {
+	description, exists := errnoToDescription[errno]
+	if !exists {
+		description = "???"
 	}
-	error, exists := errnoToError[errno]
-	if exists {
-		return error
-	}
-	return fallback //errors.New(fmt.Sprintf("Error: %d", errno))
+	return &LongtailError{Errno: errno, Description: description}
 }
 
-// ErrorToErrno Converts a golang error to a longtail int errno
 func ErrorToErrno(err error, fallback int) int {
 	if err == nil {
 		return 0
 	}
-	unwrappedError := errors.Unwrap(err)
-	if unwrappedError == nil {
-		unwrappedError = err
+	var longtailError *LongtailError
+	if errors.As(err, &longtailError) {
+		return longtailError.Errno
 	}
-	errno, exists := errorToErrno[unwrappedError]
-	if exists {
-		return errno
-	}
-	return fallback //ENOENT // Bad catchall
+	return fallback
 }
 
 type ProgressAPI interface {
@@ -657,7 +547,7 @@ func (storeIndex *Longtail_StoreIndex) Copy() (Longtail_StoreIndex, error) {
 	}
 	cStoreIndex := C.Longtail_CopyStoreIndex(storeIndex.cStoreIndex)
 	if cStoreIndex == nil {
-		return Longtail_StoreIndex{}, ErrENOMEM
+		return Longtail_StoreIndex{}, ErrnoToError(ENOMEM)
 	}
 	return Longtail_StoreIndex{cStoreIndex: cStoreIndex}, nil
 }
@@ -1092,7 +982,7 @@ func (blockIndex *Longtail_BlockIndex) Copy() (Longtail_BlockIndex, error) {
 	}
 	cBlockIndex := C.Longtail_CopyBlockIndex(blockIndex.cBlockIndex)
 	if cBlockIndex == nil {
-		return Longtail_BlockIndex{}, ErrENOMEM
+		return Longtail_BlockIndex{}, ErrnoToError(ENOMEM)
 	}
 	return Longtail_BlockIndex{cBlockIndex: cBlockIndex}, nil
 }
@@ -1806,7 +1696,7 @@ func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
 // Dispose ...
 func (asyncCompleteAPI *Longtail_AsyncFlushAPI) Dispose() {
 	if asyncCompleteAPI.cAsyncCompleteAPI != nil {
-		C.Longtail_DisposeAPI(&asyncCompleteAPI.cAsyncCompleteAPI.m_API)
+		//		C.Longtail_DisposeAPI(&asyncCompleteAPI.cAsyncCompleteAPI.m_API)
 		asyncCompleteAPI.cAsyncCompleteAPI = nil
 	}
 }

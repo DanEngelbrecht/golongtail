@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/url"
+	"os"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
@@ -42,8 +43,10 @@ const (
 
 // NewGCSBlobStore ...
 func NewGCSBlobStore(u *url.URL, disableLocking bool) (BlobStore, error) {
+	const fname = "NewGCSBlobStore"
 	if u.Scheme != "gs" {
-		return nil, fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+		err := fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
+		return nil, errors.Wrap(err, fname)
 	}
 	prefix := u.Path
 	if len(u.Path) > 0 {
@@ -59,9 +62,11 @@ func NewGCSBlobStore(u *url.URL, disableLocking bool) (BlobStore, error) {
 }
 
 func (blobStore *gcsBlobStore) NewClient(ctx context.Context) (BlobClient, error) {
+	const fname = "blobClient.NewClient"
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, blobStore.bucketName)
+		err := fmt.Errorf("Failed to create client for `%s`", blobStore.String())
+		return nil, errors.Wrap(err, fname)
 	}
 
 	bucket := client.Bucket(blobStore.bucketName)
@@ -85,6 +90,7 @@ func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {
 }
 
 func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+	const fname = "blobClient.GetObjects"
 	var items []BlobProperties
 	it := blobClient.bucket.Objects(blobClient.ctx, &storage.Query{
 		Prefix: blobClient.store.prefix + pathPrefix,
@@ -96,7 +102,7 @@ func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, fname)
 		}
 		itemName := attrs.Name[len(blobClient.store.prefix):]
 		items = append(items, BlobProperties{Size: attrs.Size, Name: itemName})
@@ -117,33 +123,36 @@ func (blobClient *gcsBlobClient) String() string {
 }
 
 func (blobObject *gcsBlobObject) Read() ([]byte, error) {
+	const fname = "gcsBlobObject.Read"
 	reader, err := blobObject.objHandle.NewReader(blobObject.ctx)
 	if err == storage.ErrObjectNotExist {
-		return nil, nil
+		err = errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
 	if err != nil {
-		return nil, errors.Wrap(err, blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
 	data, err := ioutil.ReadAll(reader)
 	err2 := reader.Close()
-	if err == storage.ErrObjectNotExist || err2 == storage.ErrObjectNotExist {
-		return nil, nil
+	if err2 == storage.ErrObjectNotExist {
+		err = errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+		return nil, errors.Wrap(err, fname)
 	}
-	if err != nil {
-		return nil, errors.Wrap(err, blobObject.path)
-	} else if err2 != nil {
-		return nil, err2
+	if err2 != nil {
+		return nil, errors.Wrap(err2, fname)
 	}
 	return data, nil
 }
 
 func (blobObject *gcsBlobObject) LockWriteVersion() (bool, error) {
+	const fname = "gcsBlobObject.LockWriteVersion"
 	objAttrs, err := blobObject.objHandle.Attrs(blobObject.ctx)
 	if err == storage.ErrObjectNotExist {
 		blobObject.writeCondition = &storage.Conditions{DoesNotExist: true}
 		return false, nil
 	} else if err != nil {
-		return false, err
+		err = errors.Wrapf(err, "Cant lock %s", blobObject.path)
+		return false, errors.Wrap(err, fname)
 	}
 
 	blobObject.writeCondition = &storage.Conditions{GenerationMatch: objAttrs.Generation, DoesNotExist: false}
@@ -151,17 +160,20 @@ func (blobObject *gcsBlobObject) LockWriteVersion() (bool, error) {
 }
 
 func (blobObject *gcsBlobObject) Exists() (bool, error) {
+	const fname = "gcsBlobObject.Exists"
 	_, err := blobObject.objHandle.Attrs(blobObject.ctx)
 	if err == storage.ErrObjectNotExist {
 		return false, nil
 	}
 	if err != nil {
-		return false, err
+		err = errors.Wrapf(err, "Cant check if file exists %s", blobObject.path)
+		return false, errors.Wrap(err, fname)
 	}
 	return true, nil
 }
 
 func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
+	const fname = "gcsBlobObject.Write"
 	var writer *storage.Writer
 	if blobObject.writeCondition == nil {
 		writer = blobObject.objHandle.NewWriter(blobObject.ctx)
@@ -172,36 +184,46 @@ func (blobObject *gcsBlobObject) Write(data []byte) (bool, error) {
 	_, err := writer.Write(data)
 	err2 := writer.Close()
 	if err != nil {
-		return false, errors.Wrap(err, blobObject.path)
+		err = errors.Wrapf(err, "Unable to write to `%s`", blobObject.path)
+		return false, errors.Wrap(err, fname)
 	}
 	if e, ok := err2.(*googleapi.Error); ok {
 		if e.Code == writeConditionFailed || e.Code == metadataForObjectChanged || e.Code == rateLimitExceeded {
 			return false, nil
 		}
-		return false, err2
+		err = errors.Wrapf(err2, "Unable to write to `%s`", blobObject.path)
+		return false, errors.Wrap(err, fname)
 	} else if err2 != nil {
-		return false, err2
+		err = errors.Wrapf(err2, "Unable to write to `%s`", blobObject.path)
+		return false, errors.Wrap(err, fname)
 	}
 
 	_, err = blobObject.objHandle.Update(blobObject.ctx, storage.ObjectAttrsToUpdate{ContentType: "application/octet-stream"})
 	if err != nil {
-		return true, err
+		err = errors.Wrapf(err2, "Unable to update attributes for `%s`", blobObject.path)
+		return true, errors.Wrap(err, fname)
 	}
 	return true, nil
 }
 
 func (blobObject *gcsBlobObject) Delete() error {
+	const fname = "gcsBlobObject.Delete"
 	_, err := blobObject.objHandle.Attrs(blobObject.ctx)
 	if err == storage.ErrObjectNotExist {
 		return nil
 	}
 	if err != nil {
-		return err
+		err = errors.Wrapf(err, "Unable to delete `%s`", blobObject.path)
+		return errors.Wrap(err, fname)
 	}
 	if blobObject.writeCondition == nil {
 		err = blobObject.objHandle.Delete(blobObject.ctx)
 	} else {
 		err = blobObject.objHandle.If(*blobObject.writeCondition).Delete(blobObject.ctx)
 	}
-	return err
+	if err != nil {
+		err = errors.Wrapf(err, "Unable to delete `%s`", blobObject.path)
+		return errors.Wrap(err, fname)
+	}
+	return nil
 }

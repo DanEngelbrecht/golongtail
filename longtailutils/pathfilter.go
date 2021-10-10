@@ -1,11 +1,22 @@
 package longtailutils
 
 import (
-	"log"
+	"context"
 	"regexp"
+	"strings"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/pkg/errors"
+
+	log "github.com/sirupsen/logrus"
 )
+
+func NormalizePath(path string) string {
+	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
+	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
+	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
+	return backwardRemoved
+}
 
 type regexPathFilter struct {
 	compiledIncludeRegexes []*regexp.Regexp
@@ -14,18 +25,26 @@ type regexPathFilter struct {
 
 // MakeRegexPathFilter ...
 func MakeRegexPathFilter(includeFilterRegEx string, excludeFilterRegEx string) (longtaillib.Longtail_PathFilterAPI, error) {
+	const fname = "MakeRegexPathFilter"
+	log := log.WithContext(context.Background()).WithFields(log.Fields{
+		"fname":              fname,
+		"includeFilterRegEx": includeFilterRegEx,
+		"excludeFilterRegEx": excludeFilterRegEx,
+	})
+	log.Debug(fname)
+
 	regexPathFilter := &regexPathFilter{}
 	if includeFilterRegEx != "" {
 		compiledIncludeRegexes, err := splitRegexes(includeFilterRegEx)
 		if err != nil {
-			return longtaillib.Longtail_PathFilterAPI{}, err
+			return longtaillib.Longtail_PathFilterAPI{}, errors.Wrap(err, fname)
 		}
 		regexPathFilter.compiledIncludeRegexes = compiledIncludeRegexes
 	}
 	if excludeFilterRegEx != "" {
 		compiledExcludeRegexes, err := splitRegexes(excludeFilterRegEx)
 		if err != nil {
-			return longtaillib.Longtail_PathFilterAPI{}, err
+			return longtaillib.Longtail_PathFilterAPI{}, errors.Wrap(err, fname)
 		}
 		regexPathFilter.compiledExcludeRegexes = compiledExcludeRegexes
 	}
@@ -36,9 +55,21 @@ func MakeRegexPathFilter(includeFilterRegEx string, excludeFilterRegEx string) (
 }
 
 func (f *regexPathFilter) Include(rootPath string, assetPath string, assetName string, isDir bool, size uint64, permissions uint16) bool {
+	const fname = "regexPathFilter.Include"
+	log := log.WithContext(context.Background()).WithFields(log.Fields{
+		"fname":       fname,
+		"rootPath":    rootPath,
+		"assetPath":   assetPath,
+		"assetName":   assetName,
+		"isDir":       isDir,
+		"size":        size,
+		"permissions": permissions,
+	})
+	log.Debug(fname)
+
 	for _, r := range f.compiledExcludeRegexes {
 		if r.MatchString(assetPath) {
-			log.Printf("INFO: Skipping `%s`", assetPath)
+			log.Debugf("Skipping `%s`", assetPath)
 			return false
 		}
 	}
@@ -50,11 +81,18 @@ func (f *regexPathFilter) Include(rootPath string, assetPath string, assetName s
 			return true
 		}
 	}
-	log.Printf("INFO: Skipping `%s`", assetPath)
+	log.Debugf("Skipping `%s`", assetPath)
 	return false
 }
 
 func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
+	const fname = "splitRegexes.Include"
+	log := log.WithContext(context.Background()).WithFields(log.Fields{
+		"fname":   fname,
+		"regexes": regexes,
+	})
+	log.Debug(fname)
+
 	var compiledRegexes []*regexp.Regexp
 	m := 0
 	s := 0
@@ -67,7 +105,7 @@ func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
 			r := (regexes)[s:(i - 1)]
 			regex, err := regexp.Compile(r)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, fname)
 			}
 			compiledRegexes = append(compiledRegexes, regex)
 			s = i + 1
@@ -80,7 +118,7 @@ func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
 		r := (regexes)[s:]
 		regex, err := regexp.Compile(r)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, fname)
 		}
 		compiledRegexes = append(compiledRegexes, regex)
 	}

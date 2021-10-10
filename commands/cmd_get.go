@@ -1,13 +1,13 @@
-package main
+package commands
 
 import (
 	"bytes"
 	"fmt"
 	"time"
 
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -21,31 +21,47 @@ func get(
 	validate bool,
 	includeFilterRegEx string,
 	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "get"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":              fname,
+		"numWorkerCount":     numWorkerCount,
+		"getConfigPath":      getConfigPath,
+		"targetFolderPath":   targetFolderPath,
+		"targetIndexPath":    targetIndexPath,
+		"localCachePath":     localCachePath,
+		"retainPermissions":  retainPermissions,
+		"validate":           validate,
+		"includeFilterRegEx": includeFilterRegEx,
+		"excludeFilterRegEx": excludeFilterRegEx,
+	})
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
 	readGetConfigStartTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(getConfigPath)
+	vbuffer, err := longtailutils.ReadFromURI(getConfigPath)
 	if err != nil {
-		return storeStats, timeStats, errors.Wrapf(err, "get: longtailstorelib.ReadFromURI() failed")
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	v := viper.New()
 	v.SetConfigType("json")
 	err = v.ReadConfig(bytes.NewBuffer(vbuffer))
 	if err != nil {
-		return storeStats, timeStats, errors.Wrapf(err, "get: v.ReadConfig() failed")
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	blobStoreURI := v.GetString("storage-uri")
 	if blobStoreURI == "" {
-		return storeStats, timeStats, fmt.Errorf("get: missing storage-uri in get-config")
+		err = fmt.Errorf("Missing storage-uri in get-config `%s`", getConfigPath)
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	sourceFilePath := v.GetString("source-path")
 	if sourceFilePath == "" {
-		return storeStats, timeStats, fmt.Errorf("get: missing source-path in get-config")
+		err = fmt.Errorf("missing source-path in get-config `%s`", getConfigPath)
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	var versionLocalStoreIndexPath string
 	if v.IsSet("version-local-store-index-path") {
@@ -71,7 +87,7 @@ func get(
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
 
-	return storeStats, timeStats, err
+	return storeStats, timeStats, errors.Wrap(err, fname)
 }
 
 type GetCmd struct {
@@ -80,7 +96,6 @@ type GetCmd struct {
 	TargetIndexUriOption
 	ValidateTargetOption
 	VersionLocalStoreIndexPathOption
-	StorageURIOption
 	CachePathOption
 	RetainPermissionsOption
 	DownsyncIncludeRegExOption

@@ -1,18 +1,27 @@
-package main
+package commands
 
 import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func initRemoteStore(
 	numWorkerCount int,
 	blobStoreURI string,
 	hashAlgorithm string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "initRemoteStore"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":          fname,
+		"numWorkerCount": numWorkerCount,
+		"blobStoreURI":   blobStoreURI,
+		"hashAlgorithm":  hashAlgorithm,
+	})
+	log.Debug(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
@@ -22,18 +31,19 @@ func initRemoteStore(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	remoteIndexStore, err := createBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, longtailstorelib.Init)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.Init)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer remoteIndexStore.Dispose()
 	setupTime := time.Since(setupStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	getExistingContentStartTime := time.Now()
-	retargetStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(remoteIndexStore, []uint64{}, 0)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: longtailutils.GetExistingStoreIndexSync(indexStore, versionIndex.GetChunkHashes(): Failed for `%s` failed", blobStoreURI)
+	retargetStoreIndex, err := longtailutils.GetExistingStoreIndexSync(remoteIndexStore, []uint64{}, 0)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed getting store index from store `%s`", blobStoreURI)
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer retargetStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -41,9 +51,9 @@ func initRemoteStore(
 
 	flushStartTime := time.Now()
 
-	errno = longtailutils.FlushStoreSync(&remoteIndexStore)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "initRemoteStore: longtailutils.FlushStore: Failed for `%v`", blobStoreURI)
+	err = longtailutils.FlushStoreSync(&remoteIndexStore)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	flushTime := time.Since(flushStartTime)

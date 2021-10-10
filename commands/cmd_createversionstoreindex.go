@@ -1,12 +1,14 @@
-package main
+package commands
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func createVersionStoreIndex(
@@ -14,6 +16,16 @@ func createVersionStoreIndex(
 	blobStoreURI string,
 	sourceFilePath string,
 	versionLocalStoreIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "createVersionStoreIndex"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":                      fname,
+		"numWorkerCount":             numWorkerCount,
+		"blobStoreURI":               blobStoreURI,
+		"sourceFilePath":             sourceFilePath,
+		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
+	})
+	log.Debug(fname)
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
@@ -22,9 +34,9 @@ func createVersionStoreIndex(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	indexStore, err := createBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, longtailstorelib.ReadOnly)
+	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer indexStore.Dispose()
 
@@ -32,13 +44,14 @@ func createVersionStoreIndex(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(sourceFilePath)
+	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "createVersionStoreIndex: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", sourceFilePath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer sourceVersionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)
@@ -47,9 +60,9 @@ func createVersionStoreIndex(
 	getExistingContentStartTime := time.Now()
 	chunkHashes := sourceVersionIndex.GetChunkHashes()
 
-	retargettedVersionStoreIndex, errno := longtailutils.GetExistingStoreIndexSync(indexStore, chunkHashes, 0)
-	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "createVersionStoreIndex: longtailutils.GetExistingStoreIndexSync(indexStore, chunkHashes) failed")
+	retargettedVersionStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, chunkHashes, 0)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer retargettedVersionStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
@@ -58,11 +71,12 @@ func createVersionStoreIndex(
 	writeVersionLocalStoreIndexStartTime := time.Now()
 	versionLocalStoreIndexBuffer, errno := longtaillib.WriteStoreIndexToBuffer(retargettedVersionStoreIndex)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrENOMEM), "createVersionStoreIndex: longtaillib.WriteStoreIndexToBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant serialize store index for `%s`", sourceFilePath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	err = longtailstorelib.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+	err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
 	if err != nil {
-		return storeStats, timeStats, errors.Wrapf(err, "createVersionStoreIndex: longtaillib.longtailstorelib.WriteToURL() failed")
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	writeVersionLocalStoreIndexTime := time.Since(writeVersionLocalStoreIndexStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Write version store index", writeVersionLocalStoreIndexTime})

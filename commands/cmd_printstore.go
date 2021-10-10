@@ -1,13 +1,13 @@
-package main
+package commands
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func printStore(
@@ -15,18 +15,29 @@ func printStore(
 	storeIndexPath string,
 	compact bool,
 	details bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "printStore"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":          fname,
+		"numWorkerCount": numWorkerCount,
+		"storeIndexPath": storeIndexPath,
+		"compact":        compact,
+		"details":        details,
+	})
+	log.Debug(fname)
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
 	readStoreIndexStartTime := time.Now()
 
-	vbuffer, err := longtailstorelib.ReadFromURI(storeIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(storeIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "printStore: longtaillib.ReadStoreIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse store index from `%s`", storeIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer storeIndex.Dispose()
 	readStoreIndexTime := time.Since(readStoreIndexStartTime)
@@ -54,7 +65,7 @@ func printStore(
 		fmt.Printf("%s\t%d\t%s\t%d\t%d",
 			storeIndexPath,
 			storeIndex.GetVersion(),
-			hashIdentifierToString(storeIndex.GetHashIdentifier()),
+			longtailutils.HashIdentifierToString(storeIndex.GetHashIdentifier()),
 			storeIndex.GetBlockCount(),
 			storeIndex.GetChunkCount())
 		if details {
@@ -65,7 +76,7 @@ func printStore(
 		fmt.Printf("\n")
 	} else {
 		fmt.Printf("Version:             %d\n", storeIndex.GetVersion())
-		fmt.Printf("Hash Identifier:     %s\n", hashIdentifierToString(storeIndex.GetHashIdentifier()))
+		fmt.Printf("Hash Identifier:     %s\n", longtailutils.HashIdentifierToString(storeIndex.GetHashIdentifier()))
 		fmt.Printf("Block Count:         %d   (%s)\n", storeIndex.GetBlockCount(), longtailutils.ByteCountDecimal(uint64(storeIndex.GetBlockCount())))
 		fmt.Printf("Chunk Count:         %d   (%s)\n", storeIndex.GetChunkCount(), longtailutils.ByteCountDecimal(uint64(storeIndex.GetChunkCount())))
 		if details {

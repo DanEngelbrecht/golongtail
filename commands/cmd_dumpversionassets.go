@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"fmt"
@@ -6,26 +6,36 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func dumpVersionAssets(
 	numWorkerCount int,
 	versionIndexPath string,
 	showDetails bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	const fname = "dumpVersionAssets"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":            fname,
+		"numWorkerCount":   numWorkerCount,
+		"versionIndexPath": versionIndexPath,
+		"showDetails":      showDetails,
+	})
+	log.Debug(fname)
+
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailstorelib.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
 	if err != nil {
-		return storeStats, timeStats, err
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
 	if errno != 0 {
-		return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno, longtaillib.ErrEIO), "dumpVersionAssets: longtaillib.ReadVersionIndexFromBuffer() failed")
+		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
 	readSourceTime := time.Since(readSourceStartTime)

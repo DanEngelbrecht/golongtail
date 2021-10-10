@@ -118,12 +118,16 @@ jobs:
           Changes in this Release
           - **FIX** Make sure flush also flushes store index, empties preflight memory and flushes any pending preflight blocks.
           - **FIX** Build Linux executable using Ubuntu 18.04 to avoid forcing update of GLIBC dependency
+          - **FIX** Improved error handling and reporting
+          - **FIX** Improved logging
           - **CHANGED** Removed unused `--target-chunk-size` option for downsync
           - **CHANGED** Removed unused `--target-block-size` option for downsync
           - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync
           - **CHANGED** `--target-path` for `downsync` command is now optional and if not given a folder will be crated in the current directory based on the source name
           - **CHANGED** Now uses Kong command line parser instead of Kingpin/v2
           - **CHANGED** Nicer progress output in terminal with elapsed time and estimated time
+          - **CHANGED** Refactored internal structure - new module with commands and one with utils and with a very small cmd/main
+          - **CHANGED** Cleaned up command names and options (old names are kept for compatabiltiy)
           - **ADD** s3-blobstore, use the uri format s3:// for Amazon S3 stores
           - **ADD** `cloneStore` command to copy all versions from one store to a new store
           - **ADD** `pruneStore` command that removes blocks of data base on which blocks are used by a list of version indexes

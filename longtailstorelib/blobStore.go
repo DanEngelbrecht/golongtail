@@ -3,12 +3,8 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
-	"time"
-
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 // BlobObject
@@ -62,7 +58,7 @@ type BlobStore interface {
 	String() string
 }
 
-func createBlobStoreForURI(uri string) (BlobStore, error) {
+func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -75,11 +71,11 @@ func createBlobStoreForURI(uri string) (BlobStore, error) {
 		case "abfss":
 			return nil, fmt.Errorf("azure Gen2 storage not yet implemented")
 		case "file":
-			return NewFSBlobStore(blobStoreURL.Path[1:])
+			return NewFSBlobStore(blobStoreURL.Path[1:], true)
 		}
 	}
 
-	return NewFSBlobStore(uri)
+	return NewFSBlobStore(uri, true)
 }
 
 func splitURI(uri string) (string, string) {
@@ -91,92 +87,4 @@ func splitURI(uri string) (string, string) {
 		return "", uri
 	}
 	return uri[:i], uri[i+1:]
-}
-
-// ReadFromURI ...
-func ReadFromURI(uri string) ([]byte, error) {
-	uriParent, uriName := splitURI(uri)
-	blobStore, err := createBlobStoreForURI(uriParent)
-	if err != nil {
-		return nil, err
-	}
-	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	object, err := client.NewObject(uriName)
-	if err != nil {
-		return nil, err
-	}
-	vbuffer, err := object.Read()
-	if err != nil {
-		return nil, err
-	}
-	return vbuffer, nil
-}
-
-// ReadFromURI ...
-func WriteToURI(uri string, data []byte) error {
-	uriParent, uriName := splitURI(uri)
-	blobStore, err := createBlobStoreForURI(uriParent)
-	if err != nil {
-		return err
-	}
-	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	object, err := client.NewObject(uriName)
-	if err != nil {
-		return err
-	}
-	_, err = object.Write(data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func readBlobWithRetry(
-	ctx context.Context,
-	client BlobClient,
-	key string) ([]byte, int, error) {
-	retryCount := 0
-	objHandle, err := client.NewObject(key)
-	if err != nil {
-		return nil, retryCount, err
-	}
-	exists, err := objHandle.Exists()
-	if err != nil {
-		return nil, retryCount, err
-	}
-	if !exists {
-		return nil, retryCount, longtaillib.ErrENOENT
-	}
-	blobData, err := objHandle.Read()
-	if err != nil {
-		log.Printf("Retrying getBlob %s in store %s\n", key, client.String())
-		retryCount++
-		blobData, err = objHandle.Read()
-	}
-	if err != nil {
-		log.Printf("Retrying 500 ms delayed getBlob %s in store %s\n", key, client.String())
-		time.Sleep(500 * time.Millisecond)
-		retryCount++
-		blobData, err = objHandle.Read()
-	}
-	if err != nil {
-		log.Printf("Retrying 2 s delayed getBlob %s in store %s\n", key, client.String())
-		time.Sleep(2 * time.Second)
-		retryCount++
-		blobData, err = objHandle.Read()
-	}
-
-	if err != nil {
-		return nil, retryCount, err
-	}
-
-	return blobData, retryCount, nil
 }

@@ -144,11 +144,15 @@ func printVersionUsage(
 	assetChunkCounts := versionIndex.GetAssetChunkCounts()
 	assetChunkIndexStarts := versionIndex.GetAssetChunkIndexStarts()
 	assetChunkIndexes := versionIndex.GetAssetChunkIndexes()
+	assetCount := 0
 	for a := uint32(0); a < versionIndex.GetAssetCount(); a++ {
 		uniqueBlockCount := uint64(0)
 		chunkCount := assetChunkCounts[a]
 		chunkIndexOffset := assetChunkIndexStarts[a]
 		lastBlockIndex := ^uint64(0)
+		if chunkCount > 0 {
+			assetCount++
+		}
 		for c := chunkIndexOffset; c < chunkIndexOffset+chunkCount; c++ {
 			chunkIndex := assetChunkIndexes[c]
 			chunkHash := chunkHashes[chunkIndex]
@@ -161,8 +165,8 @@ func printVersionUsage(
 		}
 	}
 	assetFragmentation := uint32(0)
-	if versionIndex.GetAssetCount() > 0 {
-		assetFragmentation = uint32((100*(assetFragmentCount))/uint64(versionIndex.GetAssetCount()) - 100)
+	if assetCount > 0 {
+		assetFragmentation = uint32((100*assetFragmentCount)/uint64(assetCount) - 100)
 	}
 
 	fmt.Printf("Block Usage:          %d%%\n", blockUsage)

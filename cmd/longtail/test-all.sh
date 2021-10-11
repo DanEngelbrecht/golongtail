@@ -54,6 +54,7 @@ rm -rf ./test/cp
 ./longtail.exe validate-version --version-index-path ./test/index/v2.lvi --storage-uri fsblob://test/storage
 ./longtail.exe validate-version --version-index-path ./test/index/v3.lvi --storage-uri fsblob://test/storage
 
+rm -rf ./test/current
 ./longtail.exe get --get-config-path ./test/index/v1.json --target-path ./test/current
 ./longtail.exe get --get-config-path ./test/index/v2.json --target-path ./test/current
 ./longtail.exe get --get-config-path ./test/index/v3.json --target-path ./test/current
@@ -64,6 +65,7 @@ rm -rf ./test/cp
 ./longtail.exe create-version-store-index --source-path ./test/index/v2.lvi --storage-uri fsblob://test/storage --version-local-store-index-path ./test/index/v2.lsi
 ./longtail.exe create-version-store-index --source-path ./test/index/v3.lvi --storage-uri fsblob://test/storage --version-local-store-index-path ./test/index/v3.lsi
 
+rm -rf ./test/current
 ./longtail.exe downsync --source-path ./test/index/v3.lvi --target-path ./test/current --storage-uri fsblob://test/storage --version-local-store-index-path ./test/index/v3.lsi
 ./longtail.exe downsync --source-path ./test/index/v2.lvi --target-path ./test/current --storage-uri fsblob://test/storage --version-local-store-index-path ./test/index/v2.lsi
 ./longtail.exe downsync --source-path ./test/index/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage --version-local-store-index-path ./test/index/v1.lsi
@@ -97,7 +99,7 @@ rm ./test/storage/store.*
 echo ./test/index/v1.lvi >sources.txt
 ./longtail.exe prune-store --source-paths sources.txt --storage-uri fsblob://test/storage
 rm -rf ./test/current
-./longtail.exe downsync --source-path ./test/index/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage
+#./longtail.exe downsync --source-path ./test/index/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage
 
 ./longtail.exe upsync --source-path ./test/version/v2 --target-path ./test/index/v2.lvi --storage-uri fsblob://test/storage
 ./longtail.exe upsync --source-path ./test/version/v3 --target-path ./test/index/v3.lvi --storage-uri fsblob://test/storage
@@ -107,15 +109,15 @@ echo ./test/index-clone/v2.lvi >targets.txt
 ./longtail.exe clone-store --target-path ./test/current --source-paths sources.txt --target-paths targets.txt --source-storage-uri fsblob://test/storage --target-storage-uri fsblob://test/storage-clone
 
 rm -rf ./test/current
-./longtail.exe downsync --source-path ./test/index-clone/v2.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone --version-local-store-index-path ./test/index/v3.lsi
+rm -rf ./test/current
+./longtail.exe downsync --source-path ./test/index-clone/v2.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone
 
 rm -rf ./test/index-clone
 rm -rf fsblob://test/storage-clone
 
-exit 0
-
-# BROKEN! Fails due to missing zip file?
 echo $'./test/index/v2.lvi\n./test/index/v1.lvi' >sources.txt
 echo $'./test/index-clone/v2.lvi\n./test/index-clone/v1.lvi' >targets.txt
 ./longtail.exe clone-store --target-path ./test/current --source-paths sources.txt --target-paths targets.txt --source-storage-uri fsblob://test/storage --target-storage-uri fsblob://test/storage-clone --create-version-local-store-index
-./longtail.exe downsync --source-path ./test/index-clone/v2.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone --version-local-store-index-path ./test/index-clone/v3.lsi
+rm -rf ./test/current
+./longtail.exe downsync --source-path ./test/index-clone/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone --version-local-store-index-path ./test/index-clone/v1.lsi
+./longtail.exe downsync --source-path ./test/index-clone/v2.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone --version-local-store-index-path ./test/index-clone/v2.lsi

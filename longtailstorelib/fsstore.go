@@ -150,7 +150,11 @@ func (blobObject *fsBlobObject) setMetaGeneration(meta_generation int64) error {
 func (blobObject *fsBlobObject) deleteGeneration() error {
 	const fname = "fsBlobObject.deleteGeneration"
 	metapath := blobObject.path + ".gen"
-	err := os.Remove(metapath)
+	_, err := os.Stat(metapath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	err = os.Remove(metapath)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}

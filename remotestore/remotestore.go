@@ -665,7 +665,6 @@ func onPruneBlocksMessage(
 		}
 		wg.Add(1)
 		s.deleteBlockChan <- deleteBlockMessage{blockHash: blockHash, completeSignal: &wg, successCounter: &prunedCount}
-		prunedCount++
 	}
 	wg.Wait()
 	return prunedCount, prunedIndex, nil

@@ -786,10 +786,11 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
 				generatedBlockHashes <- h
-				_, exists := lookup[h]
-				if !exists {
-					t.Errorf("Missing direct block %d", h)
-					//					generatedBlocksIndex.Dispose()
+				if client.SupportsLocking() {
+					_, exists := lookup[h]
+					if !exists {
+						t.Errorf("Missing direct block %d", h)
+					}
 				}
 			}
 			storeIndex.Dispose()

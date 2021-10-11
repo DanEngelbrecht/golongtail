@@ -75,7 +75,7 @@ type DumpVersionAssetsCmd struct {
 	Details bool `name:"details" help:"Show details about assets"`
 }
 
-func (r *DumpVersionAssetsCmd) DumpVersionAssetsCmd(ctx *Context) error {
+func (r *DumpVersionAssetsCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := dumpVersionAssets(
 		ctx.NumWorkerCount,
 		r.VersionIndexPath,

@@ -614,8 +614,10 @@ func cloneStore(
 	if err := sourcesScanner.Err(); err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	if err := sourcesZipScanner.Err(); err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
+	if sourcesZipScanner != nil {
+		if err := sourcesZipScanner.Err(); err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
 	}
 	if err := targetsScanner.Err(); err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)

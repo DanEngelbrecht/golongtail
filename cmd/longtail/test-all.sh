@@ -96,17 +96,17 @@ rm ./test/storage/store.*
 
 ./longtail.exe print-version-usage --version-index-path ./test/index/v1.lvi --storage-uri fsblob://test/storage
 
-echo ./test/index/v1.lvi >sources.txt
-./longtail.exe prune-store --source-paths sources.txt --storage-uri fsblob://test/storage
+echo ./test/index/v1.lvi >test/sources.txt
+./longtail.exe prune-store --source-paths test/sources.txt --storage-uri fsblob://test/storage
 rm -rf ./test/current
 #./longtail.exe downsync --source-path ./test/index/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage
 
 ./longtail.exe upsync --source-path ./test/version/v2 --target-path ./test/index/v2.lvi --storage-uri fsblob://test/storage
 ./longtail.exe upsync --source-path ./test/version/v3 --target-path ./test/index/v3.lvi --storage-uri fsblob://test/storage
 
-echo ./test/index/v2.lvi >sources.txt
-echo ./test/index-clone/v2.lvi >targets.txt
-./longtail.exe clone-store --target-path ./test/current --source-paths sources.txt --target-paths targets.txt --source-storage-uri fsblob://test/storage --target-storage-uri fsblob://test/storage-clone
+echo ./test/index/v2.lvi >test/sources.txt
+echo ./test/index-clone/v2.lvi >test/targets.txt
+./longtail.exe clone-store --target-path ./test/current --source-paths test/sources.txt --target-paths test/targets.txt --source-storage-uri fsblob://test/storage --target-storage-uri fsblob://test/storage-clone
 
 rm -rf ./test/current
 rm -rf ./test/current
@@ -115,9 +115,9 @@ rm -rf ./test/current
 rm -rf ./test/index-clone
 rm -rf fsblob://test/storage-clone
 
-echo $'./test/index/v2.lvi\n./test/index/v1.lvi' >sources.txt
-echo $'./test/index-clone/v2.lvi\n./test/index-clone/v1.lvi' >targets.txt
-./longtail.exe clone-store --target-path ./test/current --source-paths sources.txt --target-paths targets.txt --source-storage-uri fsblob://test/storage --target-storage-uri fsblob://test/storage-clone --create-version-local-store-index
+echo $'./test/index/v2.lvi\n./test/index/v1.lvi' >test/sources.txt
+echo $'./test/index-clone/v2.lvi\n./test/index-clone/v1.lvi' >test/targets.txt
+./longtail.exe clone-store --target-path ./test/current --source-paths test/sources.txt --target-paths test/targets.txt --source-storage-uri fsblob://test/storage --target-storage-uri fsblob://test/storage-clone --create-version-local-store-index
 rm -rf ./test/current
 ./longtail.exe downsync --source-path ./test/index-clone/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone --version-local-store-index-path ./test/index-clone/v1.lsi
 ./longtail.exe downsync --source-path ./test/index-clone/v2.lvi --target-path ./test/current --storage-uri fsblob://test/storage-clone --version-local-store-index-path ./test/index-clone/v2.lsi

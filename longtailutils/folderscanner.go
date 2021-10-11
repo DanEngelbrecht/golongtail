@@ -25,12 +25,12 @@ func (scanner *AsyncFolderScanner) Scan(
 	scanner.wg.Add(1)
 	go func() {
 		startTime := time.Now()
-		fileInfos, errno := longtaillib.GetFilesRecursively(
+		fileInfos, err := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
 			NormalizePath(sourceFolderPath))
-		if errno != 0 {
-			err := MakeError(errno, fmt.Sprintf("Failed getting folder structure for `%s`", sourceFolderPath))
+		if err != nil {
+			err := errors.Wrap(err, fmt.Sprintf("Failed getting folder structure for `%s`", sourceFolderPath))
 			scanner.err = errors.Wrap(err, fname)
 		}
 		scanner.fileInfos = fileInfos
@@ -76,9 +76,9 @@ func GetFolderIndex(
 
 		compressionTypes := GetCompressionTypesForFiles(fileInfos, compressionType)
 
-		hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
-		if errno != 0 {
-			err = MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+		hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+		if err != nil {
+			err = errors.Wrap(err, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
 			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrap(err, fname)
 		}
 
@@ -87,7 +87,7 @@ func GetFolderIndex(
 
 		createVersionIndexProgress := CreateProgress("Indexing version")
 		defer createVersionIndexProgress.Dispose()
-		vindex, errno := longtaillib.CreateVersionIndex(
+		vindex, err := longtaillib.CreateVersionIndex(
 			fs,
 			hash,
 			chunker,
@@ -97,8 +97,8 @@ func GetFolderIndex(
 			fileInfos,
 			compressionTypes,
 			targetChunkSize)
-		if errno != 0 {
-			err = MakeError(errno, fmt.Sprintf("Failed creating version index for `%s`", sourceFolderPath))
+		if err != nil {
+			err = errors.Wrap(err, fmt.Sprintf("Failed creating version index for `%s`", sourceFolderPath))
 			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrap(err, fname)
 		}
 
@@ -110,16 +110,15 @@ func GetFolderIndex(
 	if err != nil {
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}
-	var errno int
-	vindex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", sourceIndexPath))
+	vindex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Cant parse version index from `%s`", sourceIndexPath))
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}
 
-	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
-	if errno != 0 {
-		err = MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}
 

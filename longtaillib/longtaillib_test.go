@@ -118,12 +118,12 @@ func TestInMemStorage(t *testing.T) {
 	myString := "my string"
 	err := storageAPI.WriteToStorage("folder", "file", []byte(myString))
 	if err != nil {
-		t.Errorf("WriteToStorage() %w", err)
+		t.Errorf("WriteToStorage() %s", err)
 	}
 
 	rbytes, err := storageAPI.ReadFromStorage("folder", "file")
 	if err != nil {
-		t.Errorf("ReadFromStorage() %w", err)
+		t.Errorf("ReadFromStorage() %s", err)
 	}
 	testString := string(rbytes)
 	if myString != myString {
@@ -250,7 +250,7 @@ func TestStoredblock(t *testing.T) {
 
 	storedBlock, err := createStoredBlock(2, 0xdeadbeef, 0)
 	if err != nil {
-		t.Errorf("CreateStoredBlock() %w", err)
+		t.Errorf("CreateStoredBlock() %s", err)
 	}
 	validateStoredBlock(t, storedBlock, 0xdeadbeef)
 }
@@ -264,19 +264,19 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 
 	originalBlock, err := createStoredBlock(2, 0xdeadbeef, 0)
 	if err != nil {
-		t.Errorf("createStoredBlock() %w", err)
+		t.Errorf("createStoredBlock() %s", err)
 	}
 
 	storedBlockData, err := WriteStoredBlockToBuffer(originalBlock)
 	if err != nil {
-		t.Errorf("WriteStoredBlockToBuffer() %w", err)
+		t.Errorf("WriteStoredBlockToBuffer() %s", err)
 	}
 	originalBlock.Dispose()
 
 	copyBlock, err := ReadStoredBlockFromBuffer(storedBlockData)
 
 	if err != nil {
-		t.Errorf("InitStoredBlockFromData() %w", err)
+		t.Errorf("InitStoredBlockFromData() %s", err)
 	}
 	defer copyBlock.Dispose()
 	validateStoredBlock(t, copyBlock, 0xdeadbeef)
@@ -300,19 +300,19 @@ func TestFSBlockStore(t *testing.T) {
 
 	block1, err := createStoredBlock(1, blake3.GetIdentifier(), 0)
 	if err != nil {
-		t.Errorf("TestFSBlockStore() createStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() createStoredBlock() %s", err)
 	}
 	defer block1.Dispose()
 
 	block2, err := createStoredBlock(5, blake3.GetIdentifier(), 0)
 	if err != nil {
-		t.Errorf("TestFSBlockStore() createStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() createStoredBlock() %s", err)
 	}
 	defer block2.Dispose()
 
 	block3, err := createStoredBlock(9, blake3.GetIdentifier(), 0)
 	if err != nil {
-		t.Errorf("TestFSBlockStore() createStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() createStoredBlock() %s", err)
 	}
 	defer block3.Dispose()
 
@@ -322,7 +322,7 @@ func TestFSBlockStore(t *testing.T) {
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.GetStoredBlock(storedBlock1Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if !IsNotExist(err) {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Done()
@@ -335,23 +335,23 @@ func TestFSBlockStore(t *testing.T) {
 	putStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.PutStoredBlock(block1, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %s", err)
 		putStoredBlockComplete.wg.Done()
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 	}
 
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.GetStoredBlock(storedBlock1Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
 	}
 	storedBlock1 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -364,12 +364,12 @@ func TestFSBlockStore(t *testing.T) {
 	putStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.PutStoredBlock(block2, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %s", err)
 		putStoredBlockComplete.wg.Done()
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 	}
 
 	storedBlock2Index := block2.GetBlockIndex()
@@ -377,12 +377,12 @@ func TestFSBlockStore(t *testing.T) {
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.GetStoredBlock(storedBlock2Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() HasStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() HasStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
 	}
 	storedBlock2 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -395,12 +395,12 @@ func TestFSBlockStore(t *testing.T) {
 	putStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.PutStoredBlock(block3, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() PutStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() PutStoredBlock() %s", err)
 		putStoredBlockComplete.wg.Done()
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 	}
 
 	storedBlock3Index := block3.GetBlockIndex()
@@ -408,12 +408,12 @@ func TestFSBlockStore(t *testing.T) {
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.GetStoredBlock(storedBlock3Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
 	}
 	storedBlock3 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -426,12 +426,12 @@ func TestFSBlockStore(t *testing.T) {
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreAPI.GetStoredBlock(storedBlock2Hash, CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestFSBlockStore() GetStoredBlock() %w", err)
+		t.Errorf("TestFSBlockStore() GetStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
 	}
 	storedBlock2Again := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -505,7 +505,7 @@ func (b *TestBlockStore) GetStoredBlock(
 			return nil
 		}
 	}
-	asyncCompleteAPI.OnComplete(Longtail_StoredBlock{}, NotExist())
+	asyncCompleteAPI.OnComplete(Longtail_StoredBlock{}, NotExistErr())
 	return nil
 }
 
@@ -612,7 +612,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 
 	storedBlock, err := createStoredBlock(2, 0xdeadbeef, 0)
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() createStoredBlock() %w", err)
+		t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
 	}
 	defer storedBlock.Dispose()
 
@@ -620,12 +620,12 @@ func TestPutGetStoredBlock(t *testing.T) {
 	putStoredBlockComplete.wg.Add(1)
 	err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %w", err)
+		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
 		putStoredBlockComplete.wg.Done()
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != nil {
-		t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+		t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 	}
 
 	getStoredBlockComplete := &testGetBlockCompletionAPI{}
@@ -633,12 +633,12 @@ func TestPutGetStoredBlock(t *testing.T) {
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash(), CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %w", err)
+		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
 	}
 	getBlock := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = Longtail_StoredBlock{}
@@ -677,7 +677,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 	{
 		storedBlock, err := createStoredBlock(2, 0xdeadbeef, 0)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -689,19 +689,19 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 
 	{
 		storedBlock, err := createStoredBlock(3, 0xdeadbeef, 10000)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -713,18 +713,18 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 	{
 		storedBlock, err := createStoredBlock(1, 0xdeadbeef, 20000)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -736,18 +736,18 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 	{
 		storedBlock, err := createStoredBlock(4, 0xdeadbeef, 30000)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -759,12 +759,12 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %w", err)
+			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %w", putStoredBlockComplete.err)
+			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 
@@ -773,7 +773,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 		getExistingContentComplete.wg.Add(1)
 		err := blockStoreProxy.GetExistingContent(allChunkHashes, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %w", err)
+			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %s", err)
 			getExistingContentComplete.wg.Done()
 		}
 		getExistingContentComplete.wg.Wait()
@@ -786,12 +786,12 @@ func TestPruneStoredBlocks(t *testing.T) {
 	pruneBlocksComplete.wg.Add(1)
 	err := blockStoreProxy.PruneBlocks(keepBlockHashes, CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.PruneBlocks() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.PruneBlocks() %s", err)
 		pruneBlocksComplete.wg.Done()
 	}
 	pruneBlocksComplete.wg.Wait()
 	if pruneBlocksComplete.err != nil {
-		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.err %w", err)
+		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.err %s", err)
 	}
 	if pruneBlocksComplete.prunedBlockCount != 2 {
 		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.prunedBlockCount %d != %d", 2, pruneBlocksComplete.prunedBlockCount)
@@ -802,7 +802,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 		getExistingContentComplete.wg.Add(1)
 		err = blockStoreProxy.GetExistingContent(allChunkHashes, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %w", err)
+			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %s", err)
 			getExistingContentComplete.wg.Done()
 		}
 		getExistingContentComplete.wg.Wait()
@@ -850,7 +850,7 @@ func TestWriteContent(t *testing.T) {
 
 	fileInfos, err := GetFilesRecursively(storageAPI, pathFilter, "content")
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() GetFilesRecursively() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() GetFilesRecursively() %s", err)
 	}
 	defer fileInfos.Dispose()
 	tags := make([]uint32, fileInfos.GetFileCount())
@@ -865,7 +865,7 @@ func TestWriteContent(t *testing.T) {
 		tags,
 		32768)
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() CreateVersionIndex() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() CreateVersionIndex() %s", err)
 	}
 	defer versionIndex.Dispose()
 
@@ -873,7 +873,7 @@ func TestWriteContent(t *testing.T) {
 	getExistingContentComplete.wg.Add(1)
 	err = blockStoreAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %s", err)
 		getExistingContentComplete.wg.Done()
 	}
 	getExistingContentComplete.wg.Wait()
@@ -887,7 +887,7 @@ func TestWriteContent(t *testing.T) {
 		32768*2,
 		8)
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() CreateMissingContent() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() CreateMissingContent() %s", err)
 		getExistingContentComplete.wg.Done()
 	}
 	defer missingStoreIndex.Dispose()
@@ -901,7 +901,7 @@ func TestWriteContent(t *testing.T) {
 		versionIndex,
 		"content")
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() WriteContent() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() WriteContent() %s", err)
 	}
 }
 
@@ -928,7 +928,7 @@ func TestGetFileRecursively(t *testing.T) {
 	storageAPI := createFilledStorage("content")
 	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
 	if err != nil {
-		t.Errorf("TestGetFileRecursively() GetFilesRecursively() %w", err)
+		t.Errorf("TestGetFileRecursively() GetFilesRecursively() %s", err)
 	}
 	defer fileInfos.Dispose()
 	fileCount := fileInfos.GetFileCount()
@@ -953,7 +953,7 @@ func TestCreateVersionIndex(t *testing.T) {
 	storageAPI := createFilledStorage("content")
 	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
 	if err != nil {
-		t.Errorf("TestCreateVersionIndex() GetFilesRecursively() %w", err)
+		t.Errorf("TestCreateVersionIndex() GetFilesRecursively() %s", err)
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
@@ -976,7 +976,7 @@ func TestCreateVersionIndex(t *testing.T) {
 		32768)
 
 	if err != nil {
-		t.Errorf("TestCreateVersionIndex() CreateVersionIndex() %w", err)
+		t.Errorf("TestCreateVersionIndex() CreateVersionIndex() %s", err)
 	}
 	defer versionIndex.Dispose()
 	if versionIndex.GetHashIdentifier() != hashAPI.GetIdentifier() {
@@ -991,7 +991,7 @@ func TestRewriteVersion(t *testing.T) {
 	storageAPI := createFilledStorage("content")
 	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
 	if err != nil {
-		t.Errorf("TestRewriteVersion() GetFilesRecursively() %w", err)
+		t.Errorf("TestRewriteVersion() GetFilesRecursively() %s", err)
 	}
 	hashAPI := CreateBlake2HashAPI()
 	defer hashAPI.Dispose()
@@ -1014,7 +1014,7 @@ func TestRewriteVersion(t *testing.T) {
 		compressionTypes,
 		32768)
 	if err != nil {
-		t.Errorf("TestRewriteVersion() CreateVersionIndex() %w", err)
+		t.Errorf("TestRewriteVersion() CreateVersionIndex() %s", err)
 	}
 
 	storeIndex, err := CreateStoreIndex(
@@ -1023,7 +1023,7 @@ func TestRewriteVersion(t *testing.T) {
 		65536,
 		4096)
 	if err != nil {
-		t.Errorf("TestRewriteVersion() CreateStoreIndex() %w", err)
+		t.Errorf("TestRewriteVersion() CreateStoreIndex() %s", err)
 	}
 	defer storeIndex.Dispose()
 	blockStorageAPI := CreateFSBlockStore(jobAPI, storageAPI, "block_store")
@@ -1042,14 +1042,14 @@ func TestRewriteVersion(t *testing.T) {
 		versionIndex,
 		"content")
 	if err != nil {
-		t.Errorf("TestRewriteVersion() WriteContent() %w", err)
+		t.Errorf("TestRewriteVersion() WriteContent() %s", err)
 	}
 
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
 	err = blockStorageAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %w", err)
+		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %s", err)
 		getExistingContentComplete.wg.Done()
 	}
 	getExistingContentComplete.wg.Wait()
@@ -1067,6 +1067,6 @@ func TestRewriteVersion(t *testing.T) {
 		"content_copy",
 		true)
 	if err != nil {
-		t.Errorf("TestRewriteVersion() WriteVersion() %w", err)
+		t.Errorf("TestRewriteVersion() WriteVersion() %s", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -16,17 +17,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func MakeError(errno int, description string) error {
-	return errors.Wrapf(longtaillib.ErrnoToError(errno), description)
-}
-
 type getExistingContentCompletionAPI struct {
 	wg         sync.WaitGroup
 	storeIndex longtaillib.Longtail_StoreIndex
-	err        int
+	err        error
 }
 
-func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err int) {
+func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err error) {
 	const fname = "getExistingContentCompletionAPI.OnComplete"
 	log.Debug(fname)
 	a.err = err
@@ -37,10 +34,10 @@ func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Long
 type pruneBlocksCompletionAPI struct {
 	wg               sync.WaitGroup
 	prunedBlockCount uint32
-	err              int
+	err              error
 }
 
-func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err int) {
+func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err error) {
 	const fname = "pruneBlocksCompletionAPI.OnComplete"
 	log.Debug(fname)
 	a.prunedBlockCount = prunedBlockCount
@@ -50,10 +47,10 @@ func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err int) 
 type flushCompletionAPI struct {
 	asyncFlushAPI longtaillib.Longtail_AsyncFlushAPI
 	wg            sync.WaitGroup
-	err           int
+	err           error
 }
 
-func (a *flushCompletionAPI) OnComplete(err int) {
+func (a *flushCompletionAPI) OnComplete(err error) {
 	const fname = "flushCompletionAPI.OnComplete"
 	log.Debug(fname)
 	a.err = err
@@ -64,10 +61,10 @@ func (a *flushCompletionAPI) OnComplete(err int) {
 type GetStoredBlockCompletionAPI struct {
 	Wg          sync.WaitGroup
 	StoredBlock longtaillib.Longtail_StoredBlock
-	Err         int
+	Err         error
 }
 
-func (a *GetStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtail_StoredBlock, err int) {
+func (a *GetStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtail_StoredBlock, err error) {
 	const fname = "GetStoredBlockCompletionAPI.OnComplete"
 	log.Debug(fname)
 	a.Err = err
@@ -90,16 +87,16 @@ func GetExistingStoreIndexSync(
 
 	getExistingContentComplete := &getExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
-	errno := indexStore.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(getExistingContentComplete))
-	if errno != 0 {
+	err := indexStore.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+	if err != nil {
 		getExistingContentComplete.wg.Done()
 		getExistingContentComplete.wg.Wait()
-		err := MakeError(errno, "Failed getting existing content index")
+		err := errors.Wrap(err, "Failed getting existing content index")
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	getExistingContentComplete.wg.Wait()
-	if getExistingContentComplete.err != 0 {
-		err := MakeError(getExistingContentComplete.err, "GetExistingStoreIndexSync completion failed")
+	if getExistingContentComplete.err != nil {
+		err := errors.Wrap(getExistingContentComplete.err, "GetExistingStoreIndexSync completion failed")
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	return getExistingContentComplete.storeIndex, nil
@@ -118,16 +115,16 @@ func PruneBlocksSync(
 
 	pruneBlocksComplete := &pruneBlocksCompletionAPI{}
 	pruneBlocksComplete.wg.Add(1)
-	errno := indexStore.PruneBlocks(keepBlockHashes, longtaillib.CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
-	if errno != 0 {
+	err := indexStore.PruneBlocks(keepBlockHashes, longtaillib.CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
+	if err != nil {
 		pruneBlocksComplete.wg.Done()
 		pruneBlocksComplete.wg.Wait()
-		err := MakeError(errno, "Failed pruning blocks in store")
+		err := errors.Wrap(err, "Failed pruning blocks in store")
 		return 0, errors.Wrap(err, fname)
 	}
 	pruneBlocksComplete.wg.Wait()
-	if pruneBlocksComplete.err != 0 {
-		err := MakeError(pruneBlocksComplete.err, "PruneBlocks completion failed")
+	if pruneBlocksComplete.err != nil {
+		err := errors.Wrap(pruneBlocksComplete.err, "PruneBlocks completion failed")
 		return 0, errors.Wrap(err, fname)
 	}
 	return pruneBlocksComplete.prunedBlockCount, nil
@@ -145,12 +142,12 @@ func FlushStore(store *longtaillib.Longtail_BlockStoreAPI) (*flushCompletionAPI,
 	targetStoreFlushComplete := &flushCompletionAPI{}
 	targetStoreFlushComplete.wg.Add(1)
 	targetStoreFlushComplete.asyncFlushAPI = longtaillib.CreateAsyncFlushAPI(targetStoreFlushComplete)
-	errno := store.Flush(targetStoreFlushComplete.asyncFlushAPI)
-	if errno == 0 {
+	err := store.Flush(targetStoreFlushComplete.asyncFlushAPI)
+	if err == nil {
 		return targetStoreFlushComplete, nil
 	}
 	targetStoreFlushComplete.wg.Done()
-	err := MakeError(errno, "Failed creating flush callback api")
+	err = errors.Wrap(err, "Failed creating flush callback api")
 	return nil, errors.Wrap(err, fname)
 }
 
@@ -161,8 +158,8 @@ func (f *flushCompletionAPI) Wait() error {
 	})
 	log.Debug(fname)
 	f.wg.Wait()
-	if f.err != 0 {
-		err := MakeError(f.err, "Flush completion failed")
+	if f.err != nil {
+		err := errors.Wrap(f.err, "Flush completion failed")
 		return errors.Wrap(err, fname)
 	}
 	return nil
@@ -233,8 +230,8 @@ func (s *StoreFlush) Wait() error {
 			continue
 		}
 		f.Wait()
-		if f.err != 0 {
-			err = MakeError(f.err, "StoreFlush.Wait() failed")
+		if f.err != nil {
+			err = errors.Wrap(f.err, "StoreFlush.Wait() failed")
 			err = errors.Wrap(err, fname)
 			log.WithError(err).Error("Flush failed")
 		}
@@ -355,7 +352,7 @@ func ReadFromURI(uri string) ([]byte, error) {
 	return vbuffer, nil
 }
 
-// ReadFromURI ...
+// WriteToURI ...
 func WriteToURI(uri string, data []byte) error {
 	const fname = "ReadFromURI"
 	log := logrus.WithFields(logrus.Fields{
@@ -406,31 +403,27 @@ func ReadBlobWithRetry(
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	if !exists {
-		return nil, retryCount, errors.Wrap(MakeError(longtaillib.ENOENT, fmt.Sprintf("%s does not exist", key)), fname)
-	}
-	blobData, err := objHandle.Read()
-	if err != nil {
-		log.Infof("Retrying getBlob %s in store %s\n", key, client.String())
-		retryCount++
-		blobData, err = objHandle.Read()
-	}
-	if err != nil {
-		log.Infof("Retrying 500 ms delayed getBlob %s in store %s\n", key, client.String())
-		time.Sleep(500 * time.Millisecond)
-		retryCount++
-		blobData, err = objHandle.Read()
-	}
-	if err != nil {
-		log.Infof("Retrying 2 s delayed getBlob %s in store %s\n", key, client.String())
-		time.Sleep(2 * time.Second)
-		retryCount++
-		blobData, err = objHandle.Read()
-	}
-
-	if err != nil {
+		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s does not exist", key))
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
+	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
+	blobData, err := objHandle.Read()
+	for err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, retryCount, errors.Wrap(err, fname)
+		}
+		if retryCount == len(retryDelay) {
+			err = errors.Wrapf(err, "Failed getBlob %s in store %s", key, client.String())
+			log.Error(err)
+			return nil, retryCount, errors.Wrap(err, fname)
+		}
+		err = errors.Wrapf(err, "Retrying getBlob %s in store %s with %s delay", key, client.String(), retryDelay[retryCount])
+		log.Info(err)
 
+		time.Sleep(retryDelay[retryCount])
+		retryCount++
+		blobData, err = objHandle.Read()
+	}
 	return blobData, retryCount, nil
 }
 

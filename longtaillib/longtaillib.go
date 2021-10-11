@@ -126,14 +126,37 @@ func IsNotExist(err error) bool {
 	if errors.As(err, &longtailError) {
 		return longtailError.Errno == ENOENT
 	}
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return true
 	}
 	return false
 }
 
-func NotExist() error {
+func NotExistErr() error {
 	return ErrnoToError(ENOENT)
+}
+
+func IsBadFormat(err error) bool {
+	if err == nil {
+		return false
+	}
+	var longtailError *LongtailError
+	if errors.As(err, &longtailError) {
+		return longtailError.Errno == EBADF
+	}
+	return false
+}
+
+func BadFormatErr() error {
+	return ErrnoToError(EBADF)
+}
+
+func AccessViolationErr() error {
+	return ErrnoToError(EACCES)
+}
+
+func InvalidArgumentError() error {
+	return ErrnoToError(EINVAL)
 }
 
 type ProgressAPI interface {
@@ -1077,7 +1100,7 @@ func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, error) 
 
 func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, error) {
 	if len(buffer) == 0 {
-		return Longtail_StoredBlock{}, ErrnoToError(EBADF)
+		return Longtail_StoredBlock{}, BadFormatErr()
 	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	size := C.size_t(len(buffer))
@@ -1329,7 +1352,7 @@ func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, error) {
 // ReadBlockIndexFromBuffer ...
 func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, error) {
 	if len(buffer) == 0 {
-		return Longtail_BlockIndex{}, ErrnoToError(EBADF)
+		return Longtail_BlockIndex{}, BadFormatErr()
 	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
@@ -1415,7 +1438,7 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 // ReadVersionIndexFromBuffer ...
 func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, error) {
 	if len(buffer) == 0 {
-		return Longtail_VersionIndex{}, ErrnoToError(EBADF)
+		return Longtail_VersionIndex{}, BadFormatErr()
 	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))
@@ -1573,7 +1596,7 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, error) {
 // ReadStoreIndexFromBuffer ...
 func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, error) {
 	if len(buffer) == 0 {
-		return Longtail_StoreIndex{}, ErrnoToError(EBADF)
+		return Longtail_StoreIndex{}, BadFormatErr()
 	}
 	cBuffer := unsafe.Pointer(&buffer[0])
 	cSize := C.size_t(len(buffer))

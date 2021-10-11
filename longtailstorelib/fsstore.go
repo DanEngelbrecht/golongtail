@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -38,7 +39,7 @@ func (blobStore *fsBlobStore) NewClient(ctx context.Context) (BlobClient, error)
 }
 
 func (blobStore *fsBlobStore) String() string {
-	return "fsstore" + blobStore.prefix
+	return fmt.Sprintf("fsstore %s", blobStore.prefix)
 }
 
 func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
@@ -80,13 +81,13 @@ func (blobClient *fsBlobClient) Close() {
 }
 
 func (blobClient *fsBlobClient) String() string {
-	return blobClient.store.String() + ":client"
+	return fmt.Sprintf("%s:client", blobClient.store.String())
 }
 
 func (blobObject *fsBlobObject) Exists() (bool, error) {
 	const fname = "fsBlobObject.Exists"
 	_, err := os.Stat(blobObject.path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
@@ -98,18 +99,32 @@ func (blobObject *fsBlobObject) Exists() (bool, error) {
 
 func (blobObject *fsBlobObject) Read() ([]byte, error) {
 	const fname = "fsBlobObject.Read"
+
+	if blobObject.client.store.enableLocking {
+		filelock, err := blobObject.lockFile()
+		if err != nil {
+			return nil, errors.Wrap(err, fname)
+		}
+		defer filelock.Unlock()
+	}
+
 	data, err := ioutil.ReadFile(blobObject.path)
-	if err != nil {
+	if err == nil {
+		return data, nil
+	}
+	var perr *fs.PathError
+	if errors.As(err, &perr) {
+		err = errors.Wrapf(err, "%s", os.ErrNotExist)
 		return nil, errors.Wrap(err, fname)
 	}
-	return data, nil
+	return nil, errors.Wrap(err, fname)
 }
 
 func (blobObject *fsBlobObject) getMetaGeneration() (int64, error) {
 	const fname = "fsBlobObject.getMetaGeneration"
 	metapath := blobObject.path + ".gen"
 	data, err := ioutil.ReadFile(metapath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	}
 	if err != nil {

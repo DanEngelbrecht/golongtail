@@ -15,20 +15,20 @@ func TestS3BlobStore(t *testing.T) {
 
 	u, err := url.Parse("s3://longtail-test/test-s3-blob-store")
 	if err != nil {
-		t.Errorf("url.Parse() err == %q", err)
+		t.Errorf("url.Parse() err == %s", err)
 	}
 	blobStore, err := NewS3BlobStore(u)
 	if err != nil {
-		t.Errorf("NewS3BlobStore() err == %q", err)
+		t.Errorf("NewS3BlobStore() err == %s", err)
 	}
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
-		t.Errorf("blobStore.NewClient() err == %q", err)
+		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
 	defer client.Close()
 	object, err := client.NewObject("test.txt")
 	if err != nil {
-		t.Errorf("client.NewObject() err == %q", err)
+		t.Errorf("client.NewObject() err == %s", err)
 	}
 
 	data, err := object.Read()
@@ -42,11 +42,11 @@ func TestS3BlobStore(t *testing.T) {
 		t.Errorf("object.Write() ok != true")
 	}
 	if err != nil {
-		t.Errorf("object.Write() err == %q", err)
+		t.Errorf("object.Write() err == %s", err)
 	}
 	blobs, err := client.GetObjects("")
 	if err != nil {
-		t.Errorf("client.GetObjects(\"\") err == %q", err)
+		t.Errorf("client.GetObjects(\"\") err == %s", err)
 	}
 	if blobs[0].Name != "test.txt" {
 		t.Errorf("blobs[0].Name %s != %s", blobs[0].Name, "test.txt")
@@ -84,17 +84,17 @@ func TestListObjectsInEmptyS3Store(t *testing.T) {
 
 	u, err := url.Parse("s3://longtail-test/test-s3-blob-store-nonono")
 	if err != nil {
-		t.Errorf("url.Parse() err == %q", err)
+		t.Errorf("url.Parse() err == %s", err)
 	}
 	blobStore, err := NewS3BlobStore(u)
 	if err != nil {
-		t.Errorf("NewS3BlobStore() err == %q", err)
+		t.Errorf("NewS3BlobStore() err == %s", err)
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 	objects, err := client.GetObjects("")
 	if err != nil {
-		t.Errorf("TestListObjectsInEmptyS3Store() client.GetObjects(\"\")) %v != %v", err, nil)
+		t.Errorf("TestListObjectsInEmptyS3Store() client.GetObjects(\"\")) %s", err)
 	}
 	if len(objects) != 0 {
 		t.Errorf("TestListObjectsInEmptyS3Store() client.GetObjects(\"\")) %d != %d", len(objects), 0)
@@ -102,7 +102,7 @@ func TestListObjectsInEmptyS3Store(t *testing.T) {
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
 	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("TestListObjectsInEmptyS3Store() obj.Read()) %v != %v", true, errors.Is(err, os.ErrNotExist))
+		t.Errorf("TestListObjectsInEmptyS3Store() obj.Read()) %s", err)
 	}
 	if data != nil {
 		t.Errorf("TestListObjectsInEmptyS3Store() obj.Read()) %v != %v", nil, data)

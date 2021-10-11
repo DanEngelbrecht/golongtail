@@ -113,7 +113,7 @@ func (blobObject *s3BlobObject) Read() ([]byte, error) {
 	if err != nil {
 		var nsk *types.NoSuchKey
 		if errors.As(err, &nsk) {
-			err = errors.Wrapf(os.ErrNotExist, "%s does not exist", blobObject.path)
+			err = errors.Wrapf(err, "%s", os.ErrNotExist)
 			return nil, errors.Wrap(err, fname)
 		}
 		return nil, err
@@ -151,7 +151,6 @@ func (blobObject *s3BlobObject) Write(data []byte) (bool, error) {
 	}
 	_, err := blobObject.client.client.PutObject(blobObject.client.ctx, input)
 	if err != nil {
-		err = errors.Wrapf(os.ErrNotExist, "Failed to write to `%s`", blobObject.path)
 		return true, errors.Wrap(err, fname)
 	}
 	return true, nil
@@ -165,7 +164,6 @@ func (blobObject *s3BlobObject) Delete() error {
 	}
 	_, err := blobObject.client.client.DeleteObject(blobObject.client.ctx, input)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to delete `%s`", blobObject.path)
 		return errors.Wrap(err, fname)
 	}
 	return nil

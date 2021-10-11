@@ -128,7 +128,7 @@ func cloneOneVersion(
 		return cloneVersionIndex(currentVersionIndex), nil
 	}
 
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, os.ErrNotExist) {
 		return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
 	}
 

@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# create version 1
+# TODO
+# * Prune fails to let us download v1.lvi after execution - it should keep the necessary data!
+# * download/get with cache
+# * upload with --create-version-local-store-index
+# * upload with --validate
 
 if [ -d "./test" ]; then rm -rf ./test; fi
 
@@ -42,7 +46,7 @@ mkdir -p ./test/cp
 ./longtail.exe cp --version-index-path ./test/index/v2.lvi folder2/anotherabitoftextinasubfolder2.txt --storage-uri fsblob://test/storage ./test/cp/anotherabitoftextinasubfolder2.txt
 
 rm -rf ./test/index
-rm -rf fsblob://test/storage
+rm -rf ./test/storage
 rm -rf ./test/current
 rm -rf ./test/cp
 
@@ -79,7 +83,6 @@ rm -rf ./test/current
 ./longtail.exe dump-version-assets --version-index-path ./test/index/v3.lvi --details
 
 rm ./test/storage/store.*
-
 ./longtail.exe init-remote-store --storage-uri fsblob://test/storage
 
 ./longtail.exe validate-version --version-index-path ./test/index/v1.lvi --storage-uri fsblob://test/storage

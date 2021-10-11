@@ -70,8 +70,10 @@ func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 			return nil, fmt.Errorf("azure Gen1 storage not yet implemented")
 		case "abfss":
 			return nil, fmt.Errorf("azure Gen2 storage not yet implemented")
+		case "fsblob":
+			return NewFSBlobStore(blobStoreURL.Host+blobStoreURL.Path, true)
 		case "file":
-			return NewFSBlobStore(blobStoreURL.Path[1:], true)
+			return NewFSBlobStore(blobStoreURL.Host+blobStoreURL.Path, true)
 		}
 	}
 

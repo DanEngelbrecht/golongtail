@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"time"
 
@@ -92,7 +93,9 @@ func main() {
 	longtaillib.SetAssert(&longtailutils.AssertData{})
 	defer longtaillib.SetAssert(nil)
 
-	if cli.WorkerCount != 0 {
+	if cli.WorkerCount == 0 {
+		context.NumWorkerCount = runtime.NumCPU()
+	} else {
 		context.NumWorkerCount = cli.WorkerCount
 	}
 

@@ -167,7 +167,7 @@ func pruneStore(
 						existingStoreIndex.Dispose()
 						sourceVersionIndex.Dispose()
 						if dryRun {
-							log.Printf("WARNING: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
+							log.Warnf("Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 							batchErrors <- nil
 						} else {
 							err = errors.Wrapf(err, "pruneStore: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)

@@ -205,7 +205,7 @@ func downsync(
 		longtailutils.NormalizePath(resolvedTargetFolderPath),
 		retainPermissions)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed writing version to `%s`", targetFolderPath)
+		err = errors.Wrapf(err, "Failed writing version `%s` to `%s`", sourceFilePath, targetFolderPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 

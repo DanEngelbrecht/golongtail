@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
@@ -45,9 +44,9 @@ func validateVersion(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
@@ -64,9 +63,9 @@ func validateVersion(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
 
 	validateStartTime := time.Now()
-	errno = longtaillib.ValidateStore(remoteStoreIndex, versionIndex)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Validate failed for version index `%s`", versionIndexPath))
+	err = longtaillib.ValidateStore(remoteStoreIndex, versionIndex)
+	if err != nil {
+		err = errors.Wrapf(err, "Validate failed for version index `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	validateTime := time.Since(validateStartTime)

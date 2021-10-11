@@ -32,9 +32,9 @@ func dumpVersionAssets(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()

@@ -72,9 +72,9 @@ func printVersionUsage(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
@@ -117,8 +117,8 @@ func printVersionUsage(
 
 		for offset := 0; offset < batchSize; offset++ {
 			completions[offset].Wg.Wait()
-			if completions[offset].Err != 0 {
-				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno), "stats: remoteStoreIndex.GetStoredBlock() failed")
+			if completions[offset].Err != nil {
+				return storeStats, timeStats, errors.Wrapf(err, "stats: remoteStoreIndex.GetStoredBlock() failed")
 			}
 			blockIndex := completions[offset].StoredBlock.GetBlockIndex()
 			for _, chunkHash := range blockIndex.GetChunkHashes() {
@@ -184,16 +184,16 @@ func printVersionUsage(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	cacheStoreStats, errno := cacheBlockStore.GetStats()
-	if errno == 0 {
+	cacheStoreStats, err := cacheBlockStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Cache", cacheStoreStats})
 	}
-	localStoreStats, errno := localIndexStore.GetStats()
-	if errno == 0 {
+	localStoreStats, err := localIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Local", localStoreStats})
 	}
-	remoteStoreStats, errno := remoteIndexStore.GetStats()
-	if errno == 0 {
+	remoteStoreStats, err := remoteIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 	return storeStats, timeStats, nil

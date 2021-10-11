@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -85,9 +84,9 @@ func cpVersionIndex(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
@@ -96,9 +95,9 @@ func cpVersionIndex(
 
 	hashIdentifier := versionIndex.GetHashIdentifier()
 
-	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+	if err != nil {
+		err = errors.Wrapf(err, "Unsupported hash identifier `%d`", hashIdentifier)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
@@ -118,8 +117,8 @@ func cpVersionIndex(
 		indexStore,
 		storeIndex,
 		versionIndex)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant create block store for `%s` using `%s`", versionIndexPath, blobStoreURI))
+	if err != nil {
+		err = errors.Wrapf(err, "Cant create block store for `%s` using `%s`", versionIndexPath, blobStoreURI)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.Dispose()
@@ -134,16 +133,16 @@ func cpVersionIndex(
 	}
 	defer outFile.Close()
 
-	inFile, errno := blockStoreFS.OpenReadFile(sourcePath)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Longtail_StorageAPI.OpenReadFile failed for `%s`", sourcePath))
+	inFile, err := blockStoreFS.OpenReadFile(sourcePath)
+	if err != nil {
+		err = errors.Wrapf(err, "Longtail_StorageAPI.OpenReadFile failed for `%s`", sourcePath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.CloseFile(inFile)
 
-	size, errno := blockStoreFS.GetSize(inFile)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Longtail_StorageAPI.GetSize failed for `%s`", sourcePath))
+	size, err := blockStoreFS.GetSize(inFile)
+	if err != nil {
+		err = errors.Wrapf(err, "Longtail_StorageAPI.GetSize failed for `%s`", sourcePath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
@@ -153,9 +152,9 @@ func cpVersionIndex(
 		if left > 128*1024*1024 {
 			left = 128 * 1024 * 1024
 		}
-		data, errno := blockStoreFS.Read(inFile, offset, left)
-		if errno != 0 {
-			err = longtailutils.MakeError(errno, fmt.Sprintf("Longtail_StorageAPI.Read failed for `%s`", sourcePath))
+		data, err := blockStoreFS.Read(inFile, offset, left)
+		if err != nil {
+			err = errors.Wrapf(err, "Longtail_StorageAPI.Read failed for `%s`", sourcePath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 		outFile.Write(data)
@@ -182,28 +181,28 @@ func cpVersionIndex(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	shareStoreStats, errno := indexStore.GetStats()
-	if errno == 0 {
+	shareStoreStats, err := indexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Share", shareStoreStats})
 	}
-	lruStoreStats, errno := lruBlockStore.GetStats()
-	if errno == 0 {
+	lruStoreStats, err := lruBlockStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"LRU", lruStoreStats})
 	}
-	compressStoreStats, errno := compressBlockStore.GetStats()
-	if errno == 0 {
+	compressStoreStats, err := compressBlockStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Compress", compressStoreStats})
 	}
-	cacheStoreStats, errno := cacheBlockStore.GetStats()
-	if errno == 0 {
+	cacheStoreStats, err := cacheBlockStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Cache", cacheStoreStats})
 	}
-	localStoreStats, errno := localIndexStore.GetStats()
-	if errno == 0 {
+	localStoreStats, err := localIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Local", localStoreStats})
 	}
-	remoteStoreStats, errno := remoteIndexStore.GetStats()
-	if errno == 0 {
+	remoteStoreStats, err := remoteIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 

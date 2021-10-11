@@ -59,8 +59,8 @@ func initRemoteStore(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	remoteStoreStats, errno := remoteIndexStore.GetStats()
-	if errno == 0 {
+	remoteStoreStats, err := remoteIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 

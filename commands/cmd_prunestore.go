@@ -132,9 +132,9 @@ func pruneStore(
 					batchErrors <- errors.Wrap(err, fname)
 					return
 				}
-				sourceVersionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-				if errno != 0 {
-					err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", sourceFilePath))
+				sourceVersionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+				if err != nil {
+					err = errors.Wrapf(err, "Cant parse version index from `%s`", sourceFilePath)
 					batchErrors <- errors.Wrap(err, fname)
 					return
 				}
@@ -143,14 +143,14 @@ func pruneStore(
 				if versionLocalStoreIndexFilePath != "" && !writeVersionLocalStoreIndex {
 					sbuffer, err := longtailutils.ReadFromURI(versionLocalStoreIndexFilePath)
 					if err == nil {
-						existingStoreIndex, errno = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
-						if errno != 0 {
-							err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse store index from `%s`", versionLocalStoreIndexFilePath))
+						existingStoreIndex, err = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
+						if err != nil {
+							err = errors.Wrapf(err, "Cant parse store index from `%s`", versionLocalStoreIndexFilePath)
 							batchErrors <- errors.Wrap(err, fname)
 							return
 						}
-						errno = longtaillib.ValidateStore(existingStoreIndex, sourceVersionIndex)
-						if errno != 0 {
+						err = longtaillib.ValidateStore(existingStoreIndex, sourceVersionIndex)
+						if err != nil {
 							existingStoreIndex.Dispose()
 						}
 					}
@@ -162,15 +162,15 @@ func pruneStore(
 						batchErrors <- errors.Wrap(err, fname)
 						return
 					}
-					errno = longtaillib.ValidateStore(existingStoreIndex, sourceVersionIndex)
-					if errno != 0 {
+					err = longtaillib.ValidateStore(existingStoreIndex, sourceVersionIndex)
+					if err != nil {
 						existingStoreIndex.Dispose()
 						sourceVersionIndex.Dispose()
 						if dryRun {
 							log.Printf("WARNING: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 							batchErrors <- nil
 						} else {
-							err = errors.Wrapf(longtaillib.ErrnoToError(errno), "pruneStore: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
+							err = errors.Wrapf(err, "pruneStore: Data is missing in store `%s` for version `%s`", storageURI, sourceFilePath)
 							batchErrors <- errors.Wrap(err, fname)
 						}
 						return
@@ -180,8 +180,8 @@ func pruneStore(
 				blockHashesPerBatch[batchPos] = append(blockHashesPerBatch[batchPos], existingStoreIndex.GetBlockHashes()...)
 
 				if versionLocalStoreIndexFilePath != "" && writeVersionLocalStoreIndex && !dryRun {
-					sbuffer, errno := longtaillib.WriteStoreIndexToBuffer(existingStoreIndex)
-					if errno != 0 {
+					sbuffer, err := longtaillib.WriteStoreIndexToBuffer(existingStoreIndex)
+					if err != nil {
 						existingStoreIndex.Dispose()
 						sourceVersionIndex.Dispose()
 						batchErrors <- errors.Wrap(err, fname)
@@ -255,8 +255,8 @@ func pruneStore(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	remoteStoreStats, errno := remoteStore.GetStats()
-	if errno == 0 {
+	remoteStoreStats, err := remoteStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 

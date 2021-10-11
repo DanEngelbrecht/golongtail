@@ -3,7 +3,6 @@ package longtailutils
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -262,50 +261,6 @@ func FlushStoresSync(stores []longtaillib.Longtail_BlockStoreAPI) error {
 	return nil
 }
 
-func createBlobStoreForURI(uri string) (longtailstorelib.BlobStore, error) {
-	const fname = "createBlobStoreForURI"
-	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
-		"uri":   uri,
-	})
-	log.Debug(fname)
-	blobStoreURL, err := url.Parse(uri)
-	if err == nil {
-		switch blobStoreURL.Scheme {
-		case "gs":
-			store, err := longtailstorelib.NewGCSBlobStore(blobStoreURL, false)
-			if err != nil {
-				return nil, errors.Wrap(err, fname)
-			}
-			return store, nil
-		case "s3":
-			store, err := longtailstorelib.NewS3BlobStore(blobStoreURL)
-			if err != nil {
-				return nil, errors.Wrap(err, fname)
-			}
-			return store, nil
-		case "abfs":
-			err := fmt.Errorf("azure Gen1 storage not yet implemented for `%s`", uri)
-			return nil, errors.Wrap(err, fname)
-		case "abfss":
-			err := fmt.Errorf("azure Gen2 storage not yet implemented for `%s`", uri)
-			return nil, errors.Wrap(err, fname)
-		case "file":
-			store, err := longtailstorelib.NewFSBlobStore(blobStoreURL.Path[1:], true)
-			if err != nil {
-				return nil, errors.Wrap(err, fname)
-			}
-			return store, nil
-		}
-	}
-
-	store, err := longtailstorelib.NewFSBlobStore(uri, true)
-	if err != nil {
-		return nil, errors.Wrap(err, fname)
-	}
-	return store, nil
-}
-
 func splitURI(uri string) (string, string) {
 	const fname = "splitURI"
 	log := logrus.WithFields(logrus.Fields{
@@ -361,7 +316,7 @@ func WriteToURI(uri string, data []byte) error {
 	})
 	log.Debug(fname)
 	uriParent, uriName := splitURI(uri)
-	blobStore, err := createBlobStoreForURI(uriParent)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}

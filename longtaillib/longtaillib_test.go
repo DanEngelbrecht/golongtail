@@ -202,39 +202,39 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 	}
 	chunkCount := blockIndex.GetChunkCount()
 	if blockIndex.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
-		t.Errorf("validateStoredBlock() %w != %w", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
+		t.Errorf("validateStoredBlock() %d != %d", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
 	}
 	if blockIndex.GetTag() != chunkCount+uint32(10000) {
-		t.Errorf("validateStoredBlock() %w != %w", chunkCount+uint32(10000), blockIndex.GetTag())
+		t.Errorf("validateStoredBlock() %d != %d", chunkCount+uint32(10000), blockIndex.GetTag())
 
 	}
 	chunkHashes := blockIndex.GetChunkHashes()
 	if uint32(len(chunkHashes)) != chunkCount {
-		t.Errorf("validateStoredBlock() %w != %w", chunkCount, uint32(len(chunkHashes)))
+		t.Errorf("validateStoredBlock() %d != %d", chunkCount, uint32(len(chunkHashes)))
 	}
 	chunkSizes := blockIndex.GetChunkSizes()
 	if uint32(len(chunkSizes)) != chunkCount {
-		t.Errorf("validateStoredBlock() %w != %w", chunkCount, uint32(len(chunkSizes)))
+		t.Errorf("validateStoredBlock() %d != %d", chunkCount, uint32(len(chunkSizes)))
 	}
 	blockOffset := uint32(0)
 	for index, _ := range chunkHashes {
 		if chunkHashes[index] != uint64(index+1)*4711 {
-			t.Errorf("validateStoredBlock() %w != %w", uint64(index)*4711, chunkHashes[index])
+			t.Errorf("validateStoredBlock() %d != %d", uint64(index)*4711, chunkHashes[index])
 		}
 		if chunkSizes[index] != uint32(index+1)*10 {
-			t.Errorf("validateStoredBlock() %w != %w", uint32(index)*10, chunkSizes[index])
+			t.Errorf("validateStoredBlock() %d != %d", uint32(index)*10, chunkSizes[index])
 		}
 		blockOffset += uint32(chunkSizes[index])
 	}
 	blockData := storedBlock.GetChunksBlockData()
 	if uint32(len(blockData)) != blockOffset {
-		t.Errorf("validateStoredBlock() %w != %w", uint32(len(blockData)), blockOffset)
+		t.Errorf("validateStoredBlock() %d != %d", uint32(len(blockData)), blockOffset)
 	}
 	blockOffset = 0
 	for chunkIndex, _ := range chunkHashes {
 		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
 			if blockData[blockOffset+index] != uint8(chunkIndex+1) {
-				t.Errorf("validateStoredBlock() %w != %w", uint8(chunkIndex+1), blockData[blockOffset+index])
+				t.Errorf("validateStoredBlock() %d != %d", uint8(chunkIndex+1), blockData[blockOffset+index])
 			}
 		}
 		blockOffset += uint32(chunkSizes[chunkIndex])
@@ -351,7 +351,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
 	}
 	storedBlock1 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock
@@ -413,7 +413,7 @@ func TestFSBlockStore(t *testing.T) {
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err, 0)
+		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %w", getStoredBlockComplete.err)
 	}
 	storedBlock3 := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = nullBlock

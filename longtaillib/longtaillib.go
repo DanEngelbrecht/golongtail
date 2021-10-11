@@ -97,6 +97,9 @@ func (e *LongtailError) Error() string {
 }
 
 func ErrnoToError(err C.int) error {
+	if err == 0 {
+		return nil
+	}
 	description, exists := errnoToDescription[int(err)]
 	if !exists {
 		description = "???"

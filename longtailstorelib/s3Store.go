@@ -113,7 +113,7 @@ func (blobObject *s3BlobObject) Read() ([]byte, error) {
 	if err != nil {
 		var nsk *types.NoSuchKey
 		if errors.As(err, &nsk) {
-			err = errors.Wrapf(err, "%s", os.ErrNotExist)
+			err = errors.Wrapf(os.ErrNotExist, "%v", err)
 			return nil, errors.Wrap(err, fname)
 		}
 		return nil, err

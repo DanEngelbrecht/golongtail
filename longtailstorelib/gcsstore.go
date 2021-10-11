@@ -126,7 +126,7 @@ func (blobObject *gcsBlobObject) Read() ([]byte, error) {
 	const fname = "gcsBlobObject.Read"
 	reader, err := blobObject.objHandle.NewReader(blobObject.ctx)
 	if errors.Is(err, storage.ErrObjectNotExist) {
-		err = errors.Wrapf(err, "%s", os.ErrNotExist)
+		err = errors.Wrapf(os.ErrNotExist, "%v", err)
 		return nil, errors.Wrap(err, fname)
 	}
 	if err != nil {
@@ -135,7 +135,7 @@ func (blobObject *gcsBlobObject) Read() ([]byte, error) {
 	data, err := ioutil.ReadAll(reader)
 	err2 := reader.Close()
 	if errors.Is(err2, storage.ErrObjectNotExist) {
-		err = errors.Wrapf(err, "%s", os.ErrNotExist)
+		err = errors.Wrapf(os.ErrNotExist, "%v", err)
 		return nil, errors.Wrap(err, fname)
 	}
 	if err2 != nil {

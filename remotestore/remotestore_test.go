@@ -3,7 +3,6 @@ package remotestore
 import (
 	"context"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"runtime"
 	"sync"
@@ -863,7 +862,7 @@ func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
 
 	blobStore, err := longtailstorelib.NewGCSBlobStore(u, false)
 	if err != nil {
-		log.Fatalf("%v", err)
+		t.Errorf("longtailstorelib.NewGCSBlobStore() err == %s", err)
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
@@ -884,7 +883,7 @@ func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
 
 	blobStore, err := longtailstorelib.NewGCSBlobStore(u, true)
 	if err != nil {
-		log.Fatalf("%v", err)
+		t.Errorf("longtailstorelib.NewGCSBlobStore() err == %s", err)
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
@@ -910,11 +909,11 @@ func TestS3StoreIndexSync(t *testing.T) {
 func TestFSStoreIndexSyncWithLocking(t *testing.T) {
 	storePath, err := ioutil.TempDir("", "longtail-test")
 	if err != nil {
-		log.Fatalf("%v", err)
+		t.Errorf("ioutil.TempDir() err == %s", err)
 	}
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, true)
 	if err != nil {
-		log.Fatalf("%v", err)
+		t.Errorf("longtailstorelib.NewFSBlobStore() err == %s", err)
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
@@ -924,14 +923,20 @@ func TestFSStoreIndexSyncWithLocking(t *testing.T) {
 	testStoreIndexSync(blobStore, t)
 }
 
+//func TestFSStoreIndexSyncWithLockingRepeated(t *testing.T) {
+//	for i := 0; i < 100; i++ {
+//		TestFSStoreIndexSyncWithLocking(t)
+//	}
+//}
+
 func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
 	storePath, err := ioutil.TempDir("", "test")
 	if err != nil {
-		log.Fatalf("%v", err)
+		t.Errorf("ioutil.TempDir() err == %s", err)
 	}
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
 	if err != nil {
-		log.Fatalf("%v", err)
+		t.Errorf("longtailstorelib.NewFSBlobStore() err == %s", err)
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()

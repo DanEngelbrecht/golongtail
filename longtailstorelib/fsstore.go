@@ -114,7 +114,7 @@ func (blobObject *fsBlobObject) Read() ([]byte, error) {
 	}
 	var perr *fs.PathError
 	if errors.As(err, &perr) {
-		err = errors.Wrapf(err, "%s", os.ErrNotExist)
+		err = errors.Wrapf(os.ErrNotExist, "%v", err)
 		return nil, errors.Wrap(err, fname)
 	}
 	return nil, errors.Wrap(err, fname)

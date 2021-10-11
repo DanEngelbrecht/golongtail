@@ -144,7 +144,7 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 				err := writeANumberWithRetry(number, blobStore)
 				if err != nil {
 					wg.Done()
-					t.Fatal(err)
+					t.Errorf("writeANumberWithRetry() err == %s", err)
 				}
 				wg.Done()
 			}(i*20+n+1, blobStore)
@@ -154,25 +154,25 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 
 	client, err := blobStore.NewClient(context.Background())
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
 	defer client.Close()
 	object, err := client.NewObject("test.txt")
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("client.NewObject() err == %s", err)
 	}
 	data, err := object.Read()
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("object.Read() err == %s", err)
 	}
 	sliceData := strings.Split(string(data), "\n")
 	if len(sliceData) != 10*20 {
-		t.Fatal(err)
+		t.Errorf("strings.Split() err == %s", err)
 	}
 	for i := 0; i < 10*20; i++ {
 		expected := fmt.Sprintf("%05d", i+1)
 		if sliceData[i] != expected {
-			t.Fatal(err)
+			t.Errorf("strings.Split() %q == %q", sliceData[i], expected)
 		}
 	}
 }

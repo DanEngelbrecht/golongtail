@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # TODO
-# * Prune fails to let us download v1.lvi after execution - it should keep the necessary data!
 # * download/get with cache
 # * upload with --create-version-local-store-index
 # * upload with --validate
@@ -102,7 +101,7 @@ rm ./test/storage/store.*
 echo ./test/index/v1.lvi >test/sources.txt
 ./longtail.exe prune-store --source-paths test/sources.txt --storage-uri fsblob://test/storage
 rm -rf ./test/current
-#./longtail.exe downsync --source-path ./test/index/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage
+./longtail.exe downsync --source-path ./test/index/v1.lvi --target-path ./test/current --storage-uri fsblob://test/storage
 
 ./longtail.exe upsync --source-path ./test/version/v2 --target-path ./test/index/v2.lvi --storage-uri fsblob://test/storage
 ./longtail.exe upsync --source-path ./test/version/v3 --target-path ./test/index/v3.lvi --storage-uri fsblob://test/storage

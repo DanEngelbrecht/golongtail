@@ -35,8 +35,6 @@ func runInitRemoteStore(t *testing.T, storageURI string) {
 }
 
 func TestInitRemoteStore(t *testing.T) {
-	// TODO: This test hangs if we don't crate fsblockstore with locking in read/write to uri?
-	t.Skip()
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 

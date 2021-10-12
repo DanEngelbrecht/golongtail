@@ -293,13 +293,16 @@ func (blobObject *fsBlobObject) Delete() error {
 		return errors.Wrap(err, fname)
 	}
 
+	// Always try to delete the corresponding gen file
+	err = blobObject.deleteGeneration()
 	if blobObject.client.store.enableLocking {
-		err = blobObject.deleteGeneration()
 		if err != nil {
 			return errors.Wrap(err, fname)
 		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
-	return nil
+	return err
 }
 
 // ErrTimeout indicates that the lock attempt timed out.

@@ -699,7 +699,7 @@ func getCurrentStoreIndex(
 	}
 	updatedStoreIndex, err := addBlocksToStoreIndex(storeIndex, addedBlockIndexes)
 	if err != nil {
-		log.Printf("WARNING: Failed to update store index with added blocks %s", err)
+		log.Warnf("Failed to update store index with added blocks %s", err)
 		return storeIndex, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	return storeIndex, updatedStoreIndex, nil

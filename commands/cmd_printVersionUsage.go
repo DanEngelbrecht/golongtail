@@ -60,9 +60,9 @@ func printVersionUsage(
 		indexStore = cacheBlockStore
 	}
 
-	defer cacheBlockStore.Dispose()
-	defer localIndexStore.Dispose()
 	defer localFS.Dispose()
+	defer localIndexStore.Dispose()
+	defer cacheBlockStore.Dispose()
 
 	setupTime := time.Since(setupStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})

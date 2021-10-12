@@ -43,9 +43,9 @@ func downsyncVersion(t *testing.T, sourcePath string, targetPath string, storage
 func TestDownsync(t *testing.T) {
 	os.RemoveAll("./test/")
 	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "", "")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "", "")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "", "")
 
 	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "", "")
 	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {
@@ -64,9 +64,9 @@ func TestDownsync(t *testing.T) {
 func TestDownsyncWithVersionLSI(t *testing.T) {
 	os.RemoveAll("./test/")
 	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi", "")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi", "")
 
 	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "")
 	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {
@@ -85,9 +85,9 @@ func TestDownsyncWithVersionLSI(t *testing.T) {
 func TestDownsyncWithCache(t *testing.T) {
 	os.RemoveAll("./test/")
 	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "", "")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "", "")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "", "")
 
 	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "", "test/cache")
 	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {
@@ -106,9 +106,9 @@ func TestDownsyncWithCache(t *testing.T) {
 func TestDownsyncWithLSIAndCache(t *testing.T) {
 	os.RemoveAll("./test/")
 	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi", "")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi", "")
 
 	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "test/cache")
 	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {

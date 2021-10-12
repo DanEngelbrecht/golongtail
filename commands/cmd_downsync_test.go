@@ -60,3 +60,66 @@ func TestDownsync(t *testing.T) {
 		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
 	}
 }
+
+func TestDownsyncWithVersionLSI(t *testing.T) {
+	os.RemoveAll("./test/")
+	createVersionData(t, "fsblob://test")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi")
+
+	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "")
+	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
+	}
+	downsyncVersion(t, "fsblob://test/index/v2.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v2.lsi", "")
+	if !validateContent("fsblob://test", "version/current", v2FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
+	}
+	downsyncVersion(t, "fsblob://test/index/v3.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v3.lsi", "")
+	if !validateContent("fsblob://test", "version/current", v3FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
+	}
+}
+
+func TestDownsyncWithCache(t *testing.T) {
+	os.RemoveAll("./test/")
+	createVersionData(t, "fsblob://test")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "")
+
+	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "", "test/cache")
+	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
+	}
+	downsyncVersion(t, "fsblob://test/index/v2.lvi", "test/version/current", "fsblob://test/storage", "", "test/cache")
+	if !validateContent("fsblob://test", "version/current", v2FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
+	}
+	downsyncVersion(t, "fsblob://test/index/v3.lvi", "test/version/current", "fsblob://test/storage", "", "test/cache")
+	if !validateContent("fsblob://test", "version/current", v3FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
+	}
+}
+
+func TestDownsyncWithLSIAndCache(t *testing.T) {
+	os.RemoveAll("./test/")
+	createVersionData(t, "fsblob://test")
+	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi")
+	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi")
+	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi")
+
+	downsyncVersion(t, "fsblob://test/index/v1.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "test/cache")
+	if !validateContent("fsblob://test", "version/current", v1FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
+	}
+	downsyncVersion(t, "fsblob://test/index/v2.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v2.lsi", "test/cache")
+	if !validateContent("fsblob://test", "version/current", v2FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
+	}
+	downsyncVersion(t, "fsblob://test/index/v3.lvi", "test/version/current", "fsblob://test/storage", "fsblob://test/index/v3.lsi", "test/cache")
+	if !validateContent("fsblob://test", "version/current", v3FilesCreate) {
+		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
+	}
+}

@@ -36,9 +36,9 @@ func ls(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
@@ -48,9 +48,9 @@ func ls(
 	setupStartTime := time.Now()
 	hashIdentifier := versionIndex.GetHashIdentifier()
 
-	hash, errno := hashRegistry.GetHashAPI(hashIdentifier)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+	if err != nil {
+		err = errors.Wrapf(err, "Unsupported hash identifier `%d`", hashIdentifier)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
@@ -60,7 +60,7 @@ func ls(
 	fakeBlockStore := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store")
 	defer fakeBlockStoreFS.Dispose()
 
-	storeIndex, errno := longtaillib.CreateStoreIndex(
+	storeIndex, err := longtaillib.CreateStoreIndex(
 		hash,
 		versionIndex,
 		1024*1024*1024,
@@ -72,8 +72,8 @@ func ls(
 		fakeBlockStore,
 		storeIndex,
 		versionIndex)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed creating block store storage for `%s`", versionIndexPath))
+	if err != nil {
+		err = errors.Wrapf(err, "Failed creating block store storage for `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.Dispose()
@@ -86,30 +86,30 @@ func ls(
 		searchDir = commandLSVersionDir
 	}
 
-	iterator, errno := blockStoreFS.StartFind(searchDir)
-	if errno == longtaillib.ENOENT {
+	iterator, err := blockStoreFS.StartFind(searchDir)
+	if longtaillib.IsNotExist(err) {
 		return storeStats, timeStats, nil
 	}
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Failed scanning dir `%s`", searchDir))
+	if err != nil {
+		err = errors.Wrapf(err, "Failed scanning dir `%s`", searchDir)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer blockStoreFS.CloseFind(iterator)
 	for {
-		properties, errno := blockStoreFS.GetEntryProperties(iterator)
-		if errno != 0 {
-			err = longtailutils.MakeError(errno, fmt.Sprintf("Can't get properties of entry in `%s`", searchDir))
+		properties, err := blockStoreFS.GetEntryProperties(iterator)
+		if err != nil {
+			err = errors.Wrapf(err, "Can't get properties of entry in `%s`", searchDir)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 		detailsString := longtailutils.GetDetailsString(properties.Name, properties.Size, properties.Permissions, properties.IsDir, 16)
 		fmt.Printf("%s\n", detailsString)
 
-		errno = blockStoreFS.FindNext(iterator)
-		if errno == longtaillib.ENOENT {
+		err = blockStoreFS.FindNext(iterator)
+		if longtaillib.IsNotExist(err) {
 			break
 		}
-		if errno != 0 {
-			err = longtailutils.MakeError(errno, fmt.Sprintf("Can't step to next entry in `%s`", searchDir))
+		if err != nil {
+			err = errors.Wrapf(err, "Can't step to next entry in `%s`", searchDir)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 	}

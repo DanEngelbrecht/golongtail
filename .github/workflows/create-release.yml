@@ -120,6 +120,7 @@ jobs:
           - **FIX** Build Linux executable using Ubuntu 18.04 to avoid forcing update of GLIBC dependency
           - **FIX** Improved error handling and reporting
           - **FIX** Improved logging
+          - **FIX** Crash bug in `create-version-store-index` command
           - **CHANGED** Removed unused `--target-chunk-size` option for downsync
           - **CHANGED** Removed unused `--target-block-size` option for downsync
           - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync
@@ -128,11 +129,15 @@ jobs:
           - **CHANGED** Nicer progress output in terminal with elapsed time and estimated time
           - **CHANGED** Refactored internal structure - new module with commands and one with utils and with a very small cmd/main
           - **CHANGED** Cleaned up command names and options (old names are kept for compatabiltiy)
+          - **CHANGED** longtaillib now hides all errno and works strictly with golang error type
+          - **ADD** Integration test for each command in the command line tool
+          - **ADD** More unit and stress tests
           - **ADD** s3-blobstore, use the uri format s3:// for Amazon S3 stores
           - **ADD** `cloneStore` command to copy all versions from one store to a new store
           - **ADD** `pruneStore` command that removes blocks of data base on which blocks are used by a list of version indexes
           - **ADD** `get` command to use json formatted config file to avoid specifying all the source information options, generate with `--get-config-path` option in `upsync` command
           - **ADD** `printStoreIndex` now has `-details` option that shows how much data (both total and unique) is in a store
+          - **ADD** `fsblob://` uri type for file system blob store, primary use is for testing remote store with local file system
           - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
           - **UPDATE** Build using Golang 1.17.1
           - **UPDATE** Update to longtail v0.2.4

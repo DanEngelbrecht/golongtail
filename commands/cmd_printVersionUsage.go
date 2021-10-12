@@ -60,9 +60,9 @@ func printVersionUsage(
 		indexStore = cacheBlockStore
 	}
 
-	defer cacheBlockStore.Dispose()
-	defer localIndexStore.Dispose()
 	defer localFS.Dispose()
+	defer localIndexStore.Dispose()
+	defer cacheBlockStore.Dispose()
 
 	setupTime := time.Since(setupStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
@@ -72,9 +72,9 @@ func printVersionUsage(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	versionIndex, errno := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse version index from `%s`", versionIndexPath))
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", versionIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionIndex.Dispose()
@@ -117,8 +117,8 @@ func printVersionUsage(
 
 		for offset := 0; offset < batchSize; offset++ {
 			completions[offset].Wg.Wait()
-			if completions[offset].Err != 0 {
-				return storeStats, timeStats, errors.Wrapf(longtaillib.ErrnoToError(errno), "stats: remoteStoreIndex.GetStoredBlock() failed")
+			if completions[offset].Err != nil {
+				return storeStats, timeStats, errors.Wrapf(err, "stats: remoteStoreIndex.GetStoredBlock() failed")
 			}
 			blockIndex := completions[offset].StoredBlock.GetBlockIndex()
 			for _, chunkHash := range blockIndex.GetChunkHashes() {
@@ -144,11 +144,15 @@ func printVersionUsage(
 	assetChunkCounts := versionIndex.GetAssetChunkCounts()
 	assetChunkIndexStarts := versionIndex.GetAssetChunkIndexStarts()
 	assetChunkIndexes := versionIndex.GetAssetChunkIndexes()
+	assetCount := 0
 	for a := uint32(0); a < versionIndex.GetAssetCount(); a++ {
 		uniqueBlockCount := uint64(0)
 		chunkCount := assetChunkCounts[a]
 		chunkIndexOffset := assetChunkIndexStarts[a]
 		lastBlockIndex := ^uint64(0)
+		if chunkCount > 0 {
+			assetCount++
+		}
 		for c := chunkIndexOffset; c < chunkIndexOffset+chunkCount; c++ {
 			chunkIndex := assetChunkIndexes[c]
 			chunkHash := chunkHashes[chunkIndex]
@@ -161,8 +165,8 @@ func printVersionUsage(
 		}
 	}
 	assetFragmentation := uint32(0)
-	if versionIndex.GetAssetCount() > 0 {
-		assetFragmentation = uint32((100*(assetFragmentCount))/uint64(versionIndex.GetAssetCount()) - 100)
+	if assetCount > 0 {
+		assetFragmentation = uint32((100*assetFragmentCount)/uint64(assetCount) - 100)
 	}
 
 	fmt.Printf("Block Usage:          %d%%\n", blockUsage)
@@ -184,16 +188,16 @@ func printVersionUsage(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	cacheStoreStats, errno := cacheBlockStore.GetStats()
-	if errno == 0 {
+	cacheStoreStats, err := cacheBlockStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Cache", cacheStoreStats})
 	}
-	localStoreStats, errno := localIndexStore.GetStats()
-	if errno == 0 {
+	localStoreStats, err := localIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Local", localStoreStats})
 	}
-	remoteStoreStats, errno := remoteIndexStore.GetStats()
-	if errno == 0 {
+	remoteStoreStats, err := remoteIndexStore.GetStats()
+	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
 	}
 	return storeStats, timeStats, nil

@@ -33,6 +33,7 @@ func (l *LoggerData) OnLog(file string, function string, line int, level int, lo
 }
 
 func ParseLevel(lvl string) (int, error) {
+	const fname = "ParseLevel"
 	switch strings.ToLower(lvl) {
 	case "debug":
 		return 0, nil
@@ -46,7 +47,7 @@ func ParseLevel(lvl string) (int, error) {
 		return 4, nil
 	}
 
-	return -1, errors.Wrapf(longtaillib.ErrnoToError(longtaillib.EIO), "not a valid log Level: %s", lvl)
+	return -1, errors.Wrap(fmt.Errorf("Invalid log Level: %s", lvl), fname)
 }
 
 // AssertData ...

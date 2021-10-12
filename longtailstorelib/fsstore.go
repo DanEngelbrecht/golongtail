@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -27,6 +29,13 @@ type fsBlobObject struct {
 	metageneration int64
 }
 
+func normalizePath(path string) string {
+	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
+	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
+	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
+	return backwardRemoved
+}
+
 // NewFSBlobStore ...
 func NewFSBlobStore(prefix string, enableLocking bool) (BlobStore, error) {
 	s := &fsBlobStore{prefix: prefix, enableLocking: enableLocking}
@@ -38,7 +47,7 @@ func (blobStore *fsBlobStore) NewClient(ctx context.Context) (BlobClient, error)
 }
 
 func (blobStore *fsBlobStore) String() string {
-	return "fsstore" + blobStore.prefix
+	return fmt.Sprintf("fsstore %s", blobStore.prefix)
 }
 
 func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
@@ -58,7 +67,13 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		if info.IsDir() {
 			return nil
 		}
-		leafPath := path[len(searchPath)+1:]
+		if strings.HasSuffix(path, "._lck") {
+			return nil
+		}
+		leafPath := normalizePath(path[len(searchPath)+1:])
+		if len(leafPath) < len(pathPrefix) {
+			return nil
+		}
 		if leafPath[:len(pathPrefix)] == pathPrefix {
 			props := BlobProperties{Size: info.Size(), Name: leafPath}
 			objects = append(objects, props)
@@ -80,13 +95,13 @@ func (blobClient *fsBlobClient) Close() {
 }
 
 func (blobClient *fsBlobClient) String() string {
-	return blobClient.store.String() + ":client"
+	return fmt.Sprintf("%s:client", blobClient.store.String())
 }
 
 func (blobObject *fsBlobObject) Exists() (bool, error) {
 	const fname = "fsBlobObject.Exists"
 	_, err := os.Stat(blobObject.path)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
@@ -98,18 +113,32 @@ func (blobObject *fsBlobObject) Exists() (bool, error) {
 
 func (blobObject *fsBlobObject) Read() ([]byte, error) {
 	const fname = "fsBlobObject.Read"
+
+	if blobObject.client.store.enableLocking {
+		filelock, err := blobObject.lockFile()
+		if err != nil {
+			return nil, errors.Wrap(err, fname)
+		}
+		defer filelock.Unlock()
+	}
+
 	data, err := ioutil.ReadFile(blobObject.path)
-	if err != nil {
+	if err == nil {
+		return data, nil
+	}
+	var perr *fs.PathError
+	if errors.As(err, &perr) {
+		err = errors.Wrapf(os.ErrNotExist, "%v", err)
 		return nil, errors.Wrap(err, fname)
 	}
-	return data, nil
+	return nil, errors.Wrap(err, fname)
 }
 
 func (blobObject *fsBlobObject) getMetaGeneration() (int64, error) {
 	const fname = "fsBlobObject.getMetaGeneration"
 	metapath := blobObject.path + ".gen"
 	data, err := ioutil.ReadFile(metapath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return 0, nil
 	}
 	if err != nil {
@@ -135,7 +164,11 @@ func (blobObject *fsBlobObject) setMetaGeneration(meta_generation int64) error {
 func (blobObject *fsBlobObject) deleteGeneration() error {
 	const fname = "fsBlobObject.deleteGeneration"
 	metapath := blobObject.path + ".gen"
-	err := os.Remove(metapath)
+	_, err := os.Stat(metapath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	err = os.Remove(metapath)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
@@ -260,13 +293,16 @@ func (blobObject *fsBlobObject) Delete() error {
 		return errors.Wrap(err, fname)
 	}
 
+	// Always try to delete the corresponding gen file
+	err = blobObject.deleteGeneration()
 	if blobObject.client.store.enableLocking {
-		err = blobObject.deleteGeneration()
 		if err != nil {
 			return errors.Wrap(err, fname)
 		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		return nil
 	}
-	return nil
+	return err
 }
 
 // ErrTimeout indicates that the lock attempt timed out.

@@ -26,12 +26,6 @@ func (l *Lock) Unlock() error {
 	if err != nil {
 		return err
 	}
-	name, err := syscall.UTF16PtrFromString(l.filename)
-	if err != nil {
-		return err
-	}
-	// We don't care if we fail delete
-	syscall.DeleteFile(name)
 	return nil
 }
 

@@ -34,9 +34,9 @@ func printStore(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	storeIndex, errno := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
-	if errno != 0 {
-		err = longtailutils.MakeError(errno, fmt.Sprintf("Cant parse store index from `%s`", storeIndexPath))
+	storeIndex, err := longtaillib.ReadStoreIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse store index from `%s`", storeIndexPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer storeIndex.Dispose()

@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/alecthomas/kong"
 )
@@ -48,10 +49,25 @@ func TestInitRemoteStore(t *testing.T) {
 	// Kill the index file so we can do init again
 	store, _ := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
 	client, _ := store.NewClient(context.Background())
-	storeIndexObject, _ := client.NewObject("storage/index.lsi")
+	storeIndexObject, _ := client.NewObject("storage/store.lsi")
 	storeIndexObject.Delete()
 
 	// Init the store again to pick up existing blocks
+	runInitRemoteStore(t, fsBlobPathPrefix+"/storage")
+
+	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", "")
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
+	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", "")
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
+	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", "")
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
+
+	storeIndexObject.Delete()
+	emptyStoreIndex, _ := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+	emptyStoreIndexBytes, _ := longtaillib.WriteStoreIndexToBuffer(emptyStoreIndex)
+	storeIndexObject.Write(emptyStoreIndexBytes)
+
+	// Force rebuilding the index even though it exists
 	runInitRemoteStore(t, fsBlobPathPrefix+"/storage")
 
 	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", "")

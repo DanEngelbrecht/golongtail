@@ -922,12 +922,6 @@ func TestFSStoreIndexSyncWithLocking(t *testing.T) {
 	testStoreIndexSync(blobStore, t)
 }
 
-//func TestFSStoreIndexSyncWithLockingRepeated(t *testing.T) {
-//	for i := 0; i < 100; i++ {
-//		TestFSStoreIndexSyncWithLocking(t)
-//	}
-//}
-
 func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
 	storePath, err := ioutil.TempDir("", "test")
 	if err != nil {

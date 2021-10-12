@@ -59,6 +59,10 @@ type BlobStore interface {
 }
 
 func CreateBlobStoreForURI(uri string) (BlobStore, error) {
+	// Special case since filepaths may not bare nicely as a url
+	if strings.HasPrefix(uri, "fsblob://") {
+		return NewFSBlobStore(uri[len("fsblob://"):], true)
+	}
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -70,8 +74,6 @@ func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 			return nil, fmt.Errorf("azure Gen1 storage not yet implemented")
 		case "abfss":
 			return nil, fmt.Errorf("azure Gen2 storage not yet implemented")
-		case "fsblob":
-			return NewFSBlobStore(blobStoreURL.Host+blobStoreURL.Path, true)
 		case "file":
 			return NewFSBlobStore(blobStoreURL.Host+blobStoreURL.Path, true)
 		}

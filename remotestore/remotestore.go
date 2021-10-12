@@ -1829,6 +1829,24 @@ func CreateBlockStoreForURI(
 	})
 	log.Debug(fname)
 
+	// Special case since filepaths may not bare nicely as a url
+	if strings.HasPrefix(uri, "fsblob://") {
+		fsBlobStore, err := longtailstorelib.NewFSBlobStore(uri[len("fsblob://"):], true)
+		if err != nil {
+			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
+		}
+		fsBlockStore, err := NewRemoteBlockStore(
+			jobAPI,
+			fsBlobStore,
+			optionalStoreIndexPath,
+			numWorkerCount,
+			accessType)
+		if err != nil {
+			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
+		}
+		return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
+	}
+
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
@@ -1868,21 +1886,6 @@ func CreateBlockStoreForURI(
 		case "abfss":
 			err := fmt.Errorf("azure Gen2 storage not yet implemented for path %s", uri)
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
-		case "fsblob":
-			fsBlobStore, err := longtailstorelib.NewFSBlobStore(blobStoreURL.Host+blobStoreURL.Path, true)
-			if err != nil {
-				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
-			}
-			fsBlockStore, err := NewRemoteBlockStore(
-				jobAPI,
-				fsBlobStore,
-				optionalStoreIndexPath,
-				numWorkerCount,
-				accessType)
-			if err != nil {
-				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
-			}
-			return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
 		case "file":
 			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
 		}

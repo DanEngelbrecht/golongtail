@@ -18,6 +18,7 @@ func upsyncVersion(t *testing.T, sourcePath string, targetPath string, storageUR
 		"--source-path", sourcePath,
 		"--target-path", targetPath,
 		"--storage-uri", storageURI,
+		"--exclude-filter-regex", ".*\\._lck",
 	}
 	if optionalVersionLocalStoreIndexPath != "" {
 		args = append(args, "--version-local-store-index-path")

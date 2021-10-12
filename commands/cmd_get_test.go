@@ -2,6 +2,7 @@ package commands
 
 import (
 	"io/ioutil"
+	"runtime"
 	"testing"
 
 	"github.com/alecthomas/kong"
@@ -27,7 +28,7 @@ func getVersion(t *testing.T, getConfigPath string, targetPath string, optionalC
 	}
 
 	context := &Context{
-		NumWorkerCount: 4,
+		NumWorkerCount: runtime.NumCPU(),
 	}
 	err = ctx.Run(context)
 	if err != nil {

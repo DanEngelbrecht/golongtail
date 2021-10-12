@@ -132,7 +132,7 @@ func cloneOneVersion(
 		return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
 	}
 
-	log.Printf("`%s` -> `%s`\n", sourceFilePath, targetFilePath)
+	log.Infof("`%s` -> `%s`", sourceFilePath, targetFilePath)
 
 	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
 	if err != nil {
@@ -234,7 +234,7 @@ func cloneOneVersion(
 			err = errors.Wrap(err, fmt.Sprintf("Skipping, no zip file available for `%s`", sourceFilePath))
 			return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
 		}
-		fmt.Printf("Falling back to reading ZIP source from `%s`\n", sourceFileZipPath)
+		fmt.Infof("Falling back to reading ZIP source from `%s`", sourceFileZipPath)
 		zipBytes, err := longtailutils.ReadFromURI(sourceFileZipPath)
 		if err != nil {
 			return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
@@ -272,7 +272,7 @@ func cloneOneVersion(
 			}()
 
 			path := filepath.Join(targetPath, f.Name)
-			fmt.Printf("Unzipping `%s`\n", path)
+			fmt.Infof("Unzipping `%s`", path)
 
 			// Check for ZipSlip (Directory traversal)
 			if !strings.HasPrefix(path, filepath.Clean(targetPath)+string(os.PathSeparator)) {

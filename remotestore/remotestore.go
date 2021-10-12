@@ -1499,7 +1499,7 @@ func getStoreIndexFromBlocks(
 				if blockPath == longtailutils.NormalizePath(blockKey) {
 					batchBlockIndexes[batchPos] = blockIndex
 				} else {
-					log.Warnf("Block %s name does not match content hash, expected name %s\n", blockKey, blockPath)
+					log.Warnf("Block %s name does not match content hash, expected name %s", blockKey, blockPath)
 				}
 
 				wg.Done()
@@ -1698,7 +1698,7 @@ func readStoreStoreIndexWithItems(
 		if storeIndex.IsValid() {
 			return storeIndex, usedItems, nil
 		}
-		log.Printf("Retrying reading remote store index\n")
+		log.Infof("Retrying reading remote store index")
 	}
 }
 
@@ -1791,7 +1791,7 @@ func readRemoteStoreIndex(
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
-	log.Printf("Rebuilt remote index with %d blocks\n", len(storeIndex.GetBlockHashes()))
+	log.Infof("Rebuilt remote index with %d blocks", len(storeIndex.GetBlockHashes()))
 	newStoreIndex, err := addToRemoteStoreIndex(ctx, client, storeIndex)
 	if err != nil {
 		log.WithError(err).Error("Failed to update store index")

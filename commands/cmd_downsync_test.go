@@ -2,6 +2,7 @@ package commands
 
 import (
 	"io/ioutil"
+	"runtime"
 	"testing"
 
 	"github.com/alecthomas/kong"
@@ -32,7 +33,7 @@ func downsyncVersion(t *testing.T, sourcePath string, targetPath string, storage
 	}
 
 	context := &Context{
-		NumWorkerCount: 4,
+		NumWorkerCount: runtime.NumCPU(),
 	}
 	err = ctx.Run(context)
 	if err != nil {

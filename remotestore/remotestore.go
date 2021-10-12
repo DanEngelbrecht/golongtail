@@ -1829,7 +1829,7 @@ func CreateBlockStoreForURI(
 	})
 	log.Debug(fname)
 
-	// Special case since filepaths may not bare nicely as a url
+	// Special case since filepaths may not parse nicely as a url
 	if strings.HasPrefix(uri, "fsblob://") {
 		fsBlobStore, err := longtailstorelib.NewFSBlobStore(uri[len("fsblob://"):], true)
 		if err != nil {

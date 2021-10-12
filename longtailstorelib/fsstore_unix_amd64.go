@@ -59,7 +59,7 @@ func (l *Lock) LockWithTimeout(timeout time.Duration) error {
 		return errors.Wrap(err, fname)
 	case <-time.After(timeout):
 		close(cancel)
-		err := fmt.Errorf("Retry timed out for lock file %s", waited %s", l.filename, timeout.String())
+		err := fmt.Errorf("Retry timed out for lock file `%s`, waited %s", l.filename, timeout.String())
 		return errors.Wrap(err, fname)
 	}
 }

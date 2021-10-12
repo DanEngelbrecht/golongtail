@@ -49,6 +49,7 @@ func TestInitRemoteStore(t *testing.T) {
 	// Kill the index file so we can do init again
 	store, _ := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
 	client, _ := store.NewClient(context.Background())
+	defer client.Close()
 	storeIndexObject, _ := client.NewObject("storage/store.lsi")
 	storeIndexObject.Delete()
 

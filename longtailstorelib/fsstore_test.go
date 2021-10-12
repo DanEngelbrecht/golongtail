@@ -22,6 +22,7 @@ func TestFSBlobStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
+	defer client.Close()
 	object, err := client.NewObject("test.txt")
 	if err != nil {
 		t.Errorf("client.NewObject() err == %s", err)
@@ -70,6 +71,7 @@ func TestFSBlobStoreVersioning(t *testing.T) {
 	if err != nil {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
+	defer client.Close()
 	object, err := client.NewObject("test.txt")
 	if err != nil {
 		t.Errorf("client.NewObject() err == %s", err)
@@ -188,6 +190,7 @@ func TestFSGetObjects(t *testing.T) {
 	if err != nil {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
+	defer client.Close()
 	files := []string{"first.txt", "second.txt", "third.txt", "fourth.txt", "nested/first_nested.txt", "nested/second_nested.txt"}
 	for _, name := range files {
 		object, err := client.NewObject(name)

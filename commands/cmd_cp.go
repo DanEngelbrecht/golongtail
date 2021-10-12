@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
@@ -126,12 +125,6 @@ func cpVersionIndex(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Create Blockstore FS", createBlockStoreFSTime})
 
 	copyFileStartTime := time.Now()
-	// Only support writing to regular file path for now
-	outFile, err := os.Create(targetPath)
-	if err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-	defer outFile.Close()
 
 	inFile, err := blockStoreFS.OpenReadFile(sourcePath)
 	if err != nil {
@@ -157,7 +150,7 @@ func cpVersionIndex(
 			err = errors.Wrapf(err, "Longtail_StorageAPI.Read failed for `%s`", sourcePath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
-		outFile.Write(data)
+		longtailutils.WriteToURI(targetPath, data)
 		offset += left
 	}
 	copyFileTime := time.Since(copyFileStartTime)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -26,6 +27,13 @@ type fsBlobObject struct {
 	client         *fsBlobClient
 	path           string
 	metageneration int64
+}
+
+func normalizePath(path string) string {
+	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
+	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
+	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
+	return backwardRemoved
 }
 
 // NewFSBlobStore ...
@@ -59,7 +67,10 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		if info.IsDir() {
 			return nil
 		}
-		leafPath := path[len(searchPath)+1:]
+		leafPath := normalizePath(path[len(searchPath)+1:])
+		if len(leafPath) < len(pathPrefix) {
+			return nil
+		}
 		if leafPath[:len(pathPrefix)] == pathPrefix {
 			props := BlobProperties{Size: info.Size(), Name: leafPath}
 			objects = append(objects, props)

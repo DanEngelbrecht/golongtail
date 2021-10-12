@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"os"
+	"io/ioutil"
 	"testing"
 
 	"github.com/alecthomas/kong"
@@ -41,33 +41,37 @@ func upsyncVersion(t *testing.T, sourcePath string, targetPath string, storageUR
 }
 
 func TestUpsync(t *testing.T) {
-	os.RemoveAll("./test/")
-	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "", "")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "", "")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "", "")
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", "", "")
+	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", "", "")
+	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", "")
 }
 
 func TestUpsyncWithLSI(t *testing.T) {
-	os.RemoveAll("./test/")
-	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi", "")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi", "")
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v1.lsi", "")
+	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v2.lsi", "")
+	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lsi", "")
 }
 
 func TestUpsyncWithGetConfig(t *testing.T) {
-	os.RemoveAll("./test/")
-	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "", "fsblob://test/index/v1.json")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "", "fsblob://test/index/v1.json")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "", "fsblob://test/index/v1.json")
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
+	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
+	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
 }
 
 func TestUpsyncWithGetConfigAndLSI(t *testing.T) {
-	os.RemoveAll("./test/")
-	createVersionData(t, "fsblob://test")
-	upsyncVersion(t, "test/version/v1", "fsblob://test/index/v1.lvi", "fsblob://test/storage", "fsblob://test/index/v1.lsi", "fsblob://test/index/v1.json")
-	upsyncVersion(t, "test/version/v2", "fsblob://test/index/v2.lvi", "fsblob://test/storage", "fsblob://test/index/v2.lsi", "fsblob://test/index/v1.json")
-	upsyncVersion(t, "test/version/v3", "fsblob://test/index/v3.lvi", "fsblob://test/storage", "fsblob://test/index/v3.lsi", "fsblob://test/index/v1.json")
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v1.lsi", fsBlobPathPrefix+"/index/v1.json")
+	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v2.lsi", fsBlobPathPrefix+"/index/v1.json")
+	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lsi", fsBlobPathPrefix+"/index/v1.json")
 }

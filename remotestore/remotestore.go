@@ -1588,8 +1588,9 @@ func readStoreStoreIndexFromPath(
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, fname)
 	}
-	if blobData == nil {
-		return longtaillib.Longtail_StoreIndex{}, nil
+	if len(blobData) == 0 {
+		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s contains no data", key))
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	storeIndex, err := longtaillib.ReadStoreIndexFromBuffer(blobData)
 	if err != nil {
@@ -1705,7 +1706,7 @@ func readStoreStoreIndexWithItems(
 func addBlocksToStoreIndex(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	addedBlockIndexes []longtaillib.Longtail_BlockIndex) (longtaillib.Longtail_StoreIndex, error) {
-	const fname = "readStoreStoreIndexWithItems"
+	const fname = "addBlocksToStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                  fname,
 		"len(addedBlockIndexes)": addedBlockIndexes,

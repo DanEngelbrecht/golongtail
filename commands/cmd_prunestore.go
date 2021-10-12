@@ -223,7 +223,7 @@ func pruneStore(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Scanning", scanningForBlocksTime})
 
 	if dryRun {
-		fmt.Printf("Prune would keep %d blocks\n", len(usedBlocks))
+		log.Infof("Prune would keep %d blocks", len(usedBlocks))
 		return storeStats, timeStats, nil
 	}
 
@@ -243,7 +243,7 @@ func pruneStore(
 	pruneTime := time.Since(pruneStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Prune", pruneTime})
 
-	fmt.Printf("Pruned %d blocks\n", prunedBlockCount)
+	log.Infof("Pruned %d blocks", prunedBlockCount)
 
 	flushStartTime := time.Now()
 

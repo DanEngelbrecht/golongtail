@@ -44,17 +44,11 @@ func TestGet(t *testing.T) {
 	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v3.json")
 
 	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", "")
-	if !validateContent(fsBlobPathPrefix, "version/current", v1FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", "")
-	if !validateContent(fsBlobPathPrefix, "version/current", v2FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", "")
-	if !validateContent(fsBlobPathPrefix, "version/current", v3FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestGetWithVersionLSI(t *testing.T) {
@@ -66,17 +60,11 @@ func TestGetWithVersionLSI(t *testing.T) {
 	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lsi", fsBlobPathPrefix+"/index/v3.json")
 
 	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", "")
-	if !validateContent(fsBlobPathPrefix, "version/current", v1FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", "")
-	if !validateContent(fsBlobPathPrefix, "version/current", v2FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", "")
-	if !validateContent(fsBlobPathPrefix, "version/current", v3FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestGetWithCache(t *testing.T) {
@@ -88,17 +76,11 @@ func TestGetWithCache(t *testing.T) {
 	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v3.json")
 
 	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", testPath+"/cache")
-	if !validateContent(fsBlobPathPrefix, "version/current", v1FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", testPath+"/cache")
-	if !validateContent(fsBlobPathPrefix, "version/current", v2FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", testPath+"/cache")
-	if !validateContent(fsBlobPathPrefix, "version/current", v3FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestGetWithLSIAndCache(t *testing.T) {
@@ -110,15 +92,9 @@ func TestGetWithLSIAndCache(t *testing.T) {
 	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lsi", fsBlobPathPrefix+"/index/v3.json")
 
 	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", testPath+"/cache")
-	if !validateContent(fsBlobPathPrefix, "version/current", v1FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v1FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", testPath+"/cache")
-	if !validateContent(fsBlobPathPrefix, "version/current", v2FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v2FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", testPath+"/cache")
-	if !validateContent(fsBlobPathPrefix, "version/current", v3FilesCreate) {
-		t.Errorf("validateContent() content does not match %q", v3FilesCreate)
-	}
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }

@@ -17,7 +17,7 @@ func createContent(store longtailstorelib.BlobStore, path string, content map[st
 	}
 }
 
-func validateContent(baseURI string, path string, content map[string]string) bool {
+func validateContent(t *testing.T, baseURI string, path string, content map[string]string) {
 	store, _ := longtailstorelib.CreateBlobStoreForURI(baseURI)
 	client, _ := store.NewClient(context.Background())
 	defer client.Close()
@@ -30,12 +30,17 @@ func validateContent(baseURI string, path string, content map[string]string) boo
 			b, _ := o.Read()
 			d := string(b)
 			if d != c {
-				return false
+				t.Errorf("Content of file `%s` does not match. Expected `%s`, got `%s`", n, d, c)
+				return
 			}
 			foundItems[n] = string(b)
+		} else {
+			t.Errorf("Unexpected file `%s`", n)
 		}
 	}
-	return len(foundItems) == len(content)
+	if len(foundItems) != len(content) {
+		t.Errorf("Expected `%d` files but found `%d`.", len(content), len(foundItems))
+	}
 }
 
 var (
@@ -69,15 +74,4 @@ func createVersionData(t *testing.T, baseURI string) {
 	createContent(store, "version/v1/", v1FilesCreate)
 	createContent(store, "version/v2/", v2FilesCreate)
 	createContent(store, "version/v3/", v3FilesCreate)
-	/*
-		if !validateContent(store, "version/v1", v1FilesCreate) {
-			t.Errorf("validateContent() content does not match %q", v1FilesCreate)
-		}
-		if !validateContent(store, "version/v2", v2FilesCreate) {
-			t.Errorf("validateContent() content does not match %q", v2FilesCreate)
-		}
-		if !validateContent(store, "version/v3", v3FilesCreate) {
-			t.Errorf("validateContent() content does not match %q", v3FilesCreate)
-		}
-	*/
 }

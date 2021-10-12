@@ -40,7 +40,7 @@ func runCp(t *testing.T, storageURI string, versionIndexPath string, sourcePath 
 	}
 }
 
-func validateFileContent(t *testing.T, baseURI string, sourcePath string, expectedContent string) {
+func validateFileContentAndDelete(t *testing.T, baseURI string, sourcePath string, expectedContent string) {
 	store, _ := longtailstorelib.CreateBlobStoreForURI(baseURI)
 	client, _ := store.NewClient(context.Background())
 	defer client.Close()
@@ -50,6 +50,7 @@ func validateFileContent(t *testing.T, baseURI string, sourcePath string, expect
 	if s != expectedContent {
 		t.Errorf("`%s` content `%s` does not match `%s`", sourcePath, s, expectedContent)
 	}
+	o.Delete()
 }
 
 func TestCp(t *testing.T) {
@@ -61,11 +62,20 @@ func TestCp(t *testing.T) {
 	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", "")
 
 	runCp(t, fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v1.lvi", "folder/abitoftextinasubfolder.txt", fsBlobPathPrefix+"/current/abitoftextinasubfolder.txt", "")
-	validateFileContent(t, fsBlobPathPrefix, "current/abitoftextinasubfolder.txt", v1FilesCreate["folder/abitoftextinasubfolder.txt"])
+	validateFileContentAndDelete(t, fsBlobPathPrefix, "current/abitoftextinasubfolder.txt", v1FilesCreate["folder/abitoftextinasubfolder.txt"])
 
 	runCp(t, fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v2.lvi", "stuff.txt", fsBlobPathPrefix+"/current/stuff.txt", "")
-	validateFileContent(t, fsBlobPathPrefix, "current/stuff.txt", v2FilesCreate["stuff.txt"])
+	validateFileContentAndDelete(t, fsBlobPathPrefix, "current/stuff.txt", v2FilesCreate["stuff.txt"])
 
 	runCp(t, fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lvi", "morestuff.txt", fsBlobPathPrefix+"/current/morestuff.txt", "")
-	validateFileContent(t, fsBlobPathPrefix, "current/morestuff.txt", v3FilesCreate["morestuff.txt"])
+	validateFileContentAndDelete(t, fsBlobPathPrefix, "current/morestuff.txt", v3FilesCreate["morestuff.txt"])
+
+	runCp(t, fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v1.lvi", "folder/abitoftextinasubfolder.txt", fsBlobPathPrefix+"/current/abitoftextinasubfolder.txt", testPath+"/cache")
+	validateFileContentAndDelete(t, fsBlobPathPrefix, "current/abitoftextinasubfolder.txt", v1FilesCreate["folder/abitoftextinasubfolder.txt"])
+
+	runCp(t, fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v2.lvi", "stuff.txt", fsBlobPathPrefix+"/current/stuff.txt", testPath+"/cache")
+	validateFileContentAndDelete(t, fsBlobPathPrefix, "current/stuff.txt", v2FilesCreate["stuff.txt"])
+
+	runCp(t, fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lvi", "morestuff.txt", fsBlobPathPrefix+"/current/morestuff.txt", testPath+"/cache")
+	validateFileContentAndDelete(t, fsBlobPathPrefix, "current/morestuff.txt", v3FilesCreate["morestuff.txt"])
 }

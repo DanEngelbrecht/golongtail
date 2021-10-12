@@ -67,6 +67,9 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		if info.IsDir() {
 			return nil
 		}
+		if strings.HasSuffix(path, "._lck") {
+			return nil
+		}
 		leafPath := normalizePath(path[len(searchPath)+1:])
 		if len(leafPath) < len(pathPrefix) {
 			return nil

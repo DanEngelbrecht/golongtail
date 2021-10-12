@@ -2,10 +2,40 @@ package commands
 
 import (
 	"context"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+	"github.com/alecthomas/kong"
 )
+
+func executeCommandLine(command string, params ...string) (string, error) {
+	args := []string{command}
+	args = append(args, params...)
+	//	args := strings.Split(commandLine, " ")
+	parser, err := kong.New(&Cli)
+	if err != nil {
+		//		t.Errorf("kong.New(Cli) failed with %s", err)
+		return strings.Join(args, " "), err
+	}
+
+	ctx, err := parser.Parse(args)
+	if err != nil {
+		return strings.Join(args, " "), err
+		//		t.Errorf("parser.Parse() failed with %s", err)
+	}
+
+	context := &Context{
+		NumWorkerCount: runtime.NumCPU(),
+	}
+	err = ctx.Run(context)
+	if err != nil {
+		return strings.Join(args, " "), err
+		//		t.Errorf("ctx.Run(context) failed with %s", err)
+	}
+	return strings.Join(args, " "), nil
+}
 
 func createContent(store longtailstorelib.BlobStore, path string, content map[string]string) {
 	client, _ := store.NewClient(context.Background())

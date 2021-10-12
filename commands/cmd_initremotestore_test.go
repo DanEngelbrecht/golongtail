@@ -42,9 +42,10 @@ func TestInitRemoteStore(t *testing.T) {
 	runInitRemoteStore(t, fsBlobPathPrefix+"/storage")
 
 	createVersionData(t, fsBlobPathPrefix)
-	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
-	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v2.json")
-	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v3.json")
+
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v1.json")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v2.json")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v3.json")
 
 	// Kill the index file so we can do init again
 	store, _ := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
@@ -54,13 +55,16 @@ func TestInitRemoteStore(t *testing.T) {
 	storeIndexObject.Delete()
 
 	// Init the store again to pick up existing blocks
-	runInitRemoteStore(t, fsBlobPathPrefix+"/storage")
+	cmd, err := executeCommandLine("init-remote-store", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 
-	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", "")
+	executeCommandLine("get", "--get-config-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
-	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", "")
+	executeCommandLine("get", "--get-config-path", fsBlobPathPrefix+"/index/v2.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
-	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", "")
+	executeCommandLine("get", "--get-config-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 
 	storeIndexObject.Delete()
@@ -69,12 +73,15 @@ func TestInitRemoteStore(t *testing.T) {
 	storeIndexObject.Write(emptyStoreIndexBytes)
 
 	// Force rebuilding the index even though it exists
-	runInitRemoteStore(t, fsBlobPathPrefix+"/storage")
+	cmd, err = executeCommandLine("init-remote-store", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 
-	getVersion(t, fsBlobPathPrefix+"/index/v1.json", testPath+"/version/current", "")
+	executeCommandLine("get", "--get-config-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
-	getVersion(t, fsBlobPathPrefix+"/index/v2.json", testPath+"/version/current", "")
+	executeCommandLine("get", "--get-config-path", fsBlobPathPrefix+"/index/v2.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
-	getVersion(t, fsBlobPathPrefix+"/index/v3.json", testPath+"/version/current", "")
+	executeCommandLine("get", "--get-config-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }

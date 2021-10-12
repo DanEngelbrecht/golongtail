@@ -2,78 +2,79 @@ package commands
 
 import (
 	"io/ioutil"
-	"runtime"
 	"testing"
-
-	"github.com/alecthomas/kong"
 )
-
-func upsyncVersion(t *testing.T, sourcePath string, targetPath string, storageURI string, optionalVersionLocalStoreIndexPath string, optionalGetConfigPath string) {
-	parser, err := kong.New(&Cli)
-	if err != nil {
-		t.Errorf("kong.New(Cli) failed with %s", err)
-	}
-	args := []string{
-		"upsync",
-		"--source-path", sourcePath,
-		"--target-path", targetPath,
-		"--storage-uri", storageURI,
-		"--exclude-filter-regex", ".*\\._lck",
-	}
-	if optionalVersionLocalStoreIndexPath != "" {
-		args = append(args, "--version-local-store-index-path")
-		args = append(args, optionalVersionLocalStoreIndexPath)
-	}
-	if optionalGetConfigPath != "" {
-		args = append(args, "--get-config-path")
-		args = append(args, optionalGetConfigPath)
-	}
-	ctx, err := parser.Parse(args)
-	if err != nil {
-		t.Errorf("parser.Parse() failed with %s", err)
-	}
-
-	context := &Context{
-		NumWorkerCount: runtime.NumCPU(),
-	}
-	err = ctx.Run(context)
-	if err != nil {
-		t.Errorf("ctx.Run(context) failed with %s", err)
-	}
-}
 
 func TestUpsync(t *testing.T) {
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
-	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", "", "")
-	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", "", "")
-	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", "")
+	cmd, err := executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }
 
 func TestUpsyncWithLSI(t *testing.T) {
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
-	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v1.lsi", "")
-	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v2.lsi", "")
-	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lsi", "")
+
+	cmd, err := executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v2.lsi")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v3.lsi")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }
 
 func TestUpsyncWithGetConfig(t *testing.T) {
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
-	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
-	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
-	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", fsBlobPathPrefix+"/index/v1.json")
+
+	cmd, err := executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v1.json")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v2.json")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v3.json")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }
 
 func TestUpsyncWithGetConfigAndLSI(t *testing.T) {
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
-	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v1.lsi", fsBlobPathPrefix+"/index/v1.json")
-	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v2.lsi", fsBlobPathPrefix+"/index/v1.json")
-	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", fsBlobPathPrefix+"/index/v3.lsi", fsBlobPathPrefix+"/index/v1.json")
+	cmd, err := executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v1.json", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v2.json", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v2.lsi")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--get-config-path", fsBlobPathPrefix+"/index/v3.json", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v3.lsi")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }

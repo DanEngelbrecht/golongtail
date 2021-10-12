@@ -2,47 +2,27 @@ package commands
 
 import (
 	"io/ioutil"
-	"runtime"
 	"testing"
-
-	"github.com/alecthomas/kong"
 )
-
-func runLs(t *testing.T, versionIndexPath string, path string) {
-	parser, err := kong.New(&Cli)
-	if err != nil {
-		t.Errorf("kong.New(Cli) failed with %s", err)
-	}
-	args := []string{
-		"ls",
-		"--version-index-path", versionIndexPath,
-	}
-	if path != "" {
-		args = append(args, path)
-	}
-	ctx, err := parser.Parse(args)
-	if err != nil {
-		t.Errorf("parser.Parse() failed with %s", err)
-	}
-
-	context := &Context{
-		NumWorkerCount: runtime.NumCPU(),
-	}
-	err = ctx.Run(context)
-	if err != nil {
-		t.Errorf("ctx.Run(context) failed with %s", err)
-	}
-}
 
 func TestLs(t *testing.T) {
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
-	upsyncVersion(t, testPath+"/version/v1", fsBlobPathPrefix+"/index/v1.lvi", fsBlobPathPrefix+"/storage", "", "")
-	upsyncVersion(t, testPath+"/version/v2", fsBlobPathPrefix+"/index/v2.lvi", fsBlobPathPrefix+"/storage", "", "")
-	upsyncVersion(t, testPath+"/version/v3", fsBlobPathPrefix+"/index/v3.lvi", fsBlobPathPrefix+"/storage", "", "")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
 
-	runLs(t, fsBlobPathPrefix+"/index/v1.lvi", ".")
-	runLs(t, fsBlobPathPrefix+"/index/v2.lvi", "folder")
-	runLs(t, fsBlobPathPrefix+"/index/v3.lvi", "folder2")
+	cmd, err := executeCommandLine("ls", "--version-index-path", fsBlobPathPrefix+"/index/v1.lvi", ".")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("ls", "--version-index-path", fsBlobPathPrefix+"/index/v2.lvi", "folder")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("ls", "--version-index-path", fsBlobPathPrefix+"/index/v3.lvi", "folder2")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }

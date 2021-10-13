@@ -336,6 +336,35 @@ func WriteToURI(uri string, data []byte) error {
 	return nil
 }
 
+// DeleteByURI ...
+func DeleteByURI(uri string) error {
+	const fname = "DeleteByURI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"uri":   uri,
+	})
+	log.Debug(fname)
+	uriParent, uriName := splitURI(uri)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	defer client.Close()
+	object, err := client.NewObject(uriName)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	err = object.Delete()
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return errors.Wrap(err, fname)
+	}
+	return nil
+}
+
 func ReadBlobWithRetry(
 	ctx context.Context,
 	client longtailstorelib.BlobClient,

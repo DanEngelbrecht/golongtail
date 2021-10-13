@@ -127,7 +127,6 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 		}
 		defer func() {
 			if err := rc.Close(); err != nil {
-				log.WithError(err).Error(fname)
 				panic(errors.Wrap(err, fname))
 			}
 		}()

@@ -65,7 +65,7 @@ type VersionLocalStoreIndexPathOption struct {
 }
 
 type VersionIndexPathOption struct {
-	VersionIndexPath string `name:"version-index-path" help:"URI to version index (local file system, GCS and S3 bucket URI supported)"`
+	VersionIndexPath string `name:"version-index-path" required:"" help:"URI to version index (local file system, GCS and S3 bucket URI supported)"`
 }
 
 type CompactOption struct {
@@ -73,7 +73,7 @@ type CompactOption struct {
 }
 
 type StoreIndexPathOption struct {
-	StoreIndexPath string `name:"store-index-path" help:"URI to store index (local file system, GCS and S3 bucket URI supported)"`
+	StoreIndexPath string `name:"store-index-path" required:"" help:"URI to store index (local file system, GCS and S3 bucket URI supported)"`
 }
 
 type MinBlockUsagePercentOption struct {

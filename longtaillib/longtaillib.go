@@ -600,15 +600,24 @@ func carray2sliceByte(array *C.char, len int) []byte {
 }
 
 func (fileInfos *Longtail_FileInfos) GetFileCount() uint32 {
+	if fileInfos.cFileInfos == nil {
+		return 0
+	}
 	return uint32(fileInfos.cFileInfos.m_Count)
 }
 
 func (fileInfos *Longtail_FileInfos) GetFileSizes() []uint64 {
+	if fileInfos.cFileInfos == nil {
+		return nil
+	}
 	size := int(fileInfos.cFileInfos.m_Count)
 	return carray2slice64(fileInfos.cFileInfos.m_Sizes, size)
 }
 
 func (fileInfos *Longtail_FileInfos) GetFilePermissions() []uint16 {
+	if fileInfos.cFileInfos == nil {
+		return nil
+	}
 	size := int(fileInfos.cFileInfos.m_Count)
 	return carray2slice16(fileInfos.cFileInfos.m_Permissions, size)
 }
@@ -647,32 +656,53 @@ func (storeIndex *Longtail_StoreIndex) Dispose() {
 }
 
 func (storeIndex *Longtail_StoreIndex) GetVersion() uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return 0
+	}
 	return uint32(*storeIndex.cStoreIndex.m_Version)
 }
 
 func (storeIndex *Longtail_StoreIndex) GetHashIdentifier() uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return 0
+	}
 	return uint32(*storeIndex.cStoreIndex.m_HashIdentifier)
 }
 
 func (storeIndex *Longtail_StoreIndex) GetBlockCount() uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return 0
+	}
 	return uint32(*storeIndex.cStoreIndex.m_BlockCount)
 }
 
 func (storeIndex *Longtail_StoreIndex) GetChunkCount() uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return 0
+	}
 	return uint32(*storeIndex.cStoreIndex.m_ChunkCount)
 }
 
 func (storeIndex *Longtail_StoreIndex) GetBlockHashes() []uint64 {
+	if storeIndex.cStoreIndex == nil {
+		return nil
+	}
 	size := int(C.Longtail_StoreIndex_GetBlockCount(storeIndex.cStoreIndex))
 	return carray2slice64(C.Longtail_StoreIndex_GetBlockHashes(storeIndex.cStoreIndex), size)
 }
 
 func (storeIndex *Longtail_StoreIndex) GetChunkHashes() []uint64 {
+	if storeIndex.cStoreIndex == nil {
+		return nil
+	}
 	size := int(*storeIndex.cStoreIndex.m_ChunkCount)
 	return carray2slice64(storeIndex.cStoreIndex.m_ChunkHashes, size)
 }
 
 func (storeIndex *Longtail_StoreIndex) GetChunkSizes() []uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return nil
+	}
 	size := int(*storeIndex.cStoreIndex.m_ChunkCount)
 	return carray2slice32(storeIndex.cStoreIndex.m_ChunkSizes, size)
 }
@@ -689,76 +719,124 @@ func (versionIndex *Longtail_VersionIndex) Dispose() {
 }
 
 func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	return uint32(*versionIndex.cVersionIndex.m_Version)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetHashIdentifier() uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	return uint32(*versionIndex.cVersionIndex.m_HashIdentifier)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetTargetChunkSize() uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	return uint32(*versionIndex.cVersionIndex.m_TargetChunkSize)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetCount() uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	return uint32(*versionIndex.cVersionIndex.m_AssetCount)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetPath(assetIndex uint32) string {
+	if versionIndex.cVersionIndex == nil {
+		return ""
+	}
 	cPath := C.GetVersionIndexPath(versionIndex.cVersionIndex, C.uint32_t(assetIndex))
 	return C.GoString(cPath)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetHashes() []uint64 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_AssetCount)
 	return carray2slice64(versionIndex.cVersionIndex.m_ContentHashes, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetSize(assetIndex uint32) uint64 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	cSize := C.GetVersionAssetSize(versionIndex.cVersionIndex, C.uint32_t(assetIndex))
 	return uint64(cSize)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetPermissions(assetIndex uint32) uint16 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	cPermissions := C.GetVersionAssetPermissions(versionIndex.cVersionIndex, C.uint32_t(assetIndex))
 	return uint16(cPermissions)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetChunkCounts() []uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_AssetCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_AssetChunkCounts, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetChunkIndexStarts() []uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_AssetCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_AssetChunkIndexStarts, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetChunkIndexes() []uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_AssetChunkIndexCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_AssetChunkIndexes, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetChunkCount() uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return 0
+	}
 	return uint32(*versionIndex.cVersionIndex.m_ChunkCount)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetChunkHashes() []uint64 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
 	return carray2slice64(versionIndex.cVersionIndex.m_ChunkHashes, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetChunkSizes() []uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_ChunkSizes, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetAssetSizes() []uint64 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_AssetCount)
 	return carray2slice64(versionIndex.cVersionIndex.m_AssetSizes, size)
 }
 
 func (versionIndex *Longtail_VersionIndex) GetChunkTags() []uint32 {
+	if versionIndex.cVersionIndex == nil {
+		return nil
+	}
 	size := int(*versionIndex.cVersionIndex.m_ChunkCount)
 	return carray2slice32(versionIndex.cVersionIndex.m_ChunkTags, size)
 }
@@ -858,21 +936,33 @@ func GetMeowHashIdentifier() uint32 {
 
 //// Longtail_AsyncPutStoredBlockAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncPutStoredBlockAPI) OnComplete(err error) {
+	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
+		return
+	}
 	C.Longtail_AsyncPutStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, errorToErrno(err, C.EIO))
 }
 
 //// Longtail_AsyncGetStoredBlockAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block Longtail_StoredBlock, err error) {
+	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
+		return
+	}
 	C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, errorToErrno(err, C.EIO))
 }
 
 //// Longtail_AsyncGetExistingContentAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncGetExistingContentAPI) OnComplete(store_index Longtail_StoreIndex, err error) {
+	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
+		return
+	}
 	C.Longtail_AsyncGetExistingContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, store_index.cStoreIndex, errorToErrno(err, C.EIO))
 }
 
 //// Longtail_AsyncPruneBlocksAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncPruneBlocksAPI) OnComplete(pruned_block_count uint32, err error) {
+	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
+		return
+	}
 	C.Longtail_AsyncPruneBlocks_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.uint32_t(pruned_block_count), errorToErrno(err, C.EIO))
 }
 
@@ -891,6 +981,9 @@ func (asyncCompleteAPI *Longtail_AsyncPreflightStartedAPI) OnComplete(blockHashe
 
 //// Longtail_AsyncFlushAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncFlushAPI) OnComplete(err error) {
+	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
+		return
+	}
 	C.Longtail_AsyncFlush_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, errorToErrno(err, C.EIO))
 }
 

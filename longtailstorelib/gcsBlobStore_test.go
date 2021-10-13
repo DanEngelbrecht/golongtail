@@ -14,7 +14,7 @@ import (
 
 func TestGCSBlobStore(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
-	//t.Skip()
+	t.Skip()
 
 	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
@@ -110,7 +110,7 @@ func TestGCSBlobStore(t *testing.T) {
 
 func TestListObjectsInEmptyGCSStore(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
-	//t.Skip()
+	t.Skip()
 
 	u, err := url.Parse("gs://longtail-test-de/test-storage/store-nonono")
 	if err != nil {
@@ -141,7 +141,8 @@ func TestListObjectsInEmptyGCSStore(t *testing.T) {
 
 func TestGCSBlobStoreVersioning(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
-	//t.Skip()
+	t.Skip()
+
 	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {
 		t.Errorf("url.Parse() err == %s", err)
@@ -232,7 +233,7 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 
 func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 	// This test uses hardcoded paths in gcs and is disabled
-	//t.Skip()
+	t.Skip()
 
 	u, err := url.Parse("gs://longtail-test-de/test-storage/store")
 	if err != nil {

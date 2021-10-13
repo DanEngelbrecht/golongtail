@@ -75,6 +75,7 @@ type pruneBlocksMessage struct {
 type pendingPrefetchedBlock struct {
 	storedBlock       longtaillib.Longtail_StoredBlock
 	completeCallbacks []longtaillib.Longtail_AsyncGetStoredBlockAPI
+	err               error
 }
 
 type remoteStore struct {
@@ -241,12 +242,15 @@ func fetchBlock(
 	prefetchedBlock := s.prefetchBlocks[getMsg.blockHash]
 	if prefetchedBlock != nil {
 		storedBlock := prefetchedBlock.storedBlock
+		err := prefetchedBlock.err
 		if storedBlock.IsValid() {
-			s.prefetchBlocks[getMsg.blockHash] = nil
 			blockSize := -int64(storedBlock.GetBlockSize())
 			atomic.AddInt64(&s.prefetchMemory, blockSize)
+		}
+		if storedBlock.IsValid() || err != nil {
+			s.prefetchBlocks[getMsg.blockHash] = nil
 			s.fetchedBlocksSync.Unlock()
-			getMsg.asyncCompleteAPI.OnComplete(storedBlock, nil)
+			getMsg.asyncCompleteAPI.OnComplete(storedBlock, err)
 			return
 		}
 		prefetchedBlock.completeCallbacks = append(prefetchedBlock.completeCallbacks, getMsg.asyncCompleteAPI)
@@ -337,10 +341,6 @@ func prefetchBlock(
 	s.fetchedBlocksSync.Unlock()
 
 	storedBlock, getErr := getStoredBlock(ctx, s, client, prefetchMsg.blockHash)
-	if getErr != nil {
-		log.WithError(getErr).Error("Failed to get block")
-		return
-	}
 
 	s.fetchedBlocksSync.Lock()
 
@@ -350,17 +350,22 @@ func prefetchBlock(
 		s.fetchedBlocksSync.Unlock()
 		return
 	}
+
 	completeCallbacks := prefetchedBlock.completeCallbacks
 	if len(completeCallbacks) == 0 {
 		// Nobody is actively waiting for the block
-		blockSize := int64(storedBlock.GetBlockSize())
-		prefetchedBlock.storedBlock = storedBlock
-		atomic.AddInt64(&s.prefetchMemory, blockSize)
+		if storedBlock.IsValid() {
+			blockSize := int64(storedBlock.GetBlockSize())
+			prefetchedBlock.storedBlock = storedBlock
+			atomic.AddInt64(&s.prefetchMemory, blockSize)
+		}
+		prefetchedBlock.err = getErr
 		s.fetchedBlocksSync.Unlock()
 		return
 	}
 	s.prefetchBlocks[prefetchMsg.blockHash] = nil
 	s.fetchedBlocksSync.Unlock()
+
 	for i := 1; i < len(completeCallbacks)-1; i++ {
 		c := completeCallbacks[i]
 		if getErr != nil {
@@ -379,7 +384,10 @@ func prefetchBlock(
 		}
 		c.OnComplete(blockCopy, nil)
 	}
-	completeCallbacks[0].OnComplete(storedBlock, errors.Wrap(getErr, fname))
+	if getErr != nil {
+		getErr = errors.Wrap(getErr, fname)
+	}
+	completeCallbacks[0].OnComplete(storedBlock, getErr)
 }
 
 func flushPrefetch(

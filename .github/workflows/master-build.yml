@@ -29,6 +29,9 @@ jobs:
           pushd ./commands
           go test .
           popd
+          pushd ./remotestore
+          go test .
+          popd
 
       - name: build cmd
         run: |
@@ -60,6 +63,9 @@ jobs:
           pushd ./commands
           go test .
           popd
+          pushd ./remotestore
+          go test .
+          popd
 
       - name: build cmd
         run: |
@@ -89,6 +95,9 @@ jobs:
           go test .
           popd
           pushd ./commands
+          go test .
+          popd
+          pushd ./remotestore
           go test .
           popd
 

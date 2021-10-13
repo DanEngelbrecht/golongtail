@@ -2,6 +2,8 @@ package commands
 
 import (
 	"io/ioutil"
+	"os"
+	"path"
 	"testing"
 )
 
@@ -205,4 +207,28 @@ func TestDownsyncWithLSIAndCacheWithValidate(t *testing.T) {
 		t.Errorf("%s: %s", cmd, err)
 	}
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
+}
+
+func TestDownsyncMissingChunks(t *testing.T) {
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
+
+	os.RemoveAll(path.Join(testPath, "storage/chunks"))
+
+	cmd, err := executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err == nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err == nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
+	if err == nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }

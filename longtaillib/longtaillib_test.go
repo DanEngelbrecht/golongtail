@@ -204,10 +204,18 @@ func createStoredBlock(chunkCount uint32, hashIdentifier uint32, hashOffset uint
 }
 
 func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIdentifier uint32) {
+	if !storedBlock.IsValid() {
+		t.Error("validateStoredBlock() is invalid")
+	}
 	if storedBlock.cStoredBlock == nil {
 		t.Errorf("validateStoredBlock() %p == %p", storedBlock, Longtail_StoredBlock{cStoredBlock: nil})
 	}
 	blockIndex := storedBlock.GetBlockIndex()
+
+	b, _ := WriteBlockIndexToBuffer(blockIndex)
+	bi2, _ := ReadBlockIndexFromBuffer(b)
+	bi2.Dispose()
+
 	if blockIndex.GetHashIdentifier() != hashIdentifier {
 		t.Errorf("validateStoredBlock() %d == %d", blockIndex.GetHashIdentifier(), hashIdentifier)
 	}
@@ -215,9 +223,11 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 	if blockIndex.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
 		t.Errorf("validateStoredBlock() %d != %d", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
 	}
+	if blockIndex.GetBlockHash() != storedBlock.GetBlockHash() {
+		t.Errorf("validateStoredBlock() %d != %d", storedBlock.GetBlockHash(), blockIndex.GetBlockHash())
+	}
 	if blockIndex.GetTag() != chunkCount+uint32(10000) {
 		t.Errorf("validateStoredBlock() %d != %d", chunkCount+uint32(10000), blockIndex.GetTag())
-
 	}
 	chunkHashes := blockIndex.GetChunkHashes()
 	if uint32(len(chunkHashes)) != chunkCount {
@@ -250,6 +260,14 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 		}
 		blockOffset += uint32(chunkSizes[chunkIndex])
 	}
+	if blockOffset > uint32(storedBlock.GetBlockSize()) {
+		t.Errorf("validateStoredBlock() %d < %d", blockOffset, storedBlock.GetBlockSize())
+	}
+	indexCopy, err := blockIndex.Copy()
+	if err != nil {
+		t.Errorf("validateStoredBlock() blockIndex.Copy() %s", err)
+	}
+	indexCopy.Dispose()
 }
 
 func TestStoredblock(t *testing.T) {
@@ -263,6 +281,7 @@ func TestStoredblock(t *testing.T) {
 	if err != nil {
 		t.Errorf("CreateStoredBlock() %s", err)
 	}
+	defer storedBlock.Dispose()
 	validateStoredBlock(t, storedBlock, 0xdeadbeef)
 }
 
@@ -880,6 +899,74 @@ func TestWriteContent(t *testing.T) {
 	}
 	defer versionIndex.Dispose()
 
+	if 0 == versionIndex.GetVersion() {
+		t.Errorf("TestWriteContent() GetVersion() %d", versionIndex.GetVersion())
+	}
+
+	if 0 == versionIndex.GetHashIdentifier() {
+		t.Errorf("TestWriteContent() GetHashIdentifier() %d", versionIndex.GetHashIdentifier())
+	}
+
+	if 0 == versionIndex.GetTargetChunkSize() {
+		t.Errorf("TestWriteContent() GetTargetChunkSize() %d", versionIndex.GetTargetChunkSize())
+	}
+
+	if 0 == versionIndex.GetAssetCount() {
+		t.Errorf("TestWriteContent() GetAssetCount() %d", versionIndex.GetAssetCount())
+	}
+
+	if "" == versionIndex.GetAssetPath(0) {
+		t.Errorf("TestWriteContent() GetAssetPath(0) %s", versionIndex.GetAssetPath(0))
+	}
+
+	if nil == versionIndex.GetAssetHashes() {
+		t.Errorf("TestWriteContent() GetAssetHashes() %q", versionIndex.GetAssetHashes())
+	}
+
+	if 0xffffffffffffffff == versionIndex.GetAssetSize(0) {
+		t.Errorf("TestWriteContent() versionIndex.GetAssetSize(0) %d", versionIndex.GetAssetSize(0))
+	}
+
+	if 0xffff == versionIndex.GetAssetPermissions(0) {
+		t.Errorf("TestWriteContent() versionIndex.GetAssetPermissions(0) %d", versionIndex.GetAssetPermissions(0))
+	}
+
+	if nil == versionIndex.GetAssetChunkCounts() {
+		t.Errorf("TestWriteContent() versionIndex.GetAssetChunkCounts() %q", versionIndex.GetAssetChunkCounts())
+	}
+
+	if nil == versionIndex.GetAssetChunkIndexStarts() {
+		t.Errorf("TestWriteContent() GetAssetChunkIndexStarts() %q", versionIndex.GetAssetChunkIndexStarts())
+	}
+
+	if nil == versionIndex.GetAssetChunkIndexes() {
+		t.Errorf("TestWriteContent() GetAssetChunkIndexes() %q", versionIndex.GetAssetChunkIndexes())
+	}
+
+	if 0 == versionIndex.GetChunkCount() {
+		t.Errorf("TestWriteContent() GetChunkCount() %d", versionIndex.GetChunkCount())
+	}
+
+	if nil == versionIndex.GetChunkHashes() {
+		t.Errorf("TestWriteContent() GetChunkHashes() %q", versionIndex.GetChunkHashes())
+	}
+
+	if nil == versionIndex.GetChunkSizes() {
+		t.Errorf("TestWriteContent() GetChunkSizes() %q", versionIndex.GetChunkSizes())
+	}
+
+	if nil == versionIndex.GetAssetSizes() {
+		t.Errorf("TestWriteContent() GetAssetSizes() %q", versionIndex.GetAssetSizes())
+	}
+
+	if nil == versionIndex.GetChunkTags() {
+		t.Errorf("TestWriteContent() GetChunkTags() %q", versionIndex.GetChunkTags())
+	}
+
+	b, _ := WriteVersionIndexToBuffer(versionIndex)
+	v2, _ := ReadVersionIndexFromBuffer(b)
+	v2.Dispose()
+
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
 	err = blockStoreAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
@@ -1132,6 +1219,21 @@ func TestChangeVersion(t *testing.T) {
 	existingStoreIndex := getExistingContentComplete.storeIndex
 	defer existingStoreIndex.Dispose()
 
+	b, err := WriteStoreIndexToBuffer(existingStoreIndex)
+	if err != nil {
+		t.Errorf("TestChangeVersion() WriteStoreIndexToBuffer() %s", err)
+	}
+	si2, err := ReadStoreIndexFromBuffer(b)
+	if err != nil {
+		t.Errorf("TestChangeVersion() ReadStoreIndexFromBuffer() %s", err)
+	}
+	si2.Dispose()
+	b2, err := existingStoreIndex.Copy()
+	if err != nil {
+		t.Errorf("TestChangeVersion() existingStoreIndex.Copy() %s", err)
+	}
+	b2.Dispose()
+
 	versionMissingStoreIndex, err := CreateMissingContent(
 		hashAPI,
 		existingStoreIndex,
@@ -1142,6 +1244,12 @@ func TestChangeVersion(t *testing.T) {
 		t.Errorf("TestChangeVersion() CreateMissingContent() %s", err)
 	}
 	defer versionMissingStoreIndex.Dispose()
+
+	expectedStoreIndex, err := MergeStoreIndex(existingStoreIndex, versionMissingStoreIndex)
+	if err != nil {
+		t.Errorf("TestChangeVersion() MergeStoreIndex() %s", err)
+	}
+	defer expectedStoreIndex.Dispose()
 
 	writeContentProgress := CreateProgress(t, "WriteContent")
 	defer writeContentProgress.Dispose()

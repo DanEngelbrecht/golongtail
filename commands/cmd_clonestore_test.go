@@ -54,6 +54,29 @@ func TestCloneStore(t *testing.T) {
 		t.Errorf("%s: %s", cmd, err)
 	}
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
+
+	// Run again, now it will skip all existing
+	cmd, err = executeCommandLine("clone-store",
+		"--source-storage-uri", fsSourceBlobPathPrefix+"/storage",
+		"--target-storage-uri", fsTargetBlobPathPrefix+"/storage",
+		"--source-paths", sourcePath+"/source-files.txt",
+		"--target-paths", targetPath+"/target-files.txt",
+		"--target-path", sourcePath+"/version/current",
+		"--skip-validate")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+
+	// Run again, now it will validate all existing
+	cmd, err = executeCommandLine("clone-store",
+		"--source-storage-uri", fsSourceBlobPathPrefix+"/storage",
+		"--target-storage-uri", fsTargetBlobPathPrefix+"/storage",
+		"--source-paths", sourcePath+"/source-files.txt",
+		"--target-paths", targetPath+"/target-files.txt",
+		"--target-path", sourcePath+"/version/current")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
 }
 
 func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {

@@ -3,6 +3,7 @@ package remotestore
 import (
 	"context"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"runtime"
 	"sync"
@@ -706,6 +707,34 @@ func TestPruneStoreWithoutLocking(t *testing.T) {
 	PruneStoreTest(false, t)
 }
 
+func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_StoreIndex, client longtailstorelib.BlobClient) bool {
+	storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+	defer storeIndex.Dispose()
+	if err != nil {
+		log.Printf("readStoreStoreIndexWithItems() failed with %s", err)
+		return false
+	}
+	if !storeIndex.IsValid() {
+		log.Printf("readStoreStoreIndexWithItems() returned invalid store index")
+		return false
+	}
+
+	lookup := map[uint64]bool{}
+	for _, h := range storeIndex.GetBlockHashes() {
+		lookup[h] = true
+	}
+
+	blockHashes := generatedBlocksIndex.GetBlockHashes()
+	for _, h := range blockHashes {
+		_, exists := lookup[h]
+		if !exists {
+			log.Printf("Missing direct block %d", h)
+			return false
+		}
+	}
+	return true
+}
+
 func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 
 	blockGenerateCount := 4
@@ -768,30 +797,18 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				newStoreIndex.Dispose()
 			}
 
-			storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
-			if err != nil {
-				wg.Done()
-				t.Errorf("readStoreStoreIndexWithItems() failed with %s", err)
-			}
-			if !storeIndex.IsValid() {
-				wg.Done()
-				t.Error("readStoreStoreIndexWithItems() returned invalid store index")
-			}
-			lookup := map[uint64]bool{}
-			for _, h := range storeIndex.GetBlockHashes() {
-				lookup[h] = true
+			if !validateThatBlocksArePresent(generatedBlocksIndex, client) {
+				log.Printf("Could not find generated blocks in store index, retrying...\n")
+				if !validateThatBlocksArePresent(generatedBlocksIndex, client) {
+					t.Errorf("Could not find generated blocks in store index")
+				}
 			}
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()
 			for n := 0; n < blockGenerateCount; n++ {
 				h := blockHashes[n]
 				generatedBlockHashes <- h
-				_, exists := lookup[h]
-				if !exists {
-					t.Errorf("Missing direct block %d", h)
-				}
 			}
-			storeIndex.Dispose()
 			generatedBlocksIndex.Dispose()
 
 			wg.Done()

@@ -246,8 +246,6 @@ func fetchBlock(
 		if storedBlock.IsValid() {
 			blockSize := -int64(storedBlock.GetBlockSize())
 			atomic.AddInt64(&s.prefetchMemory, blockSize)
-			s.prefetchBlocks[getMsg.blockHash] = nil
-			s.fetchedBlocksSync.Unlock()
 		}
 		if storedBlock.IsValid() || err != nil {
 			s.prefetchBlocks[getMsg.blockHash] = nil

@@ -207,6 +207,7 @@ func writeANumberWithRetry(number int, blobStore BlobStore) error {
 	if err != nil {
 		return err
 	}
+	retries := 0
 	for {
 		exists, err := object.LockWriteVersion()
 		if err != nil {
@@ -230,9 +231,81 @@ func writeANumberWithRetry(number int, blobStore BlobStore) error {
 			return err
 		}
 		if ok {
-			log.Printf("Wrote %d\n", number)
+			if retries > 0 {
+				log.Printf("Wrote %d (after %d retries)\n", number, retries)
+			}
 			return nil
 		}
-		log.Printf("Retrying %d\n", number)
+		retries++
+		log.Printf("Retrying %d (failed %d times)\n", number, retries)
+	}
+}
+
+func TestCreateFSBlobStoreFromURI(t *testing.T) {
+	blobStore, err := CreateBlobStoreForURI("fsblob://my-blob-store")
+	if err != nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
+	}
+	name := blobStore.String()
+	if !strings.Contains(name, "my-blob-store") {
+		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
+	}
+}
+
+func TestCreateGCSBlobStoreFromURI(t *testing.T) {
+	blobStore, err := CreateBlobStoreForURI("gs://my-blob-store")
+	if err != nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
+	}
+	name := blobStore.String()
+	if !strings.Contains(name, "my-blob-store") {
+		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
+	}
+}
+
+func TestCreateS3BlobStoreFromURI(t *testing.T) {
+	blobStore, err := CreateBlobStoreForURI("s3://my-blob-store")
+	if err != nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
+	}
+	name := blobStore.String()
+	if !strings.Contains(name, "my-blob-store") {
+		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
+	}
+}
+
+func TestCreateFileBlobStoreFromURI(t *testing.T) {
+	blobStore, err := CreateBlobStoreForURI("file://my-blob-store")
+	if err != nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
+	}
+	name := blobStore.String()
+	if !strings.Contains(name, "my-blob-store") {
+		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
+	}
+}
+
+func TestCreateFileBlobStoreFromPath(t *testing.T) {
+	blobStore, err := CreateBlobStoreForURI("c:\\temp\\my-blob-store")
+	if err != nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
+	}
+	name := blobStore.String()
+	if !strings.Contains(name, "my-blob-store") {
+		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
+	}
+}
+
+func TestCreateAzureGen1BlobStoreFromPath(t *testing.T) {
+	_, err := CreateBlobStoreForURI("abfs://my-blob-store")
+	if err == nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", "should fail")
+	}
+}
+
+func TestCreateAzureGen2BlobStoreFromPath(t *testing.T) {
+	_, err := CreateBlobStoreForURI("abfss://my-blob-store")
+	if err == nil {
+		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", "should fail")
 	}
 }

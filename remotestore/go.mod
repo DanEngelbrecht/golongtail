@@ -1,6 +1,6 @@
 module github.com/DanEngelbrecht/golongtail/remotestore
 
-go 1.15
+go 1.17
 
 require (
 	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0-00010101000000-000000000000

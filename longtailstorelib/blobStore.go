@@ -81,14 +81,3 @@ func CreateBlobStoreForURI(uri string) (BlobStore, error) {
 
 	return NewFSBlobStore(uri, false)
 }
-
-func splitURI(uri string) (string, string) {
-	i := strings.LastIndex(uri, "/")
-	if i == -1 {
-		i = strings.LastIndex(uri, "\\")
-	}
-	if i == -1 {
-		return "", uri
-	}
-	return uri[:i], uri[i+1:]
-}

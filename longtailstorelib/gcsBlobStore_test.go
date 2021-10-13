@@ -28,16 +28,83 @@ func TestGCSBlobStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
+	defer client.Close()
+	{
+		// Clean up any old test data
+		object, _ := client.NewObject("test.txt")
+		object.Delete()
+		object, _ = client.NewObject("path/first.txt")
+		object.Delete()
+		object, _ = client.NewObject("path/second.txt")
+		object.Delete()
+	}
 	object, err := client.NewObject("test.txt")
 	if err != nil {
 		t.Errorf("client.NewObject() err == %s", err)
 	}
-	ok, err := object.Write([]byte("apa"))
+
+	exists, err := object.Exists()
+	if err != nil {
+		t.Error("object.Exists() err != nil")
+	}
+	if exists {
+		t.Error("object.Exists() true != false")
+	}
+
+	data, err := object.Read()
+	if data != nil && err != nil {
+		t.Errorf("object.Read() nil != %v", err)
+	}
+
+	testData := []byte("apa")
+	ok, err := object.Write(testData)
 	if !ok {
 		t.Errorf("object.Write() ok != true")
 	}
 	if err != nil {
 		t.Errorf("object.Write() err == %s", err)
+	}
+
+	exists, err = object.Exists()
+	if err != nil {
+		t.Error("object.Exists() err != nil")
+	}
+	if !exists {
+		t.Error("object.Exists() false != true")
+	}
+
+	blobs, err := client.GetObjects("")
+	if err != nil {
+		t.Errorf("client.GetObjects(\"\") err == %s", err)
+	}
+	if blobs[0].Name != "test.txt" {
+		t.Errorf("blobs[0].Name %s != %s", blobs[0].Name, "test.txt")
+	}
+	data, err = object.Read()
+	if len(data) != 3 {
+		t.Errorf("len(data) %d != %d", len(data), 3)
+	}
+	for i, d := range data {
+		if d != testData[i] {
+			t.Errorf("%d != testData[%d]", int(d), int(testData[i]))
+		}
+	}
+
+	object, _ = client.NewObject("path/first.txt")
+	object.Delete()
+	_, _ = object.Write([]byte("dog"))
+	object, _ = client.NewObject("path/second.txt")
+	object.Delete()
+	_, _ = object.Write([]byte("cat"))
+
+	objects, _ := client.GetObjects("")
+	if len(objects) != 3 {
+		t.Errorf("len(objects) %d != 3", len(objects))
+	}
+
+	objects, _ = client.GetObjects("path/")
+	if len(objects) != 2 {
+		t.Errorf("len(objects) %d != 2", len(objects))
 	}
 }
 
@@ -88,11 +155,15 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	if err != nil {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
+	{
+		// Clean up any old test data
+		object, _ := client.NewObject("test.txt")
+		object.Delete()
+	}
 	object, err := client.NewObject("test.txt")
 	if err != nil {
 		t.Errorf("client.NewObject() err == %s", err)
 	}
-	err = object.Delete()
 	exists, err := object.LockWriteVersion()
 	if err != nil {
 		t.Errorf("object.LockWriteVersion() err == %s", err)
@@ -106,6 +177,13 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	}
 	if err != nil {
 		t.Errorf("object.Write() err == %s", err)
+	}
+	exists, err = object.Exists()
+	if err != nil {
+		t.Error("object.Exists() err != nil")
+	}
+	if !exists {
+		t.Error("object.Exists() false != true")
 	}
 	ok, err = object.Write([]byte("skapa"))
 	if ok {
@@ -144,6 +222,13 @@ func TestGCSBlobStoreVersioning(t *testing.T) {
 	if err != nil {
 		t.Errorf("object.Delete() err == %s", err)
 	}
+	exists, err = object.Exists()
+	if err != nil {
+		t.Error("object.Exists() err != nil")
+	}
+	if exists {
+		t.Error("object.Exists() true != false")
+	}
 }
 
 func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
@@ -158,24 +243,30 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 	if err != nil {
 		t.Errorf("NewGCSBlobStore() err == %s", err)
 	}
+	client, _ := blobStore.NewClient(context.Background())
+	{
+		// Clean up any old test data
+		object, _ := client.NewObject("test.txt")
+		object.Delete()
+	}
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ {
-		wg.Add(20)
-		for n := 0; n < 20; n++ {
+	for i := 0; i < 3; i++ {
+		wg.Add(5)
+		for n := 0; n < 5; n++ {
 			go func(number int, blobStore BlobStore) {
 				err := writeANumberWithRetry(number, blobStore)
 				if err != nil {
 					t.Errorf("writeANumberWithRetry() err == %s", err)
 				}
 				wg.Done()
-			}(i*20+n+1, blobStore)
+			}(i*5+n+1, blobStore)
 		}
 		wg.Wait()
 	}
 
-	client, err := blobStore.NewClient(context.Background())
+	client, err = blobStore.NewClient(context.Background())
 	if err != nil {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
@@ -189,10 +280,10 @@ func TestGCSBlobStoreVersioningStressTest(t *testing.T) {
 		t.Errorf("object.Read() err == %s", err)
 	}
 	sliceData := strings.Split(string(data), "\n")
-	if len(sliceData) != 10*20 {
+	if len(sliceData) != 3*5 {
 		t.Errorf("strings.Split() err == %s", err)
 	}
-	for i := 0; i < 10*20; i++ {
+	for i := 0; i < 3*5; i++ {
 		expected := fmt.Sprintf("%05d", i+1)
 		if sliceData[i] != expected {
 			t.Errorf("strings.Split() %q == %q", sliceData[i], expected)

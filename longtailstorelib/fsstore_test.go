@@ -139,9 +139,9 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < 10; i++ {
-		wg.Add(20)
-		for n := 0; n < 20; n++ {
+	for i := 0; i < 5; i++ {
+		wg.Add(5)
+		for n := 0; n < 5; n++ {
 			go func(number int, blobStore BlobStore) {
 				err := writeANumberWithRetry(number, blobStore)
 				if err != nil {
@@ -149,7 +149,7 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 					t.Errorf("writeANumberWithRetry() err == %s", err)
 				}
 				wg.Done()
-			}(i*20+n+1, blobStore)
+			}(i*5+n+1, blobStore)
 		}
 		wg.Wait()
 	}
@@ -168,10 +168,10 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 		t.Errorf("object.Read() err == %s", err)
 	}
 	sliceData := strings.Split(string(data), "\n")
-	if len(sliceData) != 10*20 {
+	if len(sliceData) != 5*5 {
 		t.Errorf("strings.Split() err == %s", err)
 	}
-	for i := 0; i < 10*20; i++ {
+	for i := 0; i < 5*5; i++ {
 		expected := fmt.Sprintf("%05d", i+1)
 		if sliceData[i] != expected {
 			t.Errorf("strings.Split() %q == %q", sliceData[i], expected)

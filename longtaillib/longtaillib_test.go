@@ -82,6 +82,17 @@ func (a *testPruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err e
 	a.wg.Done()
 }
 
+type flushCompletionAPI struct {
+	asyncFlushAPI Longtail_AsyncFlushAPI
+	wg            sync.WaitGroup
+	err           error
+}
+
+func (a *flushCompletionAPI) OnComplete(err error) {
+	a.err = err
+	a.wg.Done()
+}
+
 type testLogger struct {
 	t *testing.T
 }
@@ -193,10 +204,18 @@ func createStoredBlock(chunkCount uint32, hashIdentifier uint32, hashOffset uint
 }
 
 func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIdentifier uint32) {
+	if !storedBlock.IsValid() {
+		t.Error("validateStoredBlock() is invalid")
+	}
 	if storedBlock.cStoredBlock == nil {
 		t.Errorf("validateStoredBlock() %p == %p", storedBlock, Longtail_StoredBlock{cStoredBlock: nil})
 	}
 	blockIndex := storedBlock.GetBlockIndex()
+
+	b, _ := WriteBlockIndexToBuffer(blockIndex)
+	bi2, _ := ReadBlockIndexFromBuffer(b)
+	bi2.Dispose()
+
 	if blockIndex.GetHashIdentifier() != hashIdentifier {
 		t.Errorf("validateStoredBlock() %d == %d", blockIndex.GetHashIdentifier(), hashIdentifier)
 	}
@@ -204,9 +223,11 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 	if blockIndex.GetBlockHash() != uint64(0xdeadbeef500177aa)+uint64(chunkCount) {
 		t.Errorf("validateStoredBlock() %d != %d", uint64(0xdeadbeef500177aa)+uint64(chunkCount), blockIndex.GetBlockHash())
 	}
+	if blockIndex.GetBlockHash() != storedBlock.GetBlockHash() {
+		t.Errorf("validateStoredBlock() %d != %d", storedBlock.GetBlockHash(), blockIndex.GetBlockHash())
+	}
 	if blockIndex.GetTag() != chunkCount+uint32(10000) {
 		t.Errorf("validateStoredBlock() %d != %d", chunkCount+uint32(10000), blockIndex.GetTag())
-
 	}
 	chunkHashes := blockIndex.GetChunkHashes()
 	if uint32(len(chunkHashes)) != chunkCount {
@@ -239,6 +260,14 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 		}
 		blockOffset += uint32(chunkSizes[chunkIndex])
 	}
+	if blockOffset > uint32(storedBlock.GetBlockSize()) {
+		t.Errorf("validateStoredBlock() %d < %d", blockOffset, storedBlock.GetBlockSize())
+	}
+	indexCopy, err := blockIndex.Copy()
+	if err != nil {
+		t.Errorf("validateStoredBlock() blockIndex.Copy() %s", err)
+	}
+	indexCopy.Dispose()
 }
 
 func TestStoredblock(t *testing.T) {
@@ -252,6 +281,7 @@ func TestStoredblock(t *testing.T) {
 	if err != nil {
 		t.Errorf("CreateStoredBlock() %s", err)
 	}
+	defer storedBlock.Dispose()
 	validateStoredBlock(t, storedBlock, 0xdeadbeef)
 }
 
@@ -612,7 +642,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 
 	storedBlock, err := createStoredBlock(2, 0xdeadbeef, 0)
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
+		t.Errorf("TestPutGetStoredBlock() createStoredBlock() %s", err)
 	}
 	defer storedBlock.Dispose()
 
@@ -620,12 +650,12 @@ func TestPutGetStoredBlock(t *testing.T) {
 	putStoredBlockComplete.wg.Add(1)
 	err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
+		t.Errorf("TestPutGetStoredBlock() PutStoredBlock() %s", err)
 		putStoredBlockComplete.wg.Done()
 	}
 	putStoredBlockComplete.wg.Wait()
 	if putStoredBlockComplete.err != nil {
-		t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
+		t.Errorf("TestPutGetStoredBlock() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 	}
 
 	getStoredBlockComplete := &testGetBlockCompletionAPI{}
@@ -633,12 +663,12 @@ func TestPutGetStoredBlock(t *testing.T) {
 	getStoredBlockComplete.wg.Add(1)
 	err = blockStoreProxy.GetStoredBlock(storedBlockIndex.GetBlockHash(), CreateAsyncGetStoredBlockAPI(getStoredBlockComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() GetStoredBlock() %s", err)
+		t.Errorf("TestPutGetStoredBlock() GetStoredBlock() %s", err)
 		getStoredBlockComplete.wg.Done()
 	}
 	getStoredBlockComplete.wg.Wait()
 	if getStoredBlockComplete.err != nil {
-		t.Errorf("TestFSBlockStore() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
+		t.Errorf("TestPutGetStoredBlock() getStoredBlockComplete.err %s", getStoredBlockComplete.err)
 	}
 	getBlock := getStoredBlockComplete.storedBlock
 	getStoredBlockComplete.storedBlock = Longtail_StoredBlock{}
@@ -647,13 +677,13 @@ func TestPutGetStoredBlock(t *testing.T) {
 
 	stats, err := blockStoreProxy.GetStats()
 	if err != nil {
-		t.Errorf("TestBlockStoreProxy() GetStats() %wd", err)
+		t.Errorf("TestPutGetStoredBlock() GetStats() %wd", err)
 	}
 	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1)
+		t.Errorf("TestPutGetStoredBlock() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1)
 	}
 	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count] != 1 {
-		t.Errorf("TestBlockStoreProxy() stats.BlocksPutCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1)
+		t.Errorf("TestPutGetStoredBlock() stats.BlocksPutCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Count], 1)
 	}
 
 	blockStoreProxy.Dispose()
@@ -677,7 +707,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 	{
 		storedBlock, err := createStoredBlock(2, 0xdeadbeef, 0)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -689,19 +719,19 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
+			t.Errorf("TestPruneStoredBlocks() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 
 	{
 		storedBlock, err := createStoredBlock(3, 0xdeadbeef, 10000)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -713,18 +743,18 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
+			t.Errorf("TestPruneStoredBlocks() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 	{
 		storedBlock, err := createStoredBlock(1, 0xdeadbeef, 20000)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -736,18 +766,18 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
+			t.Errorf("TestPruneStoredBlocks() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 	{
 		storedBlock, err := createStoredBlock(4, 0xdeadbeef, 30000)
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() createStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() createStoredBlock() %s", err)
 		}
 		defer storedBlock.Dispose()
 		blockIndex := storedBlock.GetBlockIndex()
@@ -759,12 +789,12 @@ func TestPruneStoredBlocks(t *testing.T) {
 		putStoredBlockComplete.wg.Add(1)
 		err = blockStoreProxy.PutStoredBlock(storedBlock, CreateAsyncPutStoredBlockAPI(putStoredBlockComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxy() PutStoredBlock() %s", err)
+			t.Errorf("TestPruneStoredBlocks() PutStoredBlock() %s", err)
 			putStoredBlockComplete.wg.Done()
 		}
 		putStoredBlockComplete.wg.Wait()
 		if putStoredBlockComplete.err != nil {
-			t.Errorf("TestBlockStoreProxy() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
+			t.Errorf("TestPruneStoredBlocks() putStoredBlockComplete.err %s", putStoredBlockComplete.err)
 		}
 	}
 
@@ -773,7 +803,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 		getExistingContentComplete.wg.Add(1)
 		err := blockStoreProxy.GetExistingContent(allChunkHashes, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %s", err)
+			t.Errorf("TestPruneStoredBlocks() blockStoreProxy.GetExistingContent() %s", err)
 			getExistingContentComplete.wg.Done()
 		}
 		getExistingContentComplete.wg.Wait()
@@ -786,15 +816,15 @@ func TestPruneStoredBlocks(t *testing.T) {
 	pruneBlocksComplete.wg.Add(1)
 	err := blockStoreProxy.PruneBlocks(keepBlockHashes, CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.PruneBlocks() %s", err)
+		t.Errorf("TestPruneStoredBlocks() blockStoreProxy.PruneBlocks() %s", err)
 		pruneBlocksComplete.wg.Done()
 	}
 	pruneBlocksComplete.wg.Wait()
 	if pruneBlocksComplete.err != nil {
-		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.err %s", err)
+		t.Errorf("TestPruneStoredBlocks() pruneBlocksComplete.err %s", err)
 	}
 	if pruneBlocksComplete.prunedBlockCount != 2 {
-		t.Errorf("TestBlockStoreProxyFull() pruneBlocksComplete.prunedBlockCount %d != %d", 2, pruneBlocksComplete.prunedBlockCount)
+		t.Errorf("TestPruneStoredBlocks() pruneBlocksComplete.prunedBlockCount %d != %d", 2, pruneBlocksComplete.prunedBlockCount)
 	}
 
 	{
@@ -802,7 +832,7 @@ func TestPruneStoredBlocks(t *testing.T) {
 		getExistingContentComplete.wg.Add(1)
 		err = blockStoreProxy.GetExistingContent(allChunkHashes, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 		if err != nil {
-			t.Errorf("TestBlockStoreProxyFull() blockStoreProxy.GetExistingContent() %s", err)
+			t.Errorf("TestPruneStoredBlocks() blockStoreProxy.GetExistingContent() %s", err)
 			getExistingContentComplete.wg.Done()
 		}
 		getExistingContentComplete.wg.Wait()
@@ -810,16 +840,16 @@ func TestPruneStoredBlocks(t *testing.T) {
 		defer prunedStoreIndex.Dispose()
 		blockHashes := prunedStoreIndex.GetBlockHashes()
 		if len(blockHashes) != 2 {
-			t.Errorf("TestBlockStoreProxyFull() len(blockHashes) %d != %d", 2, len(blockHashes))
+			t.Errorf("TestPruneStoredBlocks() len(blockHashes) %d != %d", 2, len(blockHashes))
 		}
 		expectedBlockHashes := []uint64{allBlockHashes[1], allBlockHashes[3]}
 		sort.Slice(expectedBlockHashes, func(i, j int) bool { return expectedBlockHashes[i] < expectedBlockHashes[j] })
 		sort.Slice(blockHashes, func(i, j int) bool { return blockHashes[i] < blockHashes[j] })
 		if expectedBlockHashes[0] != blockHashes[0] {
-			t.Errorf("TestBlockStoreProxyFull() blockHashes[0] %d != %d", expectedBlockHashes[0], blockHashes[0])
+			t.Errorf("TestPruneStoredBlocks() blockHashes[0] %d != %d", expectedBlockHashes[0], blockHashes[0])
 		}
 		if expectedBlockHashes[1] != blockHashes[1] {
-			t.Errorf("TestBlockStoreProxyFull() blockHashes[1] %d != %d", expectedBlockHashes[1], blockHashes[1])
+			t.Errorf("TestPruneStoredBlocks() blockHashes[1] %d != %d", expectedBlockHashes[1], blockHashes[1])
 		}
 	}
 
@@ -850,7 +880,7 @@ func TestWriteContent(t *testing.T) {
 
 	fileInfos, err := GetFilesRecursively(storageAPI, pathFilter, "content")
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() GetFilesRecursively() %s", err)
+		t.Errorf("TestWriteContent() GetFilesRecursively() %s", err)
 	}
 	defer fileInfos.Dispose()
 	tags := make([]uint32, fileInfos.GetFileCount())
@@ -865,15 +895,83 @@ func TestWriteContent(t *testing.T) {
 		tags,
 		32768)
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() CreateVersionIndex() %s", err)
+		t.Errorf("TestWriteContent() CreateVersionIndex() %s", err)
 	}
 	defer versionIndex.Dispose()
+
+	if 0 == versionIndex.GetVersion() {
+		t.Errorf("TestWriteContent() GetVersion() %d", versionIndex.GetVersion())
+	}
+
+	if 0 == versionIndex.GetHashIdentifier() {
+		t.Errorf("TestWriteContent() GetHashIdentifier() %d", versionIndex.GetHashIdentifier())
+	}
+
+	if 0 == versionIndex.GetTargetChunkSize() {
+		t.Errorf("TestWriteContent() GetTargetChunkSize() %d", versionIndex.GetTargetChunkSize())
+	}
+
+	if 0 == versionIndex.GetAssetCount() {
+		t.Errorf("TestWriteContent() GetAssetCount() %d", versionIndex.GetAssetCount())
+	}
+
+	if "" == versionIndex.GetAssetPath(0) {
+		t.Errorf("TestWriteContent() GetAssetPath(0) %s", versionIndex.GetAssetPath(0))
+	}
+
+	if nil == versionIndex.GetAssetHashes() {
+		t.Errorf("TestWriteContent() GetAssetHashes() %q", versionIndex.GetAssetHashes())
+	}
+
+	if 0xffffffffffffffff == versionIndex.GetAssetSize(0) {
+		t.Errorf("TestWriteContent() versionIndex.GetAssetSize(0) %d", versionIndex.GetAssetSize(0))
+	}
+
+	if 0xffff == versionIndex.GetAssetPermissions(0) {
+		t.Errorf("TestWriteContent() versionIndex.GetAssetPermissions(0) %d", versionIndex.GetAssetPermissions(0))
+	}
+
+	if nil == versionIndex.GetAssetChunkCounts() {
+		t.Errorf("TestWriteContent() versionIndex.GetAssetChunkCounts() %q", versionIndex.GetAssetChunkCounts())
+	}
+
+	if nil == versionIndex.GetAssetChunkIndexStarts() {
+		t.Errorf("TestWriteContent() GetAssetChunkIndexStarts() %q", versionIndex.GetAssetChunkIndexStarts())
+	}
+
+	if nil == versionIndex.GetAssetChunkIndexes() {
+		t.Errorf("TestWriteContent() GetAssetChunkIndexes() %q", versionIndex.GetAssetChunkIndexes())
+	}
+
+	if 0 == versionIndex.GetChunkCount() {
+		t.Errorf("TestWriteContent() GetChunkCount() %d", versionIndex.GetChunkCount())
+	}
+
+	if nil == versionIndex.GetChunkHashes() {
+		t.Errorf("TestWriteContent() GetChunkHashes() %q", versionIndex.GetChunkHashes())
+	}
+
+	if nil == versionIndex.GetChunkSizes() {
+		t.Errorf("TestWriteContent() GetChunkSizes() %q", versionIndex.GetChunkSizes())
+	}
+
+	if nil == versionIndex.GetAssetSizes() {
+		t.Errorf("TestWriteContent() GetAssetSizes() %q", versionIndex.GetAssetSizes())
+	}
+
+	if nil == versionIndex.GetChunkTags() {
+		t.Errorf("TestWriteContent() GetChunkTags() %q", versionIndex.GetChunkTags())
+	}
+
+	b, _ := WriteVersionIndexToBuffer(versionIndex)
+	v2, _ := ReadVersionIndexFromBuffer(b)
+	v2.Dispose()
 
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete.wg.Add(1)
 	err = blockStoreAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %s", err)
+		t.Errorf("TestWriteContent() blockStoreAPI.GetExistingContent() %s", err)
 		getExistingContentComplete.wg.Done()
 	}
 	getExistingContentComplete.wg.Wait()
@@ -887,7 +985,7 @@ func TestWriteContent(t *testing.T) {
 		32768*2,
 		8)
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() CreateMissingContent() %s", err)
+		t.Errorf("TestWriteContent() CreateMissingContent() %s", err)
 		getExistingContentComplete.wg.Done()
 	}
 	defer missingStoreIndex.Dispose()
@@ -901,7 +999,7 @@ func TestWriteContent(t *testing.T) {
 		versionIndex,
 		"content")
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() WriteContent() %s", err)
+		t.Errorf("TestWriteContent() WriteContent() %s", err)
 	}
 }
 
@@ -1049,7 +1147,7 @@ func TestRewriteVersion(t *testing.T) {
 	getExistingContentComplete.wg.Add(1)
 	err = blockStorageAPI.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
 	if err != nil {
-		t.Errorf("TestBlockStoreProxyFull() blockStoreAPI.GetExistingContent() %s", err)
+		t.Errorf("TestRewriteVersion() blockStoreAPI.GetExistingContent() %s", err)
 		getExistingContentComplete.wg.Done()
 	}
 	getExistingContentComplete.wg.Wait()
@@ -1068,5 +1166,220 @@ func TestRewriteVersion(t *testing.T) {
 		true)
 	if err != nil {
 		t.Errorf("TestRewriteVersion() WriteVersion() %s", err)
+	}
+}
+
+func TestChangeVersion(t *testing.T) {
+	storageAPI := createFilledStorage("content")
+	defer storageAPI.Dispose()
+	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
+	if err != nil {
+		t.Errorf("TestRewriteVersion() GetFilesRecursively() %s", err)
+	}
+	defer fileInfos.Dispose()
+
+	hashAPI := CreateBlake2HashAPI()
+	defer hashAPI.Dispose()
+	chunkerAPI := CreateHPCDCChunkerAPI()
+	defer chunkerAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobAPI.Dispose()
+
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), didClose: false}
+	blockStoreProxy := CreateBlockStoreAPI(blockStore)
+	blockStore.blockStoreAPI = blockStoreProxy
+	defer blockStoreProxy.Dispose()
+
+	compressionTypes := make([]uint32, fileInfos.GetFileCount())
+
+	createVersionProgress := CreateProgress(t, "CreateVersionIndex")
+	versionIndex, err := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		chunkerAPI,
+		jobAPI,
+		&createVersionProgress,
+		"content",
+		fileInfos,
+		compressionTypes,
+		32768)
+	if err != nil {
+		t.Errorf("TestChangeVersion() CreateVersionIndex() %s", err)
+	}
+	defer versionIndex.Dispose()
+
+	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
+	getExistingContentComplete.wg.Add(1)
+	err = blockStoreProxy.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+	if err != nil {
+		t.Errorf("TestChangeVersion() blockStoreAPI.GetExistingContent() %s", err)
+		getExistingContentComplete.wg.Done()
+	}
+	getExistingContentComplete.wg.Wait()
+	existingStoreIndex := getExistingContentComplete.storeIndex
+	defer existingStoreIndex.Dispose()
+
+	b, err := WriteStoreIndexToBuffer(existingStoreIndex)
+	if err != nil {
+		t.Errorf("TestChangeVersion() WriteStoreIndexToBuffer() %s", err)
+	}
+	si2, err := ReadStoreIndexFromBuffer(b)
+	if err != nil {
+		t.Errorf("TestChangeVersion() ReadStoreIndexFromBuffer() %s", err)
+	}
+	si2.Dispose()
+	b2, err := existingStoreIndex.Copy()
+	if err != nil {
+		t.Errorf("TestChangeVersion() existingStoreIndex.Copy() %s", err)
+	}
+	b2.Dispose()
+
+	versionMissingStoreIndex, err := CreateMissingContent(
+		hashAPI,
+		existingStoreIndex,
+		versionIndex,
+		65536,
+		1024)
+	if err != nil {
+		t.Errorf("TestChangeVersion() CreateMissingContent() %s", err)
+	}
+	defer versionMissingStoreIndex.Dispose()
+
+	expectedStoreIndex, err := MergeStoreIndex(existingStoreIndex, versionMissingStoreIndex)
+	if err != nil {
+		t.Errorf("TestChangeVersion() MergeStoreIndex() %s", err)
+	}
+	defer expectedStoreIndex.Dispose()
+
+	writeContentProgress := CreateProgress(t, "WriteContent")
+	defer writeContentProgress.Dispose()
+
+	err = WriteContent(
+		storageAPI,
+		blockStoreProxy,
+		jobAPI,
+		&writeContentProgress,
+		versionMissingStoreIndex,
+		versionIndex,
+		"content")
+	if err != nil {
+		t.Errorf("TestChangeVersion() WriteContent() %s", err)
+	}
+
+	storageAPI2 := createFilledStorage("content2")
+	fileInfos2, err := GetFilesRecursively(storageAPI2, Longtail_PathFilterAPI{}, "content2")
+	if err != nil {
+		t.Errorf("TestRewriteVersion() GetFilesRecursively() %s", err)
+	}
+	defer fileInfos2.Dispose()
+
+	compressionTypes = make([]uint32, fileInfos2.GetFileCount())
+
+	createVersionProgress2 := CreateProgress(t, "CreateVersionIndex")
+	versionIndex2, err := CreateVersionIndex(
+		storageAPI2,
+		hashAPI,
+		chunkerAPI,
+		jobAPI,
+		&createVersionProgress2,
+		"content2",
+		fileInfos2,
+		compressionTypes,
+		32768)
+	if err != nil {
+		t.Errorf("TestChangeVersion() CreateVersionIndex() %s", err)
+	}
+	defer versionIndex2.Dispose()
+
+	versionDiff2, err := CreateVersionDiff(hashAPI, versionIndex, versionIndex2)
+	defer versionDiff2.Dispose()
+
+	chunkHashes2, err := GetRequiredChunkHashes(versionIndex2, versionDiff2)
+
+	getExistingContentComplete2 := &testGetExistingContentCompletionAPI{}
+	getExistingContentComplete2.wg.Add(1)
+	err = blockStoreProxy.GetExistingContent(chunkHashes2, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete2))
+	if err != nil {
+		t.Errorf("TestChangeVersion() blockStoreAPI.GetExistingContent() %s", err)
+		getExistingContentComplete2.wg.Done()
+	}
+	getExistingContentComplete2.wg.Wait()
+	existingStoreIndex2 := getExistingContentComplete2.storeIndex
+	defer existingStoreIndex2.Dispose()
+
+	versionMissingStoreIndex2, err := CreateMissingContent(
+		hashAPI,
+		existingStoreIndex2,
+		versionIndex2,
+		65536,
+		1024)
+	if err != nil {
+		t.Errorf("TestChangeVersion() CreateMissingContent() %s", err)
+	}
+	defer versionMissingStoreIndex2.Dispose()
+
+	writeContentProgress2 := CreateProgress(t, "WriteContent")
+	defer writeContentProgress2.Dispose()
+
+	err = WriteContent(
+		storageAPI2,
+		blockStoreProxy,
+		jobAPI,
+		&writeContentProgress2,
+		versionMissingStoreIndex2,
+		versionIndex2,
+		"content2")
+	if err != nil {
+		t.Errorf("TestChangeVersion() WriteContent() %s", err)
+	}
+
+	chunkHashes3, err := GetRequiredChunkHashes(
+		versionIndex2,
+		versionDiff2)
+	if err != nil {
+		t.Errorf("TestChangeVersion() GetRequiredChunkHashes() %s", err)
+	}
+
+	getExistingContentComplete3 := &testGetExistingContentCompletionAPI{}
+	getExistingContentComplete3.wg.Add(1)
+	err = blockStoreProxy.GetExistingContent(chunkHashes3, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete3))
+	if err != nil {
+		t.Errorf("TestChangeVersion() blockStoreAPI.GetExistingContent() %s", err)
+		getExistingContentComplete3.wg.Done()
+	}
+	getExistingContentComplete3.wg.Wait()
+	existingStoreIndex3 := getExistingContentComplete3.storeIndex
+	defer existingStoreIndex3.Dispose()
+
+	changeVersionProgress := CreateProgress(t, "ChangeVersion")
+	defer changeVersionProgress.Dispose()
+
+	err = ChangeVersion(
+		blockStoreProxy,
+		storageAPI,
+		hashAPI,
+		jobAPI,
+		&changeVersionProgress,
+		existingStoreIndex3,
+		versionIndex,
+		versionIndex2,
+		versionDiff2,
+		"content",
+		true)
+	if err != nil {
+		t.Errorf("TestChangeVersion() ChangeVersion() %s", err)
+	}
+
+	targetStoreFlushComplete := &flushCompletionAPI{}
+	targetStoreFlushComplete.wg.Add(1)
+	targetStoreFlushComplete.asyncFlushAPI = CreateAsyncFlushAPI(targetStoreFlushComplete)
+	err = blockStoreProxy.Flush(targetStoreFlushComplete.asyncFlushAPI)
+	if err != nil {
+		t.Errorf("TestChangeVersion() blockStoreProxy.Flush() %s", err)
+		targetStoreFlushComplete.wg.Done()
+	}
+	targetStoreFlushComplete.wg.Wait()
+	if targetStoreFlushComplete.err != nil {
+		t.Errorf("TestChangeVersion() blockStoreProxy.Flush() OnComplete: %s", err)
 	}
 }

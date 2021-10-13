@@ -26,9 +26,26 @@ func TestS3BlobStore(t *testing.T) {
 		t.Errorf("blobStore.NewClient() err == %s", err)
 	}
 	defer client.Close()
+	{
+		// Clean up any old test data
+		object, _ := client.NewObject("test.txt")
+		object.Delete()
+		object, _ = client.NewObject("path/first.txt")
+		object.Delete()
+		object, _ = client.NewObject("path/second.txt")
+		object.Delete()
+	}
 	object, err := client.NewObject("test.txt")
 	if err != nil {
 		t.Errorf("client.NewObject() err == %s", err)
+	}
+
+	exists, err := object.Exists()
+	if err != nil {
+		t.Error("object.Exists() err != nil")
+	}
+	if exists {
+		t.Error("object.Exists() true != false")
 	}
 
 	data, err := object.Read()
@@ -44,6 +61,15 @@ func TestS3BlobStore(t *testing.T) {
 	if err != nil {
 		t.Errorf("object.Write() err == %s", err)
 	}
+
+	exists, err = object.Exists()
+	if err != nil {
+		t.Error("object.Exists() err != nil")
+	}
+	if !exists {
+		t.Error("object.Exists() false != true")
+	}
+
 	blobs, err := client.GetObjects("")
 	if err != nil {
 		t.Errorf("client.GetObjects(\"\") err == %s", err)
@@ -62,9 +88,10 @@ func TestS3BlobStore(t *testing.T) {
 	}
 
 	object, _ = client.NewObject("path/first.txt")
+	object.Delete()
 	_, _ = object.Write([]byte("dog"))
-
 	object, _ = client.NewObject("path/second.txt")
+	object.Delete()
 	_, _ = object.Write([]byte("cat"))
 
 	objects, _ := client.GetObjects("")

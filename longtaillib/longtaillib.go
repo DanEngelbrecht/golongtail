@@ -402,7 +402,7 @@ func UnrefPointer(ptr unsafe.Pointer) {
 }
 
 // ReadFromStorage ...
-func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path string) (b []byte, err error) {
+func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path string) ([]byte, error) {
 	const fname = "ReadFromStorage"
 
 	cRootPath := C.CString(rootPath)
@@ -436,7 +436,7 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 }
 
 // WriteToStorage ...
-func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path string, blockData []byte) (err error) {
+func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path string, blockData []byte) error {
 	const fname = "WriteToStorage"
 
 	cRootPath := C.CString(rootPath)
@@ -471,7 +471,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 	return nil
 }
 
-func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (f Longtail_StorageAPI_HOpenFile, err error) {
+func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_StorageAPI_HOpenFile, error) {
 	const fname = "OpenReadFile"
 
 	cPath := C.CString(path)
@@ -484,7 +484,7 @@ func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (f Longtail_Sto
 	return Longtail_StorageAPI_HOpenFile{cOpenFile: cOpenFile}, nil
 }
 
-func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) (s uint64, err error) {
+func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) (uint64, error) {
 	const fname = "GetSize"
 
 	var size C.uint64_t
@@ -495,7 +495,7 @@ func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) 
 	return uint64(size), nil
 }
 
-func (storageAPI *Longtail_StorageAPI) Read(f Longtail_StorageAPI_HOpenFile, offset uint64, size uint64) (b []byte, err error) {
+func (storageAPI *Longtail_StorageAPI) Read(f Longtail_StorageAPI_HOpenFile, offset uint64, size uint64) ([]byte, error) {
 	const fname = "Read"
 
 	blockData := make([]byte, size)
@@ -511,7 +511,7 @@ func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile
 	f.cOpenFile = nil
 }
 
-func (storageAPI *Longtail_StorageAPI) StartFind(path string) (i Longtail_StorageAPI_Iterator, err error) {
+func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, error) {
 	const fname = "StartFind"
 
 	cPath := C.CString(path)
@@ -524,7 +524,7 @@ func (storageAPI *Longtail_StorageAPI) StartFind(path string) (i Longtail_Storag
 	return Longtail_StorageAPI_Iterator{cIterator: cIterator}, nil
 }
 
-func (storageAPI *Longtail_StorageAPI) FindNext(iterator Longtail_StorageAPI_Iterator) (err error) {
+func (storageAPI *Longtail_StorageAPI) FindNext(iterator Longtail_StorageAPI_Iterator) error {
 	const fname = "FindNext"
 
 	errno := C.Longtail_Storage_FindNext(storageAPI.cStorageAPI, iterator.cIterator)
@@ -536,7 +536,7 @@ func (storageAPI *Longtail_StorageAPI) CloseFind(iterator Longtail_StorageAPI_It
 	iterator.cIterator = nil
 }
 
-func (storageAPI *Longtail_StorageAPI) GetEntryProperties(iterator Longtail_StorageAPI_Iterator) (p Longtail_StorageAPI_EntryProperties, err error) {
+func (storageAPI *Longtail_StorageAPI) GetEntryProperties(iterator Longtail_StorageAPI_Iterator) (Longtail_StorageAPI_EntryProperties, error) {
 	const fname = "GetEntryProperties"
 	var cProperties C.struct_Longtail_StorageAPI_EntryProperties
 	errno := C.Longtail_Storage_GetEntryProperties(storageAPI.cStorageAPI, iterator.cIterator, &cProperties)
@@ -621,7 +621,7 @@ func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 	return uint32(C.Longtail_Hash_GetIdentifier(hashAPI.cHashAPI))
 }
 
-func (storeIndex *Longtail_StoreIndex) Copy() (s Longtail_StoreIndex, err error) {
+func (storeIndex *Longtail_StoreIndex) Copy() (Longtail_StoreIndex, error) {
 	const fname = "Copy"
 	if storeIndex.cStoreIndex == nil {
 		return Longtail_StoreIndex{}, nil
@@ -856,7 +856,7 @@ func (hashRegistry *Longtail_HashRegistryAPI) Dispose() {
 }
 
 // Longtail_HashRegistryAPI ...
-func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (h Longtail_HashAPI, err error) {
+func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (Longtail_HashAPI, error) {
 	const fname = "GetHashAPI"
 	var hash_api *C.struct_Longtail_HashAPI
 	errno := C.Longtail_GetHashRegistry_GetHashAPI(hashRegistry.cHashRegistryAPI, C.uint32_t(hashIdentifier), &hash_api)
@@ -1028,7 +1028,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 //// PutStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
-	asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) (err error) {
+	asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) error {
 	const fname = "Longtail_BlockStoreAPI.PutStoredBlock"
 	errno := C.Longtail_BlockStore_PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
@@ -1040,7 +1040,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 // GetStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	blockHash uint64,
-	asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) (err error) {
+	asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) error {
 	const fname = "Longtail_BlockStoreAPI.GetStoredBlock"
 
 	errno := C.Longtail_BlockStore_GetStoredBlock(
@@ -1054,7 +1054,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 	chunkHashes []uint64,
 	minBlockUsagePercent uint32,
-	asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) (err error) {
+	asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) error {
 	const fname = "Longtail_BlockStoreAPI.GetExistingContent"
 
 	chunkCount := len(chunkHashes)
@@ -1074,7 +1074,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 // PruneBlocks() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
 	keepBlockHashes []uint64,
-	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) (err error) {
+	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) error {
 	const fname = "Longtail_BlockStoreAPI.PruneBlocks"
 
 	blockCount := len(keepBlockHashes)
@@ -1091,7 +1091,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
 }
 
 // GetStats() ...
-func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (s BlockStoreStats, err error) {
+func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, error) {
 	const fname = "Longtail_BlockStoreAPI.GetStats"
 
 	if blockStoreAPI.cBlockStoreAPI == nil {
@@ -1110,7 +1110,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (s BlockStoreStats, err 
 }
 
 // Flush() ...
-func (blockStoreAPI *Longtail_BlockStoreAPI) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) (err error) {
+func (blockStoreAPI *Longtail_BlockStoreAPI) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) error {
 	const fname = "Longtail_BlockStoreAPI.Flush"
 
 	if blockStoreAPI.cBlockStoreAPI == nil {
@@ -1205,7 +1205,7 @@ func (blockIndex *Longtail_BlockIndex) Dispose() {
 	}
 }
 
-func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) (b []byte, err error) {
+func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, error) {
 	const fname = "WriteStoredBlockToBuffer"
 
 	var buffer unsafe.Pointer
@@ -1219,7 +1219,7 @@ func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) (b []byte, err e
 	return bytes, nil
 }
 
-func ReadStoredBlockFromBuffer(buffer []byte) (s Longtail_StoredBlock, err error) {
+func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, error) {
 	const fname = "ReadStoredBlockFromBuffer"
 
 	if len(buffer) == 0 {
@@ -1238,7 +1238,7 @@ func ReadStoredBlockFromBuffer(buffer []byte) (s Longtail_StoredBlock, err error
 	return Longtail_StoredBlock{cStoredBlock: stored_block}, nil
 }
 
-func ValidateStore(storeIndex Longtail_StoreIndex, versionIndex Longtail_VersionIndex) (err error) {
+func ValidateStore(storeIndex Longtail_StoreIndex, versionIndex Longtail_VersionIndex) error {
 	const fname = "ValidateStore"
 
 	errno := C.Longtail_ValidateStore(storeIndex.cStoreIndex, versionIndex.cVersionIndex)
@@ -1253,7 +1253,7 @@ func CreateStoredBlock(
 	chunkHashes []uint64,
 	chunkSizes []uint32,
 	blockData []uint8,
-	blockDataIncludesIndex bool) (s Longtail_StoredBlock, err error) {
+	blockDataIncludesIndex bool) (Longtail_StoredBlock, error) {
 	const fname = "CreateStoredBlock"
 
 	chunkCount := len(chunkHashes)
@@ -1441,7 +1441,7 @@ func GetZStdMaxCompressionType() uint32 {
 }
 
 // GetFilesRecursively ...
-func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (i Longtail_FileInfos, err error) {
+func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (Longtail_FileInfos, error) {
 	const fname = "GetFilesRecursively"
 
 	cFolderPath := C.CString(rootPath)
@@ -1466,7 +1466,7 @@ func (fileInfos Longtail_FileInfos) GetPath(index uint32) string {
 }
 
 // WriteBlockIndexToBuffer ...
-func WriteBlockIndexToBuffer(index Longtail_BlockIndex) (b []byte, err error) {
+func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, error) {
 	const fname = "WriteBlockIndexToBuffer"
 
 	var buffer unsafe.Pointer
@@ -1481,7 +1481,7 @@ func WriteBlockIndexToBuffer(index Longtail_BlockIndex) (b []byte, err error) {
 }
 
 // ReadBlockIndexFromBuffer ...
-func ReadBlockIndexFromBuffer(buffer []byte) (b Longtail_BlockIndex, err error) {
+func ReadBlockIndexFromBuffer(buffer []byte) (Longtail_BlockIndex, error) {
 	const fname = "ReadBlockIndexFromBuffer"
 
 	if len(buffer) == 0 {
@@ -1507,7 +1507,7 @@ func CreateVersionIndex(
 	rootPath string,
 	fileInfos Longtail_FileInfos,
 	assetCompressionTypes []uint32,
-	maxChunkSize uint32) (v Longtail_VersionIndex, err error) {
+	maxChunkSize uint32) (Longtail_VersionIndex, error) {
 	const fname = "CreateVersionIndex"
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
@@ -1546,7 +1546,7 @@ func CreateVersionIndex(
 }
 
 // WriteVersionIndexToBuffer ...
-func WriteVersionIndexToBuffer(index Longtail_VersionIndex) (b []byte, err error) {
+func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
 	const fname = "WriteVersionIndexToBuffer"
 
 	var buffer unsafe.Pointer
@@ -1561,7 +1561,7 @@ func WriteVersionIndexToBuffer(index Longtail_VersionIndex) (b []byte, err error
 }
 
 // WriteVersionIndex ...
-func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) (err error) {
+func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) error {
 	const fname = "WriteVersionIndex"
 
 	cPath := C.CString(path)
@@ -1574,7 +1574,7 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 }
 
 // ReadVersionIndexFromBuffer ...
-func ReadVersionIndexFromBuffer(buffer []byte) (v Longtail_VersionIndex, err error) {
+func ReadVersionIndexFromBuffer(buffer []byte) (Longtail_VersionIndex, error) {
 	const fname = "ReadVersionIndexFromBuffer"
 
 	if len(buffer) == 0 {
@@ -1591,7 +1591,7 @@ func ReadVersionIndexFromBuffer(buffer []byte) (v Longtail_VersionIndex, err err
 }
 
 // ReadVersionIndex ...
-func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (v Longtail_VersionIndex, err error) {
+func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_VersionIndex, error) {
 	const fname = "ReadVersionIndex"
 
 	cPath := C.CString(path)
@@ -1605,7 +1605,7 @@ func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (v Longtail_V
 }
 
 // CreateStoreIndexFromBlocks ...
-func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (s Longtail_StoreIndex, err error) {
+func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (Longtail_StoreIndex, error) {
 	const fname = "CreateStoreIndexFromBlocks"
 
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
@@ -1632,7 +1632,7 @@ func CreateStoreIndex(
 	hashAPI Longtail_HashAPI,
 	versionIndex Longtail_VersionIndex,
 	maxBlockSize uint32,
-	maxChunksPerBlock uint32) (s Longtail_StoreIndex, err error) {
+	maxChunksPerBlock uint32) (Longtail_StoreIndex, error) {
 	const fname = "CreateStoreIndex"
 
 	var sindex *C.struct_Longtail_StoreIndex
@@ -1654,7 +1654,7 @@ func CreateStoreIndex(
 func GetExistingStoreIndex(
 	storeIndex Longtail_StoreIndex,
 	chunkHashes []uint64,
-	minBlockUsagePercent uint32) (s Longtail_StoreIndex, err error) {
+	minBlockUsagePercent uint32) (Longtail_StoreIndex, error) {
 	const fname = "GetExistingStoreIndex"
 
 	chunkCount := uint32(len(chunkHashes))
@@ -1677,7 +1677,7 @@ func GetExistingStoreIndex(
 
 func PruneStoreIndex(
 	storeIndex Longtail_StoreIndex,
-	keepBlockHashes []uint64) (s Longtail_StoreIndex, err error) {
+	keepBlockHashes []uint64) (Longtail_StoreIndex, error) {
 	const fname = "PruneStoreIndex"
 
 	blockCount := uint32(len(keepBlockHashes))
@@ -1699,7 +1699,7 @@ func PruneStoreIndex(
 
 func GetRequiredChunkHashes(
 	versionIndex Longtail_VersionIndex,
-	versionDiff Longtail_VersionDiff) (h []uint64, err error) {
+	versionDiff Longtail_VersionDiff) ([]uint64, error) {
 	const fname = "GetRequiredChunkHashes"
 
 	maxChunkCount := uint64(versionIndex.GetChunkCount())
@@ -1720,7 +1720,7 @@ func GetRequiredChunkHashes(
 	return outChunkHashes[:int(outChunkCount)], nil
 }
 
-func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index Longtail_StoreIndex) (s Longtail_StoreIndex, err error) {
+func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index Longtail_StoreIndex) (Longtail_StoreIndex, error) {
 	const fname = "MergeStoreIndex"
 
 	var sIndex *C.struct_Longtail_StoreIndex
@@ -1735,7 +1735,7 @@ func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index L
 }
 
 // WriteStoreIndexToBuffer ...
-func WriteStoreIndexToBuffer(index Longtail_StoreIndex) (b []byte, err error) {
+func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, error) {
 	const fname = "WriteStoreIndexToBuffer"
 
 	var buffer unsafe.Pointer
@@ -1750,7 +1750,7 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) (b []byte, err error) {
 }
 
 // ReadStoreIndexFromBuffer ...
-func ReadStoreIndexFromBuffer(buffer []byte) (s Longtail_StoreIndex, err error) {
+func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, error) {
 	const fname = "ReadStoreIndexFromBuffer"
 
 	if len(buffer) == 0 {
@@ -1966,7 +1966,7 @@ func WriteContent(
 	progressAPI *Longtail_ProgressAPI,
 	store_index Longtail_StoreIndex,
 	versionIndex Longtail_VersionIndex,
-	versionFolderPath string) (err error) {
+	versionFolderPath string) error {
 	const fname = "WriteContent"
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
@@ -1999,7 +1999,7 @@ func CreateMissingContent(
 	storeIndex Longtail_StoreIndex,
 	versionIndex Longtail_VersionIndex,
 	maxBlockSize uint32,
-	maxChunksPerBlock uint32) (s Longtail_StoreIndex, err error) {
+	maxChunksPerBlock uint32) (Longtail_StoreIndex, error) {
 	const fname = "CreateMissingContent"
 
 	var missingStoreIndex *C.struct_Longtail_StoreIndex
@@ -2025,7 +2025,7 @@ func WriteVersion(
 	storeIndex Longtail_StoreIndex,
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string,
-	retainPermissions bool) (err error) {
+	retainPermissions bool) error {
 	const fname = "WriteVersion"
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
@@ -2062,7 +2062,7 @@ func WriteVersion(
 func CreateVersionDiff(
 	hashAPI Longtail_HashAPI,
 	sourceVersionIndex Longtail_VersionIndex,
-	targetVersionIndex Longtail_VersionIndex) (d Longtail_VersionDiff, err error) {
+	targetVersionIndex Longtail_VersionIndex) (Longtail_VersionDiff, error) {
 	const fname = "CreateVersionDiff"
 
 	var versionDiff *C.struct_Longtail_VersionDiff
@@ -2089,7 +2089,7 @@ func ChangeVersion(
 	targetVersionIndex Longtail_VersionIndex,
 	versionDiff Longtail_VersionDiff,
 	versionFolderPath string,
-	retainPermissions bool) (err error) {
+	retainPermissions bool) error {
 	const fname = "ChangeVersion"
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI

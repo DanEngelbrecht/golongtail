@@ -1804,7 +1804,7 @@ func PathFilterAPIProxy_Include(path_filter_api *C.struct_Longtail_PathFilterAPI
 	context := C.PathFilterAPIProxy_GetContext(unsafe.Pointer(path_filter_api))
 	pathFilter := RestorePointer(context).(PathFilterAPI)
 	if pathFilter == nil {
-		return C.EINVAL
+		return 0
 	}
 	isDir := is_dir != 0
 	if pathFilter.Include(C.GoString(root_path), C.GoString(asset_path), C.GoString(asset_name), isDir, uint64(size), uint16(permissions)) {

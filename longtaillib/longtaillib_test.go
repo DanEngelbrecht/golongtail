@@ -1299,7 +1299,7 @@ func TestChangeVersion(t *testing.T) {
 
 	chunkHashes2, err := GetRequiredChunkHashes(versionIndex2, versionDiff2)
 	if err != nil {
-		t.Errorf("TestChangeVersion() CreateVersionDiff() %s", err)
+		t.Errorf("TestChangeVersion() GetRequiredChunkHashes() %s", err)
 	}
 
 	getExistingContentComplete2 := &testGetExistingContentCompletionAPI{}

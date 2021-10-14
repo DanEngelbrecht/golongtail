@@ -676,6 +676,22 @@ func (storeIndex *Longtail_StoreIndex) GetBlockHashes() []uint64 {
 	return carray2slice64(C.Longtail_StoreIndex_GetBlockHashes(storeIndex.cStoreIndex), size)
 }
 
+func (storeIndex *Longtail_StoreIndex) GetBlockChunkCounts() []uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return nil
+	}
+	size := int(C.Longtail_StoreIndex_GetBlockCount(storeIndex.cStoreIndex))
+	return carray2slice32(C.Longtail_StoreIndex_GetBlockChunkCounts(storeIndex.cStoreIndex), size)
+}
+
+func (storeIndex *Longtail_StoreIndex) GetBlockChunksOffsets() []uint32 {
+	if storeIndex.cStoreIndex == nil {
+		return nil
+	}
+	size := int(C.Longtail_StoreIndex_GetBlockCount(storeIndex.cStoreIndex))
+	return carray2slice32(C.Longtail_StoreIndex_GetBlockChunksOffsets(storeIndex.cStoreIndex), size)
+}
+
 func (storeIndex *Longtail_StoreIndex) GetChunkHashes() []uint64 {
 	if storeIndex.cStoreIndex == nil {
 		return nil
@@ -1145,6 +1161,10 @@ func (blockIndex *Longtail_BlockIndex) GetHashIdentifier() uint32 {
 	return uint32(*blockIndex.cBlockIndex.m_HashIdentifier)
 }
 
+func (blockIndex *Longtail_BlockIndex) GetCompressionType() uint32 {
+	return uint32(*blockIndex.cBlockIndex.m_Tag)
+}
+
 func (blockIndex *Longtail_BlockIndex) GetChunkCount() uint32 {
 	return uint32(*blockIndex.cBlockIndex.m_ChunkCount)
 }
@@ -1193,6 +1213,22 @@ func (storedBlock *Longtail_StoredBlock) GetBlockSize() int {
 	blockIndexSize := int(C.Longtail_GetBlockIndexSize(chunkCount))
 	blockDataSize := int(storedBlock.cStoredBlock.m_BlockChunksDataSize)
 	return blockIndexSize + blockDataSize
+}
+
+func (storeIndex *Longtail_StoredBlock) GetChunkHashes() []uint64 {
+	if storeIndex.cStoredBlock == nil {
+		return nil
+	}
+	size := int(*storeIndex.cStoredBlock.m_BlockIndex.m_ChunkCount)
+	return carray2slice64(storeIndex.cStoredBlock.m_BlockIndex.m_ChunkHashes, size)
+}
+
+func (storeIndex *Longtail_StoredBlock) GetChunkSizes() []uint32 {
+	if storeIndex.cStoredBlock == nil {
+		return nil
+	}
+	size := int(*storeIndex.cStoredBlock.m_BlockIndex.m_ChunkCount)
+	return carray2slice32(storeIndex.cStoredBlock.m_BlockIndex.m_ChunkSizes, size)
 }
 
 func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
@@ -1309,6 +1345,52 @@ func CreateStoredBlock(
 	}
 	C.memmove(cStoredBlock.m_BlockData, cBlockBytes, C.size_t(blockByteCount))
 	return Longtail_StoredBlock{cStoredBlock: cStoredBlock}, nil
+}
+
+// CreateBlockIndex() ...
+func CreateBlockIndex(
+	hashAPI Longtail_HashAPI,
+	tag uint32,
+	chunkIndexes []uint32,
+	chunkHashes []uint64,
+	chunkSizes []uint32) (Longtail_BlockIndex, error) {
+	const fname = "CreateBlockIndex"
+
+	chunkCount := len(chunkIndexes)
+	if chunkCount > len(chunkHashes) {
+		return Longtail_BlockIndex{}, errors.Wrap(errnoToError(C.EINVAL), fname)
+	}
+	if chunkCount > len(chunkSizes) {
+		return Longtail_BlockIndex{}, errors.Wrap(errnoToError(C.EINVAL), fname)
+	}
+
+	cChunkIndexes := (*C.uint32_t)(unsafe.Pointer(nil))
+	if chunkCount > 0 {
+		cChunkIndexes = (*C.uint32_t)(unsafe.Pointer(&chunkIndexes[0]))
+	}
+
+	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
+	if chunkCount > 0 {
+		cChunkHashes = (*C.TLongtail_Hash)(unsafe.Pointer(&chunkHashes[0]))
+	}
+	cChunkSizes := (*C.uint32_t)(unsafe.Pointer(nil))
+	if chunkCount > 0 {
+		cChunkSizes = (*C.uint32_t)(unsafe.Pointer(&chunkSizes[0]))
+	}
+	var cBlockIndex *C.struct_Longtail_BlockIndex
+
+	errno := C.Longtail_CreateBlockIndex(
+		hashAPI.cHashAPI,
+		C.uint32_t(tag),
+		C.uint32_t(chunkCount),
+		cChunkIndexes,
+		cChunkHashes,
+		cChunkSizes,
+		&cBlockIndex)
+	if errno != 0 {
+		return Longtail_BlockIndex{}, errors.Wrap(errnoToError(errno), fname)
+	}
+	return Longtail_BlockIndex{cBlockIndex: cBlockIndex}, nil
 }
 
 // CreateFSStorageAPI ...

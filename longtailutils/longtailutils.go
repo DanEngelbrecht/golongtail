@@ -71,6 +71,19 @@ func (a *GetStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtai
 	a.Wg.Done()
 }
 
+// PutStoredBlockCompletionAPI ...
+type PutStoredBlockCompletionAPI struct {
+	Wg  sync.WaitGroup
+	Err error
+}
+
+func (a *PutStoredBlockCompletionAPI) OnComplete(err error) {
+	const fname = "PutStoredBlockCompletionAPI.OnComplete"
+	log.Debug(fname)
+	a.Err = err
+	a.Wg.Done()
+}
+
 // GetExistingStoreIndexSync ...
 func GetExistingStoreIndexSync(
 	indexStore longtaillib.Longtail_BlockStoreAPI,

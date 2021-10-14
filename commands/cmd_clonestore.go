@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
@@ -179,6 +180,35 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 	return nil
 }
 
+func ReadVersionIndex(path string) (longtaillib.Longtail_VersionIndex, error) {
+	const fname = "ReadVersionIndex"
+	vbuffer, err := longtailutils.ReadFromURI(path)
+	if err != nil {
+		err := errors.Wrap(err, "longtailutils.ReadFromURI() failed")
+		return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
+	}
+
+	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err := errors.Wrap(err, "longtaillib.ReadVersionIndexFromBuffer() failed")
+		return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
+	}
+	return versionIndex, nil
+}
+
+func WriteVersionIndex(path string, versionIndex longtaillib.Longtail_VersionIndex) error {
+	const fname = "WriteVersionIndex"
+	vbuffer, err := longtaillib.WriteVersionIndexToBuffer(versionIndex)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	err = longtailutils.WriteToURI(path, vbuffer)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	return nil
+}
+
 func updateCurrentVersionFromLongtail(
 	targetPath string,
 	targetPathVersionIndex longtaillib.Longtail_VersionIndex,
@@ -196,16 +226,9 @@ func updateCurrentVersionFromLongtail(
 
 	var hash longtaillib.Longtail_HashAPI
 
-	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
+	sourceVersionIndex, err := ReadVersionIndex(sourceFilePath)
 	if err != nil {
-		err := errors.Wrap(err, "longtailutils.ReadFromURI() failed")
-		return cloneVersionIndex(targetPathVersionIndex), hash, errors.Wrap(err, fname)
-	}
-
-	sourceVersionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if err != nil {
-		err := errors.Wrap(err, "longtaillib.ReadVersionIndexFromBuffer() failed")
-		return cloneVersionIndex(targetPathVersionIndex), hash, errors.Wrap(err, fname)
+		return cloneVersionIndex(targetPathVersionIndex), longtaillib.Longtail_HashAPI{}, errors.Wrap(err, fname)
 	}
 
 	hashIdentifier := sourceVersionIndex.GetHashIdentifier()
@@ -248,7 +271,7 @@ func updateCurrentVersionFromLongtail(
 		localVersionIndex,
 		sourceVersionIndex)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed to create version diff. `%s` -> `%s`", targetPath, sourceFilePath))
+		err = errors.Wrap(err, fmt.Sprintf("Failed to create version diff to `%s`", targetPath))
 		return localVersionIndex, hash, errors.Wrap(err, fname)
 	}
 	defer versionDiff.Dispose()
@@ -257,7 +280,7 @@ func updateCurrentVersionFromLongtail(
 		sourceVersionIndex,
 		versionDiff)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed to get required chunk hashes. `%s` -> `%s`", targetPath, sourceFilePath))
+		err = errors.Wrap(err, fmt.Sprintf("Failed to get required chunk hashes for `%s`", targetPath))
 		return localVersionIndex, hash, errors.Wrap(err, fname)
 	}
 
@@ -319,6 +342,393 @@ func updateCurrentVersionFromLongtail(
 	return localVersionIndex, hash, nil
 }
 
+func fastCopyOneVersion(
+	jobs longtaillib.Longtail_JobAPI,
+	hashRegistry longtaillib.Longtail_HashRegistryAPI,
+	sourceStore longtaillib.Longtail_BlockStoreAPI,
+	targetStore longtaillib.Longtail_BlockStoreAPI,
+	targetFilePath string,
+	sourceFilePath string,
+	maxChunksPerBlock uint32,
+	minBlockUsagePercent uint32,
+	targetBlockSize uint32,
+	createVersionLocalStoreIndex bool) error {
+	const fname = "fastCopyOneVersion"
+
+	versionIndex, err := ReadVersionIndex(sourceFilePath)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+
+	existingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+		targetStore,
+		versionIndex.GetChunkHashes(),
+		minBlockUsagePercent)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	defer existingStoreIndex.Dispose()
+
+	var hash longtaillib.Longtail_HashAPI
+	hashIdentifier := versionIndex.GetHashIdentifier()
+	hash, err = hashRegistry.GetHashAPI(hashIdentifier)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+		return errors.Wrap(err, fname)
+	}
+
+	missingStoreIndex, err := longtaillib.CreateMissingContent(
+		hash,
+		existingStoreIndex,
+		versionIndex,
+		targetBlockSize,
+		maxChunksPerBlock)
+	if err != nil {
+		err = errors.Wrap(err, fmt.Sprintf("Failed creating missing content store index for `%s`", targetFilePath))
+		return errors.Wrap(err, fname)
+	}
+	defer missingStoreIndex.Dispose()
+
+	// Find the data in the source that we need in target
+	missingChunkHashes := missingStoreIndex.GetChunkHashes()
+
+	sourceExistingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+		sourceStore,
+		missingChunkHashes,
+		0)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	defer sourceExistingStoreIndex.Dispose()
+
+	// For any block we use 100% of in sourceExistingStoreIndex, lets do direct copy
+	usedChunks := make(map[uint64]uint32)
+	for _, h := range missingChunkHashes {
+		usedChunks[h] = 1
+	}
+
+	blockIndexes := make(map[uint64]longtaillib.Longtail_BlockIndex)
+	defer func() {
+		for _, blockIndex := range blockIndexes {
+			blockIndex.Dispose()
+		}
+	}()
+
+	// Copy all blocks that has 100% chunk usage
+	sourceExistingStoreIndexBlocks := sourceExistingStoreIndex.GetBlockHashes()
+	sourceExistingStoreIndexChunkHashes := sourceExistingStoreIndex.GetChunkHashes()
+	sourceExistingStoreIndexChunkSizes := sourceExistingStoreIndex.GetChunkSizes()
+	sourceExistingStoreIndexBlockChunksOffsets := sourceExistingStoreIndex.GetBlockChunksOffsets()
+	sourceExistingStoreIndexBlockChunksCounts := sourceExistingStoreIndex.GetBlockChunkCounts()
+	for i, blockHash := range sourceExistingStoreIndexBlocks {
+		chunkOffset := sourceExistingStoreIndexBlockChunksOffsets[i]
+		chunkCount := sourceExistingStoreIndexBlockChunksCounts[i]
+		chunkIndexes := make([]uint32, chunkCount)
+		usedChunkCount := uint32(0)
+		for i := uint32(0); i < chunkCount; i++ {
+			chunkIndexes[i] = chunkOffset + i
+			chunkHash := sourceExistingStoreIndexChunkHashes[chunkOffset+i]
+			if _, exists := usedChunks[chunkHash]; exists {
+				usedChunkCount++
+			}
+		}
+		if usedChunkCount == chunkCount {
+			for i := uint32(0); i < chunkCount; i++ {
+				chunkIndexes[i] = chunkOffset + i
+				chunkHash := sourceExistingStoreIndexChunkHashes[chunkOffset+i]
+				delete(usedChunks, chunkHash)
+			}
+			blockIndex, err := longtaillib.CreateBlockIndex(
+				hash,
+				0,
+				chunkIndexes,
+				sourceExistingStoreIndexChunkHashes,
+				sourceExistingStoreIndexChunkSizes)
+			if err != nil {
+				return errors.Wrap(err, fname)
+			}
+			blockIndexes[blockHash] = blockIndex
+		}
+	}
+
+	newMissingChunkHashes := make([]uint64, len(usedChunks))
+	chunkOffset := 0
+	for _, chunkHash := range missingChunkHashes {
+		if _, exists := usedChunks[chunkHash]; exists {
+			newMissingChunkHashes[chunkOffset] = chunkHash
+			chunkOffset++
+		}
+	}
+
+	newSourceExistingStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+		sourceStore,
+		newMissingChunkHashes,
+		0)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	defer newSourceExistingStoreIndex.Dispose()
+
+	newSourceExistingStoreIndexBlocks := newSourceExistingStoreIndex.GetBlockHashes()
+	newSourceExistingStoreIndexChunkHashes := newSourceExistingStoreIndex.GetChunkHashes()
+	newSourceExistingStoreIndexChunkSizes := newSourceExistingStoreIndex.GetChunkSizes()
+	newSourceExistingStoreIndexBlockChunksOffsets := newSourceExistingStoreIndex.GetBlockChunksOffsets()
+	newSourceExistingStoreIndexBlockChunksCounts := newSourceExistingStoreIndex.GetBlockChunkCounts()
+	for i, blockHash := range newSourceExistingStoreIndexBlocks {
+		chunkOffset := newSourceExistingStoreIndexBlockChunksOffsets[i]
+		chunkCount := newSourceExistingStoreIndexBlockChunksCounts[i]
+		chunkIndexes := make([]uint32, chunkCount)
+		for i := uint32(0); i < chunkCount; i++ {
+			chunkIndexes[i] = chunkOffset + i
+		}
+		blockIndex, err := longtaillib.CreateBlockIndex(
+			hash,
+			0,
+			chunkIndexes,
+			newSourceExistingStoreIndexChunkHashes,
+			newSourceExistingStoreIndexChunkSizes)
+		if err != nil {
+			return errors.Wrap(err, fname)
+		}
+		blockIndexes[blockHash] = blockIndex
+	}
+
+	/*
+
+		// Create blocks based on missingStoreIndex
+		newBlocks := missingStoreIndex.GetBlockHashes()
+		chunkHashes := missingStoreIndex.GetChunkHashes()
+		chunkSizes := missingStoreIndex.GetChunkSizes()
+		blockChunksOffsets := missingStoreIndex.GetBlockChunksOffsets()
+		blockChunksCounts := missingStoreIndex.GetBlockChunkCounts()
+
+		for i, blockHash := range newBlocks {
+			chunkOffset := blockChunksOffsets[i]
+			chunkCount := blockChunksCounts[i]
+			chunkIndexes := make([]uint32, chunkCount)
+			for i := uint32(0); i < chunkCount; i++ {
+				chunkIndexes[i] = chunkOffset + i
+			}
+			blockIndex, err := longtaillib.CreateBlockIndex(
+				hash,
+				0,
+				chunkIndexes,
+				chunkHashes,
+				chunkSizes)
+			if err != nil {
+				return errors.Wrap(err, fname)
+			}
+			blockIndexes[blockHash] = blockIndex
+		}
+	*/
+
+	writeContentProgress := longtailutils.CreateProgress(fmt.Sprintf("Copying %d of %d chunks", len(missingChunkHashes), len(versionIndex.GetChunkHashes())))
+	defer writeContentProgress.Dispose()
+	copyCount := uint32(len(blockIndexes))
+	copyDone := uint32(0)
+	writeContentProgress.OnProgress(copyCount, 0)
+
+	var wg sync.WaitGroup
+	sourceBlockHashes := sourceExistingStoreIndex.GetBlockHashes()
+	for _, blockHash := range sourceBlockHashes {
+		if _, exists := blockIndexes[blockHash]; exists {
+			delete(blockIndexes, blockHash)
+			wg.Add(1)
+			//			go func(blockHash uint64) error {
+			getCompletion := longtailutils.GetStoredBlockCompletionAPI{}
+			getCompletion.Wg.Add(1)
+			err := sourceStore.GetStoredBlock(blockHash, longtaillib.CreateAsyncGetStoredBlockAPI(&getCompletion))
+			if err != nil {
+				getCompletion.Wg.Done()
+			}
+			getCompletion.Wg.Wait()
+			if err != nil {
+				wg.Done()
+				return err
+			}
+			if getCompletion.Err != nil {
+				wg.Done()
+				return getCompletion.Err
+			}
+			defer getCompletion.StoredBlock.Dispose()
+			putCompletion := longtailutils.PutStoredBlockCompletionAPI{}
+			putCompletion.Wg.Add(1)
+			err = targetStore.PutStoredBlock(getCompletion.StoredBlock, longtaillib.CreateAsyncPutStoredBlockAPI(&putCompletion))
+			if err != nil {
+				putCompletion.Wg.Done()
+			}
+			putCompletion.Wg.Wait()
+			if err != nil {
+				wg.Done()
+				return err
+			}
+			if putCompletion.Err != nil {
+				wg.Done()
+				return putCompletion.Err
+			}
+			//			return nil
+			//			}(blockHash)
+			wg.Done()
+			copyDone++
+		}
+		writeContentProgress.OnProgress(copyCount, copyDone)
+	}
+
+	if len(blockIndexes) > 0 {
+		// Blocks that need data from multiple blocks...
+		for _, blockIndex := range blockIndexes {
+			//		go func() {
+			wg.Add(1)
+			storeIndexForBlock, err := longtaillib.GetExistingStoreIndex(sourceExistingStoreIndex, blockIndex.GetChunkHashes(), 0)
+			if err != nil {
+				wg.Done()
+				break
+			}
+			defer storeIndexForBlock.Dispose()
+			blockHashes := storeIndexForBlock.GetBlockHashes()
+			getCompletions := make([]longtailutils.GetStoredBlockCompletionAPI, len(blockHashes))
+			defer func() {
+				for _, completion := range getCompletions {
+					if completion.Err == nil {
+						completion.StoredBlock.Dispose()
+					}
+				}
+			}()
+			for i, sourceBlockHash := range blockHashes {
+				getCompletion := &getCompletions[i]
+				getCompletion.Wg.Add(1)
+				err := sourceStore.GetStoredBlock(sourceBlockHash, longtaillib.CreateAsyncGetStoredBlockAPI(getCompletion))
+				if err != nil {
+					getCompletion.Wg.Done()
+					getCompletion.Err = err
+				}
+			}
+
+			chunkBlockLookup := make(map[uint64]longtaillib.Longtail_StoredBlock)
+			chunkOffsetLookup := make(map[uint64]uint32)
+			for i := range blockHashes {
+				getCompletion := &getCompletions[i]
+				getCompletion.Wg.Wait()
+				if getCompletion.Err == nil {
+					storedBlock := getCompletion.StoredBlock
+					chunkHashes := storedBlock.GetChunkHashes()
+					chunkSizes := storedBlock.GetChunkSizes()
+					chunkOffset := uint32(0)
+					for i, chunkHash := range chunkHashes {
+						chunkSize := chunkSizes[i]
+						if _, exists := chunkBlockLookup[chunkHash]; exists {
+							chunkOffset += chunkSize
+							continue
+						}
+						chunkBlockLookup[chunkHash] = getCompletion.StoredBlock
+						chunkOffsetLookup[chunkHash] = chunkOffset
+						chunkOffset += chunkSize
+					}
+				}
+			}
+
+			// Compose a new block and store it in target
+			blockData := make([]byte, 0)
+			chunkHashes := blockIndex.GetChunkHashes()
+			chunkSizes := blockIndex.GetChunkSizes()
+			for chunkIndex, chunkHash := range chunkHashes {
+				if storedBlock, exists := chunkBlockLookup[chunkHash]; exists {
+					storedBlockData := storedBlock.GetChunksBlockData()
+					dataOffset := chunkOffsetLookup[chunkHash]
+					chunkSize := chunkSizes[chunkIndex]
+					blockData = append(blockData, storedBlockData[dataOffset:dataOffset+chunkSize]...)
+				} else {
+					wg.Done()
+					wg.Wait()
+					return errors.Wrap(longtaillib.NotExistErr(), fname)
+				}
+			}
+			storedBlock, err := longtaillib.CreateStoredBlock(
+				blockIndex.GetBlockHash(),
+				blockIndex.GetHashIdentifier(),
+				blockIndex.GetCompressionType(),
+				blockIndex.GetChunkHashes(),
+				blockIndex.GetChunkSizes(),
+				blockData,
+				false)
+			if err != nil {
+				wg.Done()
+				wg.Wait()
+				return errors.Wrap(err, fname)
+			}
+			defer storedBlock.Dispose()
+
+			go func() {
+				putCompletion := longtailutils.PutStoredBlockCompletionAPI{}
+				putCompletion.Wg.Add(1)
+				err = targetStore.PutStoredBlock(storedBlock, longtaillib.CreateAsyncPutStoredBlockAPI(&putCompletion))
+				if err != nil {
+					putCompletion.Wg.Done()
+				}
+				putCompletion.Wg.Wait()
+				if err != nil {
+					wg.Done()
+					wg.Wait()
+					return //err
+				}
+				if putCompletion.Err != nil {
+					wg.Done()
+					wg.Wait()
+					return //putCompletion.Err
+				}
+
+				wg.Done()
+			}()
+
+			copyDone++
+			writeContentProgress.OnProgress(copyCount, copyDone)
+			//		}()
+		}
+	}
+
+	err = WriteVersionIndex(targetFilePath, versionIndex)
+	if err != nil {
+		wg.Wait()
+		return errors.Wrap(err, fname)
+	}
+
+	if createVersionLocalStoreIndex {
+		versionLocalStoreIndexPath := strings.Replace(targetFilePath, ".lvi", ".lsi", -1) // TODO: This should use a file with path names instead of this rename hack!
+
+		versionLocalStoreIndex, err := longtailutils.GetExistingStoreIndexSync(
+			targetStore,
+			versionIndex.GetChunkHashes(),
+			0)
+		if err != nil {
+			wg.Wait()
+			return errors.Wrap(err, fname)
+		}
+		defer versionLocalStoreIndex.Dispose()
+
+		versionLocalStoreIndexBuffer, err := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
+		versionLocalStoreIndex.Dispose()
+		if err != nil {
+			wg.Wait()
+			return errors.Wrap(err, fname)
+		}
+		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+		if err != nil {
+			wg.Wait()
+			return errors.Wrap(err, fname)
+		}
+	}
+
+	err = WriteVersionIndex(targetFilePath, versionIndex)
+	if err != nil {
+		wg.Wait()
+		return errors.Wrap(err, fname)
+	}
+
+	wg.Wait()
+
+	return nil
+}
+
 func cloneOneVersion(
 	targetPath string,
 	jobs longtaillib.Longtail_JobAPI,
@@ -366,6 +776,20 @@ func cloneOneVersion(
 	}
 
 	log.Infof("`%s` -> `%s`", sourceFilePath, targetFilePath)
+
+	// Fast-path
+	err = fastCopyOneVersion(jobs, hashRegistry, sourceStore, targetStore, targetFilePath, sourceFilePath, maxChunksPerBlock, minBlockUsagePercent, targetBlockSize, createVersionLocalStoreIndex)
+	if err == nil {
+		sourceVersionIndex, err := ReadVersionIndex(sourceFilePath)
+		if err != nil {
+			return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
+		}
+		err = WriteVersionIndex(targetFilePath, sourceVersionIndex)
+		if err != nil {
+			return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
+		}
+		return cloneVersionIndex(currentVersionIndex), nil
+	}
 
 	targetVersionIndex, hash, err := updateCurrentVersionFromLongtail(targetPath, currentVersionIndex, jobs, hashRegistry, fs, pathFilter, retainPermissions, sourceStore, sourceFilePath, sourceFileZipPath, targetBlockSize, maxChunksPerBlock)
 	if err != nil {

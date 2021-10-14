@@ -74,7 +74,6 @@ var errnoToDescription = map[int]string{
 	C.ENOTSUP:         "Not supported.",
 	C.ENOTTY:          "Inappropriate I/O control operation.",
 	C.ENXIO:           "No such device or address.",
-	C.EOPNOTSUPP:      "Operation not supported on socket.",
 	C.EOVERFLOW:       "Value too large to be stored in data type.",
 	C.EPERM:           "Operation not permitted.",
 	C.EPIPE:           "Broken pipe.",
@@ -88,7 +87,6 @@ var errnoToDescription = map[int]string{
 	C.ETIME:           "[XSR] [Option Start] Stream ioctl() timeout. [Option End]",
 	C.ETIMEDOUT:       "Connection timed out.",
 	C.ETXTBSY:         "Text file busy.",
-	C.EWOULDBLOCK:     "C.peration would block (may be the same value as [EAGAIN]):",
 	C.EXDEV:           "Cross-device link. ",
 }
 

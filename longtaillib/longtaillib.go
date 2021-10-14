@@ -14,40 +14,82 @@ import (
 )
 
 var errnoToDescription = map[int]string{
-	C.EPERM:     "Not super-user",
-	C.ENOENT:    "No such file or directory",
-	C.ESRCH:     "No such process",
-	C.EINTR:     "Interrupted system call",
-	C.EIO:       "I/O error",
-	C.ENXIO:     "No such device or address",
-	C.E2BIG:     "Arg list too long",
-	C.ENOEXEC:   "Exec format error",
-	C.EBADF:     "Bad file number",
-	C.ECHILD:    "No children",
-	C.EAGAIN:    "No more processes",
-	C.ENOMEM:    "Not enough core",
-	C.EACCES:    "Permission denied",
-	C.EFAULT:    "Bad address",
-	C.EBUSY:     "Mount device busy",
-	C.EEXIST:    "File exists",
-	C.EXDEV:     "Cross-device link",
-	C.ENODEV:    "No such device",
-	C.ENOTDIR:   "Not a directory",
-	C.EISDIR:    "Is a directory",
-	C.EINVAL:    "Invalid argument",
-	C.ENFILE:    "Too many open files in system",
-	C.EMFILE:    "Too many open files",
-	C.ENOTTY:    "Not a typewriter",
-	C.ETXTBSY:   "Text file busy",
-	C.EFBIG:     "File too large",
-	C.ENOSPC:    "No space left on device",
-	C.ESPIPE:    "Illegal seek",
-	C.EROFS:     "Read only file system",
-	C.EMLINK:    "Too many links",
-	C.EPIPE:     "Broken pipe",
-	C.EDOM:      "Math arg out of domain of func",
-	C.ERANGE:    "Math result not representable",
-	C.ECANCELED: "Operation canceled",
+	C.E2BIG:           "Argument list too long.",
+	C.EACCES:          "Permission denied.",
+	C.EADDRINUSE:      "Address in use.",
+	C.EADDRNOTAVAIL:   "Address not available.",
+	C.EAFNOSUPPORT:    "Address family not supported.",
+	C.EAGAIN:          "Resource unavailable, try again (may be the same value as [EWOULDBLOCK]).",
+	C.EALREADY:        "Connection already in progress.",
+	C.EBADF:           "Bad file descriptor.",
+	C.EBADMSG:         "Bad message.",
+	C.EBUSY:           "Device or resource busy.",
+	C.ECANCELED:       "Operation canceled.",
+	C.ECHILD:          "No child processes.",
+	C.ECONNABORTED:    "Connection aborted.",
+	C.ECONNREFUSED:    "Connection refused.",
+	C.ECONNRESET:      "Connection reset.",
+	C.EDEADLK:         "Resource deadlock would occur.",
+	C.EDESTADDRREQ:    "Destination address required.",
+	C.EDOM:            "Mathematics argument out of domain of function.",
+	C.EEXIST:          "File exists.",
+	C.EFAULT:          "Bad address.",
+	C.EFBIG:           "File too large.",
+	C.EHOSTUNREACH:    "Host is unreachable.",
+	C.EIDRM:           "Identifier removed.",
+	C.EILSEQ:          "Illegal byte sequence.",
+	C.EINPROGRESS:     "Operation in progress.",
+	C.EINTR:           "Interrupted function.",
+	C.EINVAL:          "Invalid argument.",
+	C.EIO:             "I/O error.",
+	C.EISCONN:         "Socket is connected.",
+	C.EISDIR:          "Is a directory.",
+	C.ELOOP:           "Too many levels of symbolic links.",
+	C.EMFILE:          "Too many open files.",
+	C.EMLINK:          "Too many links.",
+	C.EMSGSIZE:        "Message too large.",
+	C.ENAMETOOLONG:    "Filename too long.",
+	C.ENETDOWN:        "Network is down.",
+	C.ENETRESET:       "Connection aborted by network.",
+	C.ENETUNREACH:     "Network unreachable.",
+	C.ENFILE:          "Too many files open in system.",
+	C.ENOBUFS:         "No buffer space available.",
+	C.ENODATA:         "[XSR] [Option Start] No message is available on the STREAM head read queue. [Option End]",
+	C.ENODEV:          "No such device.",
+	C.ENOENT:          "No such file or directory.",
+	C.ENOEXEC:         "Executable file format error.",
+	C.ENOLCK:          "No locks available.",
+	C.ENOLINK:         "Link has been severed (POSIX.1-2001).",
+	C.ENOMEM:          "Not enough space.",
+	C.ENOMSG:          "No message of the desired type.",
+	C.ENOPROTOOPT:     "Protocol not available.",
+	C.ENOSPC:          "No space left on device.",
+	C.ENOSR:           "[XSR] [Option Start] No STREAM resources. [Option End]",
+	C.ENOSTR:          "[XSR] [Option Start] Not a STREAM. [Option End]",
+	C.ENOSYS:          "Function not supported.",
+	C.ENOTCONN:        "The socket is not connected.",
+	C.ENOTDIR:         "Not a directory.",
+	C.ENOTEMPTY:       "Directory not empty.",
+	C.ENOTSOCK:        "Not a socket.",
+	C.ENOTSUP:         "Not supported.",
+	C.ENOTTY:          "Inappropriate I/O control operation.",
+	C.ENXIO:           "No such device or address.",
+	C.EOPNOTSUPP:      "Operation not supported on socket.",
+	C.EOVERFLOW:       "Value too large to be stored in data type.",
+	C.EPERM:           "Operation not permitted.",
+	C.EPIPE:           "Broken pipe.",
+	C.EPROTO:          "Protocol error.",
+	C.EPROTONOSUPPORT: "Protocol not supported.",
+	C.EPROTOTYPE:      "Protocol wrong type for socket.",
+	C.ERANGE:          "Result too large.",
+	C.EROFS:           "Read-only file system.",
+	C.ESPIPE:          "Invalid seek.",
+	C.ESRCH:           "No such process.",
+	C.ETIME:           "[XSR] [Option Start] Stream ioctl() timeout. [Option End]",
+	C.ETIMEDOUT:       "Connection timed out.",
+	C.ETXTBSY:         "Text file busy.",
+	C.EWOULDBLOCK:     "C.peration would block (may be the same value as [EAGAIN]):",
+	C.EXDEV:           "Cross-device link. ",
 }
 
 type longtailError struct {
@@ -364,12 +406,7 @@ func UnrefPointer(ptr unsafe.Pointer) {
 // ReadFromStorage ...
 func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path string) (b []byte, err error) {
 	const fname = "ReadFromStorage"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -403,12 +440,7 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 // WriteToStorage ...
 func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path string, blockData []byte) (err error) {
 	const fname = "WriteToStorage"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -443,12 +475,7 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 
 func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (f Longtail_StorageAPI_HOpenFile, err error) {
 	const fname = "OpenReadFile"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
@@ -461,12 +488,7 @@ func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (f Longtail_Sto
 
 func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) (s uint64, err error) {
 	const fname = "GetSize"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	var size C.uint64_t
 	errno := C.Longtail_Storage_GetSize(storageAPI.cStorageAPI, f.cOpenFile, &size)
 	if errno != 0 {
@@ -477,12 +499,7 @@ func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) 
 
 func (storageAPI *Longtail_StorageAPI) Read(f Longtail_StorageAPI_HOpenFile, offset uint64, size uint64) (b []byte, err error) {
 	const fname = "Read"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	blockData := make([]byte, size)
 	errno := C.Longtail_Storage_Read(storageAPI.cStorageAPI, f.cOpenFile, C.uint64_t(offset), C.uint64_t(size), unsafe.Pointer(&blockData[0]))
 	if errno != 0 {
@@ -498,12 +515,7 @@ func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile
 
 func (storageAPI *Longtail_StorageAPI) StartFind(path string) (i Longtail_StorageAPI_Iterator, err error) {
 	const fname = "StartFind"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var cIterator C.Longtail_StorageAPI_HIterator
@@ -516,12 +528,7 @@ func (storageAPI *Longtail_StorageAPI) StartFind(path string) (i Longtail_Storag
 
 func (storageAPI *Longtail_StorageAPI) FindNext(iterator Longtail_StorageAPI_Iterator) (err error) {
 	const fname = "FindNext"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
+
 	errno := C.Longtail_Storage_FindNext(storageAPI.cStorageAPI, iterator.cIterator)
 	return errors.Wrap(errnoToError(errno), fname)
 }
@@ -533,12 +540,6 @@ func (storageAPI *Longtail_StorageAPI) CloseFind(iterator Longtail_StorageAPI_It
 
 func (storageAPI *Longtail_StorageAPI) GetEntryProperties(iterator Longtail_StorageAPI_Iterator) (p Longtail_StorageAPI_EntryProperties, err error) {
 	const fname = "GetEntryProperties"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 	var cProperties C.struct_Longtail_StorageAPI_EntryProperties
 	errno := C.Longtail_Storage_GetEntryProperties(storageAPI.cStorageAPI, iterator.cIterator, &cProperties)
 	if errno != 0 {
@@ -553,10 +554,6 @@ func (storageAPI *Longtail_StorageAPI) GetEntryProperties(iterator Longtail_Stor
 }
 
 func (fileInfos *Longtail_FileInfos) Dispose() {
-	defer func() {
-		if recover() != nil {
-		}
-	}()
 	if fileInfos.cFileInfos != nil {
 		C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
 		fileInfos.cFileInfos = nil
@@ -628,12 +625,6 @@ func (hashAPI *Longtail_HashAPI) GetIdentifier() uint32 {
 
 func (storeIndex *Longtail_StoreIndex) Copy() (s Longtail_StoreIndex, err error) {
 	const fname = "Copy"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 	if storeIndex.cStoreIndex == nil {
 		return Longtail_StoreIndex{}, nil
 	}
@@ -869,12 +860,6 @@ func (hashRegistry *Longtail_HashRegistryAPI) Dispose() {
 // Longtail_HashRegistryAPI ...
 func (hashRegistry *Longtail_HashRegistryAPI) GetHashAPI(hashIdentifier uint32) (h Longtail_HashAPI, err error) {
 	const fname = "GetHashAPI"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 	var hash_api *C.struct_Longtail_HashAPI
 	errno := C.Longtail_GetHashRegistry_GetHashAPI(hashRegistry.cHashRegistryAPI, C.uint32_t(hashIdentifier), &hash_api)
 	if errno != 0 {
@@ -1047,12 +1032,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
 	asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) (err error) {
 	const fname = "Longtail_BlockStoreAPI.PutStoredBlock"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 	errno := C.Longtail_BlockStore_PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		storedBlock.cStoredBlock,
@@ -1065,12 +1044,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 	blockHash uint64,
 	asyncCompleteAPI Longtail_AsyncGetStoredBlockAPI) (err error) {
 	const fname = "Longtail_BlockStoreAPI.GetStoredBlock"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	errno := C.Longtail_BlockStore_GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
@@ -1085,12 +1058,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 	minBlockUsagePercent uint32,
 	asyncCompleteAPI Longtail_AsyncGetExistingContentAPI) (err error) {
 	const fname = "Longtail_BlockStoreAPI.GetExistingContent"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	chunkCount := len(chunkHashes)
 	cChunkHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
@@ -1111,12 +1078,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
 	keepBlockHashes []uint64,
 	asyncCompleteAPI Longtail_AsyncPruneBlocksAPI) (err error) {
 	const fname = "Longtail_BlockStoreAPI.PruneBlocks"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	blockCount := len(keepBlockHashes)
 	cBlockHashes := (*C.TLongtail_Hash)(unsafe.Pointer(nil))
@@ -1134,12 +1095,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
 // GetStats() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (s BlockStoreStats, err error) {
 	const fname = "Longtail_BlockStoreAPI.GetStats"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	if blockStoreAPI.cBlockStoreAPI == nil {
 		return BlockStoreStats{}, errors.Wrap(errnoToError(C.EINVAL), fname)
@@ -1159,12 +1114,6 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (s BlockStoreStats, err 
 // Flush() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) Flush(asyncCompleteAPI Longtail_AsyncFlushAPI) (err error) {
 	const fname = "Longtail_BlockStoreAPI.Flush"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	if blockStoreAPI.cBlockStoreAPI == nil {
 		asyncCompleteAPI.OnComplete(nil)
@@ -1260,12 +1209,6 @@ func (blockIndex *Longtail_BlockIndex) Dispose() {
 
 func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) (b []byte, err error) {
 	const fname = "WriteStoredBlockToBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var buffer unsafe.Pointer
 	var size C.size_t
@@ -1280,12 +1223,6 @@ func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) (b []byte, err e
 
 func ReadStoredBlockFromBuffer(buffer []byte) (s Longtail_StoredBlock, err error) {
 	const fname = "ReadStoredBlockFromBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	if len(buffer) == 0 {
 		return Longtail_StoredBlock{}, BadFormatErr()
@@ -1305,12 +1242,6 @@ func ReadStoredBlockFromBuffer(buffer []byte) (s Longtail_StoredBlock, err error
 
 func ValidateStore(storeIndex Longtail_StoreIndex, versionIndex Longtail_VersionIndex) (err error) {
 	const fname = "ValidateStore"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	errno := C.Longtail_ValidateStore(storeIndex.cStoreIndex, versionIndex.cVersionIndex)
 	return errors.Wrap(errnoToError(errno), fname)
@@ -1326,12 +1257,6 @@ func CreateStoredBlock(
 	blockData []uint8,
 	blockDataIncludesIndex bool) (s Longtail_StoredBlock, err error) {
 	const fname = "CreateStoredBlock"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	chunkCount := len(chunkHashes)
 	if chunkCount != len(chunkSizes) {
@@ -1520,12 +1445,6 @@ func GetZStdMaxCompressionType() uint32 {
 // GetFilesRecursively ...
 func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (i Longtail_FileInfos, err error) {
 	const fname = "GetFilesRecursively"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	cFolderPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cFolderPath))
@@ -1551,12 +1470,6 @@ func (fileInfos Longtail_FileInfos) GetPath(index uint32) string {
 // WriteBlockIndexToBuffer ...
 func WriteBlockIndexToBuffer(index Longtail_BlockIndex) (b []byte, err error) {
 	const fname = "WriteBlockIndexToBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
@@ -1572,12 +1485,6 @@ func WriteBlockIndexToBuffer(index Longtail_BlockIndex) (b []byte, err error) {
 // ReadBlockIndexFromBuffer ...
 func ReadBlockIndexFromBuffer(buffer []byte) (b Longtail_BlockIndex, err error) {
 	const fname = "ReadBlockIndexFromBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	if len(buffer) == 0 {
 		return Longtail_BlockIndex{}, BadFormatErr()
@@ -1604,12 +1511,6 @@ func CreateVersionIndex(
 	assetCompressionTypes []uint32,
 	maxChunkSize uint32) (v Longtail_VersionIndex, err error) {
 	const fname = "CreateVersionIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -1649,12 +1550,6 @@ func CreateVersionIndex(
 // WriteVersionIndexToBuffer ...
 func WriteVersionIndexToBuffer(index Longtail_VersionIndex) (b []byte, err error) {
 	const fname = "WriteVersionIndexToBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
@@ -1670,12 +1565,6 @@ func WriteVersionIndexToBuffer(index Longtail_VersionIndex) (b []byte, err error
 // WriteVersionIndex ...
 func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionIndex, path string) (err error) {
 	const fname = "WriteVersionIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -1689,12 +1578,6 @@ func WriteVersionIndex(storageAPI Longtail_StorageAPI, index Longtail_VersionInd
 // ReadVersionIndexFromBuffer ...
 func ReadVersionIndexFromBuffer(buffer []byte) (v Longtail_VersionIndex, err error) {
 	const fname = "ReadVersionIndexFromBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	if len(buffer) == 0 {
 		return Longtail_VersionIndex{}, BadFormatErr()
@@ -1712,12 +1595,6 @@ func ReadVersionIndexFromBuffer(buffer []byte) (v Longtail_VersionIndex, err err
 // ReadVersionIndex ...
 func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (v Longtail_VersionIndex, err error) {
 	const fname = "ReadVersionIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
@@ -1732,12 +1609,6 @@ func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (v Longtail_V
 // CreateStoreIndexFromBlocks ...
 func CreateStoreIndexFromBlocks(blockIndexes []Longtail_BlockIndex) (s Longtail_StoreIndex, err error) {
 	const fname = "CreateStoreIndexFromBlocks"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	rawBlockIndexes := make([]*C.struct_Longtail_BlockIndex, len(blockIndexes))
 	blockCount := len(blockIndexes)
@@ -1765,12 +1636,6 @@ func CreateStoreIndex(
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32) (s Longtail_StoreIndex, err error) {
 	const fname = "CreateStoreIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var sindex *C.struct_Longtail_StoreIndex
 	errno := C.Longtail_CreateStoreIndex(
@@ -1793,12 +1658,6 @@ func GetExistingStoreIndex(
 	chunkHashes []uint64,
 	minBlockUsagePercent uint32) (s Longtail_StoreIndex, err error) {
 	const fname = "GetExistingStoreIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	chunkCount := uint32(len(chunkHashes))
 	var cChunkHashes *C.TLongtail_Hash
@@ -1822,12 +1681,6 @@ func PruneStoreIndex(
 	storeIndex Longtail_StoreIndex,
 	keepBlockHashes []uint64) (s Longtail_StoreIndex, err error) {
 	const fname = "PruneStoreIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	blockCount := uint32(len(keepBlockHashes))
 	var cBlockHashes *C.TLongtail_Hash
@@ -1850,12 +1703,6 @@ func GetRequiredChunkHashes(
 	versionIndex Longtail_VersionIndex,
 	versionDiff Longtail_VersionDiff) (h []uint64, err error) {
 	const fname = "GetRequiredChunkHashes"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	maxChunkCount := uint64(versionIndex.GetChunkCount())
 	outChunkHashes := make([]uint64, maxChunkCount)
@@ -1877,12 +1724,6 @@ func GetRequiredChunkHashes(
 
 func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index Longtail_StoreIndex) (s Longtail_StoreIndex, err error) {
 	const fname = "MergeStoreIndex"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var sIndex *C.struct_Longtail_StoreIndex
 	errno := C.Longtail_MergeStoreIndex(
@@ -1898,12 +1739,6 @@ func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index L
 // WriteStoreIndexToBuffer ...
 func WriteStoreIndexToBuffer(index Longtail_StoreIndex) (b []byte, err error) {
 	const fname = "WriteStoreIndexToBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
@@ -1919,12 +1754,6 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) (b []byte, err error) {
 // ReadStoreIndexFromBuffer ...
 func ReadStoreIndexFromBuffer(buffer []byte) (s Longtail_StoreIndex, err error) {
 	const fname = "ReadStoreIndexFromBuffer"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	if len(buffer) == 0 {
 		return Longtail_StoreIndex{}, BadFormatErr()
@@ -1950,6 +1779,9 @@ func CreateProgressAPI(progress ProgressAPI) Longtail_ProgressAPI {
 func ProgressAPIProxy_OnProgress(progress_api *C.struct_Longtail_ProgressAPI, total_count C.uint32_t, done_count C.uint32_t) {
 	context := C.ProgressAPIProxy_GetContext(unsafe.Pointer(progress_api))
 	progress := RestorePointer(context).(ProgressAPI)
+	if progress == nil {
+		return
+	}
 	progress.OnProgress(uint32(total_count), uint32(done_count))
 }
 
@@ -1970,14 +1802,12 @@ func CreatePathFilterAPI(pathFilter PathFilterAPI) Longtail_PathFilterAPI {
 //export PathFilterAPIProxy_Include
 func PathFilterAPIProxy_Include(path_filter_api *C.struct_Longtail_PathFilterAPI, root_path *C.char, asset_path *C.char, asset_name *C.char, is_dir C.int, size C.uint64_t, permissions C.uint16_t) (keep C.int) {
 	const fname = "PathFilterAPIProxy_Include"
-	defer func() {
-		if recover() != nil {
-			keep = C.int(0)
-		}
-	}()
 
 	context := C.PathFilterAPIProxy_GetContext(unsafe.Pointer(path_filter_api))
 	pathFilter := RestorePointer(context).(PathFilterAPI)
+	if pathFilter == nil {
+		return C.EINVAL
+	}
 	isDir := is_dir != 0
 	if pathFilter.Include(C.GoString(root_path), C.GoString(asset_path), C.GoString(asset_name), isDir, uint64(size), uint16(permissions)) {
 		return 1
@@ -2004,6 +1834,9 @@ func AsyncPutStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtai
 	const fname = "AsyncPutStoredBlockAPIProxy_OnComplete"
 	context := C.AsyncPutStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPutStoredBlockAPI)
+	if asyncComplete == nil {
+		return
+	}
 	asyncComplete.OnComplete(errors.Wrap(errnoToError(err), fname))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
@@ -2027,6 +1860,9 @@ func AsyncGetStoredBlockAPIProxy_OnComplete(async_complete_api *C.struct_Longtai
 	const fname = "AsyncGetStoredBlockAPIProxy_OnComplete"
 	context := C.AsyncGetStoredBlockAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetStoredBlockAPI)
+	if asyncComplete == nil {
+		return
+	}
 	asyncComplete.OnComplete(Longtail_StoredBlock{cStoredBlock: stored_block}, errors.Wrap(errnoToError(err), fname))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
@@ -2050,6 +1886,9 @@ func AsyncGetExistingContentAPIProxy_OnComplete(async_complete_api *C.struct_Lon
 	const fname = "AsyncGetExistingContentAPIProxy_OnComplete"
 	context := C.AsyncGetExistingContentAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncGetExistingContentAPI)
+	if asyncComplete == nil {
+		return
+	}
 	asyncComplete.OnComplete(Longtail_StoreIndex{cStoreIndex: store_index}, errors.Wrap(errnoToError(err), fname))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
@@ -2073,6 +1912,9 @@ func AsyncPruneBlocksAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_A
 	const fname = "AsyncPruneBlocksAPIProxy_OnComplete"
 	context := C.AsyncPruneBlocksAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncPruneBlocksAPI)
+	if asyncComplete == nil {
+		return
+	}
 	asyncComplete.OnComplete(pruned_block_count, errors.Wrap(errnoToError(err), fname))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
@@ -2104,6 +1946,9 @@ func AsyncFlushAPIProxy_OnComplete(async_complete_api *C.struct_Longtail_AsyncFl
 	const fname = "AsyncFlushAPIProxy_OnComplete"
 	context := C.AsyncFlushAPIProxy_GetContext(unsafe.Pointer(async_complete_api))
 	asyncComplete := RestorePointer(context).(AsyncFlushAPI)
+	if asyncComplete == nil {
+		return
+	}
 	asyncComplete.OnComplete(errors.Wrap(errnoToError(err), fname))
 	C.Longtail_DisposeAPI(&async_complete_api.m_API)
 }
@@ -2125,12 +1970,6 @@ func WriteContent(
 	versionIndex Longtail_VersionIndex,
 	versionFolderPath string) (err error) {
 	const fname = "WriteContent"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -2164,12 +2003,6 @@ func CreateMissingContent(
 	maxBlockSize uint32,
 	maxChunksPerBlock uint32) (s Longtail_StoreIndex, err error) {
 	const fname = "CreateMissingContent"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var missingStoreIndex *C.struct_Longtail_StoreIndex
 	errno := C.Longtail_CreateMissingContent(
@@ -2196,12 +2029,6 @@ func WriteVersion(
 	versionFolderPath string,
 	retainPermissions bool) (err error) {
 	const fname = "WriteVersion"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -2239,12 +2066,6 @@ func CreateVersionDiff(
 	sourceVersionIndex Longtail_VersionIndex,
 	targetVersionIndex Longtail_VersionIndex) (d Longtail_VersionDiff, err error) {
 	const fname = "CreateVersionDiff"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var versionDiff *C.struct_Longtail_VersionDiff
 	errno := C.Longtail_CreateVersionDiff(
@@ -2272,12 +2093,6 @@ func ChangeVersion(
 	versionFolderPath string,
 	retainPermissions bool) (err error) {
 	const fname = "ChangeVersion"
-	defer func() {
-		if recover() != nil {
-			err = &longtailError{Description: "panic", Errno: C.EFAULT}
-			err = errors.Wrap(err, fname)
-		}
-	}()
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
 	if progressAPI != nil {
@@ -2315,6 +2130,9 @@ func ChangeVersion(
 //export LogProxy_Log
 func LogProxy_Log(log_context *C.struct_Longtail_LogContext, log *C.char) {
 	logger := RestorePointer(log_context.context).(Logger)
+	if logger == nil {
+		return
+	}
 	logFields := make([]LogField, log_context.field_count)
 	for i := 0; i < int(log_context.field_count); i++ {
 		logField := C.GetLogField(log_context, C.int(i))
@@ -2328,49 +2146,43 @@ func LogProxy_Log(log_context *C.struct_Longtail_LogContext, log *C.char) {
 func BlockStoreAPIProxy_Dispose(api *C.struct_Longtail_API) {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return
+	}
 	blockStore.Close()
 	UnrefPointer(context)
 	C.Longtail_Free(unsafe.Pointer(api))
 }
 
 //export BlockStoreAPIProxy_PutStoredBlock
-func BlockStoreAPIProxy_PutStoredBlock(api *C.struct_Longtail_BlockStoreAPI, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_PutStoredBlock(api *C.struct_Longtail_BlockStoreAPI, storedBlock *C.struct_Longtail_StoredBlock, async_complete_api *C.struct_Longtail_AsyncPutStoredBlockAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return C.EINVAL
+	}
 	err := blockStore.PutStoredBlock(Longtail_StoredBlock{cStoredBlock: storedBlock}, Longtail_AsyncPutStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return errorToErrno(err, C.EIO)
 }
 
 //export BlockStoreAPIProxy_GetStoredBlock
-func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blockHash C.uint64_t, async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_GetStoredBlock(api *C.struct_Longtail_BlockStoreAPI, blockHash C.uint64_t, async_complete_api *C.struct_Longtail_AsyncGetStoredBlockAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return C.EINVAL
+	}
 	err := blockStore.GetStoredBlock(uint64(blockHash), Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: async_complete_api})
 	return errorToErrno(err, C.EIO)
 }
 
 //export BlockStoreAPIProxy_PreflightGet
-func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, block_count C.uint32_t, block_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncPreflightStartedAPI) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, block_count C.uint32_t, block_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncPreflightStartedAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return C.EINVAL
+	}
 	blockCount := int(block_count)
 	blockHashes := carray2slice64(block_hashes, blockCount)
 	copyBlockHashes := append([]uint64{}, blockHashes...)
@@ -2379,15 +2191,12 @@ func BlockStoreAPIProxy_PreflightGet(api *C.struct_Longtail_BlockStoreAPI, block
 }
 
 //export BlockStoreAPIProxy_GetExistingContent
-func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint32_t, chunk_hashes *C.TLongtail_Hash, min_block_usage_percent C.uint32_t, async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI, chunk_count C.uint32_t, chunk_hashes *C.TLongtail_Hash, min_block_usage_percent C.uint32_t, async_complete_api *C.struct_Longtail_AsyncGetExistingContentAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return C.EINVAL
+	}
 	chunkCount := int(chunk_count)
 	minBlockUsagePercent := uint32(min_block_usage_percent)
 	chunkHashes := carray2slice64(chunk_hashes, chunkCount)
@@ -2400,15 +2209,12 @@ func BlockStoreAPIProxy_GetExistingContent(api *C.struct_Longtail_BlockStoreAPI,
 }
 
 //export BlockStoreAPIProxy_PruneBlocks
-func BlockStoreAPIProxy_PruneBlocks(api *C.struct_Longtail_BlockStoreAPI, keep_block_count C.uint32_t, keep_block_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncPruneBlocksAPI) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_PruneBlocks(api *C.struct_Longtail_BlockStoreAPI, keep_block_count C.uint32_t, keep_block_hashes *C.TLongtail_Hash, async_complete_api *C.struct_Longtail_AsyncPruneBlocksAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return C.EINVAL
+	}
 	keepBlockCount := int(keep_block_count)
 	keepBlockHashes := carray2slice64(keep_block_hashes, keepBlockCount)
 	copyBlockHashes := append([]uint64{}, keepBlockHashes...)
@@ -2419,15 +2225,12 @@ func BlockStoreAPIProxy_PruneBlocks(api *C.struct_Longtail_BlockStoreAPI, keep_b
 }
 
 //export BlockStoreAPIProxy_GetStats
-func BlockStoreAPIProxy_GetStats(api *C.struct_Longtail_BlockStoreAPI, out_stats *C.struct_Longtail_BlockStore_Stats) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_GetStats(api *C.struct_Longtail_BlockStoreAPI, out_stats *C.struct_Longtail_BlockStore_Stats) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if blockStore == nil {
+		return C.EINVAL
+	}
 	stats, err := blockStore.GetStats()
 	if err == nil {
 		for s := 0; s < Longtail_BlockStoreAPI_StatU64_Count; s++ {
@@ -2438,15 +2241,12 @@ func BlockStoreAPIProxy_GetStats(api *C.struct_Longtail_BlockStoreAPI, out_stats
 }
 
 //export BlockStoreAPIProxy_Flush
-func BlockStoreAPIProxy_Flush(api *C.struct_Longtail_BlockStoreAPI, async_complete_api *C.struct_Longtail_AsyncFlushAPI) (errn C.int) {
-	defer func() {
-		if recover() != nil {
-			errn = C.EFAULT
-		}
-	}()
-
+func BlockStoreAPIProxy_Flush(api *C.struct_Longtail_BlockStoreAPI, async_complete_api *C.struct_Longtail_AsyncFlushAPI) C.int {
 	context := C.BlockStoreAPIProxy_GetContext(unsafe.Pointer(api))
 	blockStore := RestorePointer(context).(BlockStoreAPI)
+	if nil == blockStore {
+		return C.EINVAL
+	}
 	err := blockStore.Flush(Longtail_AsyncFlushAPI{cAsyncCompleteAPI: async_complete_api})
 	return errorToErrno(err, C.EIO)
 }

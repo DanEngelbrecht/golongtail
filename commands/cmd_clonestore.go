@@ -127,7 +127,8 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 		}
 		defer func() {
 			if err := rc.Close(); err != nil {
-				panic(errors.Wrap(err, fname))
+				err = errors.Wrap(err, fname)
+				log.WithError(err).Errorf("Failed to close zip file")
 			}
 		}()
 
@@ -156,7 +157,8 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 			}
 			defer func() {
 				if err := f.Close(); err != nil {
-					panic(err)
+					err = errors.Wrap(err, fname)
+					log.WithError(err).Errorf("Failed to close target file")
 				}
 			}()
 

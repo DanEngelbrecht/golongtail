@@ -1293,8 +1293,14 @@ func TestChangeVersion(t *testing.T) {
 
 	versionDiff2, err := CreateVersionDiff(hashAPI, versionIndex, versionIndex2)
 	defer versionDiff2.Dispose()
+	if err != nil {
+		t.Errorf("TestChangeVersion() CreateVersionDiff() %s", err)
+	}
 
 	chunkHashes2, err := GetRequiredChunkHashes(versionIndex2, versionDiff2)
+	if err != nil {
+		t.Errorf("TestChangeVersion() GetRequiredChunkHashes() %s", err)
+	}
 
 	getExistingContentComplete2 := &testGetExistingContentCompletionAPI{}
 	getExistingContentComplete2.wg.Add(1)

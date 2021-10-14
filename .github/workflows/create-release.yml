@@ -122,6 +122,7 @@ jobs:
           - **FIX** Improved logging
           - **FIX** Crash bug in `create-version-store-index` command
           - **FIX** No longer hang forever if remote store tries to fetch a block registered in index but not actually present
+          - **FIX** Add nullpointer guards to catch bad input in longtaillib
           - **CHANGED** Removed unused `--target-chunk-size` option for downsync
           - **CHANGED** Removed unused `--target-block-size` option for downsync
           - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync

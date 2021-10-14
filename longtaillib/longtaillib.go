@@ -404,7 +404,6 @@ func UnrefPointer(ptr unsafe.Pointer) {
 // ReadFromStorage ...
 func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path string) ([]byte, error) {
 	const fname = "ReadFromStorage"
-
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -438,7 +437,6 @@ func (storageAPI *Longtail_StorageAPI) ReadFromStorage(rootPath string, path str
 // WriteToStorage ...
 func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path string, blockData []byte) error {
 	const fname = "WriteToStorage"
-
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 	cPath := C.CString(path)
@@ -473,7 +471,6 @@ func (storageAPI *Longtail_StorageAPI) WriteToStorage(rootPath string, path stri
 
 func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_StorageAPI_HOpenFile, error) {
 	const fname = "OpenReadFile"
-
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var cOpenFile C.Longtail_StorageAPI_HOpenFile
@@ -486,7 +483,6 @@ func (storageAPI *Longtail_StorageAPI) OpenReadFile(path string) (Longtail_Stora
 
 func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) (uint64, error) {
 	const fname = "GetSize"
-
 	var size C.uint64_t
 	errno := C.Longtail_Storage_GetSize(storageAPI.cStorageAPI, f.cOpenFile, &size)
 	if errno != 0 {
@@ -497,7 +493,6 @@ func (storageAPI *Longtail_StorageAPI) GetSize(f Longtail_StorageAPI_HOpenFile) 
 
 func (storageAPI *Longtail_StorageAPI) Read(f Longtail_StorageAPI_HOpenFile, offset uint64, size uint64) ([]byte, error) {
 	const fname = "Read"
-
 	blockData := make([]byte, size)
 	errno := C.Longtail_Storage_Read(storageAPI.cStorageAPI, f.cOpenFile, C.uint64_t(offset), C.uint64_t(size), unsafe.Pointer(&blockData[0]))
 	if errno != 0 {
@@ -513,7 +508,6 @@ func (storageAPI *Longtail_StorageAPI) CloseFile(f Longtail_StorageAPI_HOpenFile
 
 func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageAPI_Iterator, error) {
 	const fname = "StartFind"
-
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 	var cIterator C.Longtail_StorageAPI_HIterator
@@ -526,9 +520,11 @@ func (storageAPI *Longtail_StorageAPI) StartFind(path string) (Longtail_StorageA
 
 func (storageAPI *Longtail_StorageAPI) FindNext(iterator Longtail_StorageAPI_Iterator) error {
 	const fname = "FindNext"
-
 	errno := C.Longtail_Storage_FindNext(storageAPI.cStorageAPI, iterator.cIterator)
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 func (storageAPI *Longtail_StorageAPI) CloseFind(iterator Longtail_StorageAPI_Iterator) {
@@ -1034,7 +1030,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		storedBlock.cStoredBlock,
 		asyncCompleteAPI.cAsyncCompleteAPI)
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 // GetStoredBlock() ...
@@ -1047,7 +1046,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStoredBlock(
 		blockStoreAPI.cBlockStoreAPI,
 		C.uint64_t(blockHash),
 		asyncCompleteAPI.cAsyncCompleteAPI)
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 // GetExistingContent() ...
@@ -1068,7 +1070,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetExistingContent(
 		cChunkHashes,
 		C.uint32_t(minBlockUsagePercent),
 		asyncCompleteAPI.cAsyncCompleteAPI)
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 // PruneBlocks() ...
@@ -1087,7 +1092,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) PruneBlocks(
 		C.uint32_t(blockCount),
 		cBlockHashes,
 		asyncCompleteAPI.cAsyncCompleteAPI)
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 // GetStats() ...
@@ -1101,12 +1109,15 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) GetStats() (BlockStoreStats, error)
 	errno := C.Longtail_BlockStore_GetStats(
 		blockStoreAPI.cBlockStoreAPI,
 		&cStats)
+	if errno != 0 {
+		return BlockStoreStats{}, errors.Wrap(errnoToError(errno), fname)
+	}
 
 	stats := BlockStoreStats{}
 	for s := 0; s < Longtail_BlockStoreAPI_StatU64_Count; s++ {
 		stats.StatU64[s] = uint64(cStats.m_StatU64[s])
 	}
-	return stats, errors.Wrap(errnoToError(errno), fname)
+	return stats, nil
 }
 
 // Flush() ...
@@ -1120,8 +1131,10 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Flush(asyncCompleteAPI Longtail_Asy
 	errno := C.Longtail_BlockStore_Flush(
 		blockStoreAPI.cBlockStoreAPI,
 		asyncCompleteAPI.cAsyncCompleteAPI)
-
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 func (blockIndex *Longtail_BlockIndex) GetBlockHash() uint64 {
@@ -1242,7 +1255,10 @@ func ValidateStore(storeIndex Longtail_StoreIndex, versionIndex Longtail_Version
 	const fname = "ValidateStore"
 
 	errno := C.Longtail_ValidateStore(storeIndex.cStoreIndex, versionIndex.cVersionIndex)
-	return errors.Wrap(errnoToError(errno), fname)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 // CreateStoredBlock() ...

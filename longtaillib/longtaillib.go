@@ -1793,6 +1793,9 @@ func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, error) {
 // CreateProgressAPI ...
 func CreateProgressAPI(progress ProgressAPI) Longtail_ProgressAPI {
 	cContext := SavePointer(progress)
+	if cContext == nil {
+		return Longtail_ProgressAPI{}
+	}
 	progressAPIProxy := C.CreateProgressProxyAPI(cContext)
 	return Longtail_ProgressAPI{cProgressAPI: progressAPIProxy}
 }
@@ -1817,6 +1820,9 @@ func ProgressAPIProxy_Dispose(api *C.struct_Longtail_API) {
 // CreatePathFilterAPI ...
 func CreatePathFilterAPI(pathFilter PathFilterAPI) Longtail_PathFilterAPI {
 	cContext := SavePointer(pathFilter)
+	if cContext == nil {
+		return Longtail_PathFilterAPI{}
+	}
 	pathFilterAPIProxy := C.CreatePathFilterProxyAPI(cContext)
 	return Longtail_PathFilterAPI{cPathFilterAPI: pathFilterAPIProxy}
 }
@@ -1847,6 +1853,9 @@ func PathFilterAPIProxy_Dispose(api *C.struct_Longtail_API) {
 // CreateAsyncPutStoredBlockAPI ...
 func CreateAsyncPutStoredBlockAPI(asyncComplete AsyncPutStoredBlockAPI) Longtail_AsyncPutStoredBlockAPI {
 	cContext := SavePointer(asyncComplete)
+	if cContext == nil {
+		return Longtail_AsyncPutStoredBlockAPI{}
+	}
 	asyncCompleteAPIProxy := C.CreateAsyncPutStoredBlockAPI(cContext)
 	return Longtail_AsyncPutStoredBlockAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
@@ -1873,6 +1882,9 @@ func AsyncPutStoredBlockAPIProxy_Dispose(api *C.struct_Longtail_API) {
 // CreateAsyncGetStoredBlockAPI ...
 func CreateAsyncGetStoredBlockAPI(asyncComplete AsyncGetStoredBlockAPI) Longtail_AsyncGetStoredBlockAPI {
 	cContext := SavePointer(asyncComplete)
+	if cContext == nil {
+		return Longtail_AsyncGetStoredBlockAPI{}
+	}
 	asyncCompleteAPIProxy := C.CreateAsyncGetStoredBlockAPI(cContext)
 	return Longtail_AsyncGetStoredBlockAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
@@ -1899,6 +1911,9 @@ func AsyncGetStoredBlockAPIProxy_Dispose(api *C.struct_Longtail_API) {
 // CreateAsyncGetExistingContentAPI ...
 func CreateAsyncGetExistingContentAPI(asyncComplete AsyncGetExistingContentAPI) Longtail_AsyncGetExistingContentAPI {
 	cContext := SavePointer(asyncComplete)
+	if cContext == nil {
+		return Longtail_AsyncGetExistingContentAPI{}
+	}
 	asyncCompleteAPIProxy := C.CreateAsyncGetExistingContentAPI(cContext)
 	return Longtail_AsyncGetExistingContentAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
@@ -1925,6 +1940,9 @@ func AsyncGetExistingContentAPIProxy_Dispose(api *C.struct_Longtail_API) {
 // CreateAsyncPruneBlocksAPI ...
 func CreateAsyncPruneBlocksAPI(asyncComplete AsyncPruneBlocksAPI) Longtail_AsyncPruneBlocksAPI {
 	cContext := SavePointer(asyncComplete)
+	if cContext == nil {
+		return Longtail_AsyncPruneBlocksAPI{}
+	}
 	asyncCompleteAPIProxy := C.CreateAsyncPruneBlocksAPI(cContext)
 	return Longtail_AsyncPruneBlocksAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
@@ -1951,6 +1969,9 @@ func AsyncPruneBlocksAPIProxy_Dispose(api *C.struct_Longtail_API) {
 // CreateAsyncFlushAPI ...
 func CreateAsyncFlushAPI(asyncComplete AsyncFlushAPI) Longtail_AsyncFlushAPI {
 	cContext := SavePointer(asyncComplete)
+	if cContext == nil {
+		return Longtail_AsyncFlushAPI{}
+	}
 	asyncCompleteAPIProxy := C.CreateAsyncFlushAPI(cContext)
 	return Longtail_AsyncFlushAPI{cAsyncCompleteAPI: asyncCompleteAPIProxy}
 }
@@ -2275,6 +2296,9 @@ func BlockStoreAPIProxy_Flush(api *C.struct_Longtail_BlockStoreAPI, async_comple
 
 func CreateBlockStoreAPI(blockStore BlockStoreAPI) Longtail_BlockStoreAPI {
 	cContext := SavePointer(blockStore)
+	if cContext == nil {
+		return Longtail_BlockStoreAPI{}
+	}
 	blockStoreAPIProxy := C.CreateBlockStoreProxyAPI(cContext)
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: blockStoreAPIProxy}
 }
@@ -2289,6 +2313,9 @@ func getLoggerFunc(logger Logger) C.Longtail_Log {
 //SetLogger ...
 func SetLogger(logger Logger) {
 	cLoggerContext := SavePointer(logger)
+	if cLoggerContext == nil {
+		return
+	}
 	C.Longtail_SetLog(getLoggerFunc(logger), cLoggerContext)
 }
 

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"sync/atomic"
+	"sync"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -362,22 +362,28 @@ var pointerIndex uint32
 var pointerStore [1024]interface{}
 var pointerIndexer = (*[1 << 30]C.uint32_t)(C.malloc(4 * 1024))
 
+var refPointerSync sync.Mutex
+
 func SavePointer(v interface{}) unsafe.Pointer {
 	if v == nil {
 		return nil
 	}
+	refPointerSync.Lock()
+	defer refPointerSync.Unlock()
 
-	newPointerIndex := (atomic.AddUint32(&pointerIndex, 1)) % 1024
-	startPointerIndex := newPointerIndex
-	for pointerStore[newPointerIndex] != nil {
-		newPointerIndex = (atomic.AddUint32(&pointerIndex, 1)) % 1024
-		if newPointerIndex == startPointerIndex {
+	startPointerIndex := pointerIndex
+	for pointerStore[pointerIndex] != nil {
+		pointerIndex++
+		if pointerIndex == 1024 {
+			pointerIndex = 0
+		}
+		if pointerIndex == startPointerIndex {
 			return nil
 		}
 	}
-	pointerIndexer[newPointerIndex] = C.uint32_t(newPointerIndex)
-	pointerStore[newPointerIndex] = v
-	return unsafe.Pointer(&pointerIndexer[newPointerIndex])
+	pointerIndexer[pointerIndex] = C.uint32_t(pointerIndex)
+	pointerStore[pointerIndex] = v
+	return unsafe.Pointer(&pointerIndexer[pointerIndex])
 }
 
 func RestorePointer(ptr unsafe.Pointer) (v interface{}) {
@@ -395,6 +401,8 @@ func UnrefPointer(ptr unsafe.Pointer) {
 	if ptr == nil {
 		return
 	}
+	refPointerSync.Lock()
+	defer refPointerSync.Unlock()
 
 	p := (*C.uint32_t)(ptr)
 	index := uint32(*p)

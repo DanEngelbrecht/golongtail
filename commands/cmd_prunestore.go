@@ -20,6 +20,8 @@ func pruneStore(
 	sourcePaths string,
 	versionLocalStoreIndexesPath string,
 	writeVersionLocalStoreIndex bool,
+	validateVersions bool,
+	skipInvalidVersions bool,
 	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "pruneStore"
 	log := logrus.WithFields(logrus.Fields{
@@ -29,6 +31,8 @@ func pruneStore(
 		"sourcePaths":                  sourcePaths,
 		"versionLocalStoreIndexesPath": versionLocalStoreIndexesPath,
 		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
+		"validateVersions":             validateVersions,
+		"skipInvalidVersions":          skipInvalidVersions,
 		"dryRun":                       dryRun,
 	})
 	log.Debug(fname)
@@ -269,6 +273,8 @@ type PruneStoreCmd struct {
 	VersionLocalStoreIndexPaths string `name:"version-local-store-index-paths" help:"File containing list of version local store index longtail uris"`
 	DryRun                      bool   `name:"dry-run" help:"Don't prune, just show how many blocks would be kept if prune was run"`
 	WriteVersionLocalStoreIndex bool   `name:"write-version-local-store-index" help:"Write a new version local store index for each version. This requires a valid version-local-store-index-paths input parameter"`
+	ValidateVersions            bool   `name:"validate-versions" help:"Verify that all content needed for a version is available in the store"`
+	SkipInvalidVersions         bool   `name:"skip-invalid-versions" help:"If an invalid version is found, disregard its blocks. If not set and validate-version is set, invalid version will abort with an error"`
 }
 
 func (r *PruneStoreCmd) Run(ctx *Context) error {
@@ -278,6 +284,8 @@ func (r *PruneStoreCmd) Run(ctx *Context) error {
 		r.SourcePaths,
 		r.VersionLocalStoreIndexPaths,
 		r.WriteVersionLocalStoreIndex,
+		r.ValidateVersions,
+		r.SkipInvalidVersions,
 		r.DryRun)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

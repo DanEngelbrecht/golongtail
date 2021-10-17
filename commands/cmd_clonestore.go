@@ -270,7 +270,7 @@ func updateCurrentVersionFromLongtail(
 	}
 	defer existingStoreIndex.Dispose()
 
-	changeVersionProgress := longtailutils.CreateProgress("Updating version")
+	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
 	defer changeVersionProgress.Dispose()
 
 	// Try to change local version
@@ -394,7 +394,7 @@ func cloneOneVersion(
 	defer versionMissingStoreIndex.Dispose()
 
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := longtailutils.CreateProgress("Writing content blocks")
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks", 2)
 
 		err = longtaillib.WriteContent(
 			fs,

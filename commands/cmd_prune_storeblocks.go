@@ -143,7 +143,7 @@ func pruneStoreBlocks(
 	fmt.Printf("Found %d blocks to prune\n", len(unusedBlocks))
 
 	deleteUnusedBlocksStartTime := time.Now()
-	deleteUnusedBlocksProgress := longtailutils.CreateProgress("Deleting unused blocks", 2)
+	deleteUnusedBlocksProgress := longtailutils.CreateProgress("Deleting unused blocks", 0)
 	defer deleteUnusedBlocksProgress.Dispose()
 	for i, blockName := range unusedBlocks {
 		deleteUnusedBlocksProgress.OnProgress(uint32(len(unusedBlocks)), uint32(i))

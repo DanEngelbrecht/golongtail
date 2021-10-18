@@ -24,5 +24,5 @@ var Cli struct {
 	CloneStore              CloneStoreCmd              `cmd:"" name:"clone-store" help:"Clone all the data needed to cover a set of versions from one store into a new store" aliases:"cloneStore"`
 	PruneStore              PruneStoreCmd              `cmd:"" name:"prune-store" help:"Prune blocks in a store which are not used by the files in the input list. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data" aliases:"pruneStore"`
 	PruneStoreIndex         PruneStoreIndexCmd         `cmd:"" name:"prune-store-index" help:"Prune blocks in a store index which are not used by the files in the input list. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
-	PruneBlocks             PruneBlocksCmd             `cmd:"" name:"prune-blocks" help:"Prune blocks in a store which are not present in the store index. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
+	PruneStoreBlocks        PruneStoreBlocksCmd        `cmd:"" name:"prune-store-blocks" help:"Prune blocks in a store which are not present in the store index. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
 }

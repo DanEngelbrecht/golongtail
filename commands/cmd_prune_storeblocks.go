@@ -147,14 +147,24 @@ func pruneStoreBlocks(
 	defer deleteUnusedBlocksProgress.Dispose()
 	for i, blockName := range unusedBlocks {
 		deleteUnusedBlocksProgress.OnProgress(uint32(len(unusedBlocks)), uint32(i))
-		if dryRun {
-			log.Debugf("Delete `%s`\n", blockName)
-		} else {
-			fmt.Printf("Actually delete `%s`\n", blockName)
+		log.Infof("Delete `%s`\n", blockName)
+		if !dryRun {
+			object, err := client.NewObject(blockName)
+			if err != nil {
+				return storeStats, timeStats, errors.Wrap(err, fname)
+			}
+			err = object.Delete()
+			if err != nil {
+				return storeStats, timeStats, errors.Wrap(err, fname)
+			}
 		}
 	}
 	deleteUnusedBlocksProgress.OnProgress(uint32(len(unusedBlocks)), uint32(len(unusedBlocks)))
 	timeStats = append(timeStats, longtailutils.TimeStat{"Delete unused blocks", time.Since(deleteUnusedBlocksStartTime)})
+
+	if !dryRun {
+		fmt.Printf("Deleted %d blocks\n", len(unusedBlocks))
+	}
 
 	return storeStats, timeStats, nil
 }

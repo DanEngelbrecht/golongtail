@@ -188,6 +188,7 @@ func pruneStoreBlocks(
 
 		workerClient := clients[activeWorkerCount]
 		go func(client *longtailstorelib.BlobClient, blockName string) {
+			const fname = "deleteBlockWorker"
 			defer func() {
 				deleteClientChannel <- client
 			}()

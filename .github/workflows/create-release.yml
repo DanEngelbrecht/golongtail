@@ -116,33 +116,11 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **FIX** Make sure flush also flushes store index, empties preflight memory and flushes any pending preflight blocks.
-          - **FIX** Build Linux executable using Ubuntu 18.04 to avoid forcing update of GLIBC dependency
-          - **FIX** Improved error handling and reporting
-          - **FIX** Improved logging
-          - **FIX** Crash bug in `create-version-store-index` command
-          - **FIX** No longer hang forever if remote store tries to fetch a block registered in index but not actually present
-          - **FIX** Add nullpointer guards to catch bad input in longtaillib
-          - **CHANGED** Removed unused `--target-chunk-size` option for downsync
-          - **CHANGED** Removed unused `--target-block-size` option for downsync
-          - **CHANGED** Removed unused `--max-chunks-per-block` option for downsync
-          - **CHANGED** `--target-path` for `downsync` command is now optional and if not given a folder will be crated in the current directory based on the source name
-          - **CHANGED** Now uses Kong command line parser instead of Kingpin/v2
-          - **CHANGED** Nicer progress output in terminal with elapsed time and estimated time
-          - **CHANGED** Refactored internal structure - new module with commands and one with utils and with a very small cmd/main
-          - **CHANGED** Cleaned up command names and options (old names are kept for compatabiltiy)
-          - **CHANGED** longtaillib now hides all errno and works strictly with golang error type
-          - **ADD** Integration test for each command in the command line tool
-          - **ADD** More unit and stress tests
-          - **ADD** s3-blobstore, use the uri format s3:// for Amazon S3 stores
-          - **ADD** `cloneStore` command to copy all versions from one store to a new store
-          - **ADD** `pruneStore` command that removes blocks of data base on which blocks are used by a list of version indexes
-          - **ADD** `get` command to use json formatted config file to avoid specifying all the source information options, generate with `--get-config-path` option in `upsync` command
-          - **ADD** `printStoreIndex` now has `-details` option that shows how much data (both total and unique) is in a store
-          - **ADD** `fsblob://` uri type for file system blob store, primary use is for testing remote store with local file system
-          - **UPDATE** Update dependencies, in particular GCS dependency to fix oauth compatability
-          - **UPDATE** Build using Golang 1.17.1
-          - **UPDATE** Update to longtail v0.2.5
+          - **ADDED** `prune-store-index` which only updates the specific store index file
+          - **ADDED** `prune-store-blocks` which removes block files base on content in a store index file
+          - **FIX** `prune-store` is now more parallel and faster to execute
+          - **FIX** Tweaked progress bars
+          - **FIX** Remote store now runs GetExistingContent in async thread if store is opened in ReadOnly mode
         draft: false
         prerelease: false
     - name: Download Linux artifacts

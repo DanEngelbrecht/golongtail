@@ -121,6 +121,7 @@ jobs:
           - **FIX** `prune-store` is now more parallel and faster to execute
           - **FIX** Tweaked progress bars
           - **FIX** Remote store now runs GetExistingContent in async thread if store is opened in ReadOnly mode
+          - **FIX** Set process exit code explicitly
         draft: false
         prerelease: false
     - name: Download Linux artifacts

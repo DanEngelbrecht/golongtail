@@ -39,7 +39,7 @@ func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
 			fractionEta := float64(timeThisRound.Seconds()) / fractionDoneThisRound * fractionLeft
 			averageRate := float64(doneCount) / time.Since(p.startTime).Seconds()
 			averageEta := (float64(totalCount) - float64(doneCount)) / averageRate
-			weightedEta := ((fractionEta + (averageEta * 2)) / 3)
+			weightedEta := ((fractionEta + (averageEta * 3)) / 4)
 			eta := (time.Duration(weightedEta) * time.Second).String()
 			etaString = fmt.Sprintf(":%s", eta)
 		}
@@ -67,7 +67,7 @@ func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
 }
 
 // CreateProgress ...
-func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
+func CreateProgress(task string, percentRateLimit uint32) longtaillib.Longtail_ProgressAPI {
 	const fname = "CreateProgress"
 	log := log.WithContext(context.Background()).WithFields(log.Fields{
 		"fname": fname,
@@ -76,5 +76,8 @@ func CreateProgress(task string) longtaillib.Longtail_ProgressAPI {
 	log.Debug(fname)
 	progress := &ProgressData{task: task, startTime: time.Now()}
 	baseProgress := longtaillib.CreateProgressAPI(progress)
-	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, 2)
+	if percentRateLimit == 0 {
+		return baseProgress
+	}
+	return longtaillib.CreateRateLimitedProgressAPI(baseProgress, percentRateLimit)
 }

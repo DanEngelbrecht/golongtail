@@ -9,55 +9,12 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
-	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-type pruneOneResult struct {
-	err    error
-	blocks []uint64
-}
-
-func readPruneVersion(
-	sourceFilePath string,
-	versionLocalStoreIndexFilePath string,
-	writeVersionLocalStoreIndex bool) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_StoreIndex, error) {
-	const fname = "readPruneVersion"
-	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath)
-	if err != nil {
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-	}
-	versionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if err != nil {
-		err = errors.Wrapf(err, "Cant parse version index from `%s`", sourceFilePath)
-		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-	}
-
-	var storeIndex longtaillib.Longtail_StoreIndex
-	if versionLocalStoreIndexFilePath != "" && !writeVersionLocalStoreIndex {
-		sbuffer, err := longtailutils.ReadFromURI(versionLocalStoreIndexFilePath)
-		if err == nil {
-			storeIndex, err = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
-			if err != nil {
-				err = errors.Wrapf(err, "Cant parse store index from `%s`", versionLocalStoreIndexFilePath)
-				versionIndex.Dispose()
-				return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-			}
-			err = longtaillib.ValidateStore(storeIndex, versionIndex)
-			if err != nil {
-				storeIndex.Dispose()
-				versionIndex.Dispose()
-				err = errors.Wrapf(err, "Cant validate store index for `%s`", versionLocalStoreIndexFilePath)
-				return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-			}
-		}
-	}
-	return versionIndex, storeIndex, nil
-}
-
-func pruneOne(
-	remoteStore longtaillib.Longtail_BlockStoreAPI,
+func pruneOneUsingStoreIndex(
+	storeIndex longtaillib.Longtail_StoreIndex,
 	sourceFilePath string,
 	versionLocalStoreIndexFilePath string,
 	validateVersions bool,
@@ -86,7 +43,7 @@ func pruneOne(
 
 	if !existingStoreIndex.IsValid() {
 		neededChunks := versionIndex.GetChunkHashes()
-		existingStoreIndex, err = longtailutils.GetExistingStoreIndexSync(remoteStore, neededChunks, 0)
+		existingStoreIndex, err = longtaillib.GetExistingStoreIndex(storeIndex, neededChunks, 0)
 		if err != nil {
 			result.err = errors.Wrap(err, fname)
 			return
@@ -129,32 +86,25 @@ func pruneOne(
 	result.blocks = append(result.blocks, existingStoreIndex.GetBlockHashes()...)
 }
 
-func gatherBlocksToKeep(
+func gatherBlocksToKeepFromStoreIndex(
 	numWorkerCount int,
-	storageURI string,
+	storeIndex longtaillib.Longtail_StoreIndex,
 	sourceFilePaths []string,
 	versionLocalStoreIndexFilePaths []string,
 	writeVersionLocalStoreIndex bool,
 	validateVersions bool,
 	skipInvalidVersions bool,
-	dryRun bool,
-	jobs longtaillib.Longtail_JobAPI) ([]uint64, error) {
+	dryRun bool) ([]uint64, error) {
 	const fname = "gatherBlocksToKeep"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                       fname,
 		"numWorkerCount":              numWorkerCount,
-		"storageURI":                  storageURI,
 		"writeVersionLocalStoreIndex": writeVersionLocalStoreIndex,
 		"validateVersions":            validateVersions,
 		"skipInvalidVersions":         skipInvalidVersions,
 		"dryRun":                      dryRun,
 	})
 	log.Debug(fname)
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
-	if err != nil {
-		return nil, errors.Wrap(err, fname)
-	}
-	defer remoteStore.Dispose()
 
 	usedBlocks := make(map[uint64]uint32)
 
@@ -166,6 +116,8 @@ func gatherBlocksToKeep(
 
 	totalCount := uint32(len(sourceFilePaths))
 	completed := 0
+
+	var err error
 
 	for i, sourceFilePath := range sourceFilePaths {
 		versionLocalStoreIndexFilePath := ""
@@ -185,8 +137,8 @@ func gatherBlocksToKeep(
 		}
 
 		if sourceFilePath != "" {
-			go pruneOne(
-				remoteStore,
+			go pruneOneUsingStoreIndex(
+				storeIndex,
 				sourceFilePath,
 				versionLocalStoreIndexFilePath,
 				validateVersions,
@@ -253,9 +205,9 @@ func gatherBlocksToKeep(
 	return blockHashes, nil
 }
 
-func pruneStore(
+func pruneStoreIndex(
 	numWorkerCount int,
-	storageURI string,
+	storeIndexPath string,
 	sourcePaths string,
 	versionLocalStoreIndexesPath string,
 	writeVersionLocalStoreIndex bool,
@@ -266,7 +218,7 @@ func pruneStore(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
 		"numWorkerCount":               numWorkerCount,
-		"storageURI":                   storageURI,
+		"storeIndexPath":               storeIndexPath,
 		"sourcePaths":                  sourcePaths,
 		"versionLocalStoreIndexesPath": versionLocalStoreIndexesPath,
 		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
@@ -280,11 +232,7 @@ func pruneStore(
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
-	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
-	defer jobs.Dispose()
-
-	setupTime := time.Since(setupStartTime)
-	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", time.Since(setupStartTime)})
 
 	sourceFilePathsStartTime := time.Now()
 
@@ -300,8 +248,7 @@ func pruneStore(
 		sourceFilePath := sourcesScanner.Text()
 		sourceFilePaths = append(sourceFilePaths, sourceFilePath)
 	}
-	sourceFilePathsTime := time.Since(sourceFilePathsStartTime)
-	timeStats = append(timeStats, longtailutils.TimeStat{"Read source file list", sourceFilePathsTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read source file list", time.Since(sourceFilePathsStartTime)})
 
 	versionLocalStoreIndexFilePaths := make([]string, 0)
 	if strings.TrimSpace(versionLocalStoreIndexesPath) != "" {
@@ -318,8 +265,7 @@ func pruneStore(
 			versionLocalStoreIndexFilePaths = append(versionLocalStoreIndexFilePaths, versionLocalStoreIndexFilePath)
 		}
 
-		versionLocalStoreIndexesPathsTime := time.Since(versionLocalStoreIndexesPathsStartTime)
-		timeStats = append(timeStats, longtailutils.TimeStat{"Read version local store index file list", versionLocalStoreIndexesPathsTime})
+		timeStats = append(timeStats, longtailutils.TimeStat{"Read version local store index file list", time.Since(versionLocalStoreIndexesPathsStartTime)})
 
 		if len(sourceFilePaths) != len(versionLocalStoreIndexFilePaths) {
 			err = fmt.Errorf("pruneStore: Number of files in `%s` does not match number of files in `%s`", sourcePaths, versionLocalStoreIndexesPath)
@@ -327,63 +273,71 @@ func pruneStore(
 		}
 	}
 
+	readStoreIndexStartTime := time.Now()
+	storeIndexBuffer, err := longtailutils.ReadFromURI(storeIndexPath)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+	storeIndex, err := longtaillib.ReadStoreIndexFromBuffer(storeIndexBuffer)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+	defer storeIndex.Dispose()
+	storeIndexBuffer = nil
+	timeStats = append(timeStats, longtailutils.TimeStat{"Read store index", time.Since(readStoreIndexStartTime)})
+
 	gatherBlocksToKeepStartTime := time.Now()
-	blocksToKeep, err := gatherBlocksToKeep(
+
+	blocksToKeep, err := gatherBlocksToKeepFromStoreIndex(
 		numWorkerCount,
-		storageURI,
+		storeIndex,
 		sourceFilePaths,
 		versionLocalStoreIndexFilePaths,
 		writeVersionLocalStoreIndex,
 		validateVersions,
 		skipInvalidVersions,
-		dryRun,
-		jobs)
+		dryRun)
 
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
-	gatherBlocksToKeepTime := time.Since(gatherBlocksToKeepStartTime)
-	timeStats = append(timeStats, longtailutils.TimeStat{"Gather used blocks", gatherBlocksToKeepTime})
-
-	if dryRun {
-		fmt.Printf("Prune would keep %d blocks", len(blocksToKeep))
-		return storeStats, timeStats, nil
-	}
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite)
-	if err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-	defer remoteStore.Dispose()
+	timeStats = append(timeStats, longtailutils.TimeStat{"Gather used blocks", time.Since(gatherBlocksToKeepStartTime)})
 
 	pruneStartTime := time.Now()
-	prunedBlockCount, err := longtailutils.PruneBlocksSync(remoteStore, blocksToKeep)
+	prunedStoreIndex, err := longtaillib.PruneStoreIndex(storeIndex, blocksToKeep)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	pruneTime := time.Since(pruneStartTime)
-	timeStats = append(timeStats, longtailutils.TimeStat{"Prune", pruneTime})
+	timeStats = append(timeStats, longtailutils.TimeStat{"Prune", time.Since(pruneStartTime)})
 
-	log.Infof("Pruned %d blocks", prunedBlockCount)
+	oldBlockCount := storeIndex.GetBlockCount()
+	newBlockCount := prunedStoreIndex.GetBlockCount()
 
-	flushStartTime := time.Now()
-	err = longtailutils.FlushStoreSync(&remoteStore)
+	storeIndex.Dispose()
+
+	if dryRun {
+		fmt.Printf("Pruned %d blocks out of %d", oldBlockCount-newBlockCount, oldBlockCount)
+		return storeStats, timeStats, nil
+	}
+
+	writeStoreIndexStartTime := time.Now()
+	prunedStoreIndexBuffer, err := longtaillib.WriteStoreIndexToBuffer(prunedStoreIndex)
+	prunedStoreIndex.Dispose()
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	flushTime := time.Since(flushStartTime)
-	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
-
-	remoteStoreStats, err := remoteStore.GetStats()
-	if err == nil {
-		storeStats = append(storeStats, longtailutils.StoreStat{"Remote", remoteStoreStats})
+	err = longtailutils.WriteToURI(storeIndexPath, prunedStoreIndexBuffer)
+	timeStats = append(timeStats, longtailutils.TimeStat{"Write store index", time.Since(writeStoreIndexStartTime)})
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	return storeStats, timeStats, nil
 }
 
-type PruneStoreCmd struct {
-	StorageURIOption
+type PruneStoreIndexCmd struct {
+	StoreIndexPathOption
 	SourcePaths                 string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
 	VersionLocalStoreIndexPaths string `name:"version-local-store-index-paths" help:"File containing list of version local store index longtail uris"`
 	DryRun                      bool   `name:"dry-run" help:"Don't prune, just show how many blocks would be kept if prune was run"`
@@ -392,10 +346,10 @@ type PruneStoreCmd struct {
 	SkipInvalidVersions         bool   `name:"skip-invalid-versions" help:"If an invalid version is found, disregard its blocks. If not set and validate-version is set, invalid version will abort with an error"`
 }
 
-func (r *PruneStoreCmd) Run(ctx *Context) error {
-	storeStats, timeStats, err := pruneStore(
+func (r *PruneStoreIndexCmd) Run(ctx *Context) error {
+	storeStats, timeStats, err := pruneStoreIndex(
 		ctx.NumWorkerCount,
-		r.StorageURI,
+		r.StoreIndexPath,
 		r.SourcePaths,
 		r.VersionLocalStoreIndexPaths,
 		r.WriteVersionLocalStoreIndex,

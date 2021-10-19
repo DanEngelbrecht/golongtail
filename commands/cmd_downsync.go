@@ -190,7 +190,7 @@ func downsync(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := longtailutils.CreateProgress("Updating version")
+	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
 	defer changeVersionProgress.Dispose()
 	err = longtaillib.ChangeVersion(
 		indexStore,
@@ -270,7 +270,7 @@ func downsync(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtailutils.CreateProgress("Validating version")
+		createVersionIndexProgress := longtailutils.CreateProgress("Validating version", 2)
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, err := longtaillib.CreateVersionIndex(
 			fs,

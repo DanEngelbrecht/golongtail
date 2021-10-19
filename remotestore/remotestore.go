@@ -785,7 +785,11 @@ func contentIndexWorker(
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return errors.Wrap(err, fname)
 			}
-			if updatedStoreIndex.IsValid() {
+			if accessType == ReadOnly {
+				go func() {
+					onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
+				}()
+			} else if updatedStoreIndex.IsValid() {
 				onGetExistingContentMessage(s, updatedStoreIndex, getExistingContentMessage)
 				updatedStoreIndex.Dispose()
 			} else {
@@ -867,7 +871,11 @@ func contentIndexWorker(
 				storeIndexWorkerReplyErrorState(blockIndexMessages, getExistingContentMessages, pruneBlocksMessages, flushMessages, flushReplyMessages)
 				return errors.Wrap(err, fname)
 			}
-			if updatedStoreIndex.IsValid() {
+			if accessType == ReadOnly {
+				go func() {
+					onGetExistingContentMessage(s, storeIndex, getExistingContentMessage)
+				}()
+			} else if updatedStoreIndex.IsValid() {
 				onGetExistingContentMessage(s, updatedStoreIndex, getExistingContentMessage)
 				updatedStoreIndex.Dispose()
 			} else {
@@ -1471,7 +1479,7 @@ func getStoreIndexFromBlocks(
 		}
 	}(clients)
 
-	progress := longtailutils.CreateProgress("Scanning blocks")
+	progress := longtailutils.CreateProgress("Scanning blocks", 1)
 	defer progress.Dispose()
 
 	var wg sync.WaitGroup

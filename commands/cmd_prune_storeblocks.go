@@ -143,27 +143,116 @@ func pruneStoreBlocks(
 	fmt.Printf("Found %d blocks to prune\n", len(unusedBlocks))
 
 	deleteUnusedBlocksStartTime := time.Now()
-	deleteUnusedBlocksProgress := longtailutils.CreateProgress("Deleting unused blocks", 0)
+	deleteUnusedBlocksProgress := longtailutils.CreateProgress("Deleting unused blocks", 1)
 	defer deleteUnusedBlocksProgress.Dispose()
-	for i, blockName := range unusedBlocks {
-		deleteUnusedBlocksProgress.OnProgress(uint32(len(unusedBlocks)), uint32(i))
-		log.Infof("Delete `%s`\n", blockName)
-		if !dryRun {
-			object, err := client.NewObject(blockName)
-			if err != nil {
-				return storeStats, timeStats, errors.Wrap(err, fname)
-			}
-			err = object.Delete()
-			if err != nil {
-				return storeStats, timeStats, errors.Wrap(err, fname)
+
+	workerCount := numWorkerCount
+	if workerCount > len(unusedBlocks) {
+		workerCount = len(unusedBlocks)
+	}
+	deleteResultChannel := make(chan error, workerCount)
+	totalCount := uint32(len(unusedBlocks))
+	activeWorkerCount := 0
+	completed := uint32(0)
+
+	clients := make([]*longtailstorelib.BlobClient, workerCount)
+	defer func() {
+		for i := 0; i < workerCount; i++ {
+			if clients[i] != nil {
+				(*clients[i]).Close()
 			}
 		}
+	}()
+
+	deleteClientChannel := make(chan *longtailstorelib.BlobClient, workerCount)
+	for i := 0; i < workerCount; i++ {
+		workerClient, err := blobStore.NewClient(context.Background())
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+		clients[i] = &workerClient
 	}
-	deleteUnusedBlocksProgress.OnProgress(uint32(len(unusedBlocks)), uint32(len(unusedBlocks)))
+
+	for i, blockName := range unusedBlocks {
+		if activeWorkerCount == workerCount {
+			deleteErr := <-deleteResultChannel
+			deleteClient := <-deleteClientChannel
+			completed++
+			activeWorkerCount--
+			clients[activeWorkerCount] = deleteClient
+			if deleteErr != nil {
+				err = deleteErr
+				break
+			}
+		}
+
+		workerClient := clients[activeWorkerCount]
+		go func(client *longtailstorelib.BlobClient, blockName string) {
+			defer func() {
+				deleteClientChannel <- client
+			}()
+
+			log.Infof("Delete `%s`\n", blockName)
+			if !dryRun {
+				object, err := (*client).NewObject(blockName)
+				if err != nil {
+					deleteResultChannel <- errors.Wrap(err, fname)
+					return
+				}
+				err = object.Delete()
+				if err != nil {
+					deleteResultChannel <- errors.Wrap(err, fname)
+					return
+				}
+			}
+			deleteResultChannel <- nil
+		}(workerClient, blockName)
+		activeWorkerCount++
+
+		for activeWorkerCount > 0 {
+			received := false
+			select {
+			case deleteErr := <-deleteResultChannel:
+				deleteClient := <-deleteClientChannel
+				completed++
+				activeWorkerCount--
+				clients[activeWorkerCount] = deleteClient
+				if deleteErr != nil {
+					err = deleteErr
+				}
+				received = true
+			default:
+			}
+			if !received {
+				break
+			}
+		}
+		if err != nil {
+			break
+		}
+		deleteUnusedBlocksProgress.OnProgress(totalCount, uint32(i))
+	}
+
+	for activeWorkerCount > 0 {
+		deleteErr := <-deleteResultChannel
+		deleteClient := <-deleteClientChannel
+		completed++
+		activeWorkerCount--
+		clients[activeWorkerCount] = deleteClient
+		if deleteErr != nil {
+			err = deleteErr
+		}
+		deleteUnusedBlocksProgress.OnProgress(completed, totalCount)
+	}
+
 	timeStats = append(timeStats, longtailutils.TimeStat{"Delete unused blocks", time.Since(deleteUnusedBlocksStartTime)})
 
 	if !dryRun {
 		fmt.Printf("Deleted %d blocks\n", len(unusedBlocks))
+	}
+
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
 	return storeStats, timeStats, nil

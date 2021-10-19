@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -14,15 +15,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func main() {
+func runCommand() error {
 	executionStartTime := time.Now()
 	initStartTime := executionStartTime
 
 	context := &commands.Context{}
 
 	defer func() {
-		executionTime := time.Since(executionStartTime)
-		context.TimeStats = append(context.TimeStats, longtailutils.TimeStat{"Execution", executionTime})
+		context.TimeStats = append(context.TimeStats, longtailutils.TimeStat{"Execution", time.Since(executionStartTime)})
 
 		if commands.Cli.ShowStoreStats {
 			for _, s := range context.StoreStats {
@@ -103,7 +103,14 @@ func main() {
 
 	context.TimeStats = append([]longtailutils.TimeStat{{"Init", initTime}}, context.TimeStats...)
 
+	return err
+}
+
+func main() {
+	err := runCommand()
 	if err != nil {
 		log.Fatal(err)
+		os.Exit(1)
 	}
+	os.Exit(0)
 }

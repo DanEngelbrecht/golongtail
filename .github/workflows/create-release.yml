@@ -23,7 +23,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w" .
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref }}'" .
           popd
 
       - name: build dist
@@ -53,7 +53,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w" .
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref }}'" .
           popd
 
       - name: build dist
@@ -83,7 +83,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w" .
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref }}'" .
           popd
 
       - name: build dist

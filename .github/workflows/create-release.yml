@@ -20,10 +20,13 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref }}'" .
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ env.RELEASE_VERSION }}'" .
           popd
 
       - name: build dist
@@ -50,10 +53,13 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref }}'" .
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ env.RELEASE_VERSION }}'" .
           popd
 
       - name: build dist
@@ -80,10 +86,13 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref }}'" .
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ env.RELEASE_VERSION }}'" .
           popd
 
       - name: build dist
@@ -116,14 +125,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **ADDED** `prune-store-index` which only updates the specific store index file
-          - **ADDED** `prune-store-blocks` which removes block files base on content in a store index file
-          - **FIX** `prune-store` is now more parallel and faster to execute
-          - **FIX** Tweaked progress bars
-          - **FIX** Remote store now runs GetExistingContent in async thread if store is opened in ReadOnly mode
-          - **FIX** Set process exit code explicitly
+          - **ADDED** `version` command showing the current executable version
         draft: false
-        prerelease: false
+        prerelease: true
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:

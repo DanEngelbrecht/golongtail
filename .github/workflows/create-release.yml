@@ -20,13 +20,11 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
-      - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ env.RELEASE_VERSION }}'" .
+          RELEASE_VERSION="${GITHUB_REF#refs/*/}"
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ RELEASE_VERSION }}'" .
           popd
 
       - name: build dist
@@ -53,13 +51,11 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
-      - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ env.RELEASE_VERSION }}'" .
+          RELEASE_VERSION="${GITHUB_REF#refs/*/}"
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ RELEASE_VERSION }}'" .
           popd
 
       - name: build dist
@@ -92,7 +88,8 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ env.RELEASE_VERSION }}'" .
+          RELEASE_VERSION="${GITHUB_REF#refs/*/}"
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ RELEASE_VERSION }}'" .
           popd
 
       - name: build dist

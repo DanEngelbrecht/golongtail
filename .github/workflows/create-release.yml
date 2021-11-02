@@ -89,8 +89,8 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          GITHUB_FULLREF=${{ github.ref }}
-          RELEASE_VERSION=${GITHUB_FULLREF#refs/*/}
+          $GITHUB_FULLREF=${{ github.ref }}
+          $RELEASE_VERSION=${GITHUB_FULLREF#refs/*/}
           echo Version $RELEASE_VERSION
           go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${RELEASE_VERSION}'" .
           popd

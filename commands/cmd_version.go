@@ -3,7 +3,7 @@ package commands
 import "fmt"
 
 var (
-	BuildVersion string = "<none>"
+	BuildVersion string = "<dev>"
 )
 
 type VersionCmd struct {

@@ -127,7 +127,7 @@ jobs:
           Changes in this Release
           - **ADDED** `version` command showing the current executable version
         draft: false
-        prerelease: true
+        prerelease: false
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:

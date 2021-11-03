@@ -15,6 +15,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const appDescriptionTemplate = "Incremental asset delivery tool. Version %s"
+
 func runCommand() error {
 	executionStartTime := time.Now()
 	initStartTime := executionStartTime
@@ -44,7 +46,8 @@ func runCommand() error {
 		}
 	}()
 
-	ctx := kong.Parse(&commands.Cli)
+	appDescription := fmt.Sprintf(appDescriptionTemplate, commands.BuildVersion)
+	ctx := kong.Parse(&commands.Cli, kong.Description(appDescription))
 
 	longtailLogLevel, err := longtailutils.ParseLevel(commands.Cli.LogLevel)
 	if err != nil {

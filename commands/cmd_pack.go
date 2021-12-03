@@ -119,6 +119,10 @@ func pack(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Create archive index", createArchiveIndexTime})
 
 	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, targetFilePath, archiveIndex, true)
+	if !archiveIndexBlockStore.IsValid() {
+		err = errors.Wrapf(err, "Failed creating archive store for `%s`", targetFilePath)
+		return storeStats, timeStats, errors.Wrapf(err, fname)
+	}
 	defer archiveIndexBlockStore.Dispose()
 
 	indexStore := longtaillib.CreateCompressBlockStore(archiveIndexBlockStore, creg)

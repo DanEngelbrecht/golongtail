@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
@@ -797,11 +798,12 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				newStoreIndex.Dispose()
 			}
 
-			if !validateThatBlocksArePresent(generatedBlocksIndex, client) {
-				log.Printf("Could not find generated blocks in store index, retrying...\n")
-				if !validateThatBlocksArePresent(generatedBlocksIndex, client) {
-					t.Errorf("Could not find generated blocks in store index")
+			for i := 0; i < 5; i++ {
+				if validateThatBlocksArePresent(generatedBlocksIndex, client) {
+					break
 				}
+				log.Printf("Could not find generated blocks in store index, retrying...\n")
+				time.Sleep(1 * time.Second)
 			}
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()

@@ -22,8 +22,7 @@ func pack(
 	compressionAlgorithm string,
 	hashAlgorithm string,
 	includeFilterRegEx string,
-	excludeFilterRegEx string,
-	minBlockUsagePercent uint32) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "pack"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                fname,
@@ -38,7 +37,6 @@ func pack(
 		"hashAlgorithm":        hashAlgorithm,
 		"includeFilterRegEx":   includeFilterRegEx,
 		"excludeFilterRegEx":   excludeFilterRegEx,
-		"minBlockUsagePercent": minBlockUsagePercent,
 	})
 	log.Debug(fname)
 
@@ -177,7 +175,6 @@ type PackCmd struct {
 	TargetChunkSizeOption
 	MaxChunksPerBlockOption
 	TargetBlockSizeOption
-	MinBlockUsagePercentOption
 	CompressionOption
 	HashingOption
 	UpsyncIncludeRegExOption
@@ -196,8 +193,7 @@ func (r *PackCmd) Run(ctx *Context) error {
 		r.Compression,
 		r.Hashing,
 		r.IncludeFilterRegEx,
-		r.ExcludeFilterRegEx,
-		r.MinBlockUsagePercent)
+		r.ExcludeFilterRegEx)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

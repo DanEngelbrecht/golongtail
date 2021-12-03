@@ -1816,6 +1816,20 @@ func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, error) {
 	return Longtail_StoreIndex{cStoreIndex: cindex}, nil
 }
 
+// ReadArchiveIndex ...
+func ReadArchiveIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_ArchiveIndex, error) {
+	const fname = "ReadArchiveIndex"
+
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	var aindex *C.struct_Longtail_ArchiveIndex
+	errno := C.Longtail_ReadArchiveIndex(storageAPI.cStorageAPI, cPath, &aindex)
+	if errno != 0 {
+		return Longtail_ArchiveIndex{cArchiveIndex: nil}, errors.Wrap(errnoToError(errno), fname)
+	}
+	return Longtail_ArchiveIndex{cArchiveIndex: aindex}, nil
+}
+
 // CreateProgressAPI ...
 func CreateProgressAPI(progress ProgressAPI) Longtail_ProgressAPI {
 	cContext := SavePointer(progress)

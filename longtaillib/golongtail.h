@@ -2,6 +2,7 @@
     #define _GNU_SOURCE
 #endif
 #include "longtail/include/src/longtail.h"
+#include "longtail/include/lib/archiveblockstore/longtail_archiveblockstore.h"
 #include "longtail/include/lib/bikeshed/longtail_bikeshed.h"
 #include "longtail/include/lib/blake2/longtail_blake2.h"
 #include "longtail/include/lib/blake3/longtail_blake3.h"
@@ -241,6 +242,16 @@ static uint64_t GetVersionAssetSize(struct Longtail_VersionIndex* version_index,
 static uint16_t GetVersionAssetPermissions(struct Longtail_VersionIndex* version_index, uint32_t asset_index)
 {
     return version_index->m_Permissions[asset_index];
+}
+
+static struct Longtail_StoreIndex* GetArchiveStoreIndex(struct Longtail_ArchiveIndex* archive_index)
+{
+    return &archive_index->m_StoreIndex;
+}
+
+static struct Longtail_VersionIndex* GetArchiveVersionIndex(struct Longtail_ArchiveIndex* archive_index)
+{
+    return &archive_index->m_VersionIndex;
 }
 
 static void EnableMemtrace() {

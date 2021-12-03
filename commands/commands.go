@@ -26,4 +26,5 @@ var Cli struct {
 	PruneStoreIndex         PruneStoreIndexCmd         `cmd:"" name:"prune-store-index" help:"Prune blocks in a store index which are not used by the files in the input list. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
 	PruneStoreBlocks        PruneStoreBlocksCmd        `cmd:"" name:"prune-store-blocks" help:"Prune blocks in a store which are not present in the store index. CAUTION! Running uploads to a store that is being pruned may cause loss of the uploaded data"`
 	Version                 VersionCmd                 `cmd:"" name:"version" help:"Show version number"`
+	Pack                    PackCmd                    `cmd:"" name:"pack" help:"Pack a source to an archive"`
 }

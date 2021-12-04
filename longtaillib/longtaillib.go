@@ -295,6 +295,10 @@ type Longtail_VersionDiff struct {
 	cVersionDiff *C.struct_Longtail_VersionDiff
 }
 
+type Longtail_ArchiveIndex struct {
+	cArchiveIndex *C.struct_Longtail_ArchiveIndex
+}
+
 type Longtail_ProgressAPI struct {
 	cProgressAPI *C.struct_Longtail_ProgressAPI
 }
@@ -703,6 +707,25 @@ func (versionIndex *Longtail_VersionIndex) Dispose() {
 	}
 }
 
+func (archiveIndex *Longtail_ArchiveIndex) IsValid() bool {
+	return archiveIndex.cArchiveIndex != nil
+}
+
+func (archiveIndex *Longtail_ArchiveIndex) Dispose() {
+	if archiveIndex.cArchiveIndex != nil {
+		C.Longtail_Free(unsafe.Pointer(archiveIndex.cArchiveIndex))
+		archiveIndex.cArchiveIndex = nil
+	}
+}
+
+func (archiveIndex *Longtail_ArchiveIndex) GetStoreIndex() Longtail_StoreIndex {
+	return Longtail_StoreIndex{cStoreIndex: C.GetArchiveStoreIndex(archiveIndex.cArchiveIndex)}
+}
+
+func (archiveIndex *Longtail_ArchiveIndex) GetVersionIndex() Longtail_VersionIndex {
+	return Longtail_VersionIndex{cVersionIndex: C.GetArchiveVersionIndex(archiveIndex.cArchiveIndex)}
+}
+
 func (versionIndex *Longtail_VersionIndex) GetVersion() uint32 {
 	if versionIndex.cVersionIndex == nil {
 		return 0
@@ -991,6 +1014,17 @@ func CreateShareBlockStore(backingBlockStore Longtail_BlockStoreAPI) Longtail_Bl
 // CreateLRUBlockStoreAPI() ...
 func CreateLRUBlockStoreAPI(blockStore Longtail_BlockStoreAPI, cache_block_count uint) Longtail_BlockStoreAPI {
 	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateLRUBlockStoreAPI(blockStore.cBlockStoreAPI, (C.uint32_t)(cache_block_count))}
+}
+
+// CreateArchiveBlockStoreAPI() ...
+func CreateArchiveBlockStoreAPI(storageAPI Longtail_StorageAPI, archivePath string, archiveIndex Longtail_ArchiveIndex, enableWrite bool) Longtail_BlockStoreAPI {
+	cArchivePath := C.CString(archivePath)
+	defer C.free(unsafe.Pointer(cArchivePath))
+	cEnableWrite := C.int(0)
+	if enableWrite {
+		cEnableWrite = C.int(1)
+	}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateArchiveBlockStore(storageAPI.cStorageAPI, cArchivePath, archiveIndex.cArchiveIndex, cEnableWrite)}
 }
 
 // CreateBlockStoreStorageAPI() ...
@@ -1782,6 +1816,20 @@ func ReadStoreIndexFromBuffer(buffer []byte) (Longtail_StoreIndex, error) {
 	return Longtail_StoreIndex{cStoreIndex: cindex}, nil
 }
 
+// ReadArchiveIndex ...
+func ReadArchiveIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_ArchiveIndex, error) {
+	const fname = "ReadArchiveIndex"
+
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	var aindex *C.struct_Longtail_ArchiveIndex
+	errno := C.Longtail_ReadArchiveIndex(storageAPI.cStorageAPI, cPath, &aindex)
+	if errno != 0 {
+		return Longtail_ArchiveIndex{cArchiveIndex: nil}, errors.Wrap(errnoToError(errno), fname)
+	}
+	return Longtail_ArchiveIndex{cArchiveIndex: aindex}, nil
+}
+
 // CreateProgressAPI ...
 func CreateProgressAPI(progress ProgressAPI) Longtail_ProgressAPI {
 	cContext := SavePointer(progress)
@@ -2139,6 +2187,22 @@ func ChangeVersion(
 		return errors.Wrap(errnoToError(errno), fname)
 	}
 	return nil
+}
+
+func CreateArchiveIndex(
+	storeIndex Longtail_StoreIndex,
+	versionIndex Longtail_VersionIndex) (Longtail_ArchiveIndex, error) {
+	const fname = "CreateArchiveIndex"
+
+	var archiveIndex *C.struct_Longtail_ArchiveIndex
+	errno := C.Longtail_CreateArchiveIndex(
+		storeIndex.cStoreIndex,
+		versionIndex.cVersionIndex,
+		&archiveIndex)
+	if errno != 0 {
+		return Longtail_ArchiveIndex{}, errors.Wrap(errnoToError(errno), fname)
+	}
+	return Longtail_ArchiveIndex{cArchiveIndex: archiveIndex}, nil
 }
 
 //export LogProxy_Log

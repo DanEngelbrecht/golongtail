@@ -125,10 +125,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **ADDED** `version` command showing the current executable version
-          - **ADDED** `pack` command to create a self contained archive from a folder
-          - **ADDED** `unpack` command to update a folder from a self contained archive
-          - **UPDATED** Updated longtail to v0.2.7
+          - **FIXED** `--target-path` for `pack` command is now optional
+          - **FIXED** `--target-path` for `unpack` command is now optional
         draft: false
         prerelease: false
     - name: Download Linux artifacts

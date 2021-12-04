@@ -283,7 +283,7 @@ func unpack(
 
 type UnpackCmd struct {
 	SourcePath      string `name:"source-path" help:"Source folder path" required:""`
-	TargetPath      string `name:"target-path" help:"Target file uri" required:""`
+	TargetPath      string `name:"target-path" help:"Target file uri"`
 	TargetIndexPath string `name:"target-index-path" help:"Optional pre-computed index of target-path"`
 	RetainPermissionsOption
 	ValidateTargetOption

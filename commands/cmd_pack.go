@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
@@ -47,6 +49,21 @@ func pack(
 	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
+	}
+
+	resolvedTargetPath := ""
+	if targetFilePath == "" {
+		urlSplit := strings.Split(longtailutils.NormalizePath(sourceFolderPath), "/")
+		sourceName := urlSplit[len(urlSplit)-1]
+		sourceNameSplit := strings.Split(sourceName, ".")
+		resolvedTargetPath = sourceNameSplit[0]
+		if resolvedTargetPath == "" {
+			err = fmt.Errorf("Unable to resolve target path using `%s` as base", sourceFolderPath)
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+		resolvedTargetPath += ".la"
+	} else {
+		resolvedTargetPath = targetFilePath
 	}
 
 	fs := longtaillib.CreateFSStorageAPI()
@@ -118,9 +135,9 @@ func pack(
 	createArchiveIndexTime := time.Since(createArchiveIndexStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Create archive index", createArchiveIndexTime})
 
-	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, targetFilePath, archiveIndex, true)
+	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, resolvedTargetPath, archiveIndex, true)
 	if !archiveIndexBlockStore.IsValid() {
-		err = errors.Wrapf(err, "Failed creating archive store for `%s`", targetFilePath)
+		err = errors.Wrapf(err, "Failed creating archive store for `%s`", resolvedTargetPath)
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 	defer archiveIndexBlockStore.Dispose()
@@ -175,7 +192,7 @@ func pack(
 type PackCmd struct {
 	SourcePath      string `name:"source-path" help:"Source folder path" required:""`
 	SourceIndexPath string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
-	TargetPath      string `name:"target-path" help:"Target file uri" required:""`
+	TargetPath      string `name:"target-path" help:"Target file uri"`
 	TargetChunkSizeOption
 	MaxChunksPerBlockOption
 	TargetBlockSizeOption

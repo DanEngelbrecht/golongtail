@@ -91,3 +91,7 @@ type MaxChunksPerBlockOption struct {
 type TargetBlockSizeOption struct {
 	TargetBlockSize uint32 `name:"target-block-size" help:"Target block size" default:"8388608"`
 }
+
+type ScanTargetOption struct {
+	ScanTarget bool `name:"scan-target" help:"Enables scanning of target folder before write. Disable it to only add/write content to a folder" default:"true" negatable:""`
+}

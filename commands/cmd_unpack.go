@@ -19,6 +19,7 @@ func unpack(
 	targetIndexPath string,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
+	scanTarget bool,
 	retainPermissions bool,
 	validate bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "unpack"
@@ -30,7 +31,9 @@ func unpack(
 		"targetIndexPath":    targetIndexPath,
 		"includeFilterRegEx": includeFilterRegEx,
 		"excludeFilterRegEx": excludeFilterRegEx,
+		"scanTarget":         scanTarget,
 		"retainPermissions":  retainPermissions,
+		"validate":           validate,
 	})
 	log.Debug(fname)
 
@@ -65,7 +68,7 @@ func unpack(
 	defer fs.Dispose()
 
 	targetFolderScanner := longtailutils.AsyncFolderScanner{}
-	if targetIndexPath == "" {
+	if scanTarget && targetIndexPath == "" {
 		targetFolderScanner.Scan(resolvedTargetFolderPath, pathFilter, fs)
 	}
 
@@ -285,10 +288,11 @@ type UnpackCmd struct {
 	SourcePath      string `name:"source-path" help:"Source folder path" required:""`
 	TargetPath      string `name:"target-path" help:"Target file uri"`
 	TargetIndexPath string `name:"target-index-path" help:"Optional pre-computed index of target-path"`
-	RetainPermissionsOption
-	ValidateTargetOption
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
+	ScanTargetOption
+	RetainPermissionsOption
+	ValidateTargetOption
 }
 
 func (r *UnpackCmd) Run(ctx *Context) error {
@@ -299,6 +303,7 @@ func (r *UnpackCmd) Run(ctx *Context) error {
 		r.TargetIndexPath,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
+		r.ScanTarget,
 		r.RetainPermissions,
 		r.Validate)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)

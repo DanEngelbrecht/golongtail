@@ -125,6 +125,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
+          - **ADDED** `--scan-target` option for `downsync`, `get` and `unpack`. Default is on, disable with `--no-scan-target`
           - **UPDATED** Updated longtail to v0.2.9
         draft: false
         prerelease: false

@@ -23,7 +23,8 @@ func downsync(
 	validate bool,
 	versionLocalStoreIndexPath string,
 	includeFilterRegEx string,
-	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	excludeFilterRegEx string,
+	scanTarget bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -38,6 +39,7 @@ func downsync(
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"includeFilterRegEx":         includeFilterRegEx,
 		"excludeFilterRegEx":         excludeFilterRegEx,
+		"scanTarget":                 scanTarget,
 	})
 	log.Debug(fname)
 
@@ -72,7 +74,7 @@ func downsync(
 	defer fs.Dispose()
 
 	targetFolderScanner := longtailutils.AsyncFolderScanner{}
-	if targetIndexPath == "" {
+	if scanTarget && targetIndexPath == "" {
 		targetFolderScanner.Scan(resolvedTargetFolderPath, pathFilter, fs)
 	}
 
@@ -344,8 +346,9 @@ type DownsyncCmd struct {
 	RetainPermissionsOption
 	ValidateTargetOption
 	VersionLocalStoreIndexPathOption
-	DownsyncIncludeRegExOption
-	DownsyncExcludeRegExOption
+	TargetPathIncludeRegExOption
+	TargetPathExcludeRegExOption
+	ScanTargetOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -360,7 +363,8 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.Validate,
 		r.VersionLocalStoreIndexPath,
 		r.IncludeFilterRegEx,
-		r.ExcludeFilterRegEx)
+		r.ExcludeFilterRegEx,
+		r.ScanTarget)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

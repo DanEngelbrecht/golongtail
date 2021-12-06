@@ -271,8 +271,8 @@ type UpsyncCmd struct {
 	StorageURIOption
 	CompressionOption
 	HashingOption
-	UpsyncIncludeRegExOption
-	UpsyncExcludeRegExOption
+	SourcePathIncludeRegExOption
+	SourcePathExcludeRegExOption
 }
 
 func (r *UpsyncCmd) Run(ctx *Context) error {

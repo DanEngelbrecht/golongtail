@@ -20,7 +20,8 @@ func get(
 	retainPermissions bool,
 	validate bool,
 	includeFilterRegEx string,
-	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	excludeFilterRegEx string,
+	scanTarget bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "get"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":              fname,
@@ -33,6 +34,7 @@ func get(
 		"validate":           validate,
 		"includeFilterRegEx": includeFilterRegEx,
 		"excludeFilterRegEx": excludeFilterRegEx,
+		"scanTarget":         scanTarget,
 	})
 	log.Debug(fname)
 
@@ -82,7 +84,8 @@ func get(
 		validate,
 		versionLocalStoreIndexPath,
 		includeFilterRegEx,
-		excludeFilterRegEx)
+		excludeFilterRegEx,
+		scanTarget)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
@@ -98,8 +101,9 @@ type GetCmd struct {
 	VersionLocalStoreIndexPathOption
 	CachePathOption
 	RetainPermissionsOption
-	DownsyncIncludeRegExOption
-	DownsyncExcludeRegExOption
+	TargetPathIncludeRegExOption
+	TargetPathExcludeRegExOption
+	ScanTargetOption
 }
 
 func (r *GetCmd) Run(ctx *Context) error {
@@ -112,7 +116,8 @@ func (r *GetCmd) Run(ctx *Context) error {
 		r.RetainPermissions,
 		r.Validate,
 		r.IncludeFilterRegEx,
-		r.ExcludeFilterRegEx)
+		r.ExcludeFilterRegEx,
+		r.ScanTarget)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

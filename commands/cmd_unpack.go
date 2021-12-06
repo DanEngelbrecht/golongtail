@@ -287,8 +287,8 @@ type UnpackCmd struct {
 	TargetIndexPath string `name:"target-index-path" help:"Optional pre-computed index of target-path"`
 	RetainPermissionsOption
 	ValidateTargetOption
-	DownsyncIncludeRegExOption
-	DownsyncExcludeRegExOption
+	TargetPathIncludeRegExOption
+	TargetPathExcludeRegExOption
 }
 
 func (r *UnpackCmd) Run(ctx *Context) error {

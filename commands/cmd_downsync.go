@@ -344,8 +344,8 @@ type DownsyncCmd struct {
 	RetainPermissionsOption
 	ValidateTargetOption
 	VersionLocalStoreIndexPathOption
-	DownsyncIncludeRegExOption
-	DownsyncExcludeRegExOption
+	TargetPathIncludeRegExOption
+	TargetPathExcludeRegExOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {

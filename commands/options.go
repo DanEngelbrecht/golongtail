@@ -16,19 +16,19 @@ type HashingOption struct {
 	Hashing string `name:"hash-algorithm" help:"Hash algorithm [meow blake2 blake3]" enum:"meow,blake2,blake3" default:"blake3"`
 }
 
-type UpsyncIncludeRegExOption struct {
+type SourcePathIncludeRegExOption struct {
 	IncludeFilterRegEx string `name:"include-filter-regex" help:"Optional include regex filter for assets in --source-path. Separate regexes with **"`
 }
 
-type DownsyncIncludeRegExOption struct {
+type TargetPathIncludeRegExOption struct {
 	IncludeFilterRegEx string `name:"include-filter-regex" help:"Optional include regex filter for assets in --target-path on downsync. Separate regexes with **"`
 }
 
-type UpsyncExcludeRegExOption struct {
+type SourcePathExcludeRegExOption struct {
 	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --source-path on upsync. Separate regexes with **"`
 }
 
-type DownsyncExcludeRegExOption struct {
+type TargetPathExcludeRegExOption struct {
 	ExcludeFilterRegEx string `name:"exclude-filter-regex" help:"Optional exclude regex filter for assets in --target-path on downsync. Separate regexes with **"`
 }
 

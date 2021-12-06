@@ -198,8 +198,8 @@ type PackCmd struct {
 	TargetBlockSizeOption
 	CompressionOption
 	HashingOption
-	UpsyncIncludeRegExOption
-	UpsyncExcludeRegExOption
+	SourcePathIncludeRegExOption
+	SourcePathExcludeRegExOption
 }
 
 func (r *PackCmd) Run(ctx *Context) error {

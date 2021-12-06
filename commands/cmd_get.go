@@ -98,8 +98,8 @@ type GetCmd struct {
 	VersionLocalStoreIndexPathOption
 	CachePathOption
 	RetainPermissionsOption
-	DownsyncIncludeRegExOption
-	DownsyncExcludeRegExOption
+	TargetPathIncludeRegExOption
+	TargetPathExcludeRegExOption
 }
 
 func (r *GetCmd) Run(ctx *Context) error {

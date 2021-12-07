@@ -3,7 +3,6 @@ package longtailutils
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -359,7 +358,7 @@ func DeleteByURI(uri string) error {
 		return errors.Wrap(err, fname)
 	}
 	err = object.Delete()
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
 	}
 	return nil
@@ -393,7 +392,7 @@ func ReadBlobWithRetry(
 	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
 	blobData, err := objHandle.Read()
 	for err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if longtaillib.IsNotExist(err) {
 			return nil, retryCount, errors.Wrap(err, fname)
 		}
 		if retryCount == len(retryDelay) {

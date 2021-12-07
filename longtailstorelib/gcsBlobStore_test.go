@@ -3,13 +3,13 @@ package longtailstorelib
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 func TestGCSBlobStore(t *testing.T) {
@@ -131,7 +131,7 @@ func TestListObjectsInEmptyGCSStore(t *testing.T) {
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if !errors.Is(err, os.ErrNotExist) {
+	if !longtaillib.IsNotExist(err) {
 		t.Errorf("TestListObjectsInEmptyGCSStore() obj.Read()) %s", err)
 	}
 	if data != nil {

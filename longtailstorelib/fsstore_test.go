@@ -3,13 +3,13 @@ package longtailstorelib
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 func TestFSBlobStore(t *testing.T) {
@@ -53,7 +53,7 @@ func TestListObjectsInEmptyFSStore(t *testing.T) {
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if !errors.Is(err, os.ErrNotExist) {
+	if !longtaillib.IsNotExist(err) {
 		t.Errorf("TestListObjectsInEmptyFSStore() obj.Read()) %s", err)
 	}
 	if data != nil {

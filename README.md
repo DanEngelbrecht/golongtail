@@ -70,6 +70,23 @@ The store index will grow in size and if you have a lot of data in a single stor
 
 To minimize downloads even more, longtail has support for a download cache where all downloaded blocks is stored as they are downloaded. As a block can be used by many different assets it is useful to cache them both for an initial download as well as when patching an existing version.
 
+## Self contained archives vs stores
+Longtail can operate in the standard store way which is focused on creating minimal diffs between two versions, it does a good job of keeping track of earlier content and just let you download/upload the new parts of a version. Some data is not suited to try and do a delta as it would make the store grow very fast and the gains would disappear.
+
+Longtail can also create self-contained archive which contains the version index, store index and the blocks all in one file. It provides and alternative to a zip file with the added benefit of being able to apply changes to an existing folder doing minimal work. Pack and unpack speed is also good as is the compression rates.
+
+Example for an archive containg 32.2 Gb worth of Windows .pdb files.
+
+|                           | Mode         | Size       |Pack Time  |Unpack Time  |
+|---------------------------|--------------|------------|-----------|-------------|
+|Raw                        |Copy          | 32,2 Gb    |  0m 53s   | 0m 53s      |
+|7-Zip                      |LZMA2 fastest | 5.71 Gb    |  2m 37s   | 0m 40s      |
+|7-Zip                      |LZMA2 normal  | 4.59 Gb    | 18m 24s   | 0m 35s      |
+|7-Zip                      |LZMA2 ultra   | 3.26 Gb    | 24m 05s   | 0m 31s      |
+|Longtail                   |zstd          | 4.25 Gb    |  0m 22s   | 0m 27s      |
+|Longtail                   |zstd_max      | 3.30 Gb    | 11m 23s   | 0m 24s      |
+
+
 ## Cloning
 git clone https://github.com/DanEngelbrecht/golongtail.git
 
@@ -114,3 +131,15 @@ Build the command line and run it for a breif description of commands/options.
 
 ### Download from GCS using version local store index and a `get-info` file with a cache
 `longtail.exe get --get-config-path "gs://test_block_storage/store/index/my_folder.json" --cache-path "./download-cache"`
+
+### Create a self-containing archive from a folder naming the archive using the source name
+`longtail.exe pack --source-path "stuff/my_folder"`
+
+### Create a self-containing archive from a folder with an explicit target file
+`longtail.exe pack --source-path "stuff/my_folder" --target-path "my_folder.la"`
+
+### Unpacking a self-contained archive to a folder naming the target folder from the source archive name
+`longtail.exe unpack --source-path "my_folder.la"`
+
+### Unpacking a self-contained archive to a folder without deleting files not in the archive
+`longtail.exe unpack --source-path "my_folder.la" --target-path "merged_folder" --no-scan-target`

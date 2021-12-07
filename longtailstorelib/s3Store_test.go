@@ -2,11 +2,11 @@ package longtailstorelib
 
 import (
 	"net/url"
-	"os"
 	"testing"
 
-	"github.com/pkg/errors"
 	"golang.org/x/net/context"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 func TestS3BlobStore(t *testing.T) {
@@ -128,7 +128,7 @@ func TestListObjectsInEmptyS3Store(t *testing.T) {
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if !errors.Is(err, os.ErrNotExist) {
+	if !longtaillib.IsNotExist(err) {
 		t.Errorf("TestListObjectsInEmptyS3Store() obj.Read()) %s", err)
 	}
 	if data != nil {

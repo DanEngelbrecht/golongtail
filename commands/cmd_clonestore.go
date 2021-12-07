@@ -361,7 +361,7 @@ func cloneOneVersion(
 		return cloneVersionIndex(currentVersionIndex), nil
 	}
 
-	if !errors.Is(err, os.ErrNotExist) {
+	if !longtaillib.IsNotExist(err) {
 		return cloneVersionIndex(currentVersionIndex), errors.Wrap(err, fname)
 	}
 

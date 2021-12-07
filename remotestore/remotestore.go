@@ -1113,7 +1113,7 @@ func tryAddRemoteStoreIndexWithLocking(
 		if err != nil {
 			return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
-		if errors.Is(err, os.ErrNotExist) {
+		if longtaillib.IsNotExist(err) {
 			return false, longtaillib.Longtail_StoreIndex{}, nil
 		}
 
@@ -1605,7 +1605,7 @@ func readStoreStoreIndexFromPath(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, fname)
 	}
 	if len(blobData) == 0 {
-		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s contains no data", key))
+		err = errors.Wrap(os.ErrNotExist, fmt.Sprintf("%s contains no data", key))
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	storeIndex, err := longtaillib.ReadStoreIndexFromBuffer(blobData)
@@ -1657,10 +1657,14 @@ func mergeStoreIndexItems(
 	storeIndex := longtaillib.Longtail_StoreIndex{}
 	for _, item := range items {
 		tmpStoreIndex, err := readStoreStoreIndexFromPath(ctx, item, client)
+
 		if err != nil || (!tmpStoreIndex.IsValid()) {
-			// The file we expected is no longer there, tell caller that we need to try again
 			storeIndex.Dispose()
-			return longtaillib.Longtail_StoreIndex{}, nil, nil
+			if longtaillib.IsNotExist(err) {
+				// The file we expected is no longer there, tell caller that we need to try again
+				return longtaillib.Longtail_StoreIndex{}, nil, nil
+			}
+			return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrap(err, fname)
 		}
 		if !storeIndex.IsValid() {
 			storeIndex = tmpStoreIndex
@@ -1774,7 +1778,7 @@ func readRemoteStoreIndex(
 					err = errors.Wrap(err, fmt.Sprintf("Cant parse optional store index from `%s`", optionalStoreIndexPath))
 					log.WithError(err).Info("Failed parsing optional store index")
 				}
-			} else if !errors.Is(err, os.ErrNotExist) {
+			} else if !longtaillib.IsNotExist(err) {
 				log.WithError(err).Info("Failed reading optional store index")
 			}
 		}

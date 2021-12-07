@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )
 
 func TestCreateStoreAndClient(t *testing.T) {
@@ -38,7 +37,7 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	}
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if !errors.Is(err, os.ErrNotExist) {
+	if !longtaillib.IsNotExist(err) {
 		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %s", err)
 	}
 	if data != nil {

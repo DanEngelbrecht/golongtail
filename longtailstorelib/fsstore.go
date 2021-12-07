@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
 )
 
@@ -101,11 +102,10 @@ func (blobClient *fsBlobClient) String() string {
 func (blobObject *fsBlobObject) Exists() (bool, error) {
 	const fname = "fsBlobObject.Exists"
 	_, err := os.Stat(blobObject.path)
-	if errors.Is(err, os.ErrNotExist) {
+	if longtaillib.IsNotExist(err) {
 		return false, nil
 	}
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed to check for existance `%s`", blobObject.path))
 		return false, errors.Wrap(err, fname)
 	}
 	return true, nil
@@ -138,7 +138,7 @@ func (blobObject *fsBlobObject) getMetaGeneration() (int64, error) {
 	const fname = "fsBlobObject.getMetaGeneration"
 	metapath := blobObject.path + ".gen"
 	data, err := ioutil.ReadFile(metapath)
-	if errors.Is(err, os.ErrNotExist) {
+	if longtaillib.IsNotExist(err) {
 		return 0, nil
 	}
 	if err != nil {
@@ -165,7 +165,7 @@ func (blobObject *fsBlobObject) deleteGeneration() error {
 	const fname = "fsBlobObject.deleteGeneration"
 	metapath := blobObject.path + ".gen"
 	_, err := os.Stat(metapath)
-	if errors.Is(err, os.ErrNotExist) {
+	if longtaillib.IsNotExist(err) {
 		return nil
 	}
 	err = os.Remove(metapath)
@@ -299,7 +299,7 @@ func (blobObject *fsBlobObject) Delete() error {
 		if err != nil {
 			return errors.Wrap(err, fname)
 		}
-	} else if errors.Is(err, os.ErrNotExist) {
+	} else if longtaillib.IsNotExist(err) {
 		return nil
 	}
 	return err

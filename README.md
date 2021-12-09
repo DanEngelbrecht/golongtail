@@ -3,7 +3,7 @@
 |master      | [![Build Status](https://github.com/DanEngelbrecht/golongtail/workflows/Build%20Master/badge.svg)](https://github.com/DanEngelbrecht/golongtail/workflows/Build%20Master/badge.svg) |
 
 # golongtail
-Incremental asset delivery tool - using techniques related to the casync project by Lennart Poettering (https://github.com/systemd/casync). It is designed to make efficient diffs between version and allows arbitrary forward and backward patching while keeping the patching size and fast.
+Incremental asset delivery tool - using techniques related to the casync project by Lennart Poettering (https://github.com/systemd/casync). It is designed to make efficient diffs between version and allows arbitrary forward and backward patching while keeping the patching size small and fast.
 
 This repo is a Go wrapper for [longtail](https://github.com/DanEngelbrecht/longtail), both a module that hides the C interface and a module that provides a simple command line interface for up/down loading content as well as managing a "store".
 

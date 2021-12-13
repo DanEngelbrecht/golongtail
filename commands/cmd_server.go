@@ -4,19 +4,22 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/DanEngelbrecht/golongtail/remotestore"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 type httpHandler struct {
 	readOnly      bool
 	authorization string
+	store         longtaillib.Longtail_BlockStoreAPI
 }
 
 // Need to att http-client block store implementation
@@ -94,10 +97,27 @@ func serve(
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
+	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
+	defer jobs.Dispose()
+	creg := longtaillib.CreateFullCompressionRegistry()
+	defer creg.Dispose()
+	hashRegistry := longtaillib.CreateFullHashRegistry()
+	defer hashRegistry.Dispose()
+
+	mode := remotestore.ReadWrite
+	if readOnly {
+		mode = remotestore.ReadOnly
+	}
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, mode)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+	defer remoteIndexStore.Dispose()
+
 	auth := os.Getenv("LONGTAIL_SERVER_HTTP_AUTH")
 	addresses := []string{":http"}
 
-	handler := httpHandler{readOnly: readOnly, authorization: auth}
+	handler := httpHandler{readOnly: readOnly, authorization: auth, store: remoteIndexStore}
 	http.Handle("/", handler)
 
 	tlsConfig := &tls.Config{}

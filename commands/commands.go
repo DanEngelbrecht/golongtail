@@ -28,4 +28,5 @@ var Cli struct {
 	Version                 VersionCmd                 `cmd:"" name:"version" help:"Show version number"`
 	Pack                    PackCmd                    `cmd:"" name:"pack" help:"Pack a source to an archive"`
 	Unpack                  UnpackCmd                  `cmd:"" name:"unpack" help:"Unpack an archive"`
+	Serve                   ServeCmd                   `cmd:"" name:"serve" help:"Start a store server"`
 }

@@ -98,7 +98,7 @@ func upsync(
 		hashRegistry,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, remotestore.ReadWrite)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}

@@ -514,7 +514,7 @@ func cloneStore(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, remotestore.ReadOnly)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -542,7 +542,7 @@ func cloneStore(
 	sourceStore := longtaillib.CreateShareBlockStore(sourceLRUBlockStore)
 	defer sourceStore.Dispose()
 
-	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
+	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", jobs, numWorkerCount, remotestore.ReadWrite)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

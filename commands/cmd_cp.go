@@ -43,7 +43,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, remotestore.ReadOnly)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

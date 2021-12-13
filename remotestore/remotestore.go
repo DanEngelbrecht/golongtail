@@ -1837,16 +1837,12 @@ func CreateBlockStoreForURI(
 	optionalStoreIndexPath string,
 	jobAPI longtaillib.Longtail_JobAPI,
 	numWorkerCount int,
-	targetBlockSize uint32,
-	maxChunksPerBlock uint32,
 	accessType AccessType) (longtaillib.Longtail_BlockStoreAPI, error) {
 	const fname = "CreateBlockStoreForURI"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":             fname,
-		"numWorkerCount":    numWorkerCount,
-		"targetBlockSize":   targetBlockSize,
-		"maxChunksPerBlock": maxChunksPerBlock,
-		"accessType":        accessType,
+		"fname":          fname,
+		"numWorkerCount": numWorkerCount,
+		"accessType":     accessType,
 	})
 	log.Debug(fname)
 

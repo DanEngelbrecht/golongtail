@@ -19,6 +19,16 @@ type httpHandler struct {
 	authorization string
 }
 
+// Need to att http-client block store implementation
+
+// get/index payload: chunk_hashes[]
+// preflight payload: block_hashes[]
+// get/block/block-hash
+// get/stats
+// prune
+// flush
+// put/block/block-hash payload: stored_block
+
 func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("ServeHTTP")
 	if h.authorization != "" && r.Header.Get("Authorization") != h.authorization {
@@ -29,10 +39,14 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		h.get(r.URL.Path, w)
-	case "HEAD":
-		h.head(r.URL.Path, w)
+	case "PREFLIGHT":
+		h.preflight(r.URL.Path, w)
 	case "PUT":
 		h.put(r.URL.Path, w, r)
+	case "PRUNE":
+		h.preflight(r.URL.Path, w)
+	case "FLUSH":
+		h.preflight(r.URL.Path, w)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		w.Write([]byte("only GET, PUT and HEAD are supported"))
@@ -42,7 +56,7 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h httpHandler) get(path string, w http.ResponseWriter) {
 }
 
-func (h httpHandler) head(path string, w http.ResponseWriter) {
+func (h httpHandler) preflight(path string, w http.ResponseWriter) {
 }
 
 func (h httpHandler) put(path string, w http.ResponseWriter, r *http.Request) {
@@ -53,6 +67,12 @@ func (h httpHandler) put(path string, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	return
+}
+
+func (h httpHandler) prune(path string, w http.ResponseWriter) {
+}
+
+func (h httpHandler) flush(path string, w http.ResponseWriter) {
 }
 
 func serve(

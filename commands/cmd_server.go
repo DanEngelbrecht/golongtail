@@ -74,12 +74,12 @@ func (g *getExistingContentComplete) OnComplete(storeIndex longtaillib.Longtail_
 
 // Need to att http-client block store implementation
 
-// get/index payload: chunk_hashes[]
-// preflight payload: block_hashes[]
-// get/block/block-hash
-// get/stats
-// prune
-// flush
+// get/index payload: chunk_hashes[] -> store_index
+// get/preflight payload: block_hashes[] -> block_hashes[]
+// get/block/block-hash -> stored_block
+// get/stats -> stats
+// get/flush
+// put/prune payload: keep_block_hashes[] -> pruned_count
 // put/block/block-hash payload: stored_block
 
 func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -93,14 +93,8 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		h.get(r.URL.Path, w, r)
-	case "PREFLIGHT":
-		h.preflight(r.URL.Path, w)
 	case "PUT":
 		h.put(r.URL.Path, w, r)
-	case "PRUNE":
-		h.preflight(r.URL.Path, w)
-	case "FLUSH":
-		h.preflight(r.URL.Path, w)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		w.Write([]byte("only GET, PUT and HEAD are supported"))
@@ -225,21 +219,12 @@ func (h httpHandler) get(path string, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h httpHandler) preflight(path string, w http.ResponseWriter) {
-}
-
 func (h httpHandler) put(path string, w http.ResponseWriter, r *http.Request) {
 	if h.readOnly {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("store is read only"))
 		return
 	}
-}
-
-func (h httpHandler) prune(path string, w http.ResponseWriter) {
-}
-
-func (h httpHandler) flush(path string, w http.ResponseWriter) {
 }
 
 func serve(

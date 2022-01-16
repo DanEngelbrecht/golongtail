@@ -125,7 +125,7 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **UPDATED** Updated longtail to v0.2.12 - fixes deadlock with folders containing more than 131072 files
+          - **UPDATED** Updated longtail to v0.2.14 - fixes handling of non-ascii file names on Windows
         draft: false
         prerelease: false
     - name: Download Linux artifacts

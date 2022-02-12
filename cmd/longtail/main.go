@@ -23,6 +23,21 @@ func runCommand() error {
 
 	context := &commands.Context{}
 
+	go func() {
+		for range time.Tick(1 * time.Second) {
+			context.StoresLock.Lock()
+			for _, s := range context.Stores {
+				if s.IsValid() {
+					stats, err := s.GetStats()
+					if err == nil {
+						log.Printf("%d, %d\n", stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Byte_Count], stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count])
+					}
+				}
+			}
+			context.StoresLock.Unlock()
+		}
+	}()
+
 	defer func() {
 		context.TimeStats = append(context.TimeStats, longtailutils.TimeStat{"Execution", time.Since(executionStartTime)})
 

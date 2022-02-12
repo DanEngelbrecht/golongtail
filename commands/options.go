@@ -1,11 +1,30 @@
 package commands
 
-import "github.com/DanEngelbrecht/golongtail/longtailutils"
+import (
+	"sync"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailutils"
+)
 
 type Context struct {
 	NumWorkerCount int
 	StoreStats     []longtailutils.StoreStat
 	TimeStats      []longtailutils.TimeStat
+	Stores         []*longtaillib.Longtail_BlockStoreAPI
+	StoresLock     sync.Mutex
+}
+
+func (ctx *Context) AddStore(s *longtaillib.Longtail_BlockStoreAPI) {
+	ctx.StoresLock.Lock()
+	defer ctx.StoresLock.Unlock()
+	ctx.Stores = append(ctx.Stores, s)
+}
+
+func (ctx *Context) RemoveStores() {
+	ctx.StoresLock.Lock()
+	defer ctx.StoresLock.Unlock()
+	ctx.Stores = nil
 }
 
 type CompressionOption struct {

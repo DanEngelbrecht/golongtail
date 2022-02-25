@@ -125,7 +125,8 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **UPDATED** Updated longtail to v0.2.14 - fixes handling of non-ascii file names on Windows
+          - **UPDATED** Updated longtail to v0.2.16 - fixes handling of UNC paths
+          - **FIX** Minor logging tweaks
         draft: false
         prerelease: false
     - name: Download Linux artifacts

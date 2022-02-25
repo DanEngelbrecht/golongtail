@@ -11,11 +11,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const uncprefix = "\\\\?\\"
+
 func NormalizePath(path string) string {
 	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
+	if strings.HasPrefix(doubleForwardRemoved, uncprefix) {
+		doubleBackwardRemoved := uncprefix + strings.Replace(doubleForwardRemoved[4:], "\\\\", "\\", -1)
+		return doubleBackwardRemoved
+	}
 	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
-	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
-	return backwardRemoved
+	return doubleBackwardRemoved
 }
 
 type regexPathFilter struct {

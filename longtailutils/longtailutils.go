@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 )
 
 type getExistingContentCompletionAPI struct {
@@ -23,6 +22,10 @@ type getExistingContentCompletionAPI struct {
 
 func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err error) {
 	const fname = "getExistingContentCompletionAPI.OnComplete"
+	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
+		"fname": fname,
+		"err":   err,
+	})
 	log.Debug(fname)
 	a.err = err
 	a.storeIndex = storeIndex
@@ -37,6 +40,11 @@ type pruneBlocksCompletionAPI struct {
 
 func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err error) {
 	const fname = "pruneBlocksCompletionAPI.OnComplete"
+	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
+		"fname":            fname,
+		"prunedBlockCount": prunedBlockCount,
+		"err":              err,
+	})
 	log.Debug(fname)
 	a.prunedBlockCount = prunedBlockCount
 	a.wg.Done()
@@ -50,6 +58,10 @@ type flushCompletionAPI struct {
 
 func (a *flushCompletionAPI) OnComplete(err error) {
 	const fname = "flushCompletionAPI.OnComplete"
+	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
+		"fname": fname,
+		"err":   err,
+	})
 	log.Debug(fname)
 	a.err = err
 	a.wg.Done()
@@ -64,6 +76,10 @@ type GetStoredBlockCompletionAPI struct {
 
 func (a *GetStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtail_StoredBlock, err error) {
 	const fname = "GetStoredBlockCompletionAPI.OnComplete"
+	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
+		"fname": fname,
+		"err":   err,
+	})
 	log.Debug(fname)
 	a.Err = err
 	a.StoredBlock = storedBlock
@@ -459,7 +475,7 @@ func GetCompressionType(compressionAlgorithm string) (uint32, error) {
 	if compressionType, exists := compressionTypeMap[compressionAlgorithm]; exists {
 		return compressionType, nil
 	}
-	err := fmt.Errorf("Unsupported compression algorithm: `%s`", compressionAlgorithm)
+	err := fmt.Errorf("unsupported compression algorithm: `%s`", compressionAlgorithm)
 	return 0, errors.Wrap(err, fname)
 }
 

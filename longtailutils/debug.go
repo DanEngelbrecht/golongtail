@@ -47,7 +47,7 @@ func ParseLevel(lvl string) (int, error) {
 		return 4, nil
 	}
 
-	return -1, errors.Wrap(fmt.Errorf("Invalid log Level: %s", lvl), fname)
+	return -1, errors.Wrap(fmt.Errorf("invalid log Level: %s", lvl), fname)
 }
 
 // AssertData ...

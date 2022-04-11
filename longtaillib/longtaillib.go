@@ -103,7 +103,7 @@ func errnoToError(err C.int) error {
 	if err == 0 {
 		return nil
 	}
-	description, _ := errnoToDescription[int(err)]
+	description := errnoToDescription[int(err)]
 	return &longtailError{Errno: err, Description: description}
 }
 
@@ -1652,6 +1652,27 @@ func ReadVersionIndex(storageAPI Longtail_StorageAPI, path string) (Longtail_Ver
 		return Longtail_VersionIndex{cVersionIndex: nil}, errors.Wrap(errnoToError(errno), fname)
 	}
 	return Longtail_VersionIndex{cVersionIndex: vindex}, nil
+}
+
+func FileExists(storageAPI Longtail_StorageAPI, path string) bool {
+	const fname = "FileExists"
+
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	exists := C.Longtail_Storage_IsFile(storageAPI.cStorageAPI, cPath)
+	return exists != 0
+}
+
+func DeleteFile(storageAPI Longtail_StorageAPI, path string) error {
+	const fname = "FileExists"
+
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+	errno := C.Longtail_Storage_RemoveFile(storageAPI.cStorageAPI, cPath)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
 }
 
 // CreateStoreIndexFromBlocks ...

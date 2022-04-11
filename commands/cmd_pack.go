@@ -58,7 +58,7 @@ func pack(
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetPath = sourceNameSplit[0]
 		if resolvedTargetPath == "" {
-			err = fmt.Errorf("Unable to resolve target path using `%s` as base", sourceFolderPath)
+			err = fmt.Errorf("unable to resolve target path using `%s` as base", sourceFolderPath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 		resolvedTargetPath += ".la"

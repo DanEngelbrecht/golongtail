@@ -17,11 +17,12 @@ func unpack(
 	sourceFilePath string,
 	targetFolderPath string,
 	targetIndexPath string,
+	retainPermissions bool,
+	validate bool,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
-	retainPermissions bool,
-	validate bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "unpack"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":              fname,
@@ -29,11 +30,12 @@ func unpack(
 		"sourceFilePath":     sourceFilePath,
 		"targetFolderPath":   targetFolderPath,
 		"targetIndexPath":    targetIndexPath,
+		"retainPermissions":  retainPermissions,
+		"validate":           validate,
 		"includeFilterRegEx": includeFilterRegEx,
 		"excludeFilterRegEx": excludeFilterRegEx,
 		"scanTarget":         scanTarget,
-		"retainPermissions":  retainPermissions,
-		"validate":           validate,
+		"cacheTargetIndex":   cacheTargetIndex,
 	})
 	log.Debug(fname)
 
@@ -57,7 +59,7 @@ func unpack(
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetFolderPath = sourceNameSplit[0]
 		if resolvedTargetFolderPath == "" {
-			err = fmt.Errorf("Unable to resolve target path using `%s` as base", sourceFilePath)
+			err = fmt.Errorf("unable to resolve target path using `%s` as base", sourceFilePath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 	} else {
@@ -66,6 +68,18 @@ func unpack(
 
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
+
+	if targetIndexPath != "" {
+		cacheTargetIndex = false
+	}
+
+	cacheTargetIndexPath := resolvedTargetFolderPath + "/.longtail.index.cache.lvi"
+
+	if cacheTargetIndex {
+		if longtaillib.FileExists(fs, cacheTargetIndexPath) {
+			targetIndexPath = cacheTargetIndexPath
+		}
+	}
 
 	targetFolderScanner := longtailutils.AsyncFolderScanner{}
 	if scanTarget && targetIndexPath == "" {
@@ -147,6 +161,13 @@ func unpack(
 	defer versionDiff.Dispose()
 	getVersionDiffTime := time.Since(getVersionDiffStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get diff", getVersionDiffTime})
+
+	if cacheTargetIndex && longtaillib.FileExists(fs, cacheTargetIndexPath) {
+		err = longtaillib.DeleteFile(fs, cacheTargetIndexPath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+	}
 
 	changeVersionStartTime := time.Now()
 	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
@@ -281,6 +302,13 @@ func unpack(
 		timeStats = append(timeStats, longtailutils.TimeStat{"Validate", validateTime})
 	}
 
+	if cacheTargetIndex {
+		err = longtaillib.WriteVersionIndex(fs, sourceVersionIndex, cacheTargetIndexPath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+	}
+
 	return storeStats, timeStats, nil
 }
 
@@ -288,11 +316,12 @@ type UnpackCmd struct {
 	SourcePath      string `name:"source-path" help:"Source folder path" required:""`
 	TargetPath      string `name:"target-path" help:"Target file uri"`
 	TargetIndexPath string `name:"target-index-path" help:"Optional pre-computed index of target-path"`
+	RetainPermissionsOption
+	ValidateTargetOption
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
 	ScanTargetOption
-	RetainPermissionsOption
-	ValidateTargetOption
+	CacheTargetIndexOption
 }
 
 func (r *UnpackCmd) Run(ctx *Context) error {
@@ -301,11 +330,12 @@ func (r *UnpackCmd) Run(ctx *Context) error {
 		r.SourcePath,
 		r.TargetPath,
 		r.TargetIndexPath,
+		r.RetainPermissions,
+		r.Validate,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
-		r.RetainPermissions,
-		r.Validate)
+		r.CacheTargetIndex)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

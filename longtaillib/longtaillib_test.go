@@ -137,7 +137,7 @@ func TestInMemStorage(t *testing.T) {
 		t.Errorf("ReadFromStorage() %s", err)
 	}
 	testString := string(rbytes)
-	if myString != myString {
+	if myString != testString {
 		t.Errorf("ReadFromStorage() %s != %s", rbytes, testString)
 	}
 }
@@ -238,7 +238,7 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 		t.Errorf("validateStoredBlock() %d != %d", chunkCount, uint32(len(chunkSizes)))
 	}
 	blockOffset := uint32(0)
-	for index, _ := range chunkHashes {
+	for index := range chunkHashes {
 		if chunkHashes[index] != uint64(index+1)*4711 {
 			t.Errorf("validateStoredBlock() %d != %d", uint64(index)*4711, chunkHashes[index])
 		}
@@ -252,7 +252,7 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 		t.Errorf("validateStoredBlock() %d != %d", uint32(len(blockData)), blockOffset)
 	}
 	blockOffset = 0
-	for chunkIndex, _ := range chunkHashes {
+	for chunkIndex := range chunkHashes {
 		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
 			if blockData[blockOffset+index] != uint8(chunkIndex+1) {
 				t.Errorf("validateStoredBlock() %d != %d", uint8(chunkIndex+1), blockData[blockOffset+index])
@@ -588,7 +588,7 @@ func (b *TestBlockStore) PruneBlocks(
 		keepMap[b] = true
 	}
 	var removeBlocks []uint64
-	for h, _ := range b.blocks {
+	for h := range b.blocks {
 		if _, exists := keepMap[h]; exists {
 			continue
 		}
@@ -899,67 +899,67 @@ func TestWriteContent(t *testing.T) {
 	}
 	defer versionIndex.Dispose()
 
-	if 0 == versionIndex.GetVersion() {
+	if versionIndex.GetVersion() == 0 {
 		t.Errorf("TestWriteContent() GetVersion() %d", versionIndex.GetVersion())
 	}
 
-	if 0 == versionIndex.GetHashIdentifier() {
+	if versionIndex.GetHashIdentifier() == 0 {
 		t.Errorf("TestWriteContent() GetHashIdentifier() %d", versionIndex.GetHashIdentifier())
 	}
 
-	if 0 == versionIndex.GetTargetChunkSize() {
+	if versionIndex.GetTargetChunkSize() == 0 {
 		t.Errorf("TestWriteContent() GetTargetChunkSize() %d", versionIndex.GetTargetChunkSize())
 	}
 
-	if 0 == versionIndex.GetAssetCount() {
+	if versionIndex.GetAssetCount() == 0 {
 		t.Errorf("TestWriteContent() GetAssetCount() %d", versionIndex.GetAssetCount())
 	}
 
-	if "" == versionIndex.GetAssetPath(0) {
+	if versionIndex.GetAssetPath(0) == "" {
 		t.Errorf("TestWriteContent() GetAssetPath(0) %s", versionIndex.GetAssetPath(0))
 	}
 
-	if nil == versionIndex.GetAssetHashes() {
+	if versionIndex.GetAssetHashes() == nil {
 		t.Errorf("TestWriteContent() GetAssetHashes() %q", versionIndex.GetAssetHashes())
 	}
 
-	if 0xffffffffffffffff == versionIndex.GetAssetSize(0) {
+	if versionIndex.GetAssetSize(0) == 0xffffffffffffffff {
 		t.Errorf("TestWriteContent() versionIndex.GetAssetSize(0) %d", versionIndex.GetAssetSize(0))
 	}
 
-	if 0xffff == versionIndex.GetAssetPermissions(0) {
+	if versionIndex.GetAssetPermissions(0) == 0xffff {
 		t.Errorf("TestWriteContent() versionIndex.GetAssetPermissions(0) %d", versionIndex.GetAssetPermissions(0))
 	}
 
-	if nil == versionIndex.GetAssetChunkCounts() {
+	if versionIndex.GetAssetChunkCounts() == nil {
 		t.Errorf("TestWriteContent() versionIndex.GetAssetChunkCounts() %q", versionIndex.GetAssetChunkCounts())
 	}
 
-	if nil == versionIndex.GetAssetChunkIndexStarts() {
+	if versionIndex.GetAssetChunkIndexStarts() == nil {
 		t.Errorf("TestWriteContent() GetAssetChunkIndexStarts() %q", versionIndex.GetAssetChunkIndexStarts())
 	}
 
-	if nil == versionIndex.GetAssetChunkIndexes() {
+	if versionIndex.GetAssetChunkIndexes() == nil {
 		t.Errorf("TestWriteContent() GetAssetChunkIndexes() %q", versionIndex.GetAssetChunkIndexes())
 	}
 
-	if 0 == versionIndex.GetChunkCount() {
+	if versionIndex.GetChunkCount() == 0 {
 		t.Errorf("TestWriteContent() GetChunkCount() %d", versionIndex.GetChunkCount())
 	}
 
-	if nil == versionIndex.GetChunkHashes() {
+	if versionIndex.GetChunkHashes() == nil {
 		t.Errorf("TestWriteContent() GetChunkHashes() %q", versionIndex.GetChunkHashes())
 	}
 
-	if nil == versionIndex.GetChunkSizes() {
+	if versionIndex.GetChunkSizes() == nil {
 		t.Errorf("TestWriteContent() GetChunkSizes() %q", versionIndex.GetChunkSizes())
 	}
 
-	if nil == versionIndex.GetAssetSizes() {
+	if versionIndex.GetAssetSizes() == nil {
 		t.Errorf("TestWriteContent() GetAssetSizes() %q", versionIndex.GetAssetSizes())
 	}
 
-	if nil == versionIndex.GetChunkTags() {
+	if versionIndex.GetChunkTags() == nil {
 		t.Errorf("TestWriteContent() GetChunkTags() %q", versionIndex.GetChunkTags())
 	}
 

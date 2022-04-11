@@ -24,7 +24,8 @@ func downsync(
 	versionLocalStoreIndexPath string,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
-	scanTarget bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	scanTarget bool,
+	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -40,6 +41,7 @@ func downsync(
 		"includeFilterRegEx":         includeFilterRegEx,
 		"excludeFilterRegEx":         excludeFilterRegEx,
 		"scanTarget":                 scanTarget,
+		"cacheTargetIndex":           cacheTargetIndex,
 	})
 	log.Debug(fname)
 
@@ -63,7 +65,7 @@ func downsync(
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetFolderPath = sourceNameSplit[0]
 		if resolvedTargetFolderPath == "" {
-			err = fmt.Errorf("Unable to resolve target path using `%s` as base", sourceFilePath)
+			err = fmt.Errorf("unable to resolve target path using `%s` as base", sourceFilePath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 	} else {
@@ -72,6 +74,18 @@ func downsync(
 
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
+
+	if targetIndexPath != "" {
+		cacheTargetIndex = false
+	}
+
+	cacheTargetIndexPath := resolvedTargetFolderPath + "/.longtail.index.cache.lvi"
+
+	if cacheTargetIndex {
+		if longtaillib.FileExists(fs, cacheTargetIndexPath) {
+			targetIndexPath = cacheTargetIndexPath
+		}
+	}
 
 	targetFolderScanner := longtailutils.AsyncFolderScanner{}
 	if scanTarget && targetIndexPath == "" {
@@ -190,6 +204,13 @@ func downsync(
 	defer retargettedVersionStoreIndex.Dispose()
 	getExistingContentTime := time.Since(getExistingContentStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
+
+	if cacheTargetIndex && longtaillib.FileExists(fs, cacheTargetIndexPath) {
+		err = longtaillib.DeleteFile(fs, cacheTargetIndexPath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+	}
 
 	changeVersionStartTime := time.Now()
 	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
@@ -334,6 +355,13 @@ func downsync(
 		timeStats = append(timeStats, longtailutils.TimeStat{"Validate", validateTime})
 	}
 
+	if cacheTargetIndex {
+		err = longtaillib.WriteVersionIndex(fs, sourceVersionIndex, cacheTargetIndexPath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+	}
+
 	return storeStats, timeStats, nil
 }
 
@@ -349,6 +377,7 @@ type DownsyncCmd struct {
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
 	ScanTargetOption
+	CacheTargetIndexOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -364,7 +393,8 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.VersionLocalStoreIndexPath,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
-		r.ScanTarget)
+		r.ScanTarget,
+		r.CacheTargetIndex)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

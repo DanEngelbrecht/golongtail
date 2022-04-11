@@ -65,7 +65,9 @@ func validateContent(t *testing.T, baseURI string, path string, content map[stri
 			}
 			foundItems[n] = string(b)
 		} else {
-			t.Errorf("Unexpected file `%s`", n)
+			if n != ".longtail.index.cache.lvi" {
+				t.Errorf("Unexpected file `%s`", n)
+			}
 		}
 	}
 	if len(foundItems) != len(content) {

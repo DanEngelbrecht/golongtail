@@ -92,10 +92,10 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 		"sourceFileZipPath": sourceFileZipPath,
 	})
 	if sourceFileZipPath == "" {
-		err := fmt.Errorf("Skipping, no zip file available for `%s`", sourceFileZipPath)
+		err := fmt.Errorf("skipping, no zip file available for `%s`", sourceFileZipPath)
 		return errors.Wrap(err, fname)
 	}
-	log.Infof("Falling back to reading ZIP source from `%s`", sourceFileZipPath)
+	log.Infof("falling back to reading ZIP source from `%s`", sourceFileZipPath)
 	zipBytes, err := longtailutils.ReadFromURI(sourceFileZipPath)
 	if err != nil {
 		return errors.Wrap(err, fname)
@@ -128,7 +128,7 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 		defer func() {
 			if err := rc.Close(); err != nil {
 				err = errors.Wrap(err, fname)
-				log.WithError(err).Errorf("Failed to close zip file")
+				log.WithError(err).Errorf("failed to close zip file")
 			}
 		}()
 
@@ -137,7 +137,7 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 
 		// Check for ZipSlip (Directory traversal)
 		if !strings.HasPrefix(path, filepath.Clean(targetPath)+string(os.PathSeparator)) {
-			err := fmt.Errorf("Illegal file path: `%s`", path)
+			err := fmt.Errorf("illegal file path: `%s`", path)
 			return errors.Wrap(err, fname)
 		}
 
@@ -158,7 +158,7 @@ func downloadFromZip(targetPath string, sourceFileZipPath string) error {
 			defer func() {
 				if err := f.Close(); err != nil {
 					err = errors.Wrap(err, fname)
-					log.WithError(err).Errorf("Failed to close target file")
+					log.WithError(err).Errorf("failed to close target file")
 				}
 			}()
 
@@ -217,7 +217,7 @@ func updateCurrentVersionFromLongtail(
 		localVersionIndex = cloneVersionIndex(targetPathVersionIndex)
 		hash, err = hashRegistry.GetHashAPI(hashIdentifier)
 		if err != nil {
-			err = errors.Wrap(err, fmt.Sprintf("Unsupported hash identifier `%d`", hashIdentifier))
+			err = errors.Wrap(err, fmt.Sprintf("unsupported hash identifier `%d`", hashIdentifier))
 			return localVersionIndex, longtaillib.Longtail_HashAPI{}, errors.Wrap(err, fname)
 		}
 	} else {
@@ -238,7 +238,7 @@ func updateCurrentVersionFromLongtail(
 
 		localVersionIndex, hash, _, err = targetIndexReader.Get()
 		if err != nil {
-			err := errors.Wrap(err, "Failed scanning target path")
+			err := errors.Wrap(err, "failed scanning target path")
 			return longtaillib.Longtail_VersionIndex{}, hash, errors.Wrap(err, fname)
 		}
 	}
@@ -248,7 +248,7 @@ func updateCurrentVersionFromLongtail(
 		localVersionIndex,
 		sourceVersionIndex)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed to create version diff. `%s` -> `%s`", targetPath, sourceFilePath))
+		err = errors.Wrap(err, fmt.Sprintf("failed to create version diff. `%s` -> `%s`", targetPath, sourceFilePath))
 		return localVersionIndex, hash, errors.Wrap(err, fname)
 	}
 	defer versionDiff.Dispose()
@@ -257,7 +257,7 @@ func updateCurrentVersionFromLongtail(
 		sourceVersionIndex,
 		versionDiff)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed to get required chunk hashes. `%s` -> `%s`", targetPath, sourceFilePath))
+		err = errors.Wrap(err, fmt.Sprintf("failed to get required chunk hashes. `%s` -> `%s`", targetPath, sourceFilePath))
 		return localVersionIndex, hash, errors.Wrap(err, fname)
 	}
 
@@ -313,7 +313,7 @@ func updateCurrentVersionFromLongtail(
 
 	localVersionIndex, hash, _, err = targetIndexReader.Get()
 	if err != nil {
-		err := errors.Wrap(err, "Failed scanning target path")
+		err := errors.Wrap(err, "failed scanning target path")
 		return longtaillib.Longtail_VersionIndex{}, hash, errors.Wrap(err, fname)
 	}
 	return localVersionIndex, hash, nil
@@ -388,7 +388,7 @@ func cloneOneVersion(
 		targetBlockSize,
 		maxChunksPerBlock)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed creating missing content store index for `%s`", targetPath))
+		err = errors.Wrap(err, fmt.Sprintf("failed creating missing content store index for `%s`", targetPath))
 		return targetVersionIndex, errors.Wrap(err, fname)
 	}
 	defer versionMissingStoreIndex.Dispose()
@@ -406,7 +406,7 @@ func cloneOneVersion(
 			longtailutils.NormalizePath(targetPath))
 		writeContentProgress.Dispose()
 		if err != nil {
-			err = errors.Wrap(err, fmt.Sprintf("Failed writing content from `%s`", targetPath))
+			err = errors.Wrap(err, fmt.Sprintf("failed writing content from `%s`", targetPath))
 			return targetVersionIndex, errors.Wrap(err, fname)
 		}
 	}
@@ -434,13 +434,13 @@ func cloneOneVersion(
 		versionLocalStoreIndexPath := strings.Replace(targetFilePath, ".lvi", ".lsi", -1) // TODO: This should use a file with path names instead of this rename hack!
 		versionLocalStoreIndex, err := longtaillib.MergeStoreIndex(newExistingStoreIndex, versionMissingStoreIndex)
 		if err != nil {
-			err = errors.Wrap(err, fmt.Sprintf("Failed merging store index for `%s`", versionLocalStoreIndexPath))
+			err = errors.Wrap(err, fmt.Sprintf("failed merging store index for `%s`", versionLocalStoreIndexPath))
 			return targetVersionIndex, errors.Wrap(err, fname)
 		}
 		versionLocalStoreIndexBuffer, err := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
 		versionLocalStoreIndex.Dispose()
 		if err != nil {
-			err = errors.Wrap(err, fmt.Sprintf("Failed serializing store index for `%s`", versionLocalStoreIndexPath))
+			err = errors.Wrap(err, fmt.Sprintf("failed serializing store index for `%s`", versionLocalStoreIndexPath))
 			return targetVersionIndex, errors.Wrap(err, fname)
 		}
 		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)

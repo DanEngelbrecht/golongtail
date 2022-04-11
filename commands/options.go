@@ -95,3 +95,7 @@ type TargetBlockSizeOption struct {
 type ScanTargetOption struct {
 	ScanTarget bool `name:"scan-target" help:"Enables scanning of target folder before write. Disable it to only add/write content to a folder" default:"true" negatable:""`
 }
+
+type CacheTargetIndexOption struct {
+	CacheTargetIndex bool `name:"cache-target-index" help:"Stores a copy version index for the target folder and uses it if it exists, skipping folder scanning" default:"true" negatable:""`
+}

@@ -21,7 +21,8 @@ func get(
 	validate bool,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
-	scanTarget bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	scanTarget bool,
+	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "get"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":              fname,
@@ -35,6 +36,7 @@ func get(
 		"includeFilterRegEx": includeFilterRegEx,
 		"excludeFilterRegEx": excludeFilterRegEx,
 		"scanTarget":         scanTarget,
+		"cacheTargetIndex":   cacheTargetIndex,
 	})
 	log.Debug(fname)
 
@@ -57,7 +59,7 @@ func get(
 
 	blobStoreURI := v.GetString("storage-uri")
 	if blobStoreURI == "" {
-		err = fmt.Errorf("Missing storage-uri in get-config `%s`", getConfigPath)
+		err = fmt.Errorf("missing storage-uri in get-config `%s`", getConfigPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	sourceFilePath := v.GetString("source-path")
@@ -85,7 +87,8 @@ func get(
 		versionLocalStoreIndexPath,
 		includeFilterRegEx,
 		excludeFilterRegEx,
-		scanTarget)
+		scanTarget,
+		cacheTargetIndex)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
@@ -104,6 +107,7 @@ type GetCmd struct {
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
 	ScanTargetOption
+	CacheTargetIndexOption
 }
 
 func (r *GetCmd) Run(ctx *Context) error {
@@ -117,7 +121,8 @@ func (r *GetCmd) Run(ctx *Context) error {
 		r.Validate,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
-		r.ScanTarget)
+		r.ScanTarget,
+		r.CacheTargetIndex)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

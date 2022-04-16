@@ -161,7 +161,7 @@ func gatherBlocksToKeep(
 	resultChannel := make(chan pruneOneResult, numWorkerCount)
 	activeWorkerCount := 0
 
-	progress := longtailutils.CreateProgress("Processing versions", 0)
+	progress := longtailutils.CreateProgress("Processing versions       ", 0)
 	defer progress.Dispose()
 
 	totalCount := uint32(len(sourceFilePaths))

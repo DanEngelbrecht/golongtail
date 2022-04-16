@@ -98,7 +98,6 @@ func unpack(
 	}
 
 	sourceVersionIndex := archiveIndex.GetVersionIndex()
-	storeIndex := archiveIndex.GetStoreIndex()
 
 	readSourceTime := time.Since(readSourceStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
@@ -129,8 +128,11 @@ func unpack(
 
 	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
 	defer lruBlockStore.Dispose()
-	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
-	defer indexStore.Dispose()
+
+	shareBlockStore := longtaillib.CreateShareBlockStore(lruBlockStore)
+	defer shareBlockStore.Dispose()
+
+	indexStore := shareBlockStore
 
 	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
@@ -162,6 +164,23 @@ func unpack(
 	getVersionDiffTime := time.Since(getVersionDiffStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get diff", getVersionDiffTime})
 
+	getExistingContentStartTime := time.Now()
+	chunkHashes, err := longtaillib.GetRequiredChunkHashes(
+		sourceVersionIndex,
+		versionDiff)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to get required chunk hashes. `%s` -> `%s`", targetFolderPath, sourceFilePath)
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+
+	retargettedVersionStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, chunkHashes, 0)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+	defer retargettedVersionStoreIndex.Dispose()
+	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
+
 	if cacheTargetIndex && longtaillib.FileExists(fs, cacheTargetIndexPath) {
 		err = longtaillib.DeleteFile(fs, cacheTargetIndexPath)
 		if err != nil {
@@ -170,7 +189,7 @@ func unpack(
 	}
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
+	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
 	err = longtaillib.ChangeVersion(
 		indexStore,
@@ -178,7 +197,7 @@ func unpack(
 		hash,
 		jobs,
 		&changeVersionProgress,
-		storeIndex,
+		retargettedVersionStoreIndex,
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
@@ -195,7 +214,7 @@ func unpack(
 	flushStartTime := time.Now()
 
 	stores := []longtaillib.Longtail_BlockStoreAPI{
-		indexStore,
+		shareBlockStore,
 		lruBlockStore,
 		compressBlockStore,
 		archiveIndexBlockStore,
@@ -208,7 +227,7 @@ func unpack(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	shareStoreStats, err := indexStore.GetStats()
+	shareStoreStats, err := shareBlockStore.GetStats()
 	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Share", shareStoreStats})
 	}
@@ -240,7 +259,7 @@ func unpack(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtailutils.CreateProgress("Validating version", 2)
+		createVersionIndexProgress := longtailutils.CreateProgress("Validating version        ", 1)
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, err := longtaillib.CreateVersionIndex(
 			fs,

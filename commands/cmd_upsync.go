@@ -141,7 +141,7 @@ func upsync(
 
 	writeContentStartTime := time.Now()
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := longtailutils.CreateProgress("Writing content blocks", 2)
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks    ", 1)
 		defer writeContentProgress.Dispose()
 
 		err = longtaillib.WriteContent(

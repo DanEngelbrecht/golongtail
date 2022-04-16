@@ -82,7 +82,7 @@ func pruneStoreBlocks(
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
-	findObjectsProgress := longtailutils.CreateProgress("Checking found blocks", 2)
+	findObjectsProgress := longtailutils.CreateProgress("Checking found blocks     ", 1)
 	defer findObjectsProgress.Dispose()
 
 	blocksFound := make(map[uint64]string)
@@ -113,7 +113,7 @@ func pruneStoreBlocks(
 	defer storeIndex.Dispose()
 
 	indexingUsedBlocksStartTime := time.Now()
-	indexUsedBlocksProgress := longtailutils.CreateProgress("Indexing used blocks", 2)
+	indexUsedBlocksProgress := longtailutils.CreateProgress("Indexing used blocks      ", 1)
 	defer indexUsedBlocksProgress.Dispose()
 
 	blockHashes := storeIndex.GetBlockHashes()
@@ -126,7 +126,7 @@ func pruneStoreBlocks(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Index used blocks", time.Since(indexingUsedBlocksStartTime)})
 
 	checkForUnusedBlocksStartTime := time.Now()
-	checkForUnusedBlocksProgress := longtailutils.CreateProgress("Checking for unused blocks", 2)
+	checkForUnusedBlocksProgress := longtailutils.CreateProgress("Checking for unused blocks", 1)
 	defer checkForUnusedBlocksProgress.Dispose()
 	i := 0
 	unusedBlocks := make([]string, 0)
@@ -143,7 +143,7 @@ func pruneStoreBlocks(
 	fmt.Printf("Found %d blocks to prune\n", len(unusedBlocks))
 
 	deleteUnusedBlocksStartTime := time.Now()
-	deleteUnusedBlocksProgress := longtailutils.CreateProgress("Deleting unused blocks", 1)
+	deleteUnusedBlocksProgress := longtailutils.CreateProgress("Deleting unused blocks    ", 1)
 	defer deleteUnusedBlocksProgress.Dispose()
 
 	workerCount := numWorkerCount

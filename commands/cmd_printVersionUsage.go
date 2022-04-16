@@ -96,7 +96,7 @@ func printVersionUsage(
 
 	fetchingBlocksStartTime := time.Now()
 
-	progress := longtailutils.CreateProgress("Fetching blocks", 2)
+	progress := longtailutils.CreateProgress("Fetching blocks           ", 1)
 	defer progress.Dispose()
 
 	blockHashes := existingStoreIndex.GetBlockHashes()

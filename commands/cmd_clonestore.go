@@ -270,7 +270,7 @@ func updateCurrentVersionFromLongtail(
 	}
 	defer existingStoreIndex.Dispose()
 
-	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
+	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
 
 	// Try to change local version
@@ -394,7 +394,7 @@ func cloneOneVersion(
 	defer versionMissingStoreIndex.Dispose()
 
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := longtailutils.CreateProgress("Writing content blocks", 2)
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks    ", 1)
 
 		err = longtaillib.WriteContent(
 			fs,
@@ -537,7 +537,7 @@ func cloneStore(
 	defer cacheBlockStore.Dispose()
 	defer sourceCompressBlockStore.Dispose()
 
-	sourceLRUBlockStore := longtaillib.CreateLRUBlockStoreAPI(sourceCompressBlockStore, 32)
+	sourceLRUBlockStore := longtaillib.CreateLRUBlockStoreAPI(sourceCompressBlockStore, 64)
 	defer sourceLRUBlockStore.Dispose()
 	sourceStore := longtaillib.CreateShareBlockStore(sourceLRUBlockStore)
 	defer sourceStore.Dispose()

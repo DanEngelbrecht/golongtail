@@ -70,7 +70,7 @@ func cpVersionIndex(
 	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
+	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 64)
 	defer lruBlockStore.Dispose()
 	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()

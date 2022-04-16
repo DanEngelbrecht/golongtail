@@ -145,7 +145,7 @@ func pack(
 	indexStore := longtaillib.CreateCompressBlockStore(archiveIndexBlockStore, creg)
 	defer indexStore.Dispose()
 
-	writeContentProgress := longtailutils.CreateProgress("Writing content blocks", 2)
+	writeContentProgress := longtailutils.CreateProgress("Writing content blocks    ", 1)
 	defer writeContentProgress.Dispose()
 
 	writeContentStartTime := time.Now()

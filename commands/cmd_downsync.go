@@ -157,7 +157,7 @@ func downsync(
 	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
+	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 64)
 	defer lruBlockStore.Dispose()
 	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
@@ -213,7 +213,7 @@ func downsync(
 	}
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
+	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
 	err = longtaillib.ChangeVersion(
 		indexStore,
@@ -293,7 +293,7 @@ func downsync(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtailutils.CreateProgress("Validating version", 2)
+		createVersionIndexProgress := longtailutils.CreateProgress("Validating version        ", 1)
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, err := longtaillib.CreateVersionIndex(
 			fs,

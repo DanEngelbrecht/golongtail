@@ -85,7 +85,7 @@ func GetFolderIndex(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := CreateProgress("Indexing version", 2)
+		createVersionIndexProgress := CreateProgress("Indexing version          ", 1)
 		defer createVersionIndexProgress.Dispose()
 		vindex, err := longtaillib.CreateVersionIndex(
 			fs,

@@ -22,7 +22,8 @@ func unpack(
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
-	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	cacheTargetIndex bool,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "unpack"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":              fname,
@@ -36,6 +37,7 @@ func unpack(
 		"excludeFilterRegEx": excludeFilterRegEx,
 		"scanTarget":         scanTarget,
 		"cacheTargetIndex":   cacheTargetIndex,
+		"enableFileMapping":  enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -115,12 +117,13 @@ func unpack(
 		fs,
 		jobs,
 		hashRegistry,
+		enableFileMapping,
 		&targetFolderScanner)
 
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
-	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, sourceFilePath, archiveIndex, false)
+	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, sourceFilePath, archiveIndex, false, enableFileMapping)
 	defer archiveIndexBlockStore.Dispose()
 
 	compressBlockStore := longtaillib.CreateCompressBlockStore(archiveIndexBlockStore, creg)
@@ -270,7 +273,8 @@ func unpack(
 			longtailutils.NormalizePath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
-			targetChunkSize)
+			targetChunkSize,
+			enableFileMapping)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to create version index for `%s`", resolvedTargetFolderPath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
@@ -341,6 +345,7 @@ type UnpackCmd struct {
 	TargetPathExcludeRegExOption
 	ScanTargetOption
 	CacheTargetIndexOption
+	EnableFileMappingOption
 }
 
 func (r *UnpackCmd) Run(ctx *Context) error {
@@ -354,7 +359,8 @@ func (r *UnpackCmd) Run(ctx *Context) error {
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
-		r.CacheTargetIndex)
+		r.CacheTargetIndex,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

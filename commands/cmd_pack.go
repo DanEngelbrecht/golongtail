@@ -24,7 +24,8 @@ func pack(
 	compressionAlgorithm string,
 	hashAlgorithm string,
 	includeFilterRegEx string,
-	excludeFilterRegEx string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	excludeFilterRegEx string,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "pack"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                fname,
@@ -39,6 +40,7 @@ func pack(
 		"hashAlgorithm":        hashAlgorithm,
 		"includeFilterRegEx":   includeFilterRegEx,
 		"excludeFilterRegEx":   excludeFilterRegEx,
+		"enableFileMapping":    enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -101,6 +103,7 @@ func pack(
 		fs,
 		jobs,
 		hashRegistry,
+		enableFileMapping,
 		&sourceFolderScanner)
 
 	creg := longtaillib.CreateFullCompressionRegistry()
@@ -135,7 +138,7 @@ func pack(
 	createArchiveIndexTime := time.Since(createArchiveIndexStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Create archive index", createArchiveIndexTime})
 
-	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, resolvedTargetPath, archiveIndex, true)
+	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, resolvedTargetPath, archiveIndex, true, enableFileMapping)
 	if !archiveIndexBlockStore.IsValid() {
 		err = errors.Wrapf(err, "Failed creating archive store for `%s`", resolvedTargetPath)
 		return storeStats, timeStats, errors.Wrapf(err, fname)
@@ -200,6 +203,7 @@ type PackCmd struct {
 	HashingOption
 	SourcePathIncludeRegExOption
 	SourcePathExcludeRegExOption
+	EnableFileMappingOption
 }
 
 func (r *PackCmd) Run(ctx *Context) error {
@@ -214,7 +218,8 @@ func (r *PackCmd) Run(ctx *Context) error {
 		r.Compression,
 		r.Hashing,
 		r.IncludeFilterRegEx,
-		r.ExcludeFilterRegEx)
+		r.ExcludeFilterRegEx,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

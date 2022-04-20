@@ -57,7 +57,7 @@ func ls(
 	fakeBlockStoreFS := longtaillib.CreateInMemStorageAPI()
 	defer fakeBlockStoreFS.Dispose()
 
-	fakeBlockStore := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store")
+	fakeBlockStore := longtaillib.CreateFSBlockStore(jobs, fakeBlockStoreFS, "store", false)
 	defer fakeBlockStoreFS.Dispose()
 
 	storeIndex, err := longtaillib.CreateStoreIndex(

@@ -990,10 +990,14 @@ func (asyncCompleteAPI *Longtail_AsyncFlushAPI) OnComplete(err error) {
 }
 
 // CreateFSBlockStore() ...
-func CreateFSBlockStore(jobAPI Longtail_JobAPI, storageAPI Longtail_StorageAPI, contentPath string) Longtail_BlockStoreAPI {
+func CreateFSBlockStore(jobAPI Longtail_JobAPI, storageAPI Longtail_StorageAPI, contentPath string, enableFileMapping bool) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(jobAPI.cJobAPI, storageAPI.cStorageAPI, cContentPath, nil)}
+	cFileMapping := C.int(0)
+	if enableFileMapping {
+		cFileMapping = C.int(1)
+	}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(jobAPI.cJobAPI, storageAPI.cStorageAPI, cContentPath, nil, cFileMapping)}
 }
 
 // CreateCacheBlockStore() ...
@@ -1017,14 +1021,18 @@ func CreateLRUBlockStoreAPI(blockStore Longtail_BlockStoreAPI, cache_block_count
 }
 
 // CreateArchiveBlockStoreAPI() ...
-func CreateArchiveBlockStoreAPI(storageAPI Longtail_StorageAPI, archivePath string, archiveIndex Longtail_ArchiveIndex, enableWrite bool) Longtail_BlockStoreAPI {
+func CreateArchiveBlockStoreAPI(storageAPI Longtail_StorageAPI, archivePath string, archiveIndex Longtail_ArchiveIndex, enableWrite bool, enableFileMapping bool) Longtail_BlockStoreAPI {
 	cArchivePath := C.CString(archivePath)
 	defer C.free(unsafe.Pointer(cArchivePath))
 	cEnableWrite := C.int(0)
 	if enableWrite {
 		cEnableWrite = C.int(1)
 	}
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateArchiveBlockStore(storageAPI.cStorageAPI, cArchivePath, archiveIndex.cArchiveIndex, cEnableWrite)}
+	cEnableFileMapping := C.int(0)
+	if enableFileMapping {
+		cEnableFileMapping = C.int(1)
+	}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateArchiveBlockStore(storageAPI.cStorageAPI, cArchivePath, archiveIndex.cArchiveIndex, cEnableWrite, cEnableFileMapping)}
 }
 
 // CreateBlockStoreStorageAPI() ...
@@ -1557,7 +1565,8 @@ func CreateVersionIndex(
 	rootPath string,
 	fileInfos Longtail_FileInfos,
 	assetCompressionTypes []uint32,
-	maxChunkSize uint32) (Longtail_VersionIndex, error) {
+	maxChunkSize uint32,
+	enableFileMapping bool) (Longtail_VersionIndex, error) {
 	const fname = "CreateVersionIndex"
 
 	var cProgressAPI *C.struct_Longtail_ProgressAPI
@@ -1573,6 +1582,11 @@ func CreateVersionIndex(
 		cCompressionTypes = unsafe.Pointer(&assetCompressionTypes[0])
 	}
 
+	cEnableFileMapping := C.int(0)
+	if enableFileMapping {
+		cEnableFileMapping = C.int(1)
+	}
+
 	var vindex *C.struct_Longtail_VersionIndex
 	errno := C.Longtail_CreateVersionIndex(
 		storageAPI.cStorageAPI,
@@ -1586,6 +1600,7 @@ func CreateVersionIndex(
 		fileInfos.cFileInfos,
 		(*C.uint32_t)(cCompressionTypes),
 		C.uint32_t(maxChunkSize),
+		cEnableFileMapping,
 		&vindex)
 
 	if errno != 0 {

@@ -99,3 +99,7 @@ type ScanTargetOption struct {
 type CacheTargetIndexOption struct {
 	CacheTargetIndex bool `name:"cache-target-index" help:"Stores a copy version index for the target folder and uses it if it exists, skipping folder scanning" default:"true" negatable:""`
 }
+
+type EnableFileMappingOption struct {
+	EnableFileMapping bool `name:"enable-file-mapping" help:"Enabled memory mapped file for file reads"`
+}

@@ -188,6 +188,7 @@ func updateCurrentVersionFromLongtail(
 	pathFilter longtaillib.Longtail_PathFilterAPI,
 	retainPermissions bool,
 	sourceStore longtaillib.Longtail_BlockStoreAPI,
+	enableFileMapping bool,
 	sourceFilePath string,
 	sourceFileZipPath string,
 	targetBlockSize uint32,
@@ -234,6 +235,7 @@ func updateCurrentVersionFromLongtail(
 			fs,
 			jobs,
 			hashRegistry,
+			enableFileMapping,
 			&targetFolderScanner)
 
 		localVersionIndex, hash, _, err = targetIndexReader.Get()
@@ -270,7 +272,7 @@ func updateCurrentVersionFromLongtail(
 	}
 	defer existingStoreIndex.Dispose()
 
-	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
+	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
 
 	// Try to change local version
@@ -309,6 +311,7 @@ func updateCurrentVersionFromLongtail(
 		fs,
 		jobs,
 		hashRegistry,
+		enableFileMapping,
 		&targetFolderScanner)
 
 	localVersionIndex, hash, _, err = targetIndexReader.Get()
@@ -338,7 +341,8 @@ func cloneOneVersion(
 	targetFilePath string,
 	sourceFilePath string,
 	sourceFileZipPath string,
-	currentVersionIndex longtaillib.Longtail_VersionIndex) (longtaillib.Longtail_VersionIndex, error) {
+	currentVersionIndex longtaillib.Longtail_VersionIndex,
+	enableFileMapping bool) (longtaillib.Longtail_VersionIndex, error) {
 	const fname = "cloneOneVersion"
 
 	log := logrus.WithFields(logrus.Fields{
@@ -353,6 +357,7 @@ func cloneOneVersion(
 		"targetFilePath":               targetFilePath,
 		"sourceFilePath":               sourceFilePath,
 		"sourceFileZipPath":            sourceFileZipPath,
+		"enableFileMapping":            enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -367,7 +372,20 @@ func cloneOneVersion(
 
 	log.Infof("`%s` -> `%s`", sourceFilePath, targetFilePath)
 
-	targetVersionIndex, hash, err := updateCurrentVersionFromLongtail(targetPath, currentVersionIndex, jobs, hashRegistry, fs, pathFilter, retainPermissions, sourceStore, sourceFilePath, sourceFileZipPath, targetBlockSize, maxChunksPerBlock)
+	targetVersionIndex, hash, err := updateCurrentVersionFromLongtail(
+		targetPath,
+		currentVersionIndex,
+		jobs,
+		hashRegistry,
+		fs,
+		pathFilter,
+		retainPermissions,
+		sourceStore,
+		enableFileMapping,
+		sourceFilePath,
+		sourceFileZipPath,
+		targetBlockSize,
+		maxChunksPerBlock)
 	if err != nil {
 		return targetVersionIndex, errors.Wrap(err, fname)
 	}
@@ -394,7 +412,7 @@ func cloneOneVersion(
 	defer versionMissingStoreIndex.Dispose()
 
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := longtailutils.CreateProgress("Writing content blocks", 2)
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks    ", 1)
 
 		err = longtaillib.WriteContent(
 			fs,
@@ -473,7 +491,8 @@ func cloneStore(
 	hashing string,
 	compression string,
 	minBlockUsagePercent uint32,
-	skipValidate bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	skipValidate bool,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cloneStore"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
@@ -514,7 +533,7 @@ func cloneStore(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -524,7 +543,7 @@ func cloneStore(
 	var sourceCompressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if len(localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, sourceRemoteIndexStore)
 
@@ -542,7 +561,7 @@ func cloneStore(
 	sourceStore := longtaillib.CreateShareBlockStore(sourceLRUBlockStore)
 	defer sourceStore.Dispose()
 
-	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
+	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -613,7 +632,8 @@ func cloneStore(
 			targetFilePath,
 			sourceFilePath,
 			sourceFileZipPath,
-			currentVersionIndex)
+			currentVersionIndex,
+			enableFileMapping)
 		currentVersionIndex.Dispose()
 		currentVersionIndex = newCurrentVersionIndex
 
@@ -653,6 +673,7 @@ type CloneStoreCmd struct {
 	HashingOption
 	CompressionOption
 	MinBlockUsagePercentOption
+	EnableFileMappingOption
 }
 
 func (r *CloneStoreCmd) Run(ctx *Context) error {
@@ -672,7 +693,8 @@ func (r *CloneStoreCmd) Run(ctx *Context) error {
 		r.Hashing,
 		r.Compression,
 		r.MinBlockUsagePercent,
-		r.SkipValidate)
+		r.SkipValidate,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

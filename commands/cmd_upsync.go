@@ -30,7 +30,8 @@ func upsync(
 	excludeFilterRegEx string,
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
-	getConfigPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	getConfigPath string,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "upsync"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -49,6 +50,7 @@ func upsync(
 		"minBlockUsagePercent":       minBlockUsagePercent,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"getConfigPath":              getConfigPath,
+		"enableFileMapping":          enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -96,9 +98,10 @@ func upsync(
 		fs,
 		jobs,
 		hashRegistry,
+		enableFileMapping,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite)
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -141,7 +144,7 @@ func upsync(
 
 	writeContentStartTime := time.Now()
 	if versionMissingStoreIndex.GetBlockCount() > 0 {
-		writeContentProgress := longtailutils.CreateProgress("Writing content blocks", 2)
+		writeContentProgress := longtailutils.CreateProgress("Writing content blocks    ", 1)
 		defer writeContentProgress.Dispose()
 
 		err = longtaillib.WriteContent(
@@ -273,6 +276,7 @@ type UpsyncCmd struct {
 	HashingOption
 	SourcePathIncludeRegExOption
 	SourcePathExcludeRegExOption
+	EnableFileMappingOption
 }
 
 func (r *UpsyncCmd) Run(ctx *Context) error {
@@ -291,7 +295,8 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 		r.ExcludeFilterRegEx,
 		r.MinBlockUsagePercent,
 		r.VersionLocalStoreIndexPath,
-		r.GetConfigPath)
+		r.GetConfigPath,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

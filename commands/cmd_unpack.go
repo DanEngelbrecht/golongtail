@@ -22,7 +22,8 @@ func unpack(
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
-	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	cacheTargetIndex bool,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "unpack"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":              fname,
@@ -36,6 +37,7 @@ func unpack(
 		"excludeFilterRegEx": excludeFilterRegEx,
 		"scanTarget":         scanTarget,
 		"cacheTargetIndex":   cacheTargetIndex,
+		"enableFileMapping":  enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -98,7 +100,6 @@ func unpack(
 	}
 
 	sourceVersionIndex := archiveIndex.GetVersionIndex()
-	storeIndex := archiveIndex.GetStoreIndex()
 
 	readSourceTime := time.Since(readSourceStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Read source index", readSourceTime})
@@ -116,12 +117,13 @@ func unpack(
 		fs,
 		jobs,
 		hashRegistry,
+		enableFileMapping,
 		&targetFolderScanner)
 
 	creg := longtaillib.CreateFullCompressionRegistry()
 	defer creg.Dispose()
 
-	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, sourceFilePath, archiveIndex, false)
+	archiveIndexBlockStore := longtaillib.CreateArchiveBlockStoreAPI(fs, sourceFilePath, archiveIndex, false, enableFileMapping)
 	defer archiveIndexBlockStore.Dispose()
 
 	compressBlockStore := longtaillib.CreateCompressBlockStore(archiveIndexBlockStore, creg)
@@ -129,8 +131,11 @@ func unpack(
 
 	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
 	defer lruBlockStore.Dispose()
-	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
-	defer indexStore.Dispose()
+
+	shareBlockStore := longtaillib.CreateShareBlockStore(lruBlockStore)
+	defer shareBlockStore.Dispose()
+
+	indexStore := shareBlockStore
 
 	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
@@ -162,6 +167,23 @@ func unpack(
 	getVersionDiffTime := time.Since(getVersionDiffStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Get diff", getVersionDiffTime})
 
+	getExistingContentStartTime := time.Now()
+	chunkHashes, err := longtaillib.GetRequiredChunkHashes(
+		sourceVersionIndex,
+		versionDiff)
+	if err != nil {
+		err = errors.Wrapf(err, "Failed to get required chunk hashes. `%s` -> `%s`", targetFolderPath, sourceFilePath)
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+
+	retargettedVersionStoreIndex, err := longtailutils.GetExistingStoreIndexSync(indexStore, chunkHashes, 0)
+	if err != nil {
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+	defer retargettedVersionStoreIndex.Dispose()
+	getExistingContentTime := time.Since(getExistingContentStartTime)
+	timeStats = append(timeStats, longtailutils.TimeStat{"Get content index", getExistingContentTime})
+
 	if cacheTargetIndex && longtaillib.FileExists(fs, cacheTargetIndexPath) {
 		err = longtaillib.DeleteFile(fs, cacheTargetIndexPath)
 		if err != nil {
@@ -170,7 +192,7 @@ func unpack(
 	}
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
+	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
 	err = longtaillib.ChangeVersion(
 		indexStore,
@@ -178,7 +200,7 @@ func unpack(
 		hash,
 		jobs,
 		&changeVersionProgress,
-		storeIndex,
+		retargettedVersionStoreIndex,
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
@@ -195,7 +217,7 @@ func unpack(
 	flushStartTime := time.Now()
 
 	stores := []longtaillib.Longtail_BlockStoreAPI{
-		indexStore,
+		shareBlockStore,
 		lruBlockStore,
 		compressBlockStore,
 		archiveIndexBlockStore,
@@ -208,7 +230,7 @@ func unpack(
 	flushTime := time.Since(flushStartTime)
 	timeStats = append(timeStats, longtailutils.TimeStat{"Flush", flushTime})
 
-	shareStoreStats, err := indexStore.GetStats()
+	shareStoreStats, err := shareBlockStore.GetStats()
 	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Share", shareStoreStats})
 	}
@@ -240,7 +262,7 @@ func unpack(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtailutils.CreateProgress("Validating version", 2)
+		createVersionIndexProgress := longtailutils.CreateProgress("Validating version        ", 1)
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, err := longtaillib.CreateVersionIndex(
 			fs,
@@ -251,7 +273,8 @@ func unpack(
 			longtailutils.NormalizePath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
-			targetChunkSize)
+			targetChunkSize,
+			enableFileMapping)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to create version index for `%s`", resolvedTargetFolderPath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
@@ -322,6 +345,7 @@ type UnpackCmd struct {
 	TargetPathExcludeRegExOption
 	ScanTargetOption
 	CacheTargetIndexOption
+	EnableFileMappingOption
 }
 
 func (r *UnpackCmd) Run(ctx *Context) error {
@@ -335,7 +359,8 @@ func (r *UnpackCmd) Run(ctx *Context) error {
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
-		r.CacheTargetIndex)
+		r.CacheTargetIndex,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

@@ -25,7 +25,8 @@ func downsync(
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
-	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	cacheTargetIndex bool,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -42,6 +43,7 @@ func downsync(
 		"excludeFilterRegEx":         excludeFilterRegEx,
 		"scanTarget":                 scanTarget,
 		"cacheTargetIndex":           cacheTargetIndex,
+		"enableFileMapping":          enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -124,6 +126,7 @@ func downsync(
 		fs,
 		jobs,
 		hashRegistry,
+		enableFileMapping,
 		&targetFolderScanner)
 
 	creg := longtaillib.CreateFullCompressionRegistry()
@@ -133,7 +136,7 @@ func downsync(
 	defer localFS.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPath, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPath, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -146,7 +149,7 @@ func downsync(
 	if localCachePath == "" {
 		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	} else {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -213,7 +216,7 @@ func downsync(
 	}
 
 	changeVersionStartTime := time.Now()
-	changeVersionProgress := longtailutils.CreateProgress("Updating version", 2)
+	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
 	err = longtaillib.ChangeVersion(
 		indexStore,
@@ -293,7 +296,7 @@ func downsync(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := longtailutils.CreateProgress("Validating version", 2)
+		createVersionIndexProgress := longtailutils.CreateProgress("Validating version        ", 1)
 		defer createVersionIndexProgress.Dispose()
 		validateVersionIndex, err := longtaillib.CreateVersionIndex(
 			fs,
@@ -304,7 +307,8 @@ func downsync(
 			longtailutils.NormalizePath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
-			targetChunkSize)
+			targetChunkSize,
+			enableFileMapping)
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to create version index for `%s`", resolvedTargetFolderPath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
@@ -378,6 +382,7 @@ type DownsyncCmd struct {
 	TargetPathExcludeRegExOption
 	ScanTargetOption
 	CacheTargetIndexOption
+	EnableFileMappingOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -394,7 +399,8 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
-		r.CacheTargetIndex)
+		r.CacheTargetIndex,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

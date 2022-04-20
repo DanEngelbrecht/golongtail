@@ -1479,7 +1479,7 @@ func getStoreIndexFromBlocks(
 		}
 	}(clients)
 
-	progress := longtailutils.CreateProgress("Scanning blocks", 1)
+	progress := longtailutils.CreateProgress("Scanning blocks           ", 1)
 	defer progress.Dispose()
 
 	var wg sync.WaitGroup
@@ -1839,7 +1839,8 @@ func CreateBlockStoreForURI(
 	numWorkerCount int,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
-	accessType AccessType) (longtaillib.Longtail_BlockStoreAPI, error) {
+	accessType AccessType,
+	enableFileMapping bool) (longtaillib.Longtail_BlockStoreAPI, error) {
 	const fname = "CreateBlockStoreForURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":             fname,
@@ -1908,8 +1909,8 @@ func CreateBlockStoreForURI(
 			err := fmt.Errorf("azure Gen2 storage not yet implemented for path %s", uri)
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		case "file":
-			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:]), nil
+			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], enableFileMapping), nil
 		}
 	}
-	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri), nil
+	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, enableFileMapping), nil
 }

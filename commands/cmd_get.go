@@ -22,7 +22,8 @@ func get(
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
-	cacheTargetIndex bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	cacheTargetIndex bool,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "get"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":              fname,
@@ -37,6 +38,7 @@ func get(
 		"excludeFilterRegEx": excludeFilterRegEx,
 		"scanTarget":         scanTarget,
 		"cacheTargetIndex":   cacheTargetIndex,
+		"enableFileMapping":  enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -88,7 +90,8 @@ func get(
 		includeFilterRegEx,
 		excludeFilterRegEx,
 		scanTarget,
-		cacheTargetIndex)
+		cacheTargetIndex,
+		enableFileMapping)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
@@ -108,6 +111,7 @@ type GetCmd struct {
 	TargetPathExcludeRegExOption
 	ScanTargetOption
 	CacheTargetIndexOption
+	EnableFileMappingOption
 }
 
 func (r *GetCmd) Run(ctx *Context) error {
@@ -122,7 +126,8 @@ func (r *GetCmd) Run(ctx *Context) error {
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
-		r.CacheTargetIndex)
+		r.CacheTargetIndex,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

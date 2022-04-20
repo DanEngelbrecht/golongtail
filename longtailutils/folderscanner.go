@@ -54,6 +54,7 @@ func GetFolderIndex(
 	fs longtaillib.Longtail_StorageAPI,
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
+	enableFileMapping bool,
 	scanner *AsyncFolderScanner) (longtaillib.Longtail_VersionIndex, longtaillib.Longtail_HashAPI, time.Duration, error) {
 	const fname = "GetFolderIndex"
 	log := logrus.WithFields(logrus.Fields{
@@ -85,7 +86,7 @@ func GetFolderIndex(
 		chunker := longtaillib.CreateHPCDCChunkerAPI()
 		defer chunker.Dispose()
 
-		createVersionIndexProgress := CreateProgress("Indexing version", 2)
+		createVersionIndexProgress := CreateProgress("Indexing version          ", 1)
 		defer createVersionIndexProgress.Dispose()
 		vindex, err := longtaillib.CreateVersionIndex(
 			fs,
@@ -96,7 +97,8 @@ func GetFolderIndex(
 			NormalizePath(sourceFolderPath),
 			fileInfos,
 			compressionTypes,
-			targetChunkSize)
+			targetChunkSize,
+			enableFileMapping)
 		if err != nil {
 			err = errors.Wrap(err, fmt.Sprintf("Failed creating version index for `%s`", sourceFolderPath))
 			return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, scanTime + time.Since(startTime), errors.Wrap(err, fname)
@@ -143,6 +145,7 @@ func (indexReader *AsyncVersionIndexReader) Read(
 	fs longtaillib.Longtail_StorageAPI,
 	jobs longtaillib.Longtail_JobAPI,
 	hashRegistry longtaillib.Longtail_HashRegistryAPI,
+	enableFileMapping bool,
 	scanner *AsyncFolderScanner) {
 	indexReader.wg.Add(1)
 	go func() {
@@ -156,6 +159,7 @@ func (indexReader *AsyncVersionIndexReader) Read(
 			fs,
 			jobs,
 			hashRegistry,
+			enableFileMapping,
 			scanner)
 		indexReader.wg.Done()
 	}()

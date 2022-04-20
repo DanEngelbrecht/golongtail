@@ -150,7 +150,7 @@ func gatherBlocksToKeep(
 		"dryRun":                      dryRun,
 	})
 	log.Debug(fname)
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false)
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
@@ -161,7 +161,7 @@ func gatherBlocksToKeep(
 	resultChannel := make(chan pruneOneResult, numWorkerCount)
 	activeWorkerCount := 0
 
-	progress := longtailutils.CreateProgress("Processing versions", 0)
+	progress := longtailutils.CreateProgress("Processing versions       ", 0)
 	defer progress.Dispose()
 
 	totalCount := uint32(len(sourceFilePaths))
@@ -350,7 +350,7 @@ func pruneStore(
 		fmt.Printf("Prune would keep %d blocks", len(blocksToKeep))
 		return storeStats, timeStats, nil
 	}
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite)
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite, false)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

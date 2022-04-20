@@ -38,7 +38,7 @@ func printVersionUsage(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -53,7 +53,7 @@ func printVersionUsage(
 		indexStore = remoteIndexStore
 	} else {
 		localFS = longtaillib.CreateFSStorageAPI()
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), false)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -96,7 +96,7 @@ func printVersionUsage(
 
 	fetchingBlocksStartTime := time.Now()
 
-	progress := longtailutils.CreateProgress("Fetching blocks", 2)
+	progress := longtailutils.CreateProgress("Fetching blocks           ", 1)
 	defer progress.Dispose()
 
 	blockHashes := existingStoreIndex.GetBlockHashes()

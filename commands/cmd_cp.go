@@ -17,16 +17,18 @@ func cpVersionIndex(
 	versionIndexPath string,
 	localCachePath string,
 	sourcePath string,
-	targetPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	targetPath string,
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cpVersionIndex"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
-		"fname":            fname,
-		"numWorkerCount":   numWorkerCount,
-		"blobStoreURI":     blobStoreURI,
-		"versionIndexPath": versionIndexPath,
-		"localCachePath":   localCachePath,
-		"sourcePath":       sourcePath,
-		"targetPath":       targetPath,
+		"fname":             fname,
+		"numWorkerCount":    numWorkerCount,
+		"blobStoreURI":      blobStoreURI,
+		"versionIndexPath":  versionIndexPath,
+		"localCachePath":    localCachePath,
+		"sourcePath":        sourcePath,
+		"targetPath":        targetPath,
+		"enableFileMapping": enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -43,7 +45,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -59,7 +61,7 @@ func cpVersionIndex(
 	if localCachePath == "" {
 		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	} else {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath))
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -208,6 +210,7 @@ type CpCmd struct {
 	CachePathOption
 	SourcePath string `name:"source path" arg:"" help:"Source path inside the version index to copy"`
 	TargetPath string `name:"target path" arg:"" help:"Target uri path"`
+	EnableFileMappingOption
 }
 
 func (r *CpCmd) Run(ctx *Context) error {
@@ -217,7 +220,8 @@ func (r *CpCmd) Run(ctx *Context) error {
 		r.VersionIndexPath,
 		r.CachePath,
 		r.SourcePath,
-		r.TargetPath)
+		r.TargetPath,
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

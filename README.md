@@ -184,7 +184,7 @@ Setting `--min-block-usage-percent` to a higher value, say 80, would mean that a
 
 You might think that setting this to 100% would be optimal, but then you will get no reuse of older blocks that you might already have cached so you need to make a reasonable compromise here.
 
-From my experience when longtail have been used to download UE editors and UE-base games 80 (as in 80% relevant data in each block) is a good compromise which leads to small deltas and not to much redundant data.
+From my experience when longtail have been used to download Unreal editors and Unreal-based games 80 (as in 80% relevant data in each block) is a good compromise which leads to small deltas and not to much redundant data.
 
 When longtail downloads data from a store it optimizes which blocks to use if it find a chunk in multiple blocks to pick the blocks with the least amount of redundant data.
 

@@ -448,6 +448,8 @@ var (
 		"zstd":            longtaillib.GetZStdDefaultCompressionType(),
 		"zstd_min":        longtaillib.GetZStdMinCompressionType(),
 		"zstd_max":        longtaillib.GetZStdMaxCompressionType(),
+		"zstd_high":       longtaillib.GetZStdMaxCompressionType(),
+		"zstd_low":        longtaillib.GetZStdMaxCompressionType(),
 	}
 
 	hashIdentifierMap = map[string]uint32{

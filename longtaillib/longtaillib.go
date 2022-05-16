@@ -1498,6 +1498,16 @@ func GetZStdMaxCompressionType() uint32 {
 	return uint32(C.Longtail_GetZStdMaxQuality())
 }
 
+// GetZStdHighCompressionType ...
+func GetZStdHighCompressionType() uint32 {
+	return uint32(C.Longtail_GetZStdHighQuality())
+}
+
+// GetZStdLowCompressionType ...
+func GetZStdLowCompressionType() uint32 {
+	return uint32(C.Longtail_GetZStdLowQuality())
+}
+
 // GetFilesRecursively ...
 func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (Longtail_FileInfos, error) {
 	const fname = "GetFilesRecursively"

@@ -125,9 +125,9 @@ jobs:
         release_name: Release ${{ github.ref }}
         body: |
           Changes in this Release
-          - **ADDED** Added `--cache-target-index` option to downsync/unpack that automatically caches target folder state. Default on, turn off with `--no-cache-target-index`
-          - **ADDED** Added `--enable-file-mapping` option to relevant commands to enable reading using memory mapped files. Default off.
-          - **UPDATED** Updated longtail to v0.3.0
+          - **ADDED** `--zstd_low` and `--zstd_high` compression options
+          - **UPDATED** Updated longtail to v0.3.1
+          - **UPDATED** Updated README.md
         draft: false
         prerelease: false
     - name: Download Linux artifacts

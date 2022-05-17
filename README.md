@@ -111,20 +111,18 @@ To minimize downloads even more, longtail has support for a download cache where
 ## Usage
 Build the command line and run it using `longtail --help` for a breif description of commands/options.
 
-## Guidelines for uploading and downloading from a delta store
+## Guidelines for uploading and downloading using a delta store
 
 ### Structure
 
-To `upsync` you should provide a `--storage-uri` - this is where the data is stored for all versions including an index over all the data, an example for GCS would be `gs://my_bucket/store` and for S3 `s3://my_bucket/store` which creates a folder in `my_bucket`.
+To `upsync` you should provide a `--storage-uri` - this is where the data is stored for all versions including an index over all the data. An example for GCS would be `gs://my_bucket/store` and for S3 `s3://my_bucket/store` which creates a folder calls `store` in the bucket `my_bucket`.
 The bucket must already be created and have proper access rights - for upload you need to be able to create objects, read and write to them, list objects and read/write meta-data.
 
 You also need to provide a `--target-path` which is where the version index is stored. I recommend that you put that in a separate folder in your bucket.
 
 Optionally (and recommended) you can add a `--version-local-store-index-path` to store a version local store index which is a subset to the full store index required to fullfill this version only. By using that you do not need to download the full store index when you later `downsync` a version.
 
-To reduce the number of parameters to give and keep track on you can use the `get` and `put` commands which let you specify the path to a json file which includes the path to the store, version index and optional version local store index. This command also lets you skip the path to the version index and version local store index and will automatically set them up based on the target name (the json config file).
-
-An example of the default structure using the `put` command:
+An example of the structure using the `upsync` command:
 ```
 [bucket]
     store
@@ -151,7 +149,7 @@ To `downsync` this you would issue:
 
 Quite the long command lines, but you will likely automate this rather than do it manually.
 
-You can simplify the syntax by using the `put` and `get` commands:
+To reduce the number of parameters to give and keep track on you can use the `get` and `put` commands which let you specify the path to a json file which includes the path to the store, version index and optional version local store index. This command also lets you skip the path to the version index, version local store index and store and will automatically set them up based on the target name (the json config file).
 
 The default structure for `put`:
 ```
@@ -178,11 +176,12 @@ The default structure for `put`:
 ```
 
 `longtail put --source-path v1 --target-path gs://bucket/v1.json`
+
 `longtail get --source-path gs://bucket/v1.json`
 
-The `--target-path` is optional for `get` and longtail will deduce the target folder name from the `source-path` path, in this case it will be a folder called `v1` in the current directory.
+The `--target-path` is optional for `get` and longtail will deduce the target folder name from the `--source-path` path, in this case it will be a folder called `v1` in the current directory.
 
-You can still use the `put` command and override the `--storage-uri`, `target-version-index-path` and `version-local-store-index-path` if you want a different structure.
+You can use the `put` command and override the `--storage-uri`, `--target-version-index-path` and `--version-local-store-index-path` if you want a different structure, the `get` command will still be simple as the paths to the individual parts will be stored in the .json file.
 
 ### Caching data between versions
 By default longtail `downsync` or `get` does not cache any downloaded blocks from the store. This works fairly well since it will only download data for the files that needs to be modified/added, but if you care about download size you do want to create a cache of blocks to use between versions.

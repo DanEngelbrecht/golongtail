@@ -128,7 +128,7 @@ jobs:
           - **ADDED** `put` commmand to complement `get` commmand
           - **CHANGED** `--get-config-path` option has been removed from `upsync`; use `put` instead.
           - **CHANGED** `--get-config-path` option for `get` renamed to `--source-path`
-          - **FIXED** Automatic resolving of `--target-path` for `downsync` and `get` now resolved to a folder in the local directory
+          - **FIXED** Automatic resolving of `--target-path` for `downsync` and `get` now resolves to a folder in the local directory
         draft: false
         prerelease: false
     - name: Download Linux artifacts

@@ -100,7 +100,7 @@ func get(
 }
 
 type GetCmd struct {
-	GetConfigURI string `name:"get-config-path" help:"File uri for json formatted get-config file" required:""`
+	GetConfigURI string `name:"source-path" help:"File uri for json formatted get-config file" required:""`
 	TargetPathOption
 	TargetIndexUriOption
 	ValidateTargetOption

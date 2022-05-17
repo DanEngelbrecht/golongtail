@@ -62,7 +62,9 @@ func downsync(
 
 	resolvedTargetFolderPath := ""
 	if targetFolderPath == "" {
-		urlSplit := strings.Split(longtailutils.NormalizePath(sourceFilePath), "/")
+		normalizedSourceFilePath := longtailutils.NormalizePath(sourceFilePath)
+		normalizedSourceFilePath = strings.ReplaceAll(normalizedSourceFilePath, "\\", "/")
+		urlSplit := strings.Split(normalizedSourceFilePath, "/")
 		sourceName := urlSplit[len(urlSplit)-1]
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetFolderPath = sourceNameSplit[0]

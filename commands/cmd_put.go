@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -29,6 +30,7 @@ func put(
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
 	targetPath string,
+	disableVersionLocalStoreIndex bool,
 	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "put"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
@@ -73,11 +75,15 @@ func put(
 	}
 
 	if targetIndexFilePath == "" {
-		targetIndexFilePath = parentPath + "/version-index/" + configName + ".lvi"
+		targetIndexFilePath = parentPath + "/version-data/version-index/" + configName + ".lvi"
 	}
 
 	if versionLocalStoreIndexPath == "" {
-		versionLocalStoreIndexPath = parentPath + "/version-store-index/" + configName + ".lsi"
+		if !disableVersionLocalStoreIndex {
+			versionLocalStoreIndexPath = parentPath + "/version-data/version-store-index/" + configName + ".lsi"
+		}
+	} else if disableVersionLocalStoreIndex {
+		return storeStats, timeStats, fmt.Errorf("put: conflicting options for version local store index, --no-version-local-store-index is set together with path `%s`", versionLocalStoreIndexPath)
 	}
 
 	downSyncStoreStats, downSyncTimeStats, err := upsync(
@@ -142,12 +148,13 @@ func put(
 }
 
 type PutCmd struct {
-	GetConfigURI               string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
-	TargetFileIndexPath        string `name:"target-version-index-path" help:"Target version index file uri"`
-	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
-	OptionalStorageURI         string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
-	SourcePath                 string `name:"source-path" help:"Source folder path" required:""`
-	SourceIndexPath            string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
+	GetConfigURI                  string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
+	TargetFileIndexPath           string `name:"target-version-index-path" help:"Target version index file uri"`
+	VersionLocalStoreIndexPath    string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
+	OptionalStorageURI            string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
+	SourcePath                    string `name:"source-path" help:"Source folder path" required:""`
+	SourceIndexPath               string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
+	DisableVersionLocalStoreIndex bool   `name:"no-version-local-store-index" help:"Disable saving of store index optimized for this particular version"`
 	TargetChunkSizeOption
 	TargetBlockSizeOption
 	MaxChunksPerBlockOption
@@ -176,6 +183,7 @@ func (r *PutCmd) Run(ctx *Context) error {
 		r.MinBlockUsagePercent,
 		r.VersionLocalStoreIndexPath,
 		r.GetConfigURI,
+		r.DisableVersionLocalStoreIndex,
 		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

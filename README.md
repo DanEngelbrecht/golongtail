@@ -122,9 +122,9 @@ You also need to provide a `--target-path` which is where the version index is s
 
 Optionally (and recommended) you can add a `--version-local-store-index-path` to store a version local store index which is a subset to the full store index required to fullfill this version only. By using that you do not need to download the full store index when you later `downsync` a version.
 
-Finally to make the `downsync` syntax easier and not specify as many parameters, use the `--get-config-path` option to provide a path to a json file which includes the path to the store, version index and optional version local store index. You can use the path to that json file as a single source to `downsync` using `--get-config-path` index instead of specifying the three individual options.
+To reduce the number of parameters to give and keep track on you can use the `get` and `put` commands which let you specify the path to a json file which includes the path to the store, version index and optional version local store index. This command also lets you skip the path to the version index and version local store index and will automatically set them up based on the target name (the json config file).
 
-An example of the structure could look like this:
+An example of the default structure using the `put` command:
 ```
 [bucket]
     store
@@ -134,7 +134,36 @@ An example of the structure could look like this:
                 0000a9c8s8a771242.lsb
                 ...
             ...
-    versions
+    version-store-index
+        v1.lsi
+        v2.lsi
+        ...
+    v1.lvi
+    v2.lvi
+    ...
+```
+
+To achive this structure in GCS the syntax would be:
+`longtail upsync --source-path v1 --target-path gs://bucket/v1.lvi --version-local-store-index-path gs://bucket/version-store-index/v1.lsi --storage-uri gs://bucket/store`
+
+To `downsync` this you would issue:
+`longtail downsync --target-path v1 --source-path gs://bucket/v1.lvi --version-local-store-index-path gs://bucket/version-store-index/v1.lsi --storage-uri gs://bucket/store`
+
+Quite the long command lines, but you will likely automate this rather than do it manually.
+
+You can simplify the syntax by using the `put` and `get` commands:
+
+The default structure for `put`:
+```
+[bucket]
+    store
+        store.lsi
+        chunks
+            0000
+                0000a9c8s8a771242.lsb
+                ...
+            ...
+    version-data
         version-index
             v1.lvi
             v2.lvi
@@ -143,28 +172,23 @@ An example of the structure could look like this:
             v1.lsi
             v2.lsi
             ...
-        v1.json
-        v2.json
-        ...
+    v1.json
+    v2.json
+    ...
 ```
 
-To achive this structure in GCS the syntax would be:
-`longtail upsync --source-path v1 --target-path gs://bucket/versions/version-index/v1.lvi --version-local-store-index-path gs://bucket/versions/version-store-index/v1.lsi --storage-uri gs://bucket/store`
+`longtail put --source-path v1 --target-path gs://bucket/v1.json`
+`longtail get --source-path gs://bucket/v1.json`
 
-To `downsync` this you would issue:
-`longtail downsync --target-path v1 --source-path gs://bucket/versions/version-index/v1.lvi --version-local-store-index-path gs://bucket/versions/version-store-index/v1.lsi --storage-uri gs://bucket/store`
+The `--target-path` is optional for `get` and longtail will deduce the target folder name from the `source-path` path, in this case it will be a folder called `v1` in the current directory.
 
-Quite the long command lines, but you will likely automate this rather than do it manually.
-
-You can simplify the syntax for `downsync` by adding the `--get-config-path` option to create a json file that includes all the separate details. Extended the command line with `--get-config-path gs://bucket/versions/v1.json`, and getting the version is quite a bit simpler:
-
-`longtail get --get-config-path gs://bucket/versions/v1.json`. The `--target-path` is optional and longtail will deduce the target folder name from the `get-config-path` path, in this case it will be called `v1`.
+You can still use the `put` command and override the `--storage-uri`, `target-version-index-path` and `version-local-store-index-path` if you want a different structure.
 
 ### Caching data between versions
 By default longtail `downsync` or `get` does not cache any downloaded blocks from the store. This works fairly well since it will only download data for the files that needs to be modified/added, but if you care about download size you do want to create a cache of blocks to use between versions.
 
 You do this using the `--cache-path` option, like this:
-`longtail get --get-config-path gs://bucket/versions/v1.json --cache-path /tmp/longtail-cache`
+`longtail get --source-path gs://bucket/versions/v1.json --cache-path /tmp/longtail-cache`
 
 The cache will save every block that you download from the store and will use blocks from the cache as a primary source of data.
 
@@ -219,14 +243,14 @@ Longtail uses a mechanism of writing partial store indexes and merging them on t
 ### Download from a local folder
 `longtail.exe downsync --source-path "local_store/index/my_folder.lvi" --target-path "my_folder_copy" --storage-uri "local_store"`
 
-### Upload to GCS with version local store index and a `get-info` file
-`longtail.exe upsync --source-path "my_folder" --target-path "gs://test_block_storage/store/index/my_folder.lvi" --storage-uri "gs://test_block_storage/store" --version-local-store-index-path "gs://test_block_storage/store/index/my_folder.lsi" --get-config-path "gs://test_block_storage/store/index/my_folder.json"`
+### Upload to GCS with version local store index and a `get-config` file
+`longtail.exe put --source-path "my_folder" --target-path "gs://test_block_storage/store/index/my_folder.json"`
 
-### Download from GCS using version local store index and a `get-info` file
-`longtail.exe get --get-config-path "gs://test_block_storage/store/index/my_folder.json"`
+### Download from GCS using version local store index and a `get-config` file into default folder `my_folder`
+`longtail.exe get --source-path "gs://test_block_storage/store/index/my_folder.json"`
 
-### Download from GCS using version local store index and a `get-info` file with a cache
-`longtail.exe get --get-config-path "gs://test_block_storage/store/index/my_folder.json" --cache-path "./download-cache"`
+### Download from GCS using version local store index and a `get-config` file with a cache into custom folder `download/target_folder`
+`longtail.exe get --source-path "gs://test_block_storage/store/index/my_folder.json" --cache-path "./download-cache" --target-path "download/target_folder"`
 
 ### Create a self-containing archive from a folder naming the archive using the source name
 `longtail.exe pack --source-path "stuff/my_folder"`

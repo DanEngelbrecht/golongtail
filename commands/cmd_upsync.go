@@ -2,15 +2,12 @@ package commands
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 
 	"github.com/sirupsen/logrus"
 )
@@ -30,7 +27,6 @@ func upsync(
 	excludeFilterRegEx string,
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
-	getConfigPath string,
 	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "upsync"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
@@ -49,7 +45,6 @@ func upsync(
 		"excludeFilterRegEx":         excludeFilterRegEx,
 		"minBlockUsagePercent":       minBlockUsagePercent,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
-		"getConfigPath":              getConfigPath,
 		"enableFileMapping":          enableFileMapping,
 	})
 	log.Debug(fname)
@@ -221,43 +216,6 @@ func upsync(
 		timeStats = append(timeStats, longtailutils.TimeStat{"Write version store index", writeVersionLocalStoreIndexTime})
 	}
 
-	if getConfigPath != "" {
-		writeGetConfigStartTime := time.Now()
-
-		v := viper.New()
-		v.SetConfigType("json")
-		v.Set("storage-uri", blobStoreURI)
-		v.Set("source-path", targetFilePath)
-		if versionLocalStoreIndexPath != "" {
-			v.Set("version-local-store-index-path", versionLocalStoreIndexPath)
-		}
-		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
-		if err != nil {
-			return storeStats, timeStats, errors.Wrapf(err, fname)
-		}
-		tmpFilePath := tmpFile.Name()
-		tmpFile.Close()
-		log.WithField(tmpFilePath, "tmpFilePath").Debug("Writing get config temp file")
-		err = v.WriteConfigAs(tmpFilePath)
-		if err != nil {
-			return storeStats, timeStats, errors.Wrapf(err, fname)
-		}
-
-		bytes, err := ioutil.ReadFile(tmpFilePath)
-		if err != nil {
-			return storeStats, timeStats, errors.Wrapf(err, fname)
-		}
-		os.Remove(tmpFilePath)
-
-		err = longtailutils.WriteToURI(getConfigPath, bytes)
-		if err != nil {
-			return storeStats, timeStats, errors.Wrapf(err, fname)
-		}
-
-		writeGetConfigTime := time.Since(writeGetConfigStartTime)
-		timeStats = append(timeStats, longtailutils.TimeStat{"Write get config", writeGetConfigTime})
-	}
-
 	return storeStats, timeStats, nil
 }
 
@@ -266,7 +224,6 @@ type UpsyncCmd struct {
 	SourceIndexPath            string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	TargetPath                 string `name:"target-path" help:"Target file uri" required:""`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
-	GetConfigPath              string `name:"get-config-path" help:"Target file uri for json formatted get-config file"`
 	TargetChunkSizeOption
 	MaxChunksPerBlockOption
 	TargetBlockSizeOption
@@ -295,7 +252,6 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 		r.ExcludeFilterRegEx,
 		r.MinBlockUsagePercent,
 		r.VersionLocalStoreIndexPath,
-		r.GetConfigPath,
 		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

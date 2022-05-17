@@ -2,11 +2,15 @@ package commands
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 func put(
@@ -51,15 +55,17 @@ func put(
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
+	targetName := targetPath
 	parentPath := ""
 	pathDelimiter := strings.LastIndexAny(targetPath, "\\/")
 	if pathDelimiter != -1 {
 		parentPath = targetPath[0:pathDelimiter]
+		targetName = targetPath[pathDelimiter+1:]
 	}
-	configPathName := targetPath
-	extensionDelimiter := strings.LastIndexAny(targetPath, ".")
+	configName := targetName
+	extensionDelimiter := strings.LastIndexAny(configName, ".")
 	if extensionDelimiter != -1 {
-		configPathName = configPathName[0:extensionDelimiter]
+		configName = configName[0:extensionDelimiter]
 	}
 
 	if blobStoreURI == "" {
@@ -67,11 +73,11 @@ func put(
 	}
 
 	if targetIndexFilePath == "" {
-		targetIndexFilePath = configPathName + ".lvi"
+		targetIndexFilePath = parentPath + "/version-index/" + configName + ".lvi"
 	}
 
 	if versionLocalStoreIndexPath == "" {
-		versionLocalStoreIndexPath = configPathName + ".lsi"
+		versionLocalStoreIndexPath = parentPath + "/version-store-index/" + configName + ".lsi"
 	}
 
 	downSyncStoreStats, downSyncTimeStats, err := upsync(
@@ -89,18 +95,55 @@ func put(
 		excludeFilterRegEx,
 		minBlockUsagePercent,
 		versionLocalStoreIndexPath,
-		targetPath,
 		enableFileMapping)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
+
+	if err == nil {
+		writeGetConfigStartTime := time.Now()
+
+		v := viper.New()
+		v.SetConfigType("json")
+		v.Set("storage-uri", blobStoreURI)
+		v.Set("source-path", targetIndexFilePath)
+		if versionLocalStoreIndexPath != "" {
+			v.Set("version-local-store-index-path", versionLocalStoreIndexPath)
+		}
+		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, fname)
+		}
+		tmpFilePath := tmpFile.Name()
+		tmpFile.Close()
+		log.WithField(tmpFilePath, "tmpFilePath").Debug("Writing get config temp file")
+		err = v.WriteConfigAs(tmpFilePath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, fname)
+		}
+
+		bytes, err := ioutil.ReadFile(tmpFilePath)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, fname)
+		}
+		os.Remove(tmpFilePath)
+
+		err = longtailutils.WriteToURI(targetPath, bytes)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrapf(err, fname)
+		}
+
+		writeGetConfigTime := time.Since(writeGetConfigStartTime)
+		timeStats = append(timeStats, longtailutils.TimeStat{"Write get config", writeGetConfigTime})
+
+	}
 
 	return storeStats, timeStats, errors.Wrap(err, fname)
 }
 
 type PutCmd struct {
 	GetConfigURI               string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
-	TargetFileIndexPath        string `name:"target-index-path" help:"Target index file uri"`
+	TargetFileIndexPath        string `name:"target-version-index-path" help:"Target version index file uri"`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
 	OptionalStorageURI         string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
 	SourcePath                 string `name:"source-path" help:"Source folder path" required:""`
@@ -113,7 +156,6 @@ type PutCmd struct {
 	SourcePathIncludeRegExOption
 	SourcePathExcludeRegExOption
 	MinBlockUsagePercentOption
-
 	EnableFileMappingOption
 }
 

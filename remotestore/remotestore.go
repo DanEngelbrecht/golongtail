@@ -1909,8 +1909,8 @@ func CreateBlockStoreForURI(
 			err := fmt.Errorf("azure Gen2 storage not yet implemented for path %s", uri)
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		case "file":
-			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], enableFileMapping), nil
+			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], ".lsb", enableFileMapping), nil
 		}
 	}
-	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, enableFileMapping), nil
+	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, ".lsb", enableFileMapping), nil
 }

@@ -53,7 +53,7 @@ func printVersionUsage(
 		indexStore = remoteIndexStore
 	} else {
 		localFS = longtaillib.CreateFSStorageAPI()
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), false)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), "", false)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 

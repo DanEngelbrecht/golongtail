@@ -151,7 +151,7 @@ func downsync(
 	if localCachePath == "" {
 		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	} else {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), enableFileMapping)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), "", enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 

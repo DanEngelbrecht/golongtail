@@ -543,7 +543,7 @@ func cloneStore(
 	var sourceCompressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if len(localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), enableFileMapping)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), "", enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, sourceRemoteIndexStore)
 

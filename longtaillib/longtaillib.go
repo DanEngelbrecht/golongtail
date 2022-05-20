@@ -990,14 +990,21 @@ func (asyncCompleteAPI *Longtail_AsyncFlushAPI) OnComplete(err error) {
 }
 
 // CreateFSBlockStore() ...
-func CreateFSBlockStore(jobAPI Longtail_JobAPI, storageAPI Longtail_StorageAPI, contentPath string, enableFileMapping bool) Longtail_BlockStoreAPI {
+func CreateFSBlockStore(jobAPI Longtail_JobAPI, storageAPI Longtail_StorageAPI, contentPath string, blockExtension string, enableFileMapping bool) Longtail_BlockStoreAPI {
 	cContentPath := C.CString(contentPath)
 	defer C.free(unsafe.Pointer(cContentPath))
+
+	var cBlockExtension *C.char
+	if blockExtension != "" {
+		cBlockExtension = C.CString(blockExtension)
+		defer C.free(unsafe.Pointer(cBlockExtension))
+	}
+
 	cFileMapping := C.int(0)
 	if enableFileMapping {
 		cFileMapping = C.int(1)
 	}
-	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(jobAPI.cJobAPI, storageAPI.cStorageAPI, cContentPath, nil, cFileMapping)}
+	return Longtail_BlockStoreAPI{cBlockStoreAPI: C.Longtail_CreateFSBlockStoreAPI(jobAPI.cJobAPI, storageAPI.cStorageAPI, cContentPath, cBlockExtension, cFileMapping)}
 }
 
 // CreateCacheBlockStore() ...

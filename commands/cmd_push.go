@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
@@ -40,7 +41,8 @@ func push(
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 
-	excludeFilterRegEx := ".longtail/*."
+	logFile := ".longtail/log"
+	excludeFilterRegEx := "^\\.longtail(/|$)"
 	sourceFolderPath := ""
 	targetFilePath := ".longtail/tmp.lvi"
 	blobStoreURI := ".longtail/store"
@@ -92,6 +94,28 @@ func push(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
+
+	history := ""
+	_, err = os.Stat(logFile)
+	if err == nil {
+		historyBytes, err := ioutil.ReadFile(logFile)
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+		history = string(historyBytes)
+	} else if !os.IsNotExist(err) {
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+
+	historyLines := make([]string, 0)
+	if history != "" {
+		historyLines = strings.Split(string(history), "\n")
+	}
+
+	historyLines = append(historyLines, hashedVersionFilePath)
+	history = strings.Join(historyLines, "\n")
+
+	ioutil.WriteFile(logFile, []byte(history), 0666)
 
 	storeStats = append(storeStats, upSyncStoreStats...)
 	timeStats = append(timeStats, upSyncTimeStats...)

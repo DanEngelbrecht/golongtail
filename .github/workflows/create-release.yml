@@ -124,7 +124,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{github.ref.name}]
+        tag_name: ${{github.ref.name}}
         body: |
           ${{steps.read_changelog.outputs.contents}}
         draft: false

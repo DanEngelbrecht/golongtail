@@ -34,11 +34,11 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
-      - name: Build ${{env.GITHUB_REF_NAME}}
+      - name: Build ${GITHUB_REF_NAME}
         run: |
           pushd ./cmd/longtail
-          echo Version ${{env.GITHUB_REF_NAME}}
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{env.GITHUB_REF_NAME}}'" .
+          echo Version ${GITHUB_REF_NAME}
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${GITHUB_REF_NAME}'" .
           popd
 
       - name: build dist
@@ -116,7 +116,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{env.GITHUB_REF_NAME}}
+        tag_name: ${GITHUB_REF_NAME}
         body: |
           ${{steps.read_changelog.outputs.contents}}
         draft: false

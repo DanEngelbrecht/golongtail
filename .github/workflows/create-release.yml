@@ -115,8 +115,7 @@ jobs:
     - name: Read CHANGELOG
       id: read_changelog
       run: |
-        CONTENTS=$(sed '1p;1,/^##/!d;/##/d' CHANGELOG.md)
-        echo "::set-output name=contents::${CONTENTS}"
+        echo "CHANGELOG_CONTENTS=$(sed '1p;1,/^##/!d;/##/d' CHANGELOG.md)" >> $GITHUB_ENV
 
     - name: Create Release
       id: create_release
@@ -126,7 +125,7 @@ jobs:
       with:
         tag_name: ${{github.ref.name}}
         body: |
-          ${{steps.read_changelog.outputs.contents}}
+          ${{ env.CHANGELOG_CONTENTS }}
         draft: false
         prerelease: ${{steps.get-prerelease.outputs.value}}
         files: |

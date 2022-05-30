@@ -42,90 +42,90 @@ jobs:
           go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref.name }}'" .
           popd
 
-      - name: build dist
-        run: |
-          mkdir dist
-          cp ${{matrix.target}} dist/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@master
-        with:
-          name: dist-${{matrix.platform}}-x64
-          path: dist
-
-  create-release:
-
-    runs-on: ubuntu-18.04
-
-    needs: [build]
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@master
-
-    - name: Download Linux artifacts
-      uses: actions/download-artifact@v1
-      with:
-        name: dist-linux-x64
-        path: dist-linux-x64
-    - name: Download MacOs artifacts
-      uses: actions/download-artifact@v1
-      with:
-        name: dist-macos-x64
-        path: dist-macos-x64
-    - name: Download Win32 artifacts
-      uses: actions/download-artifact@v1
-      with:
-        name: dist-win32-x64
-        path: dist-win32-x64
-
-    - name: rename artifacts
-      run: |
-        cp dist-linux-x64/longtail longtail-linux-x64
-        cp dist-macos-x64/longtail longtail-macos-x64
-        cp dist-win32-x64/longtail.exe longtail-win32-x64.exe
-    - name: Zip Linux artifacts
-      uses: montudor/action-zip@v0.1.0
-      with:
-        args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
-    - name: Zip MacOS artifacts
-      uses: montudor/action-zip@v0.1.0
-      with:
-        args: zip -qq -r ./macos-x64.zip ./dist-macos-x64
-    - name: Zip Win32 artifacts
-      uses: montudor/action-zip@v0.1.0
-      with:
-        args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
-
-    - name: Check prerelease
-      id: get-prerelease
-      uses: haya14busa/action-cond@v1
-      with:
-        cond: ${{contains(github.ref, '-pre')}}
-        if_true: "true"
-        if_false: "false"
-
-    - name: Read CHANGELOG
-      id: read_changelog
-      uses: andstor/file-reader-action@v1
-      with:
-        path: "CHANGELOG.md"
-
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${GITHUB_REF_NAME}
-        body: |
-          ${{steps.read_changelog.outputs.contents}}
-        draft: false
-        prerelease: ${{steps.get-prerelease.outputs.value}}
-        files: |
-          win32-x64.zip
-          linux-x64.zip
-          macos-x64.zip
-          longtail-linux-x64
-          longtail-macos-x64
-          longtail-win32-x64.exe
+#      - name: build dist
+#        run: |
+#          mkdir dist
+#          cp ${{matrix.target}} dist/
+#
+#      - name: Upload artifacts
+#        uses: actions/upload-artifact@master
+#        with:
+#          name: dist-${{matrix.platform}}-x64
+#          path: dist
+#
+#  create-release:
+#
+#    runs-on: ubuntu-18.04
+#
+#    needs: [build]
+#
+#    steps:
+#    - name: Checkout code
+#      uses: actions/checkout@master
+#
+#    - name: Download Linux artifacts
+#      uses: actions/download-artifact@v1
+#      with:
+#        name: dist-linux-x64
+#        path: dist-linux-x64
+#    - name: Download MacOs artifacts
+#      uses: actions/download-artifact@v1
+#      with:
+#        name: dist-macos-x64
+#        path: dist-macos-x64
+#    - name: Download Win32 artifacts
+#      uses: actions/download-artifact@v1
+#      with:
+#        name: dist-win32-x64
+#        path: dist-win32-x64
+#
+#    - name: rename artifacts
+#      run: |
+#        cp dist-linux-x64/longtail longtail-linux-x64
+#        cp dist-macos-x64/longtail longtail-macos-x64
+#        cp dist-win32-x64/longtail.exe longtail-win32-x64.exe
+#    - name: Zip Linux artifacts
+#      uses: montudor/action-zip@v0.1.0
+#      with:
+#        args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
+#    - name: Zip MacOS artifacts
+#      uses: montudor/action-zip@v0.1.0
+#      with:
+#        args: zip -qq -r ./macos-x64.zip ./dist-macos-x64
+#    - name: Zip Win32 artifacts
+#      uses: montudor/action-zip@v0.1.0
+#      with:
+#        args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
+#
+#    - name: Check prerelease
+#      id: get-prerelease
+#      uses: haya14busa/action-cond@v1
+#      with:
+#        cond: ${{contains(github.ref, '-pre')}}
+#        if_true: "true"
+#        if_false: "false"
+#
+#    - name: Read CHANGELOG
+#      id: read_changelog
+#      uses: andstor/file-reader-action@v1
+#      with:
+#        path: "CHANGELOG.md"
+#
+#    - name: Create Release
+#      id: create_release
+#      uses: softprops/action-gh-release@v1
+#      env:
+#        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      with:
+#        tag_name: ${GITHUB_REF_NAME}
+#        body: |
+#          ${{steps.read_changelog.outputs.contents}}
+#        draft: false
+#        prerelease: ${{steps.get-prerelease.outputs.value}}
+#        files: |
+#          win32-x64.zip
+#          linux-x64.zip
+#          macos-x64.zip
+#          longtail-linux-x64
+#          longtail-macos-x64
+#          longtail-win32-x64.exe

@@ -7,40 +7,24 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
 
 jobs:
-  build-linux:
+  build:
+    name: Build & Upload
 
-    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, macos-latest, windows-latest]
+        include:
+        - os: ubuntu-18.04
+          target: ./cmd/longtail/longtail
+          platform: linux
+        - os: macos-latest
+          target: ./cmd/longtail/longtail
+          platform: macos
+        - os: windows-latest
+          target: ./cmd/longtail/longtail.exe
+          platform: win32
 
-    steps:
-      - name: Set up Go 1.17.1
-        uses: actions/setup-go@v1
-        with:
-          go-version: 1.17.1
-
-      - name: Check out source code
-        uses: actions/checkout@v2
-
-      - name: build cmd
-        run: |
-          pushd ./cmd/longtail
-          echo Version ${{github.ref.name}}
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{github.ref.name}}'" .
-          popd
-
-      - name: build dist
-        run: |
-          mkdir dist
-          cp ./cmd/longtail/longtail dist/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@master
-        with:
-          name: dist-linux-x64
-          path: dist
-
-  build-macos:
-
-    runs-on: macos-latest
+    runs-on: ${{matrix.os}}
 
     steps:
       - name: Set up Go 1.17.1
@@ -51,7 +35,7 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
-      - name: build cmd
+      - name: Build ${{github.ref.name}}
         run: |
           pushd ./cmd/longtail
           echo Version ${{github.ref.name}}
@@ -61,43 +45,12 @@ jobs:
       - name: build dist
         run: |
           mkdir dist
-          cp ./cmd/longtail/longtail dist/
+          cp ${{matrix.os.target}} dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@master
         with:
-          name: dist-macos-x64
-          path: dist
-
-  build-win32:
-
-    runs-on: windows-latest
-
-    steps:
-      - name: Set up Go 1.17.1
-        uses: actions/setup-go@v1
-        with:
-          go-version: 1.17.1
-
-      - name: Check out source code
-        uses: actions/checkout@v2
-
-      - name: build cmd
-        run: |
-          pushd ./cmd/longtail
-          echo Version ${{github.ref.name}}
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{github.ref.name}}'" .
-          popd
-
-      - name: build dist
-        run: |
-          mkdir dist
-          cp ./cmd/longtail/longtail.exe dist/
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@master
-        with:
-          name: dist-win32-x64
+          name: dist-${{matrix.os.platform}}-x64
           path: dist
 
   create-release:

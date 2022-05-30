@@ -14,41 +14,41 @@ jobs:
       with:
         access_token: ${{ github.token }}
 
-#  test:
-#    name: Build & Test
-#
-#    strategy:
-#      matrix:
-#        os: [ubuntu-18.04, macos-latest, windows-latest]
-#
-#    runs-on: ${{matrix.os}}
-#
-#    steps:
-#      - name: Set up Go 1.17.1
-#        uses: actions/setup-go@v1
-#        with:
-#          go-version: 1.17.1
-#
-#      - name: Check out source code
-#        uses: actions/checkout@v2
-#
-#      - name: test
-#        run: |
-#          pushd ./longtaillib
-#          go test .
-#          popd
-#          pushd ./longtailstorelib
-#          go test .
-#          popd
-#          pushd ./commands
-#          go test .
-#          popd
-#          pushd ./remotestore
-#          go test .
-#          popd
-#
-#      - name: build cmd
-#        run: |
-#          pushd ./cmd/longtail
-#          go build .
-#          popd
+  test:
+    name: Build & Test
+
+    strategy:
+      matrix:
+        os: [ubuntu-18.04, macos-latest, windows-latest]
+
+    runs-on: ${{matrix.os}}
+
+    steps:
+      - name: Set up Go 1.17.1
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.17.1
+
+      - name: Check out source code
+        uses: actions/checkout@v2
+
+      - name: test
+        run: |
+          pushd ./longtaillib
+          go test .
+          popd
+          pushd ./longtailstorelib
+          go test .
+          popd
+          pushd ./commands
+          go test .
+          popd
+          pushd ./remotestore
+          go test .
+          popd
+
+      - name: build cmd
+        run: |
+          pushd ./cmd/longtail
+          go build .
+          popd

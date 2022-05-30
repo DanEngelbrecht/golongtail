@@ -44,12 +44,12 @@ jobs:
       - name: build dist
         run: |
           mkdir dist
-          cp ${{matrix.os.target}} dist/
+          cp ${{matrix.target}} dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@master
         with:
-          name: dist-${{matrix.os.platform}}-x64
+          name: dist-${{matrix.platform}}-x64
           path: dist
 
   create-release:

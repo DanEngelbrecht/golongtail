@@ -112,10 +112,15 @@ jobs:
         if_true: "true"
         if_false: "false"
 
-    - name: Read CHANGELOG
-      id: read_changelog
+    - name: Extract Version Changes
       run: |
-        echo "CHANGELOG_CONTENTS=$(sed '1p;1,/^##/!d;/##/d' CHANGELOG.md)" >> $GITHUB_ENV
+        sed '1,/^##/!d;/##/d' CHANGELOG.md > CHANGELOG.tmp
+
+    - name: Read CHANGELOG.tmp
+      id: read_changelog
+      uses: andstor/file-reader-action@v1
+      with:
+        path: "CHANGELOG.tmp"
 
     - name: Create Release
       id: create_release
@@ -123,9 +128,9 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{github.ref.name}}
+        tag_name: ${{github.ref.name}]
         body: |
-          ${{ env.CHANGELOG_CONTENTS }}
+          ${{steps.read_changelog.outputs.contents}}
         draft: false
         prerelease: ${{steps.get-prerelease.outputs.value}}
         files: |

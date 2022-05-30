@@ -114,9 +114,9 @@ jobs:
 
     - name: Read CHANGELOG
       id: read_changelog
-      uses: andstor/file-reader-action@v1
-      with:
-        path: "CHANGELOG.md"
+      run: |
+        CONTENTS=$(sed '1p;1,/^##/!d;/##/d' CHANGELOG.md)
+        echo "::set-output name=contents::${CONTENTS}"
 
     - name: Create Release
       id: create_release

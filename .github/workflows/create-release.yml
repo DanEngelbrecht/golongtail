@@ -12,16 +12,15 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-18.04, macos-latest, windows-latest]
         include:
         - os: ubuntu-18.04
-          target: ./cmd/longtail/longtail
+          target: "./cmd/longtail/longtail"
           platform: linux
         - os: macos-latest
-          target: ./cmd/longtail/longtail
+          target: "./cmd/longtail/longtail"
           platform: macos
         - os: windows-latest
-          target: ./cmd/longtail/longtail.exe
+          target: "./cmd/longtail/longtail.exe"
           platform: win32
 
     runs-on: ${{matrix.os}}

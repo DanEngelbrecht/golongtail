@@ -1,0 +1,4 @@
+- **UPDATED** Update all Go dependencies to latest version
+- **FIX** Simplified release workflow
+- **CHANGED** Read CHANGELOG.md when creating a release
+- **CHANGED** Automatically detect pre-release base on tag name (-preX suffix)

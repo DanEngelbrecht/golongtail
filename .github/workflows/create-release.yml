@@ -23,10 +23,8 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          GITHUB_FULLREF=${{ github.ref }}
-          RELEASE_VERSION=${GITHUB_FULLREF#refs/*/}
-          echo Version $RELEASE_VERSION
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${RELEASE_VERSION}'" .
+          echo Version ${{github.ref.name}}
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{github.ref.name}}'" .
           popd
 
       - name: build dist
@@ -56,10 +54,8 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          GITHUB_FULLREF=${{ github.ref }}
-          RELEASE_VERSION=${GITHUB_FULLREF#refs/*/}
-          echo Version $RELEASE_VERSION
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${RELEASE_VERSION}'" .
+          echo Version ${{github.ref.name}}
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{github.ref.name}}'" .
           popd
 
       - name: build dist
@@ -89,10 +85,8 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          $GITHUB_FULLREF="${{ github.ref }}"
-          $RELEASE_VERSION=$GITHUB_FULLREF -replace 'refs/.*/', ''
-          echo Version $RELEASE_VERSION
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${RELEASE_VERSION}'" .
+          echo Version ${{github.ref.name}}
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{github.ref.name}}'" .
           popd
 
       - name: build dist
@@ -115,20 +109,7 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@master
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-      with:
-        tag_name: ${{ github.ref }}
-        name: Release ${{ github.ref }}
-        body: |
-          Changes in this Release
-          - **CHANGED** set block extension to ".lsb" for fsblockstore in remote stores
-          - **UPDATED** Updated longtail to 0.3.3
-        draft: false
-        prerelease: false
+
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
@@ -162,15 +143,36 @@ jobs:
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./win32-x64.zip ./dist-win32-x64
-    - name: Upload to GitHub release
-      uses: Roang-zero1/github-upload-release-artifacts-action@master
+
+    - name: Check prerelease
+      id: get-prerelease
+      uses: haya14busa/action-cond@v1
       with:
-        args: |
+        cond: ${{contains(github.ref, '-pre')}}
+        if_true: "true"
+        if_false: "false"
+
+    - name: Read CHANGELOG
+      id: read_changelog
+      uses: andstor/file-reader-action@v1
+      with:
+        path: "CHANGELOG.md"
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{github.ref.name}}
+        body: |
+          ${{steps.read_changelog.outputs.contents}}
+        draft: false
+        prerelease: ${{steps.get-prerelease.outputs.value}}
+        files: |
           win32-x64.zip
           linux-x64.zip
           macos-x64.zip
           longtail-linux-x64
           longtail-macos-x64
           longtail-win32-x64.exe
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

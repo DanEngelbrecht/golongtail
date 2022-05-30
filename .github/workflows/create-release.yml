@@ -37,8 +37,9 @@ jobs:
       - name: Build ${GITHUB_REF_NAME}
         run: |
           pushd ./cmd/longtail
-          echo Version ${GITHUB_REF_NAME}
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${GITHUB_REF_NAME}'" .
+          echo github.ref.name ${{ github.ref.name }}
+          echo github.ref ${{ github.ref }}
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref.name }}'" .
           popd
 
       - name: build dist

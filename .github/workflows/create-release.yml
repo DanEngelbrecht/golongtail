@@ -16,12 +16,15 @@ jobs:
         - os: ubuntu-18.04
           target: "./cmd/longtail/longtail"
           platform: linux
+          tag: "${GITHUB_REF_NAME}"
         - os: macos-latest
           target: "./cmd/longtail/longtail"
           platform: macos
+          tag: "${GITHUB_REF_NAME}"
         - os: windows-latest
           target: "./cmd/longtail/longtail.exe"
           platform: win32
+          tag: "${env:GITHUB_REF_NAME}"
 
     runs-on: ${{matrix.os}}
 
@@ -34,12 +37,11 @@ jobs:
       - name: Check out source code
         uses: actions/checkout@v2
 
-      - name: Build ${GITHUB_REF_NAME}
+      - name: Build
         run: |
           pushd ./cmd/longtail
-          echo github.ref.name ${{ github.ref.name }}
-          echo github.ref ${{ github.ref }}
-          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ github.ref.name }}'" .
+          echo matrix.tag ${{ matrix.tag }}
+          go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ matrix.tag }}'" .
           popd
 
 #      - name: build dist

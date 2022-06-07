@@ -79,9 +79,10 @@ type pendingPrefetchedBlock struct {
 }
 
 type remoteStore struct {
-	jobAPI        longtaillib.Longtail_JobAPI
-	blobStore     longtailstorelib.BlobStore
-	defaultClient longtailstorelib.BlobClient
+	jobAPI           longtaillib.Longtail_JobAPI
+	blobStore        longtailstorelib.BlobStore
+	blobStoreOptions []longtailstorelib.BlobStoreOption
+	defaultClient    longtailstorelib.BlobClient
 
 	workerCount int
 
@@ -931,13 +932,15 @@ func NewRemoteBlockStore(
 	blobStore longtailstorelib.BlobStore,
 	optionalStoreIndexPath string,
 	workerCount int,
-	accessType AccessType) (longtaillib.BlockStoreAPI, error) {
+	accessType AccessType,
+	opts ...longtailstorelib.BlobStoreOption) (longtaillib.BlockStoreAPI, error) {
 	const fname = "NewRemoteBlockStore"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                  fname,
 		"optionalStoreIndexPath": optionalStoreIndexPath,
 		"workerCount":            workerCount,
 		"accessType":             accessType,
+		"opts":                   opts,
 	})
 	log.Debug(fname)
 	ctx := context.Background()
@@ -947,9 +950,10 @@ func NewRemoteBlockStore(
 	}
 
 	s := &remoteStore{
-		jobAPI:        jobAPI,
-		blobStore:     blobStore,
-		defaultClient: defaultClient}
+		jobAPI:           jobAPI,
+		blobStore:        blobStore,
+		blobStoreOptions: opts,
+		defaultClient:    defaultClient}
 
 	s.workerCount = workerCount
 	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
@@ -1758,7 +1762,8 @@ func readRemoteStoreIndex(
 	blobStore longtailstorelib.BlobStore,
 	client longtailstorelib.BlobClient,
 	accessType AccessType,
-	workerCount int) (longtaillib.Longtail_StoreIndex, error) {
+	workerCount int,
+	blobStoreOptions ...longtailstorelib.BlobStoreOption) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "readRemoteStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
@@ -1771,7 +1776,7 @@ func readRemoteStoreIndex(
 	var storeIndex longtaillib.Longtail_StoreIndex
 	if accessType != Init {
 		if accessType == ReadOnly && len(optionalStoreIndexPath) > 0 {
-			sbuffer, err := longtailutils.ReadFromURI(optionalStoreIndexPath)
+			sbuffer, err := longtailutils.ReadFromURI(optionalStoreIndexPath, blobStoreOptions...)
 			if err == nil {
 				storeIndex, err = longtaillib.ReadStoreIndexFromBuffer(sbuffer)
 				if err != nil {
@@ -1840,7 +1845,8 @@ func CreateBlockStoreForURI(
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
 	accessType AccessType,
-	enableFileMapping bool) (longtaillib.Longtail_BlockStoreAPI, error) {
+	enableFileMapping bool,
+	opts ...longtailstorelib.BlobStoreOption) (longtaillib.Longtail_BlockStoreAPI, error) {
 	const fname = "CreateBlockStoreForURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":             fname,
@@ -1848,6 +1854,7 @@ func CreateBlockStoreForURI(
 		"targetBlockSize":   targetBlockSize,
 		"maxChunksPerBlock": maxChunksPerBlock,
 		"accessType":        accessType,
+		"opts":              opts,
 	})
 	log.Debug(fname)
 
@@ -1862,7 +1869,8 @@ func CreateBlockStoreForURI(
 			fsBlobStore,
 			optionalStoreIndexPath,
 			numWorkerCount,
-			accessType)
+			accessType,
+			opts...)
 		if err != nil {
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		}
@@ -1882,13 +1890,14 @@ func CreateBlockStoreForURI(
 				gcsBlobStore,
 				optionalStoreIndexPath,
 				numWorkerCount,
-				accessType)
+				accessType,
+				opts...)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}
 			return longtaillib.CreateBlockStoreAPI(gcsBlockStore), nil
 		case "s3":
-			s3BlobStore, err := longtailstorelib.NewS3BlobStore(blobStoreURL)
+			s3BlobStore, err := longtailstorelib.NewS3BlobStore(blobStoreURL, opts...)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}
@@ -1897,7 +1906,8 @@ func CreateBlockStoreForURI(
 				s3BlobStore,
 				optionalStoreIndexPath,
 				numWorkerCount,
-				accessType)
+				accessType,
+				opts...)
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}

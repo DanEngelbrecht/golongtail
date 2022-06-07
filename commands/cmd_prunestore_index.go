@@ -16,6 +16,7 @@ import (
 func pruneOneUsingStoreIndex(
 	storeIndex longtaillib.Longtail_StoreIndex,
 	sourceFilePath string,
+	s3EndpointResolverURI string,
 	versionLocalStoreIndexFilePath string,
 	validateVersions bool,
 	skipInvalidVersions bool,
@@ -33,7 +34,7 @@ func pruneOneUsingStoreIndex(
 		outResults <- result
 	}()
 
-	versionIndex, existingStoreIndex, err := readPruneVersion(sourceFilePath, versionLocalStoreIndexFilePath, writeVersionLocalStoreIndex)
+	versionIndex, existingStoreIndex, err := readPruneVersion(sourceFilePath, s3EndpointResolverURI, versionLocalStoreIndexFilePath, writeVersionLocalStoreIndex)
 	if err != nil {
 		result.err = errors.Wrap(err, fname)
 		return
@@ -74,7 +75,7 @@ func pruneOneUsingStoreIndex(
 			result.err = errors.Wrap(err, fname)
 			return
 		}
-		err = longtailutils.WriteToURI(versionLocalStoreIndexFilePath, sbuffer)
+		err = longtailutils.WriteToURI(versionLocalStoreIndexFilePath, sbuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		if err != nil {
 			existingStoreIndex.Dispose()
 			result.err = errors.Wrap(err, fname)
@@ -89,6 +90,7 @@ func pruneOneUsingStoreIndex(
 func gatherBlocksToKeepFromStoreIndex(
 	numWorkerCount int,
 	storeIndex longtaillib.Longtail_StoreIndex,
+	s3EndpointResolverURI string,
 	sourceFilePaths []string,
 	versionLocalStoreIndexFilePaths []string,
 	writeVersionLocalStoreIndex bool,
@@ -140,6 +142,7 @@ func gatherBlocksToKeepFromStoreIndex(
 			go pruneOneUsingStoreIndex(
 				storeIndex,
 				sourceFilePath,
+				s3EndpointResolverURI,
 				versionLocalStoreIndexFilePath,
 				validateVersions,
 				skipInvalidVersions,
@@ -208,6 +211,7 @@ func gatherBlocksToKeepFromStoreIndex(
 func pruneStoreIndex(
 	numWorkerCount int,
 	storeIndexPath string,
+	s3EndpointResolverURI string,
 	sourcePaths string,
 	versionLocalStoreIndexesPath string,
 	writeVersionLocalStoreIndex bool,
@@ -219,6 +223,7 @@ func pruneStoreIndex(
 		"fname":                        fname,
 		"numWorkerCount":               numWorkerCount,
 		"storeIndexPath":               storeIndexPath,
+		"s3EndpointResolverURI":        s3EndpointResolverURI,
 		"sourcePaths":                  sourcePaths,
 		"versionLocalStoreIndexesPath": versionLocalStoreIndexesPath,
 		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
@@ -274,7 +279,7 @@ func pruneStoreIndex(
 	}
 
 	readStoreIndexStartTime := time.Now()
-	storeIndexBuffer, err := longtailutils.ReadFromURI(storeIndexPath)
+	storeIndexBuffer, err := longtailutils.ReadFromURI(storeIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -291,6 +296,7 @@ func pruneStoreIndex(
 	blocksToKeep, err := gatherBlocksToKeepFromStoreIndex(
 		numWorkerCount,
 		storeIndex,
+		s3EndpointResolverURI,
 		sourceFilePaths,
 		versionLocalStoreIndexFilePaths,
 		writeVersionLocalStoreIndex,
@@ -327,7 +333,7 @@ func pruneStoreIndex(
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	err = longtailutils.WriteToURI(storeIndexPath, prunedStoreIndexBuffer)
+	err = longtailutils.WriteToURI(storeIndexPath, prunedStoreIndexBuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	timeStats = append(timeStats, longtailutils.TimeStat{"Write store index", time.Since(writeStoreIndexStartTime)})
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
@@ -338,6 +344,7 @@ func pruneStoreIndex(
 
 type PruneStoreIndexCmd struct {
 	StoreIndexPathOption
+	S3EndpointResolverURLOption
 	SourcePaths                 string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
 	VersionLocalStoreIndexPaths string `name:"version-local-store-index-paths" help:"File containing list of version local store index longtail uris"`
 	DryRun                      bool   `name:"dry-run" help:"Don't prune, just show how many blocks would be kept if prune was run"`
@@ -350,6 +357,7 @@ func (r *PruneStoreIndexCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := pruneStoreIndex(
 		ctx.NumWorkerCount,
 		r.StoreIndexPath,
+		r.S3EndpointResolverURL,
 		r.SourcePaths,
 		r.VersionLocalStoreIndexPaths,
 		r.WriteVersionLocalStoreIndex,

@@ -36,6 +36,10 @@ type StorageURIOption struct {
 	StorageURI string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
 }
 
+type S3EndpointResolverURLOption struct {
+	S3EndpointResolverURL string `name:"s3-endpoint-resolver-uri" help"Optional URI for S3 endpoint resolver"`
+}
+
 type CachePathOption struct {
 	CachePath string `name:"cache-path" help:"Location for cached blocks"`
 }

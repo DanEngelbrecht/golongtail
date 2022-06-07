@@ -13,12 +13,14 @@ import (
 func validateVersion(
 	numWorkerCount int,
 	blobStoreURI string,
+	s3EndpointResolverURI string,
 	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "validateVersion"
 	log := logrus.WithFields(logrus.Fields{
-		"numWorkerCount":   numWorkerCount,
-		"blobStoreURI":     blobStoreURI,
-		"versionIndexPath": versionIndexPath,
+		"numWorkerCount":        numWorkerCount,
+		"blobStoreURI":          blobStoreURI,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"versionIndexPath":      versionIndexPath,
 	})
 	log.Debug(fname)
 
@@ -31,7 +33,7 @@ func validateVersion(
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false)
+	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -40,7 +42,7 @@ func validateVersion(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -76,6 +78,7 @@ func validateVersion(
 
 type ValidateVersionCmd struct {
 	StorageURIOption
+	S3EndpointResolverURLOption
 	VersionIndexPathOption
 }
 
@@ -83,6 +86,7 @@ func (r *ValidateVersionCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := validateVersion(
 		ctx.NumWorkerCount,
 		r.StorageURI,
+		r.S3EndpointResolverURL,
 		r.VersionIndexPath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

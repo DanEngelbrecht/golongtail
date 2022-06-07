@@ -1,4 +1,5 @@
 ##
+- **ADDED** new `--s3-endpoint-resolver-uri` for use with s3 storage/targets to set endpoint resolver URI
 - **UPDATED** Update all Go dependencies to latest version
 - **FIX** Simplified release workflow
 - **CHANGED** Read CHANGELOG.md when creating a release

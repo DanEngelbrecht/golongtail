@@ -14,6 +14,7 @@ import (
 func get(
 	numWorkerCount int,
 	getConfigPath string,
+	s3EndpointResolverURI string,
 	targetFolderPath string,
 	targetIndexPath string,
 	localCachePath string,
@@ -26,19 +27,20 @@ func get(
 	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "get"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":              fname,
-		"numWorkerCount":     numWorkerCount,
-		"getConfigPath":      getConfigPath,
-		"targetFolderPath":   targetFolderPath,
-		"targetIndexPath":    targetIndexPath,
-		"localCachePath":     localCachePath,
-		"retainPermissions":  retainPermissions,
-		"validate":           validate,
-		"includeFilterRegEx": includeFilterRegEx,
-		"excludeFilterRegEx": excludeFilterRegEx,
-		"scanTarget":         scanTarget,
-		"cacheTargetIndex":   cacheTargetIndex,
-		"enableFileMapping":  enableFileMapping,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"getConfigPath":         getConfigPath,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"targetFolderPath":      targetFolderPath,
+		"targetIndexPath":       targetIndexPath,
+		"localCachePath":        localCachePath,
+		"retainPermissions":     retainPermissions,
+		"validate":              validate,
+		"includeFilterRegEx":    includeFilterRegEx,
+		"excludeFilterRegEx":    excludeFilterRegEx,
+		"scanTarget":            scanTarget,
+		"cacheTargetIndex":      cacheTargetIndex,
+		"enableFileMapping":     enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -47,7 +49,7 @@ func get(
 
 	readGetConfigStartTime := time.Now()
 
-	vbuffer, err := longtailutils.ReadFromURI(getConfigPath)
+	vbuffer, err := longtailutils.ReadFromURI(getConfigPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -80,6 +82,7 @@ func get(
 	downSyncStoreStats, downSyncTimeStats, err := downsync(
 		numWorkerCount,
 		blobStoreURI,
+		s3EndpointResolverURI,
 		sourceFilePath,
 		targetFolderPath,
 		targetIndexPath,
@@ -101,6 +104,7 @@ func get(
 
 type GetCmd struct {
 	GetConfigURI string `name:"source-path" help:"File uri for json formatted get-config file" required:""`
+	S3EndpointResolverURLOption
 	TargetPathOption
 	TargetIndexUriOption
 	ValidateTargetOption
@@ -118,6 +122,7 @@ func (r *GetCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := get(
 		ctx.NumWorkerCount,
 		r.GetConfigURI,
+		r.S3EndpointResolverURL,
 		r.TargetPath,
 		r.TargetIndexPath,
 		r.CachePath,

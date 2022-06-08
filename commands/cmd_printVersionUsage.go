@@ -14,15 +14,17 @@ import (
 func printVersionUsage(
 	numWorkerCount int,
 	blobStoreURI string,
+	s3EndpointResolverURI string,
 	versionIndexPath string,
 	localCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "printVersionUsage"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":            fname,
-		"numWorkerCount":   numWorkerCount,
-		"blobStoreURI":     blobStoreURI,
-		"versionIndexPath": versionIndexPath,
-		"localCachePath":   localCachePath,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"blobStoreURI":          blobStoreURI,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"versionIndexPath":      versionIndexPath,
+		"localCachePath":        localCachePath,
 	})
 	log.Debug(fname)
 
@@ -38,7 +40,7 @@ func printVersionUsage(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -68,7 +70,7 @@ func printVersionUsage(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -205,6 +207,7 @@ func printVersionUsage(
 
 type PrintVersionUsageCmd struct {
 	StorageURIOption
+	S3EndpointResolverURLOption
 	VersionIndexPathOption
 	CachePathOption
 }
@@ -213,6 +216,7 @@ func (r *PrintVersionUsageCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := printVersionUsage(
 		ctx.NumWorkerCount,
 		r.StorageURI,
+		r.S3EndpointResolverURL,
 		r.VersionIndexPath,
 		r.CachePath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)

@@ -13,15 +13,17 @@ import (
 func printStore(
 	numWorkerCount int,
 	storeIndexPath string,
+	s3EndpointResolverURI string,
 	compact bool,
 	details bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "printStore"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":          fname,
-		"numWorkerCount": numWorkerCount,
-		"storeIndexPath": storeIndexPath,
-		"compact":        compact,
-		"details":        details,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"storeIndexPath":        storeIndexPath,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"compact":               compact,
+		"details":               details,
 	})
 	log.Debug(fname)
 
@@ -30,7 +32,7 @@ func printStore(
 
 	readStoreIndexStartTime := time.Now()
 
-	vbuffer, err := longtailutils.ReadFromURI(storeIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(storeIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -90,6 +92,7 @@ func printStore(
 
 type PrintStoreCmd struct {
 	StoreIndexPathOption
+	S3EndpointResolverURLOption
 	CompactOption
 	Details bool `name:"details" help:"Show details about data sizes"`
 }
@@ -98,6 +101,7 @@ func (r *PrintStoreCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := printStore(
 		ctx.NumWorkerCount,
 		r.StoreIndexPath,
+		r.S3EndpointResolverURL,
 		r.Compact,
 		r.Details)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)

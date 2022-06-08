@@ -13,13 +13,15 @@ import (
 func ls(
 	numWorkerCount int,
 	versionIndexPath string,
+	s3EndpointResolverURI string,
 	commandLSVersionDir string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "ls"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":               fname,
-		"numWorkerCount":      numWorkerCount,
-		"versionIndexPath":    versionIndexPath,
-		"commandLSVersionDir": commandLSVersionDir,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"versionIndexPath":      versionIndexPath,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"commandLSVersionDir":   commandLSVersionDir,
 	})
 	log.Debug(fname)
 
@@ -32,7 +34,7 @@ func ls(
 	defer hashRegistry.Dispose()
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -118,6 +120,7 @@ func ls(
 
 type LsCmd struct {
 	VersionIndexPathOption
+	S3EndpointResolverURLOption
 	Path string `name:"path" arg:"" optional:"" help:"Path inside the version index to list"`
 }
 
@@ -125,6 +128,7 @@ func (r *LsCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := ls(
 		ctx.NumWorkerCount,
 		r.VersionIndexPath,
+		r.S3EndpointResolverURL,
 		r.Path)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

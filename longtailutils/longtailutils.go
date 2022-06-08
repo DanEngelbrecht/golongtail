@@ -20,6 +20,16 @@ type getExistingContentCompletionAPI struct {
 	err        error
 }
 
+func WithS3EndpointResolverURI(endpointURI string) longtailstorelib.BlobStoreOption {
+	return func(options interface{}) {
+		s3options, ok := options.(*longtailstorelib.S3Options)
+		if !ok {
+			return
+		}
+		s3options.EndpointResolverURI = endpointURI
+	}
+}
+
 func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err error) {
 	const fname = "getExistingContentCompletionAPI.OnComplete"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
@@ -294,7 +304,7 @@ func splitURI(uri string) (string, string) {
 }
 
 // ReadFromURI ...
-func ReadFromURI(uri string) ([]byte, error) {
+func ReadFromURI(uri string, opts ...longtailstorelib.BlobStoreOption) ([]byte, error) {
 	const fname = "ReadFromURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname": fname,
@@ -302,7 +312,7 @@ func ReadFromURI(uri string) ([]byte, error) {
 	})
 	log.Debug(fname)
 	uriParent, uriName := splitURI(uri)
-	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
@@ -323,7 +333,7 @@ func ReadFromURI(uri string) ([]byte, error) {
 }
 
 // WriteToURI ...
-func WriteToURI(uri string, data []byte) error {
+func WriteToURI(uri string, data []byte, opts ...longtailstorelib.BlobStoreOption) error {
 	const fname = "ReadFromURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname": fname,
@@ -331,7 +341,7 @@ func WriteToURI(uri string, data []byte) error {
 	})
 	log.Debug(fname)
 	uriParent, uriName := splitURI(uri)
-	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent, opts...)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
@@ -352,7 +362,7 @@ func WriteToURI(uri string, data []byte) error {
 }
 
 // DeleteByURI ...
-func DeleteByURI(uri string) error {
+func DeleteByURI(uri string, opts ...longtailstorelib.BlobStoreOption) error {
 	const fname = "DeleteByURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname": fname,
@@ -360,7 +370,7 @@ func DeleteByURI(uri string) error {
 	})
 	log.Debug(fname)
 	uriParent, uriName := splitURI(uri)
-	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent, opts...)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}

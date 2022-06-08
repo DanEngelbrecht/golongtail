@@ -13,13 +13,15 @@ import (
 func printVersion(
 	numWorkerCount int,
 	versionIndexPath string,
+	s3EndpointResolverURI string,
 	compact bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "printVersion"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":            fname,
-		"numWorkerCount":   numWorkerCount,
-		"versionIndexPath": versionIndexPath,
-		"compact":          compact,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"versionIndexPath":      versionIndexPath,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"compact":               compact,
 	})
 	log.Debug(fname)
 
@@ -28,7 +30,7 @@ func printVersion(
 
 	readSourceStartTime := time.Now()
 
-	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -109,6 +111,7 @@ func printVersion(
 
 type PrintVersionCmd struct {
 	VersionIndexPathOption
+	S3EndpointResolverURLOption
 	CompactOption
 }
 
@@ -116,6 +119,7 @@ func (r *PrintVersionCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := printVersion(
 		ctx.NumWorkerCount,
 		r.VersionIndexPath,
+		r.S3EndpointResolverURL,
 		r.Compact)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

@@ -15,9 +15,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+type S3Options struct {
+	EndpointResolverURI string
+}
+
 type s3BlobStore struct {
 	bucketName string
 	prefix     string
+	options    S3Options
 }
 
 type s3BlobClient struct {
@@ -33,7 +38,7 @@ type s3BlobObject struct {
 }
 
 // NewS3BlobStore ...
-func NewS3BlobStore(u *url.URL) (BlobStore, error) {
+func NewS3BlobStore(u *url.URL, opts ...BlobStoreOption) (BlobStore, error) {
 	const fname = "NewS3BlobStore"
 	if u.Scheme != "s3" {
 		err := fmt.Errorf("invalid scheme '%s', expected 'gs'", u.Scheme)
@@ -48,6 +53,9 @@ func NewS3BlobStore(u *url.URL) (BlobStore, error) {
 		prefix += "/"
 	}
 	s := &s3BlobStore{bucketName: u.Host, prefix: prefix}
+	for _, opt := range opts {
+		opt(&s.options)
+	}
 	return s, nil
 }
 
@@ -57,7 +65,11 @@ func (blobStore *s3BlobStore) NewClient(ctx context.Context) (BlobClient, error)
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
-	client := s3.NewFromConfig(cfg)
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if blobStore.options.EndpointResolverURI != "" {
+			o.EndpointResolver = s3.EndpointResolverFromURL(blobStore.options.EndpointResolverURI)
+		}
+	})
 	return &s3BlobClient{store: blobStore, ctx: ctx, client: client}, nil
 }
 

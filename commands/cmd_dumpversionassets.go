@@ -14,13 +14,15 @@ import (
 func dumpVersionAssets(
 	numWorkerCount int,
 	versionIndexPath string,
+	s3EndpointResolverURI string,
 	showDetails bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "dumpVersionAssets"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":            fname,
-		"numWorkerCount":   numWorkerCount,
-		"versionIndexPath": versionIndexPath,
-		"showDetails":      showDetails,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"versionIndexPath":      versionIndexPath,
+		"showDetails":           showDetails,
 	})
 	log.Debug(fname)
 
@@ -28,7 +30,7 @@ func dumpVersionAssets(
 	timeStats := []longtailutils.TimeStat{}
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -72,6 +74,7 @@ func dumpVersionAssets(
 
 type DumpVersionAssetsCmd struct {
 	VersionIndexPathOption
+	S3EndpointResolverURLOption
 	Details bool `name:"details" help:"Show details about assets"`
 }
 
@@ -79,6 +82,7 @@ func (r *DumpVersionAssetsCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := dumpVersionAssets(
 		ctx.NumWorkerCount,
 		r.VersionIndexPath,
+		r.S3EndpointResolverURL,
 		r.Details)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

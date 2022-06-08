@@ -17,6 +17,7 @@ import (
 func put(
 	numWorkerCount int,
 	blobStoreURI string,
+	s3EndpointResolverURI string,
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetIndexFilePath string,
@@ -37,6 +38,7 @@ func put(
 		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
 		"blobStoreURI":               blobStoreURI,
+		"s3EndpointResolverURI":      s3EndpointResolverURI,
 		"sourceFolderPath":           sourceFolderPath,
 		"sourceIndexPath":            sourceIndexPath,
 		"targetIndexFilePath":        targetIndexFilePath,
@@ -89,6 +91,7 @@ func put(
 	downSyncStoreStats, downSyncTimeStats, err := upsync(
 		numWorkerCount,
 		blobStoreURI,
+		s3EndpointResolverURI,
 		sourceFolderPath,
 		sourceIndexPath,
 		targetIndexFilePath,
@@ -112,6 +115,9 @@ func put(
 		v := viper.New()
 		v.SetConfigType("json")
 		v.Set("storage-uri", blobStoreURI)
+		if s3EndpointResolverURI != "" {
+			v.Set("s3-endpoint-resolver-uri", s3EndpointResolverURI)
+		}
 		v.Set("source-path", targetIndexFilePath)
 		if versionLocalStoreIndexPath != "" {
 			v.Set("version-local-store-index-path", versionLocalStoreIndexPath)
@@ -134,7 +140,7 @@ func put(
 		}
 		os.Remove(tmpFilePath)
 
-		err = longtailutils.WriteToURI(targetPath, bytes)
+		err = longtailutils.WriteToURI(targetPath, bytes, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
@@ -148,10 +154,11 @@ func put(
 }
 
 type PutCmd struct {
-	GetConfigURI                  string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
-	TargetFileIndexPath           string `name:"target-version-index-path" help:"Target version index file uri"`
-	VersionLocalStoreIndexPath    string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
-	OptionalStorageURI            string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
+	GetConfigURI               string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
+	TargetFileIndexPath        string `name:"target-version-index-path" help:"Target version index file uri"`
+	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
+	OptionalStorageURI         string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
+	S3EndpointResolverURLOption
 	SourcePath                    string `name:"source-path" help:"Source folder path" required:""`
 	SourceIndexPath               string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	DisableVersionLocalStoreIndex bool   `name:"no-version-local-store-index" help:"Disable saving of store index optimized for this particular version"`
@@ -170,6 +177,7 @@ func (r *PutCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := put(
 		ctx.NumWorkerCount,
 		r.OptionalStorageURI,
+		r.S3EndpointResolverURL,
 		r.SourcePath,
 		r.SourceIndexPath,
 		r.TargetFileIndexPath,

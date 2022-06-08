@@ -23,24 +23,25 @@ type ReadStoreIndexAsyncResult struct {
 func pruneStoreBlocks(
 	numWorkerCount int,
 	storeIndexPath string,
+	s3EndpointResolverURI string,
 	blocksRootPath string,
 	blockExtension string,
 	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "pruneStore"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":          fname,
-		"numWorkerCount": numWorkerCount,
-		"storeIndexPath": storeIndexPath,
-		"blocksRootPath": blocksRootPath,
-		"blockExtension": blockExtension,
-		"dryRun":         dryRun,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"storeIndexPath":        storeIndexPath,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"blocksRootPath":        blocksRootPath,
+		"blockExtension":        blockExtension,
+		"dryRun":                dryRun,
 	})
 	log.Debug(fname)
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
-	// TODO
 
-	blobStore, err := longtailstorelib.CreateBlobStoreForURI(blocksRootPath)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(blocksRootPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -55,7 +56,7 @@ func pruneStoreBlocks(
 	go func() {
 		const fname = "GetStoreIndexAsync"
 		start := time.Now()
-		storeIndexBuffer, err := longtailutils.ReadFromURI(storeIndexPath)
+		storeIndexBuffer, err := longtailutils.ReadFromURI(storeIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		if err != nil {
 			readStoreIndexAsyncResultChannel <- ReadStoreIndexAsyncResult{err: errors.Wrap(err, fname), elapsed: time.Since(start)}
 			return
@@ -261,6 +262,7 @@ func pruneStoreBlocks(
 
 type PruneStoreBlocksCmd struct {
 	StoreIndexPathOption
+	S3EndpointResolverURLOption
 	BlocksRootPath string `name:"blocks-root-path" help:"Root path uri for all blocks to check" required:""`
 	BlockExtension string `name:"block-extension" help:"The file extension to use when finding blocks" default:".lsb"`
 	DryRun         bool   `name:"dry-run" help:"Don't prune, just show how many blocks would be deleted if prune was run"`
@@ -270,6 +272,7 @@ func (r *PruneStoreBlocksCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := pruneStoreBlocks(
 		ctx.NumWorkerCount,
 		r.StoreIndexPath,
+		r.S3EndpointResolverURL,
 		r.BlocksRootPath,
 		r.BlockExtension,
 		r.DryRun)

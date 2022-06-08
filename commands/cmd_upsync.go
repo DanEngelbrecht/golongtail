@@ -15,6 +15,7 @@ import (
 func upsync(
 	numWorkerCount int,
 	blobStoreURI string,
+	s3EndpointResolverURI string,
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetFilePath string,
@@ -33,6 +34,7 @@ func upsync(
 		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
 		"blobStoreURI":               blobStoreURI,
+		"s3EndpointResolverURI":      s3EndpointResolverURI,
 		"sourceFolderPath":           sourceFolderPath,
 		"sourceIndexPath":            sourceIndexPath,
 		"targetFilePath":             targetFilePath,
@@ -96,7 +98,7 @@ func upsync(
 		enableFileMapping,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping)
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -188,7 +190,7 @@ func upsync(
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
 
-	err = longtailutils.WriteToURI(targetFilePath, vbuffer)
+	err = longtailutils.WriteToURI(targetFilePath, vbuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -208,7 +210,7 @@ func upsync(
 			err = errors.Wrapf(err, "Failed serializing store index for `%s`", versionLocalStoreIndexPath)
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
-		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer)
+		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
@@ -229,6 +231,7 @@ type UpsyncCmd struct {
 	TargetBlockSizeOption
 	MinBlockUsagePercentOption
 	StorageURIOption
+	S3EndpointResolverURLOption
 	CompressionOption
 	HashingOption
 	SourcePathIncludeRegExOption
@@ -240,6 +243,7 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := upsync(
 		ctx.NumWorkerCount,
 		r.StorageURI,
+		r.S3EndpointResolverURL,
 		r.SourcePath,
 		r.SourceIndexPath,
 		r.TargetPath,

@@ -14,6 +14,7 @@ import (
 func cpVersionIndex(
 	numWorkerCount int,
 	blobStoreURI string,
+	s3EndpointResolverURI string,
 	versionIndexPath string,
 	localCachePath string,
 	sourcePath string,
@@ -21,14 +22,15 @@ func cpVersionIndex(
 	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cpVersionIndex"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
-		"fname":             fname,
-		"numWorkerCount":    numWorkerCount,
-		"blobStoreURI":      blobStoreURI,
-		"versionIndexPath":  versionIndexPath,
-		"localCachePath":    localCachePath,
-		"sourcePath":        sourcePath,
-		"targetPath":        targetPath,
-		"enableFileMapping": enableFileMapping,
+		"fname":                 fname,
+		"numWorkerCount":        numWorkerCount,
+		"blobStoreURI":          blobStoreURI,
+		"s3EndpointResolverURI": s3EndpointResolverURI,
+		"versionIndexPath":      versionIndexPath,
+		"localCachePath":        localCachePath,
+		"sourcePath":            sourcePath,
+		"targetPath":            targetPath,
+		"enableFileMapping":     enableFileMapping,
 	})
 	log.Debug(fname)
 
@@ -45,7 +47,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping)
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -81,7 +83,7 @@ func cpVersionIndex(
 	timeStats = append(timeStats, longtailutils.TimeStat{"Setup", setupTime})
 
 	readSourceStartTime := time.Now()
-	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath)
+	vbuffer, err := longtailutils.ReadFromURI(versionIndexPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -152,7 +154,7 @@ func cpVersionIndex(
 			err = errors.Wrapf(err, "Longtail_StorageAPI.Read failed for `%s`", sourcePath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
-		longtailutils.WriteToURI(targetPath, data)
+		longtailutils.WriteToURI(targetPath, data, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		offset += left
 	}
 	copyFileTime := time.Since(copyFileStartTime)
@@ -206,6 +208,7 @@ func cpVersionIndex(
 
 type CpCmd struct {
 	StorageURIOption
+	S3EndpointResolverURLOption
 	VersionIndexPathOption
 	CachePathOption
 	SourcePath string `name:"source path" arg:"" help:"Source path inside the version index to copy"`
@@ -217,6 +220,7 @@ func (r *CpCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := cpVersionIndex(
 		ctx.NumWorkerCount,
 		r.StorageURI,
+		r.S3EndpointResolverURL,
 		r.VersionIndexPath,
 		r.CachePath,
 		r.SourcePath,

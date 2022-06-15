@@ -1,6 +1,11 @@
 ##
+- **UPDATED** Updated longtail to 0.3.4
+
+## v0.3.4
 - **ADDED** new `--s3-endpoint-resolver-uri` for use with s3 storage/targets to set endpoint resolver URI
 - **UPDATED** Update all Go dependencies to latest version
+
+## v0.3.3
 - **FIX** Simplified release workflow
 - **CHANGED** Read CHANGELOG.md when creating a release
 - **CHANGED** Automatically detect pre-release base on tag name (-preX suffix)

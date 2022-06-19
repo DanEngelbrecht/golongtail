@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -29,7 +30,7 @@ func (scanner *AsyncFolderScanner) Scan(
 		fileInfos, err := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			NormalizePath(sourceFolderPath))
+			longtailstorelib.NormalizeFileSystemPath(sourceFolderPath))
 		if err != nil {
 			err := errors.Wrap(err, fmt.Sprintf("Failed getting folder structure for `%s`", sourceFolderPath))
 			scanner.err = errors.Wrap(err, fname)
@@ -95,7 +96,7 @@ func GetFolderIndex(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			NormalizePath(sourceFolderPath),
+			longtailstorelib.NormalizeFileSystemPath(sourceFolderPath),
 			fileInfos,
 			compressionTypes,
 			targetChunkSize,

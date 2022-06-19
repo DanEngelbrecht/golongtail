@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -55,7 +56,7 @@ func printVersionUsage(
 		indexStore = remoteIndexStore
 	} else {
 		localFS = longtaillib.CreateFSStorageAPI()
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), "", false)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailstorelib.NormalizeFileSystemPath(localCachePath), "", false)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 

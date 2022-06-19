@@ -65,6 +65,10 @@ func CreateBlobStoreForURI(uri string, opts ...BlobStoreOption) (BlobStore, erro
 	if strings.HasPrefix(uri, "fsblob://") {
 		return NewFSBlobStore(uri[len("fsblob://"):], false)
 	}
+	// Special case for unc paths
+	if strings.HasPrefix(uri, UNCPrefix) {
+		return NewFSBlobStore(uri, false)
+	}
 	blobStoreURL, err := url.Parse(uri)
 	if err == nil {
 		switch blobStoreURL.Scheme {

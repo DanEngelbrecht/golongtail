@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -291,7 +292,7 @@ func updateCurrentVersionFromLongtail(
 		localVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		longtailutils.NormalizePath(targetPath),
+		longtailstorelib.NormalizeFileSystemPath(targetPath),
 		retainPermissions)
 
 	localVersionIndex.Dispose()
@@ -432,7 +433,7 @@ func cloneOneVersion(
 			&writeContentProgress,
 			versionMissingStoreIndex,
 			targetVersionIndex,
-			longtailutils.NormalizePath(targetPath))
+			longtailstorelib.NormalizeFileSystemPath(targetPath))
 		writeContentProgress.Dispose()
 		if err != nil {
 			err = errors.Wrap(err, fmt.Sprintf("failed writing content from `%s`", targetPath))
@@ -558,7 +559,7 @@ func cloneStore(
 	var sourceCompressBlockStore longtaillib.Longtail_BlockStoreAPI
 
 	if len(localCachePath) > 0 {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), "", enableFileMapping)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailstorelib.NormalizeFileSystemPath(localCachePath), "", enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, sourceRemoteIndexStore)
 

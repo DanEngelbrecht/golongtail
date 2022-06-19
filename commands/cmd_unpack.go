@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -56,7 +57,7 @@ func unpack(
 
 	resolvedTargetFolderPath := ""
 	if targetFolderPath == "" {
-		urlSplit := strings.Split(longtailutils.NormalizePath(sourceFilePath), "/")
+		urlSplit := strings.Split(longtailstorelib.NormalizeFileSystemPath(sourceFilePath), "/")
 		sourceName := urlSplit[len(urlSplit)-1]
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetFolderPath = sourceNameSplit[0]
@@ -75,7 +76,7 @@ func unpack(
 		cacheTargetIndex = false
 	}
 
-	cacheTargetIndexPath := resolvedTargetFolderPath + "/.longtail.index.cache.lvi"
+	cacheTargetIndexPath := longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath + "/.longtail.index.cache.lvi")
 
 	if cacheTargetIndex {
 		if longtaillib.FileExists(fs, cacheTargetIndexPath) {
@@ -204,7 +205,7 @@ func unpack(
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		longtailutils.NormalizePath(resolvedTargetFolderPath),
+		longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
 		retainPermissions)
 	if err != nil {
 		err = errors.Wrapf(err, "Failed writing version `%s` to `%s`", sourceFilePath, targetFolderPath)
@@ -252,7 +253,7 @@ func unpack(
 		validateFileInfos, err := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			longtailutils.NormalizePath(resolvedTargetFolderPath))
+			longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath))
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to scan `%s`", resolvedTargetFolderPath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
@@ -270,7 +271,7 @@ func unpack(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			longtailutils.NormalizePath(resolvedTargetFolderPath),
+			longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
 			targetChunkSize,

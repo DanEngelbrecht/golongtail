@@ -27,7 +27,7 @@ func createZipForFolder(searchPath string) (bytes.Buffer, error) {
 			return nil
 		}
 		subPath := path[len(searchPath)+1:]
-		fw, err := zw.Create(longtailutils.NormalizePath(subPath))
+		fw, err := zw.Create(longtailstorelib.NormalizeFileSystemPath(subPath))
 
 		if err != nil {
 			return err

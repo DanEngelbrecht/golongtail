@@ -3,25 +3,12 @@ package longtailutils
 import (
 	"context"
 	"regexp"
-	"strings"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
 
 	log "github.com/sirupsen/logrus"
 )
-
-const uncprefix = "\\\\?\\"
-
-func NormalizePath(path string) string {
-	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
-	if strings.HasPrefix(doubleForwardRemoved, uncprefix) {
-		doubleBackwardRemoved := uncprefix + strings.Replace(doubleForwardRemoved[4:], "\\\\", "\\", -1)
-		return doubleBackwardRemoved
-	}
-	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
-	return doubleBackwardRemoved
-}
 
 type regexPathFilter struct {
 	compiledIncludeRegexes []*regexp.Regexp

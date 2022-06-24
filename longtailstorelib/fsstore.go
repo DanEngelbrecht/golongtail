@@ -30,11 +30,17 @@ type fsBlobObject struct {
 	metageneration int64
 }
 
-func normalizePath(path string) string {
-	doubleForwardRemoved := strings.Replace(path, "//", "/", -1)
-	doubleBackwardRemoved := strings.Replace(doubleForwardRemoved, "\\\\", "/", -1)
-	backwardRemoved := strings.Replace(doubleBackwardRemoved, "\\", "/", -1)
-	return backwardRemoved
+const UNCPrefix = "\\\\?\\"
+
+func NormalizeFileSystemPath(path string) string {
+	if strings.HasPrefix(path, UNCPrefix) {
+		forwardSlashReplaced := strings.Replace(path, "/", "\\", -1)
+		doubleBackwardRemoved := UNCPrefix + strings.Replace(forwardSlashReplaced[len(UNCPrefix):], "\\\\", "\\", -1)
+		return doubleBackwardRemoved
+	}
+	backwardRemoved := strings.Replace(path, "\\", "/", -1)
+	doubleForwardRemoved := strings.Replace(backwardRemoved, "//", "/", -1)
+	return doubleForwardRemoved
 }
 
 // NewFSBlobStore ...
@@ -52,7 +58,7 @@ func (blobStore *fsBlobStore) String() string {
 }
 
 func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
-	fsPath := path.Join(blobClient.store.prefix, filepath)
+	fsPath := NormalizeFileSystemPath(path.Join(blobClient.store.prefix, filepath))
 	return &fsBlobObject{client: blobClient, path: fsPath, metageneration: -1}, nil
 }
 
@@ -71,7 +77,7 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		if strings.HasSuffix(path, "._lck") {
 			return nil
 		}
-		leafPath := normalizePath(path[len(searchPath)+1:])
+		leafPath := NormalizeFileSystemPath(path[len(searchPath)+1:])
 		if len(leafPath) < len(pathPrefix) {
 			return nil
 		}

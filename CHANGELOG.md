@@ -1,4 +1,7 @@
 ##
+- **FIXED** Full support for windows extended length paths (UNC paths)
+
+## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4
 
 ## v0.3.4

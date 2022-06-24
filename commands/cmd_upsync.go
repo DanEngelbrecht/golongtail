@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -151,7 +152,7 @@ func upsync(
 			&writeContentProgress,
 			versionMissingStoreIndex,
 			vindex,
-			longtailutils.NormalizePath(sourceFolderPath))
+			longtailstorelib.NormalizeFileSystemPath(sourceFolderPath))
 		if err != nil {
 			err = errors.Wrapf(err, "Failed writing content from `%s`", sourceFolderPath)
 			return storeStats, timeStats, errors.Wrapf(err, fname)

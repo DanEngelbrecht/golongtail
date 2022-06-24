@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/DanEngelbrecht/golongtail/remotestore"
 	"github.com/pkg/errors"
@@ -64,7 +65,7 @@ func downsync(
 
 	resolvedTargetFolderPath := ""
 	if targetFolderPath == "" {
-		normalizedSourceFilePath := longtailutils.NormalizePath(sourceFilePath)
+		normalizedSourceFilePath := longtailstorelib.NormalizeFileSystemPath(sourceFilePath)
 		normalizedSourceFilePath = strings.ReplaceAll(normalizedSourceFilePath, "\\", "/")
 		urlSplit := strings.Split(normalizedSourceFilePath, "/")
 		sourceName := urlSplit[len(urlSplit)-1]
@@ -85,7 +86,7 @@ func downsync(
 		cacheTargetIndex = false
 	}
 
-	cacheTargetIndexPath := resolvedTargetFolderPath + "/.longtail.index.cache.lvi"
+	cacheTargetIndexPath := longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath + "/.longtail.index.cache.lvi")
 
 	if cacheTargetIndex {
 		if longtaillib.FileExists(fs, cacheTargetIndexPath) {
@@ -153,7 +154,7 @@ func downsync(
 	if localCachePath == "" {
 		compressBlockStore = longtaillib.CreateCompressBlockStore(remoteIndexStore, creg)
 	} else {
-		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailutils.NormalizePath(localCachePath), "", enableFileMapping)
+		localIndexStore = longtaillib.CreateFSBlockStore(jobs, localFS, longtailstorelib.NormalizeFileSystemPath(localCachePath), "", enableFileMapping)
 
 		cacheBlockStore = longtaillib.CreateCacheBlockStore(jobs, localIndexStore, remoteIndexStore)
 
@@ -232,7 +233,7 @@ func downsync(
 		targetVersionIndex,
 		sourceVersionIndex,
 		versionDiff,
-		longtailutils.NormalizePath(resolvedTargetFolderPath),
+		longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
 		retainPermissions)
 	if err != nil {
 		err = errors.Wrapf(err, "Failed writing version `%s` to `%s`", sourceFilePath, targetFolderPath)
@@ -290,7 +291,7 @@ func downsync(
 		validateFileInfos, err := longtaillib.GetFilesRecursively(
 			fs,
 			pathFilter,
-			longtailutils.NormalizePath(resolvedTargetFolderPath))
+			longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath))
 		if err != nil {
 			err = errors.Wrapf(err, "Failed to scan `%s`", resolvedTargetFolderPath)
 			return storeStats, timeStats, errors.Wrap(err, fname)
@@ -308,7 +309,7 @@ func downsync(
 			chunker,
 			jobs,
 			&createVersionIndexProgress,
-			longtailutils.NormalizePath(resolvedTargetFolderPath),
+			longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
 			validateFileInfos,
 			nil,
 			targetChunkSize,

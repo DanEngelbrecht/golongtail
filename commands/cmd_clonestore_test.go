@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 )
@@ -27,7 +28,7 @@ func createZipForFolder(searchPath string) (bytes.Buffer, error) {
 			return nil
 		}
 		subPath := path[len(searchPath)+1:]
-		fw, err := zw.Create(longtailutils.NormalizePath(subPath))
+		fw, err := zw.Create(longtailstorelib.NormalizeFileSystemPath(subPath))
 
 		if err != nil {
 			return err

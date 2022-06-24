@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 
@@ -55,7 +56,7 @@ func pack(
 
 	resolvedTargetPath := ""
 	if targetFilePath == "" {
-		urlSplit := strings.Split(longtailutils.NormalizePath(sourceFolderPath), "/")
+		urlSplit := strings.Split(longtailstorelib.NormalizeFileSystemPath(sourceFolderPath), "/")
 		sourceName := urlSplit[len(urlSplit)-1]
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetPath = sourceNameSplit[0]
@@ -159,7 +160,7 @@ func pack(
 		&writeContentProgress,
 		storeIndex,
 		vindex,
-		longtailutils.NormalizePath(sourceFolderPath))
+		longtailstorelib.NormalizeFileSystemPath(sourceFolderPath))
 	if err != nil {
 		err = errors.Wrapf(err, "Failed writing content from `%s`", sourceFolderPath)
 		return storeStats, timeStats, errors.Wrapf(err, fname)

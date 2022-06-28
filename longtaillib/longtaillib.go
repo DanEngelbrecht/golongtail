@@ -1848,7 +1848,9 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, error) {
 		return nil, errors.Wrap(errnoToError(errno), fname)
 	}
 	defer C.Longtail_Free(buffer)
-	bytes := C.GoBytes(buffer, C.int(size))
+	unsafeBuffer := unsafe.Slice((*byte)(buffer), size)
+	bytes := make([]byte, size)
+	copy(bytes, unsafeBuffer)
 	return bytes, nil
 }
 

@@ -677,7 +677,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 
 	stats, err := blockStoreProxy.GetStats()
 	if err != nil {
-		t.Errorf("TestPutGetStoredBlock() GetStats() %wd", err)
+		t.Errorf("TestPutGetStoredBlock() GetStats() %d", err)
 	}
 	if stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count] != 1 {
 		t.Errorf("TestPutGetStoredBlock() stats.BlocksGetCount %d != %d", stats.StatU64[Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Count], 1)

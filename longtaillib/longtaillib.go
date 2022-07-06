@@ -1277,7 +1277,8 @@ func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, error) 
 		return nil, errors.Wrap(errnoToError(errno), fname)
 	}
 	defer C.Longtail_Free(buffer)
-	bytes := C.GoBytes(buffer, C.int(size))
+	bytes := make([]byte, size)
+	copy(bytes, unsafe.Slice((*byte)(buffer), size))
 	return bytes, nil
 }
 
@@ -1551,7 +1552,8 @@ func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, error) {
 		return nil, errors.Wrap(errnoToError(errno), fname)
 	}
 	defer C.Longtail_Free(buffer)
-	bytes := C.GoBytes(buffer, C.int(size))
+	bytes := make([]byte, size)
+	copy(bytes, unsafe.Slice((*byte)(buffer), size))
 	return bytes, nil
 }
 
@@ -1638,7 +1640,8 @@ func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
 		return nil, errors.Wrap(errnoToError(errno), fname)
 	}
 	defer C.Longtail_Free(buffer)
-	bytes := C.GoBytes(buffer, C.int(size))
+	bytes := make([]byte, size)
+	copy(bytes, unsafe.Slice((*byte)(buffer), size))
 	return bytes, nil
 }
 
@@ -1848,7 +1851,8 @@ func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, error) {
 		return nil, errors.Wrap(errnoToError(errno), fname)
 	}
 	defer C.Longtail_Free(buffer)
-	bytes := C.GoBytes(buffer, C.int(size))
+	bytes := make([]byte, size)
+	copy(bytes, unsafe.Slice((*byte)(buffer), size))
 	return bytes, nil
 }
 

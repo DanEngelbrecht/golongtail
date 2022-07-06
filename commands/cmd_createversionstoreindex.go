@@ -75,7 +75,8 @@ func createVersionStoreIndex(
 		err = errors.Wrapf(err, "Cant serialize store index for `%s`", sourceFilePath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	defer versionLocalStoreIndexBuffer.Dispose()
+	err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer.ToBuffer(), longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

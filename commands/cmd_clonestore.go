@@ -79,7 +79,8 @@ func cloneVersionIndex(v longtaillib.Longtail_VersionIndex) longtaillib.Longtail
 		log.WithError(err).Info(fname)
 		return longtaillib.Longtail_VersionIndex{}
 	}
-	copy, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	defer vbuffer.Dispose()
+	copy, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer.ToBuffer())
 	if err != nil {
 		err := errors.Wrap(err, "longtaillib.ReadVersionIndexFromBuffer() failed")
 		log.WithError(err).Info(fname)
@@ -454,8 +455,9 @@ func cloneOneVersion(
 	if err != nil {
 		return targetVersionIndex, errors.Wrap(err, fname)
 	}
+	defer vbuffer.Dispose()
 
-	err = longtailutils.WriteToURI(targetFilePath, vbuffer, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
+	err = longtailutils.WriteToURI(targetFilePath, vbuffer.ToBuffer(), longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
 	if err != nil {
 		return targetVersionIndex, errors.Wrap(err, fname)
 	}
@@ -467,13 +469,14 @@ func cloneOneVersion(
 			err = errors.Wrap(err, fmt.Sprintf("failed merging store index for `%s`", versionLocalStoreIndexPath))
 			return targetVersionIndex, errors.Wrap(err, fname)
 		}
+		defer versionLocalStoreIndex.Dispose()
 		versionLocalStoreIndexBuffer, err := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
-		versionLocalStoreIndex.Dispose()
 		if err != nil {
 			err = errors.Wrap(err, fmt.Sprintf("failed serializing store index for `%s`", versionLocalStoreIndexPath))
 			return targetVersionIndex, errors.Wrap(err, fname)
 		}
-		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
+		defer versionLocalStoreIndexBuffer.Dispose()
+		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer.ToBuffer(), longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
 		if err != nil {
 			return targetVersionIndex, errors.Wrap(err, fname)
 		}

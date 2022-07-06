@@ -122,13 +122,16 @@ func (blobObject *memBlobObject) Write(data []byte) (bool, error) {
 		}
 	}
 
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
 	if !exists {
-		blob = &memBlob{generation: 0, path: blobObject.path, data: data}
+		blob = &memBlob{generation: 0, path: blobObject.path, data: dataCopy}
 		blobObject.client.store.blobs[blobObject.path] = blob
 		return true, nil
 	}
 
-	blob.data = data
+	blob.data = dataCopy
 	blob.generation++
 	return true, nil
 }

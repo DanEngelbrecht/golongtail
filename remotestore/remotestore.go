@@ -146,24 +146,25 @@ func putStoredBlock(
 		if err != nil {
 			return errors.Wrap(err, fname)
 		}
+		defer blob.Dispose()
 
-		ok, err := objHandle.Write(blob)
+		ok, err := objHandle.Write(blob.ToBuffer())
 		if err != nil || !ok {
 			log.Warning("Retrying putBlob")
 			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
-			ok, err = objHandle.Write(blob)
+			ok, err = objHandle.Write(blob.ToBuffer())
 		}
 		if err != nil || !ok {
 			log.Warning("Retrying 500 ms delayed putBlob")
 			time.Sleep(500 * time.Millisecond)
 			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
-			ok, err = objHandle.Write(blob)
+			ok, err = objHandle.Write(blob.ToBuffer())
 		}
 		if err != nil || !ok {
 			log.Warning("Retrying 2 s delayed putBlob")
 			time.Sleep(2 * time.Second)
 			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
-			ok, err = objHandle.Write(blob)
+			ok, err = objHandle.Write(blob.ToBuffer())
 		}
 
 		if err != nil || !ok {
@@ -172,7 +173,7 @@ func putStoredBlock(
 			return errors.Wrap(err, fname)
 		}
 
-		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], (uint64)(len(blob)))
+		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], (uint64)(blob.Size()))
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
 	}
 
@@ -282,7 +283,8 @@ func fetchBlock(
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname))
 			continue
 		}
-		blockCopy, err := longtaillib.ReadStoredBlockFromBuffer(buf)
+		blockCopy, err := longtaillib.ReadStoredBlockFromBuffer(buf.ToBuffer())
+		buf.Dispose()
 		if err != nil {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname))
 			continue
@@ -378,7 +380,8 @@ func prefetchBlock(
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname))
 			continue
 		}
-		blockCopy, err := longtaillib.ReadStoredBlockFromBuffer(buf)
+		blockCopy, err := longtaillib.ReadStoredBlockFromBuffer(buf.ToBuffer())
+		buf.Dispose()
 		if err != nil {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname))
 			continue
@@ -1140,8 +1143,9 @@ func tryAddRemoteStoreIndexWithLocking(
 			err = errors.Wrap(err, fmt.Sprintf("Failed serializing store index for `%s`", key))
 			return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
+		defer storeBlob.Dispose()
 
-		ok, err := objHandle.Write(storeBlob)
+		ok, err := objHandle.Write(storeBlob.ToBuffer())
 		if err != nil {
 			newStoreIndex.Dispose()
 			return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
@@ -1157,8 +1161,9 @@ func tryAddRemoteStoreIndexWithLocking(
 		err = errors.Wrap(err, fmt.Sprintf("Failed serializing store index for `%s`", key))
 		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
+	defer storeBlob.Dispose()
 
-	ok, err := objHandle.Write(storeBlob)
+	ok, err := objHandle.Write(storeBlob.ToBuffer())
 	if err != nil {
 		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
@@ -1181,8 +1186,9 @@ func tryWriteRemoteStoreIndex(
 		err := errors.Wrap(err, fmt.Sprintf("Failed serializing store index"))
 		return false, errors.Wrap(err, fname)
 	}
+	defer storeBlob.Dispose()
 
-	sha256 := sha256.Sum256(storeBlob)
+	sha256 := sha256.Sum256(storeBlob.ToBuffer())
 	key := fmt.Sprintf("store_%x.lsi", sha256)
 
 	for _, item := range existingIndexItems {
@@ -1208,7 +1214,7 @@ func tryWriteRemoteStoreIndex(
 		return false, nil
 	}
 
-	ok, err := objHandle.Write(storeBlob)
+	ok, err := objHandle.Write(storeBlob.ToBuffer())
 	if !ok || err != nil {
 		return ok, errors.Wrap(err, fname)
 	}
@@ -1313,6 +1319,7 @@ func tryOverwriteRemoteStoreIndexWithLocking(
 		err := errors.Wrap(err, "Failed serializing store index")
 		return false, errors.Wrap(err, fname)
 	}
+	defer storeBlob.Dispose()
 
 	key := "store.lsi"
 	objHandle, err := client.NewObject(key)
@@ -1325,7 +1332,7 @@ func tryOverwriteRemoteStoreIndexWithLocking(
 		return false, errors.Wrap(err, fname)
 	}
 
-	ok, err := objHandle.Write(storeBlob)
+	ok, err := objHandle.Write(storeBlob.ToBuffer())
 	if err != nil {
 		return false, errors.Wrap(err, fname)
 	}
@@ -1352,8 +1359,9 @@ func tryOverwriteRemoteStoreIndexWithoutLocking(
 		err = errors.Wrap(err, fmt.Sprintf("Failed serializing store index"))
 		return false, errors.Wrap(err, fname)
 	}
+	defer storeBlob.Dispose()
 
-	sha256 := sha256.Sum256(storeBlob)
+	sha256 := sha256.Sum256(storeBlob.ToBuffer())
 	key := fmt.Sprintf("store_%x.lsi", sha256)
 
 	objHandle, err := client.NewObject(key)
@@ -1370,7 +1378,7 @@ func tryOverwriteRemoteStoreIndexWithoutLocking(
 		return false, errors.Wrap(err, fname)
 	}
 	if !exists {
-		ok, err := objHandle.Write(storeBlob)
+		ok, err := objHandle.Write(storeBlob.ToBuffer())
 		if !ok || err != nil {
 			return ok, errors.Wrap(err, fname)
 		}

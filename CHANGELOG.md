@@ -1,5 +1,6 @@
 ##
-- **FIXED** Full support for windows extended length paths (UNC paths)
+- **CHANGED** Add NativeBuffer to avoid copying of bytes to Golang array and remove signed 32-bit integer length of arrays (`WriteStoredBlockToBuffer`, `WriteBlockIndexToBuffer`, `WriteVersionIndexToBuffer`, `WriteStoreIndexToBuffer`)
+- **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 
 ## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4

@@ -190,8 +190,9 @@ func upsync(
 		err = errors.Wrapf(err, "Failed serializing version index for `%s`", targetFilePath)
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
+	defer vbuffer.Dispose()
 
-	err = longtailutils.WriteToURI(targetFilePath, vbuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	err = longtailutils.WriteToURI(targetFilePath, vbuffer.ToBuffer(), longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -207,11 +208,12 @@ func upsync(
 		}
 		defer versionLocalStoreIndex.Dispose()
 		versionLocalStoreIndexBuffer, err := longtaillib.WriteStoreIndexToBuffer(versionLocalStoreIndex)
+		defer versionLocalStoreIndexBuffer.Dispose()
 		if err != nil {
 			err = errors.Wrapf(err, "Failed serializing store index for `%s`", versionLocalStoreIndexPath)
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
-		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+		err = longtailutils.WriteToURI(versionLocalStoreIndexPath, versionLocalStoreIndexBuffer.ToBuffer(), longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}

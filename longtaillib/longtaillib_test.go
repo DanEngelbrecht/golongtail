@@ -213,7 +213,8 @@ func validateStoredBlock(t *testing.T, storedBlock Longtail_StoredBlock, hashIde
 	blockIndex := storedBlock.GetBlockIndex()
 
 	b, _ := WriteBlockIndexToBuffer(blockIndex)
-	bi2, _ := ReadBlockIndexFromBuffer(b)
+	defer b.Dispose()
+	bi2, _ := ReadBlockIndexFromBuffer(b.ToBuffer())
 	bi2.Dispose()
 
 	if blockIndex.GetHashIdentifier() != hashIdentifier {
@@ -301,9 +302,10 @@ func Test_ReadWriteStoredBlockBuffer(t *testing.T) {
 	if err != nil {
 		t.Errorf("WriteStoredBlockToBuffer() %s", err)
 	}
+	defer storedBlockData.Dispose()
 	originalBlock.Dispose()
 
-	copyBlock, err := ReadStoredBlockFromBuffer(storedBlockData)
+	copyBlock, err := ReadStoredBlockFromBuffer(storedBlockData.ToBuffer())
 
 	if err != nil {
 		t.Errorf("InitStoredBlockFromData() %s", err)
@@ -965,7 +967,8 @@ func TestWriteContent(t *testing.T) {
 	}
 
 	b, _ := WriteVersionIndexToBuffer(versionIndex)
-	v2, _ := ReadVersionIndexFromBuffer(b)
+	defer b.Dispose()
+	v2, _ := ReadVersionIndexFromBuffer(b.ToBuffer())
 	v2.Dispose()
 
 	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
@@ -1224,10 +1227,11 @@ func TestChangeVersion(t *testing.T) {
 	defer existingStoreIndex.Dispose()
 
 	b, err := WriteStoreIndexToBuffer(existingStoreIndex)
+	defer b.Dispose()
 	if err != nil {
 		t.Errorf("TestChangeVersion() WriteStoreIndexToBuffer() %s", err)
 	}
-	si2, err := ReadStoreIndexFromBuffer(b)
+	si2, err := ReadStoreIndexFromBuffer(b.ToBuffer())
 	if err != nil {
 		t.Errorf("TestChangeVersion() ReadStoreIndexFromBuffer() %s", err)
 	}

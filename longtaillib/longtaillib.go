@@ -362,6 +362,11 @@ type Longtail_ChunkerAPI struct {
 	cChunkerAPI *C.struct_Longtail_ChunkerAPI
 }
 
+type NativeBuffer struct {
+	buffer unsafe.Pointer
+	size   C.size_t
+}
+
 var pointerIndex uint32
 var pointerStore [1024]interface{}
 var pointerIndexer = (*[1 << 30]C.uint32_t)(C.malloc(4 * 1024))
@@ -403,6 +408,25 @@ func UnrefPointer(ptr unsafe.Pointer) {
 	p := (*C.uint32_t)(ptr)
 	index := uint32(*p)
 	pointerStore[index] = nil
+}
+
+func (b *NativeBuffer) ToBuffer() []byte {
+	if b.size == 0 {
+		return nil
+	}
+	return (*[1 << 30]byte)(unsafe.Pointer((*byte)(b.buffer)))[:b.size]
+}
+
+func (b *NativeBuffer) Dispose() {
+	if b.buffer != nil {
+		C.Longtail_Free(b.buffer)
+		b.buffer = nil
+		b.size = 0
+	}
+}
+
+func (b *NativeBuffer) Size() int {
+	return int(b.size)
 }
 
 // ReadFromStorage ...
@@ -1267,19 +1291,16 @@ func (blockIndex *Longtail_BlockIndex) Dispose() {
 	}
 }
 
-func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) ([]byte, error) {
+func WriteStoredBlockToBuffer(storedBlock Longtail_StoredBlock) (NativeBuffer, error) {
 	const fname = "WriteStoredBlockToBuffer"
 
 	var buffer unsafe.Pointer
 	var size C.size_t
 	errno := C.Longtail_WriteStoredBlockToBuffer(storedBlock.cStoredBlock, &buffer, &size)
 	if errno != 0 {
-		return nil, errors.Wrap(errnoToError(errno), fname)
+		return NativeBuffer{}, errors.Wrap(errnoToError(errno), fname)
 	}
-	defer C.Longtail_Free(buffer)
-	bytes := make([]byte, size)
-	copy(bytes, unsafe.Slice((*byte)(buffer), size))
-	return bytes, nil
+	return NativeBuffer{buffer, size}, nil
 }
 
 func ReadStoredBlockFromBuffer(buffer []byte) (Longtail_StoredBlock, error) {
@@ -1542,19 +1563,16 @@ func (fileInfos Longtail_FileInfos) GetPath(index uint32) string {
 }
 
 // WriteBlockIndexToBuffer ...
-func WriteBlockIndexToBuffer(index Longtail_BlockIndex) ([]byte, error) {
+func WriteBlockIndexToBuffer(index Longtail_BlockIndex) (NativeBuffer, error) {
 	const fname = "WriteBlockIndexToBuffer"
 
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
 	errno := C.Longtail_WriteBlockIndexToBuffer(index.cBlockIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, errors.Wrap(errnoToError(errno), fname)
+		return NativeBuffer{}, errors.Wrap(errnoToError(errno), fname)
 	}
-	defer C.Longtail_Free(buffer)
-	bytes := make([]byte, size)
-	copy(bytes, unsafe.Slice((*byte)(buffer), size))
-	return bytes, nil
+	return NativeBuffer{buffer, size}, nil
 }
 
 // ReadBlockIndexFromBuffer ...
@@ -1630,19 +1648,16 @@ func CreateVersionIndex(
 }
 
 // WriteVersionIndexToBuffer ...
-func WriteVersionIndexToBuffer(index Longtail_VersionIndex) ([]byte, error) {
+func WriteVersionIndexToBuffer(index Longtail_VersionIndex) (NativeBuffer, error) {
 	const fname = "WriteVersionIndexToBuffer"
 
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
 	errno := C.Longtail_WriteVersionIndexToBuffer(index.cVersionIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, errors.Wrap(errnoToError(errno), fname)
+		return NativeBuffer{}, errors.Wrap(errnoToError(errno), fname)
 	}
-	defer C.Longtail_Free(buffer)
-	bytes := make([]byte, size)
-	copy(bytes, unsafe.Slice((*byte)(buffer), size))
-	return bytes, nil
+	return NativeBuffer{buffer, size}, nil
 }
 
 // WriteVersionIndex ...
@@ -1841,19 +1856,16 @@ func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index L
 }
 
 // WriteStoreIndexToBuffer ...
-func WriteStoreIndexToBuffer(index Longtail_StoreIndex) ([]byte, error) {
+func WriteStoreIndexToBuffer(index Longtail_StoreIndex) (NativeBuffer, error) {
 	const fname = "WriteStoreIndexToBuffer"
 
 	var buffer unsafe.Pointer
 	size := C.size_t(0)
 	errno := C.Longtail_WriteStoreIndexToBuffer(index.cStoreIndex, &buffer, &size)
 	if errno != 0 {
-		return nil, errors.Wrap(errnoToError(errno), fname)
+		return NativeBuffer{}, errors.Wrap(errnoToError(errno), fname)
 	}
-	defer C.Longtail_Free(buffer)
-	bytes := make([]byte, size)
-	copy(bytes, unsafe.Slice((*byte)(buffer), size))
-	return bytes, nil
+	return NativeBuffer{buffer, size}, nil
 }
 
 // ReadStoreIndexFromBuffer ...

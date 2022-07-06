@@ -392,6 +392,7 @@ func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (longtaillib.Lo
 
 func storeBlock(blobClient longtailstorelib.BlobClient, storedBlock longtaillib.Longtail_StoredBlock, blockHashOffset uint64, parentPath string) uint64 {
 	bytes, _ := longtaillib.WriteStoredBlockToBuffer(storedBlock)
+	defer bytes.Dispose()
 	blockIndex := storedBlock.GetBlockIndex()
 	storedBlockHash := blockIndex.GetBlockHash() + blockHashOffset
 	path := getBlockPath("chunks", storedBlockHash)
@@ -399,7 +400,7 @@ func storeBlock(blobClient longtailstorelib.BlobClient, storedBlock longtaillib.
 		path = parentPath + "/" + path
 	}
 	blobObject, _ := blobClient.NewObject(path)
-	blobObject.Write(bytes)
+	blobObject.Write(bytes.ToBuffer())
 	return storedBlockHash
 }
 

@@ -69,8 +69,10 @@ func TestInitRemoteStore(t *testing.T) {
 
 	storeIndexObject.Delete()
 	emptyStoreIndex, _ := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
+	defer emptyStoreIndex.Dispose()
 	emptyStoreIndexBytes, _ := longtaillib.WriteStoreIndexToBuffer(emptyStoreIndex)
-	storeIndexObject.Write(emptyStoreIndexBytes)
+	defer emptyStoreIndexBytes.Dispose()
+	storeIndexObject.Write(emptyStoreIndexBytes.ToBuffer())
 
 	// Force rebuilding the index even though it exists
 	cmd, err = executeCommandLine("init-remote-store", "--storage-uri", fsBlobPathPrefix+"/storage")

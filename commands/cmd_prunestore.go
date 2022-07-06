@@ -114,12 +114,13 @@ func pruneOne(
 
 	if versionLocalStoreIndexFilePath != "" && writeVersionLocalStoreIndex && !dryRun {
 		sbuffer, err := longtaillib.WriteStoreIndexToBuffer(existingStoreIndex)
+		defer sbuffer.Dispose()
 		if err != nil {
 			existingStoreIndex.Dispose()
 			result.err = errors.Wrap(err, fname)
 			return
 		}
-		err = longtailutils.WriteToURI(versionLocalStoreIndexFilePath, sbuffer, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+		err = longtailutils.WriteToURI(versionLocalStoreIndexFilePath, sbuffer.ToBuffer(), longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 		if err != nil {
 			existingStoreIndex.Dispose()
 			result.err = errors.Wrap(err, fname)

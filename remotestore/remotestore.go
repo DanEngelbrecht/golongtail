@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -1090,13 +1089,13 @@ func (s *remoteStore) Close() {
 	for i := 0; i < s.workerCount; i++ {
 		err := <-s.workerErrorChan
 		if err != nil {
-			log.Fatal(err)
+			logrus.Fatal(err)
 		}
 	}
 	close(s.blockIndexChan)
 	err := <-s.workerErrorChan
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
 	s.defaultClient.Close()

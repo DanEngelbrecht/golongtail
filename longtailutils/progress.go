@@ -3,7 +3,6 @@ package longtailutils
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -55,8 +54,7 @@ func (p *ProgressData) OnProgress(totalCount uint32, doneCount uint32) {
 
 	timeString := fmt.Sprintf("%s%s", elapsed, etaString)
 
-	fmt.Fprintf(os.Stderr,
-		"\r%s %3d%%: |%s%s|: [%s]        %s",
+	fmt.Printf("\r%s %3d%%: |%s%s|: [%s]        %s",
 		p.task,
 		percentDone,
 		strings.Repeat("█", progressBarCount), strings.Repeat(" ", progressBarFullLength-progressBarCount),

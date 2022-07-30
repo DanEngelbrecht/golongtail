@@ -148,39 +148,27 @@ func putStoredBlock(
 		}
 		defer blob.Dispose()
 
-		isOk := func(ok bool, err error) bool {
-			if ok {
-				if err == nil {
-					return true
-				}
-				// Failed to update meta data, ok, just log as warning
-				log.Warningf("failed to update metadata of stored block at `%s` in `%s` (%s)", key, s, err)
-				return true
-			}
-			return false
-		}
-
 		var sleepTimes = [...]time.Duration{100 * time.Millisecond, 500 * time.Millisecond, 2 * time.Second}
 		ok, err := objHandle.Write(blob.ToBuffer())
-		if !ok && err != nil {
+		if err != nil {
 			err := errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, s))
 			err = errors.Wrap(err, fname)
 			log.Error(err)
 			return err
 		}
-		if !isOk(ok, err) {
+		if !ok {
 			for _, sleepTime := range sleepTimes {
 				atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
 				log.Warningf("retrying putBlob (sleeping %s)", sleepTime)
 				time.Sleep(sleepTime)
 				ok, err = objHandle.Write(blob.ToBuffer())
-				if !ok && err != nil {
+				if err != nil {
 					err = errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, s))
 					err = errors.Wrap(err, fname)
 					log.Error(err)
 					return err
 				}
-				if isOk(ok, err) {
+				if ok {
 					break
 				}
 			}

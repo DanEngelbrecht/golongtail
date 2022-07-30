@@ -157,12 +157,14 @@ func TestPutGetStoredBlock(t *testing.T) {
 	storedBlock, err := storeBlockFromSeed(t, storeAPI, 0)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %s", err)
+		return
 	}
 	blockHash := storedBlock.GetBlockHash()
 
 	storedBlockCopy, err := fetchBlockFromStore(t, storeAPI, blockHash)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() fetchBlockFromStore(t, storeAPI, 0) %s", err)
+		return
 	}
 	defer storedBlockCopy.Dispose()
 
@@ -593,14 +595,17 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	blocks[0], err = storeBlockFromSeed(t, storeAPI, 0)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 0) %s", err)
+		return
 	}
 	blocks[1], err = storeBlockFromSeed(t, storeAPI, 10)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 10) %s", err)
+		return
 	}
 	blocks[2], err = storeBlockFromSeed(t, storeAPI, 20)
 	if err != nil {
 		t.Errorf("TestPutGetStoredBlock() storeBlock(t, storeAPI, 20) %s", err)
+		return
 	}
 
 	blockIndexes := []longtaillib.Longtail_BlockIndex{

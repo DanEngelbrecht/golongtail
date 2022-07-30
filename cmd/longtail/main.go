@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -26,22 +26,21 @@ func runCommand() error {
 	defer func() {
 		context.TimeStats = append(context.TimeStats, longtailutils.TimeStat{"Execution", time.Since(executionStartTime)})
 
-		if commands.Cli.ShowStoreStats {
-			for _, s := range context.StoreStats {
-				longtailutils.PrintStats(s.Name, s.Stats)
-			}
+		for _, s := range context.StoreStats {
+			longtailutils.PrintStats(s.Name, s.Stats, commands.Cli.ShowStoreStats)
 		}
 
-		if commands.Cli.ShowStats {
-			maxLen := 0
-			for _, s := range context.TimeStats {
-				if len(s.Name) > maxLen {
-					maxLen = len(s.Name)
-				}
+		maxLen := 0
+		for _, s := range context.TimeStats {
+			if len(s.Name) > maxLen {
+				maxLen = len(s.Name)
 			}
-			for _, s := range context.TimeStats {
-				name := fmt.Sprintf("%s:", s.Name)
-				log.Printf("%-*s %s", maxLen+1, name, s.Dur)
+		}
+		for _, s := range context.TimeStats {
+			logrus.WithFields(logrus.Fields{"name": s.Name, "duration": s.Dur.String()}).Infof("stats")
+			name := fmt.Sprintf("%s:", s.Name)
+			if commands.Cli.ShowStats {
+				fmt.Printf("%-*s %s\n", maxLen+1, name, s.Dur)
 			}
 		}
 	}()
@@ -51,7 +50,7 @@ func runCommand() error {
 
 	longtailLogLevel, err := longtailutils.ParseLevel(commands.Cli.LogLevel)
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 	}
 
 	switch commands.Cli.LogLevel {
@@ -71,6 +70,25 @@ func runCommand() error {
 
 	longtaillib.SetAssert(&longtailutils.AssertData{})
 	defer longtaillib.SetAssert(nil)
+
+	if commands.Cli.LogFilePath != "" {
+		fileHook, err := longtailutils.NewFileLog(commands.Cli.LogFilePath, &logrus.JSONFormatter{})
+		if err != nil {
+			logrus.Fatal(err)
+		}
+		logrus.AddHook(&fileHook)
+	}
+	if commands.Cli.LogToConsole {
+		logrus.SetFormatter(&logrus.TextFormatter{
+			ForceColors:      commands.Cli.LogColoring,
+			DisableTimestamp: !commands.Cli.LogConsoleTimestamp,
+			FullTimestamp:    true,
+			TimestampFormat:  time.RFC822,
+		})
+		logrus.SetOutput(os.Stdout)
+	} else {
+		logrus.SetOutput(ioutil.Discard)
+	}
 
 	if commands.Cli.WorkerCount == 0 {
 		context.NumWorkerCount = runtime.NumCPU()
@@ -94,7 +112,7 @@ func runCommand() error {
 				if l == "" {
 					continue
 				}
-				log.Printf("[MEM] %s", l)
+				fmt.Printf("[MEM] %s\n", l)
 			}
 			longtaillib.DisableMemtrace()
 		}()
@@ -112,7 +130,7 @@ func runCommand() error {
 func main() {
 	err := runCommand()
 	if err != nil {
-		log.Fatal(err)
+		logrus.Fatal(err)
 		os.Exit(1)
 	}
 	os.Exit(0)

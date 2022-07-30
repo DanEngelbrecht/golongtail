@@ -9,6 +9,10 @@ var Cli struct {
 	MemTraceDetailed        bool                       `name:"mem-trace-detailed" help:"Output detailed memory statistics from longtail"`
 	MemTraceCSV             string                     `name:"mem-trace-csv" help:"Output path for detailed memory statistics from longtail in csv format"`
 	WorkerCount             int                        `name:"worker-count" help:"Limit number of workers created, defaults to match number of logical CPUs (zero for default count)" default:"0"`
+	LogToConsole            bool                       `name:"log-to-console" help:"Enable logging to console" default:"true" negatable:""`
+	LogFilePath             string                     `name:"log-file-path" help:"Path to log file for json formatted logging"`
+	LogColoring             bool                       `name:"log-coloring" help:"Use colored logging for stdout"`
+	LogConsoleTimestamp     bool                       `name:"log-console-timestamp" help:"Add timestamps to stdout logging"`
 	Upsync                  UpsyncCmd                  `cmd:"" name:"upsync" help:"Upload a folder"`
 	Downsync                DownsyncCmd                `cmd:"" name:"downsync" help:"Download a folder"`
 	Get                     GetCmd                     `cmd:"" name:"get" help:"Download a folder using a get-config"`

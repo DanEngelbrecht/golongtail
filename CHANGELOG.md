@@ -1,4 +1,11 @@
 ##
+- **ADDED** `--log-to-console` option, default is on, disable all logging output in console with `--no-log-to-console`
+- **ADDED** `--log-file-path` option, default is no log file output, add path to json formatted log file
+- **ADDED** `--log-coloring` option, enables colored logging output in console, default is non-colored
+- **ADDED** `--log-console-timestamp` option, enabled timestamps in the console log, default is not to include time stamp
+- **CHANGED** Stats output is not printed to StdOut and with formatted logging to log file if enabled
+- **CHANGED** All logging now goes through logrus with the default logrus text formatting
+- **CHANGED** Progress output in console now goes to StdOut instead of StdErr
 - **CHANGED** Add NativeBuffer to avoid copying of bytes to Golang array and remove signed 32-bit integer length of arrays (`WriteStoredBlockToBuffer`, `WriteBlockIndexToBuffer`, `WriteVersionIndexToBuffer`, `WriteStoreIndexToBuffer`)
 - **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 

@@ -112,6 +112,7 @@ func runCommand() error {
 				if l == "" {
 					continue
 				}
+				logrus.WithField("mem", l).Infof("stats")
 				fmt.Printf("[MEM] %s\n", l)
 			}
 			longtaillib.DisableMemtrace()

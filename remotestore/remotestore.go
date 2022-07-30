@@ -132,7 +132,7 @@ func putStoredBlock(
 	blockHash := blockIndex.GetBlockHash()
 	key := getBlockPath("chunks", blockHash)
 
-	log = logrus.WithFields(logrus.Fields{
+	log = log.WithFields(logrus.Fields{
 		"blockHash": blockHash,
 		"key":       key,
 	})
@@ -148,29 +148,36 @@ func putStoredBlock(
 		}
 		defer blob.Dispose()
 
+		var sleepTimes = [...]time.Duration{100 * time.Millisecond, 500 * time.Millisecond, 2 * time.Second}
 		ok, err := objHandle.Write(blob.ToBuffer())
-		if err != nil || !ok {
-			log.Warning("Retrying putBlob")
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
-			ok, err = objHandle.Write(blob.ToBuffer())
+		if err != nil {
+			err := errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, s))
+			err = errors.Wrap(err, fname)
+			log.Error(err)
+			return err
 		}
-		if err != nil || !ok {
-			log.Warning("Retrying 500 ms delayed putBlob")
-			time.Sleep(500 * time.Millisecond)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
-			ok, err = objHandle.Write(blob.ToBuffer())
-		}
-		if err != nil || !ok {
-			log.Warning("Retrying 2 s delayed putBlob")
-			time.Sleep(2 * time.Second)
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
-			ok, err = objHandle.Write(blob.ToBuffer())
-		}
-
-		if err != nil || !ok {
-			atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_FailCount], 1)
-			err := errors.Wrap(err, fmt.Sprintf("Failed to put stored block at `%s` in `%s`", key, s))
-			return errors.Wrap(err, fname)
+		if !ok {
+			for _, sleepTime := range sleepTimes {
+				atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_RetryCount], 1)
+				log.Warningf("retrying putBlob (sleeping %s)", sleepTime)
+				time.Sleep(sleepTime)
+				ok, err = objHandle.Write(blob.ToBuffer())
+				if err != nil {
+					err = errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, s))
+					err = errors.Wrap(err, fname)
+					log.Error(err)
+					return err
+				}
+				if ok {
+					break
+				}
+			}
+			if !ok {
+				err = fmt.Errorf("failed to put stored block at `%s` in `%s` even after retries", key, s)
+				err = errors.Wrap(err, fname)
+				log.Error(err)
+				return err
+			}
 		}
 
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], (uint64)(blob.Size()))

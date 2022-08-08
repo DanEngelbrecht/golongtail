@@ -83,6 +83,11 @@ jobs:
         name: dist-win32-x64
         path: dist-win32-x64
 
+    - name: Set execute permission
+      run: |
+        chmod +x dist-linux-x64/longtail
+        chmod +x dist-macos-x64/longtail
+
     - name: Rename artifacts
       run: |
         cp dist-linux-x64/longtail longtail-linux-x64

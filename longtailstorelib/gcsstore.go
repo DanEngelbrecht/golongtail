@@ -62,7 +62,7 @@ func NewGCSBlobStore(u *url.URL, disableLocking bool) (BlobStore, error) {
 }
 
 func (blobStore *gcsBlobStore) NewClient(ctx context.Context) (BlobClient, error) {
-	const fname = "blobClient.NewClient"
+	const fname = "gcsBlobStore.NewClient"
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		err := fmt.Errorf("Failed to create client for `%s`", blobStore.String())
@@ -90,7 +90,7 @@ func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {
 }
 
 func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
-	const fname = "blobClient.GetObjects"
+	const fname = "gcsBlobClient.GetObjects"
 	var items []BlobProperties
 	it := blobClient.bucket.Objects(blobClient.ctx, &storage.Query{
 		Prefix: blobClient.store.prefix + pathPrefix,

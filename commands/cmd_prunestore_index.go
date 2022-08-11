@@ -23,7 +23,7 @@ func pruneOneUsingStoreIndex(
 	writeVersionLocalStoreIndex bool,
 	dryRun bool,
 	outResults chan<- pruneOneResult) {
-	const fname = "pruneOne"
+	const fname = "pruneOneUsingStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname": fname,
 	})
@@ -98,7 +98,7 @@ func gatherBlocksToKeepFromStoreIndex(
 	validateVersions bool,
 	skipInvalidVersions bool,
 	dryRun bool) ([]uint64, error) {
-	const fname = "gatherBlocksToKeep"
+	const fname = "gatherBlocksToKeepFromStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                       fname,
 		"numWorkerCount":              numWorkerCount,
@@ -219,7 +219,7 @@ func pruneStoreIndex(
 	validateVersions bool,
 	skipInvalidVersions bool,
 	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	const fname = "pruneStore"
+	const fname = "pruneStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
 		"numWorkerCount":               numWorkerCount,

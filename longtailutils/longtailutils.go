@@ -130,7 +130,7 @@ func GetExistingStoreIndexSync(
 func PruneBlocksSync(
 	indexStore longtaillib.Longtail_BlockStoreAPI,
 	keepBlockHashes []uint64) (uint32, error) {
-	const fname = "GetExistingStoreIndexSync"
+	const fname = "PruneBlocksSync"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                fname,
 		"len(keepBlockHashes)": len(keepBlockHashes),
@@ -329,12 +329,13 @@ func ReadFromURI(uri string, opts ...longtailstorelib.BlobStoreOption) ([]byte, 
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
+	log.Infof("read %d bytes", len(vbuffer))
 	return vbuffer, nil
 }
 
 // WriteToURI ...
 func WriteToURI(uri string, data []byte, opts ...longtailstorelib.BlobStoreOption) error {
-	const fname = "ReadFromURI"
+	const fname = "WriteToURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname": fname,
 		"uri":   uri,
@@ -358,6 +359,7 @@ func WriteToURI(uri string, data []byte, opts ...longtailstorelib.BlobStoreOptio
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
+	log.Infof("wrote %d bytes", len(data))
 	return nil
 }
 
@@ -387,6 +389,7 @@ func DeleteByURI(uri string, opts ...longtailstorelib.BlobStoreOption) error {
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
 	}
+	log.Info("deleted file")
 	return nil
 }
 
@@ -394,7 +397,7 @@ func ReadBlobWithRetry(
 	ctx context.Context,
 	client longtailstorelib.BlobClient,
 	key string) ([]byte, int, error) {
-	const fname = "ReadFromURI"
+	const fname = "ReadBlobWithRetry"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":  fname,
 		"client": client,
@@ -433,6 +436,7 @@ func ReadBlobWithRetry(
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
+	log.Infof("read %d bytes", len(blobData))
 	return blobData, retryCount, nil
 }
 
@@ -506,7 +510,7 @@ func GetHashIdentifier(hashAlgorithm string) (uint32, error) {
 }
 
 func HashIdentifierToString(hashIdentifier uint32) string {
-	const fname = "GetCompressionType"
+	const fname = "HashIdentifierToString"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":          fname,
 		"hashIdentifier": hashIdentifier,

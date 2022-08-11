@@ -63,7 +63,7 @@ func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
 }
 
 func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
-	const fname = "fsBlobObject.GetObjects"
+	const fname = "fsBlobClient.GetObjects"
 	searchPath := blobClient.store.prefix
 
 	objects := make([]BlobProperties, 0)

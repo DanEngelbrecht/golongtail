@@ -22,7 +22,7 @@ func validateVersion(
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"versionIndexPath":      versionIndexPath,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

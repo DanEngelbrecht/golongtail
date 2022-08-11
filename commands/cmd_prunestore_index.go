@@ -232,7 +232,7 @@ func pruneStoreIndex(
 		"skipInvalidVersions":          skipInvalidVersions,
 		"dryRun":                       dryRun,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	setupStartTime := time.Now()
 	storeStats := []longtailutils.StoreStat{}

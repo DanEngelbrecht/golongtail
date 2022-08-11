@@ -40,7 +40,7 @@ func unpack(
 		"cacheTargetIndex":   cacheTargetIndex,
 		"enableFileMapping":  enableFileMapping,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

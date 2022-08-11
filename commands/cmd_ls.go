@@ -23,7 +23,7 @@ func ls(
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"commandLSVersionDir":   commandLSVersionDir,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

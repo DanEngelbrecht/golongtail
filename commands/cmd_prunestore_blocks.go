@@ -37,7 +37,7 @@ func pruneStoreBlocks(
 		"blockExtension":        blockExtension,
 		"dryRun":                dryRun,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 

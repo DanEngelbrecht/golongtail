@@ -31,6 +31,7 @@ func validateOneVersion(
 		"targetEndpointResolverURI": targetEndpointResolverURI,
 		"skipValidate":              skipValidate,
 	})
+	log.Info(fname)
 	tbuffer, err := longtailutils.ReadFromURI(targetFilePath, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
 	if err != nil {
 		return errors.Wrap(err, fname)
@@ -370,7 +371,7 @@ func cloneOneVersion(
 		"sourceFileZipPath":            sourceFileZipPath,
 		"enableFileMapping":            enableFileMapping,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	err := validateOneVersion(targetStore, targetFilePath, targetEndpointResolverURI, skipValidate)
 	if err == nil {
@@ -532,7 +533,7 @@ func cloneStore(
 		"minBlockUsagePercent":         minBlockUsagePercent,
 		"skipValidate":                 skipValidate,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

@@ -1714,7 +1714,7 @@ func FileExists(storageAPI Longtail_StorageAPI, path string) bool {
 }
 
 func DeleteFile(storageAPI Longtail_StorageAPI, path string) error {
-	const fname = "FileExists"
+	const fname = "DeleteFile"
 
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))

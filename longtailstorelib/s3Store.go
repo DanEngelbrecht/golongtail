@@ -87,7 +87,7 @@ func (blobClient *s3BlobClient) NewObject(path string) (BlobObject, error) {
 }
 
 func (blobClient *s3BlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
-	const fname = "s3BlobStore.GetObjects"
+	const fname = "s3BlobClient.GetObjects"
 	var items []BlobProperties
 	output, err := blobClient.client.ListObjectsV2(blobClient.ctx, &s3.ListObjectsV2Input{
 		Bucket: aws.String(blobClient.store.bucketName),

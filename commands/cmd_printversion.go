@@ -23,7 +23,7 @@ func printVersion(
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"compact":               compact,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

@@ -78,7 +78,7 @@ func (f *regexPathFilter) Include(rootPath string, assetPath string, assetName s
 }
 
 func splitRegexes(regexes string) ([]*regexp.Regexp, error) {
-	const fname = "splitRegexes.Include"
+	const fname = "splitRegexes"
 	log := log.WithContext(context.Background()).WithFields(log.Fields{
 		"fname":   fname,
 		"regexes": regexes,

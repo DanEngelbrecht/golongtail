@@ -43,7 +43,7 @@ func pack(
 		"excludeFilterRegEx":   excludeFilterRegEx,
 		"enableFileMapping":    enableFileMapping,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

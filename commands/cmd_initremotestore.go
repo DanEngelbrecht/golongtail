@@ -23,7 +23,7 @@ func initRemoteStore(
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"hashAlgorithm":         hashAlgorithm,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

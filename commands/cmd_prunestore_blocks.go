@@ -27,7 +27,7 @@ func pruneStoreBlocks(
 	blocksRootPath string,
 	blockExtension string,
 	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
-	const fname = "pruneStore"
+	const fname = "pruneStoreBlocks"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                 fname,
 		"numWorkerCount":        numWorkerCount,
@@ -37,7 +37,7 @@ func pruneStoreBlocks(
 		"blockExtension":        blockExtension,
 		"dryRun":                dryRun,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}
 

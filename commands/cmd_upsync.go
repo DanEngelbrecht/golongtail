@@ -50,7 +50,7 @@ func upsync(
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"enableFileMapping":          enableFileMapping,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

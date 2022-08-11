@@ -33,7 +33,7 @@ func cpVersionIndex(
 		"targetPath":            targetPath,
 		"enableFileMapping":     enableFileMapping,
 	})
-	log.Debug(fname)
+	log.Info(fname)
 
 	storeStats := []longtailutils.StoreStat{}
 	timeStats := []longtailutils.TimeStat{}

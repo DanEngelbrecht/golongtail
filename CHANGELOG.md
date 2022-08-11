@@ -11,7 +11,7 @@
 - **FIXED** Improved retrylogic when writing stored block with better logging details
 - **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 - **FIXED** Corrected some function names logging
-- **UPDATED** Updated longtail to 0.3.4
+- **UPDATED** Updated longtail to 0.3.5
 
 ## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4

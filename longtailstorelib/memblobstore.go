@@ -71,7 +71,7 @@ func (blobClient *memBlobClient) Close() {
 }
 
 func (blobClient *memBlobClient) String() string {
-	return "memstore"
+	return blobClient.store.String()
 }
 
 func (blobObject *memBlobObject) Exists() (bool, error) {
@@ -153,4 +153,8 @@ func (blobObject *memBlobObject) Delete() error {
 	}
 	delete(blobObject.client.store.blobs, blobObject.path)
 	return nil
+}
+
+func (blobObject *memBlobObject) String() string {
+	return fmt.Sprintf("%s/%s", blobObject.client.String(), blobObject.path)
 }

@@ -36,6 +36,8 @@ type BlobObject interface {
 	// Will return an error if a version lock is set with LockWriteVersion()
 	// and the underlying file has changed
 	Delete() error
+
+	String() string
 }
 
 type BlobProperties struct {

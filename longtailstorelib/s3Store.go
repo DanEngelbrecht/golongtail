@@ -185,3 +185,7 @@ func (blobObject *s3BlobObject) Delete() error {
 	}
 	return nil
 }
+
+func (blobObject *s3BlobObject) String() string {
+	return fmt.Sprintf("%s/%s", blobObject.client.String(), blobObject.path)
+}

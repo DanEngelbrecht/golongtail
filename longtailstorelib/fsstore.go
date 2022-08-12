@@ -54,7 +54,7 @@ func (blobStore *fsBlobStore) NewClient(ctx context.Context) (BlobClient, error)
 }
 
 func (blobStore *fsBlobStore) String() string {
-	return fmt.Sprintf("fsstore %s", blobStore.prefix)
+	return fmt.Sprintf("fsblob://%s", blobStore.prefix)
 }
 
 func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
@@ -102,7 +102,7 @@ func (blobClient *fsBlobClient) Close() {
 }
 
 func (blobClient *fsBlobClient) String() string {
-	return fmt.Sprintf("%s:client", blobClient.store.String())
+	return blobClient.store.String()
 }
 
 func (blobObject *fsBlobObject) Exists() (bool, error) {
@@ -203,7 +203,7 @@ func (blobObject *fsBlobObject) LockWriteVersion() (bool, error) {
 	const fname = "fsBlobObject.LockWriteVersion"
 
 	if !blobObject.client.store.enableLocking {
-		err := fmt.Errorf("Locking is not supported for %s", blobObject.client.store.String())
+		err := fmt.Errorf("locking is not supported for %s", blobObject.String())
 		return false, errors.Wrap(err, fname)
 	}
 
@@ -309,6 +309,10 @@ func (blobObject *fsBlobObject) Delete() error {
 		return nil
 	}
 	return err
+}
+
+func (blobObject *fsBlobObject) String() string {
+	return fmt.Sprintf("%s/%s", blobObject.client.String(), blobObject.path)
 }
 
 // ErrTimeout indicates that the lock attempt timed out.

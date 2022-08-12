@@ -1,5 +1,7 @@
 ##
-- **CHANGED** commands now logs input details at info level
+- **
+- **CHANGED** commands now logs input details at `info` level
+- **CHANGED** Improved logging in remotestore with `info` level
 - **CHANGED** Stats output is now printed to StdOut and with formatted logging to log file if `--log-file-path` is enabled
 - **CHANGED** All logging now goes through logrus with the default logrus text formatting
 - **CHANGED** Progress output in console now goes to StdOut instead of StdErr
@@ -11,6 +13,7 @@
 - **FIXED** Improved retrylogic when writing stored block with better logging details
 - **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 - **FIXED** Corrected some function names logging
+- **FIXED** splitURI handles mixed forward and backward slash better
 - **UPDATED** Updated longtail to 0.3.5
 
 ## v0.3.5

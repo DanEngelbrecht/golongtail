@@ -120,8 +120,9 @@ func putStoredBlock(
 	storedBlock longtaillib.Longtail_StoredBlock) error {
 	const fname = "putStoredBlock"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
-		"s":     s,
+		"fname":      fname,
+		"s":          s,
+		"blobClient": blobClient.String(),
 	})
 	log.Debug(fname)
 
@@ -181,6 +182,12 @@ func putStoredBlock(
 
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Byte_Count], (uint64)(blob.Size()))
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_PutStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
+
+		log.WithFields(logrus.Fields{
+			"chunks": blockIndex.GetChunkCount(),
+			"bytes":  blob.Size(),
+			"path":   objHandle.String(),
+		}).Info("wrote block")
 	}
 
 	blockIndexCopy, err := blockIndex.Copy()
@@ -198,9 +205,10 @@ func getStoredBlock(
 	blockHash uint64) (longtaillib.Longtail_StoredBlock, error) {
 	const fname = "getStoredBlock"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":     fname,
-		"s":         s,
-		"blockHash": blockHash,
+		"fname":      fname,
+		"s":          s,
+		"blobClient": blobClient.String(),
+		"blockHash":  blockHash,
 	})
 	log.Debug(fname)
 
@@ -231,6 +239,10 @@ func getStoredBlock(
 		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname)
 	}
 	atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_Chunk_Count], (uint64)(blockIndex.GetChunkCount()))
+	log.WithFields(logrus.Fields{
+		"chunks": blockIndex.GetChunkCount(),
+		"bytes":  len(storedBlockData),
+		"path":   fmt.Sprintf("%s/%s", blobClient.String(), key)}).Info("read block")
 	return storedBlock, nil
 }
 
@@ -243,6 +255,7 @@ func fetchBlock(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":  fname,
 		"s":      s,
+		"client": client.String(),
 		"getMsg": getMsg,
 	})
 	log.Debug(fname)
@@ -309,6 +322,7 @@ func deleteBlock(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":     fname,
 		"s":         s,
+		"client":    client.String(),
 		"blockHash": blockHash,
 	})
 	log.Debug(fname)
@@ -335,6 +349,7 @@ func prefetchBlock(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
 		"s":           s,
+		"client":      client.String(),
 		"prefetchMsg": prefetchMsg,
 	})
 	log.Debug(fname)
@@ -563,6 +578,7 @@ func addBlocksToRemoteStoreIndex(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                  fname,
 		"s":                      s,
+		"blobClient":             blobClient.String(),
 		"len(addedBlockIndexes)": addedBlockIndexes,
 	})
 	log.Debug(fname)
@@ -652,6 +668,7 @@ func onPruneBlocksMessage(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                fname,
 		"s":                    s,
+		"blobClient":           blobClient.String(),
 		"len(keepBlockHashes)": len(keepBlockHashes),
 	})
 	log.Debug(fname)
@@ -701,6 +718,7 @@ func getCurrentStoreIndex(
 		"fname":                  fname,
 		"s":                      s,
 		"optionalStoreIndexPath": optionalStoreIndexPath,
+		"client":                 client.String(),
 		"accessType":             accessType,
 		"len(addedBlockIndexes)": len(addedBlockIndexes),
 	})
@@ -946,6 +964,7 @@ func NewRemoteBlockStore(
 	const fname = "NewRemoteBlockStore"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                  fname,
+		"blobStore":              blobStore,
 		"optionalStoreIndexPath": optionalStoreIndexPath,
 		"workerCount":            workerCount,
 		"accessType":             accessType,
@@ -1107,7 +1126,8 @@ func tryAddRemoteStoreIndexWithLocking(
 	blobClient longtailstorelib.BlobClient) (bool, longtaillib.Longtail_StoreIndex, error) {
 	const fname = "tryAddRemoteStoreIndexWithLocking"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":      fname,
+		"blobClient": blobClient,
 	})
 	log.Debug(fname)
 
@@ -1136,6 +1156,7 @@ func tryAddRemoteStoreIndexWithLocking(
 			return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
 		defer remoteStoreIndex.Dispose()
+		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": len(blob)}).Info("read store index")
 
 		newStoreIndex, err := longtaillib.MergeStoreIndex(remoteStoreIndex, addStoreIndex)
 		if err != nil {
@@ -1160,6 +1181,7 @@ func tryAddRemoteStoreIndexWithLocking(
 			newStoreIndex.Dispose()
 			return false, longtaillib.Longtail_StoreIndex{}, nil
 		}
+		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Info("wrote store index")
 		return ok, newStoreIndex, nil
 	}
 	storeBlob, err := longtaillib.WriteStoreIndexToBuffer(addStoreIndex)
@@ -1173,6 +1195,9 @@ func tryAddRemoteStoreIndexWithLocking(
 	if err != nil {
 		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
+	if ok {
+		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Info("wrote store index")
+	}
 	return ok, longtaillib.Longtail_StoreIndex{}, nil
 }
 
@@ -1183,13 +1208,14 @@ func tryWriteRemoteStoreIndex(
 	blobClient longtailstorelib.BlobClient) (bool, error) {
 	const fname = "tryWriteRemoteStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":      fname,
+		"blobClient": blobClient,
 	})
 	log.Debug(fname)
 
 	storeBlob, err := longtaillib.WriteStoreIndexToBuffer(storeIndex)
 	if err != nil {
-		err := errors.Wrap(err, fmt.Sprintf("Failed serializing store index"))
+		err := errors.Wrap(err, "Failed serializing store index")
 		return false, errors.Wrap(err, fname)
 	}
 	defer storeBlob.Dispose()
@@ -1225,6 +1251,8 @@ func tryWriteRemoteStoreIndex(
 		return ok, errors.Wrap(err, fname)
 	}
 
+	log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Info("wrote store index")
+
 	for _, item := range existingIndexItems {
 		objHandle, err := blobClient.NewObject(item)
 		if err != nil {
@@ -1245,7 +1273,8 @@ func tryAddRemoteStoreIndex(
 	blobClient longtailstorelib.BlobClient) (bool, longtaillib.Longtail_StoreIndex, error) {
 	const fname = "tryAddRemoteStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":      fname,
+		"blobClient": blobClient.String(),
 	})
 	log.Debug(fname)
 
@@ -1266,7 +1295,7 @@ func tryAddRemoteStoreIndex(
 	mergedStoreIndex, err := longtaillib.MergeStoreIndex(storeIndex, addStoreIndex)
 	storeIndex.Dispose()
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed merging store index for"))
+		err = errors.Wrap(err, "Failed merging store index")
 		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 
@@ -1283,7 +1312,8 @@ func addToRemoteStoreIndex(
 	addStoreIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "addToRemoteStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":      fname,
+		"blobClient": blobClient,
 	})
 	log.Debug(fname)
 
@@ -1316,7 +1346,8 @@ func tryOverwriteRemoteStoreIndexWithLocking(
 	client longtailstorelib.BlobClient) (bool, error) {
 	const fname = "tryOverwriteRemoteStoreIndexWithLocking"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":  fname,
+		"client": client,
 	})
 	log.Debug(fname)
 
@@ -1351,7 +1382,8 @@ func tryOverwriteRemoteStoreIndexWithoutLocking(
 	client longtailstorelib.BlobClient) (bool, error) {
 	const fname = "tryOverwriteRemoteStoreIndexWithoutLocking"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":  fname,
+		"client": client.String(),
 	})
 	log.Debug(fname)
 
@@ -1362,7 +1394,7 @@ func tryOverwriteRemoteStoreIndexWithoutLocking(
 
 	storeBlob, err := longtaillib.WriteStoreIndexToBuffer(storeIndex)
 	if err != nil {
-		err = errors.Wrap(err, fmt.Sprintf("Failed serializing store index"))
+		err = errors.Wrap(err, "Failed serializing store index")
 		return false, errors.Wrap(err, fname)
 	}
 	defer storeBlob.Dispose()
@@ -1413,7 +1445,8 @@ func tryOverwriteRemoteStoreIndex(
 	blobClient longtailstorelib.BlobClient) (bool, error) {
 	const fname = "tryOverwriteRemoteStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":      fname,
+		"blobClient": blobClient,
 	})
 	log.Debug(fname)
 
@@ -1429,7 +1462,8 @@ func tryOverwriteStoreIndexWithRetry(
 	blobClient longtailstorelib.BlobClient) error {
 	const fname = "tryOverwriteStoreIndexWithRetry"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":      fname,
+		"blobClient": blobClient,
 	})
 	log.Debug(fname)
 
@@ -1464,6 +1498,7 @@ func getStoreIndexFromBlocks(
 	const fname = "getStoreIndexFromBlocks"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":          fname,
+		"blobClient":     blobClient,
 		"workerCount":    workerCount,
 		"len(blockKeys)": blockKeys,
 	})
@@ -1585,6 +1620,8 @@ func buildStoreIndexFromStoreBlocks(
 	const fname = "buildStoreIndexFromStoreBlocks"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
+		"blobStore":   blobStore,
+		"blobClient":  blobClient,
 		"workerCount": workerCount,
 	})
 	log.Debug(fname)
@@ -1613,8 +1650,9 @@ func readStoreStoreIndexFromPath(
 	client longtailstorelib.BlobClient) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "readStoreStoreIndexFromPath"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
-		"key":   key,
+		"fname":  fname,
+		"key":    key,
+		"client": client.String(),
 	})
 	log.Debug(fname)
 
@@ -1639,7 +1677,8 @@ func getStoreStoreIndexes(
 	client longtailstorelib.BlobClient) ([]string, error) {
 	const fname = "getStoreStoreIndexes"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":  fname,
+		"client": client.String(),
 	})
 	log.Debug(fname)
 
@@ -1667,6 +1706,7 @@ func mergeStoreIndexItems(
 	const fname = "mergeStoreIndexItems"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":      fname,
+		"client":     client.String(),
 		"len(items)": len(items),
 	})
 	log.Debug(fname)
@@ -1707,7 +1747,8 @@ func readStoreStoreIndexWithItems(
 	client longtailstorelib.BlobClient) (longtaillib.Longtail_StoreIndex, []string, error) {
 	const fname = "readStoreStoreIndexWithItems"
 	log := logrus.WithFields(logrus.Fields{
-		"fname": fname,
+		"fname":  fname,
+		"client": client.String(),
 	})
 	log.Debug(fname)
 
@@ -1723,7 +1764,10 @@ func readStoreStoreIndexWithItems(
 				err := errors.Wrap(err, "Failed to create empty store index")
 				return longtaillib.Longtail_StoreIndex{}, nil, errors.Wrapf(err, fname)
 			}
+			log.Info("created empty store index")
 			return storeIndex, nil, nil
+		} else {
+			log.WithFields(logrus.Fields{"items": items}).Info("read store index items")
 		}
 
 		storeIndex, usedItems, err := mergeStoreIndexItems(ctx, client, items)
@@ -1781,6 +1825,8 @@ func readRemoteStoreIndex(
 	const fname = "readRemoteStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
+		"blobStore":   blobStore.String(),
+		"client":      client.String(),
 		"accessType":  accessType,
 		"workerCount": workerCount,
 	})
@@ -1816,12 +1862,13 @@ func readRemoteStoreIndex(
 	if accessType == ReadOnly {
 		storeIndex, err = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
 		if err != nil {
-			err := errors.Wrap(err, fmt.Sprintf("Failed creating empty store index"))
+			err := errors.Wrap(err, "Failed creating empty store index")
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
 		return storeIndex, nil
 	}
 
+	log.Info("bulding store index from blocks")
 	storeIndex, err = buildStoreIndexFromStoreBlocks(
 		ctx,
 		blobStore,

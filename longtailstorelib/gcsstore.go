@@ -220,3 +220,7 @@ func (blobObject *gcsBlobObject) Delete() error {
 	}
 	return nil
 }
+
+func (blobObject *gcsBlobObject) String() string {
+	return fmt.Sprintf("%s/%s", blobObject.client.String(), blobObject.path)
+}

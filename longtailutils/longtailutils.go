@@ -294,8 +294,9 @@ func splitURI(uri string) (string, string) {
 	})
 	log.Debug(fname)
 	i := strings.LastIndex(uri, "/")
-	if i == -1 {
-		i = strings.LastIndex(uri, "\\")
+	backI := strings.LastIndex(uri, "\\")
+	if backI > i || i == -1 {
+		i = backI
 	}
 	if i == -1 {
 		return "", uri

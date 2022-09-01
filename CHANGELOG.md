@@ -1,5 +1,4 @@
 ##
-- **
 - **CHANGED** commands now logs input details at `info` level
 - **CHANGED** Improved logging in remotestore with `info` level
 - **CHANGED** Stats output is now printed to StdOut and with formatted logging to log file if `--log-file-path` is enabled
@@ -15,7 +14,7 @@
 - **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 - **FIXED** Corrected some function names logging
 - **FIXED** splitURI handles mixed forward and backward slash better
-- **UPDATED** Updated longtail to 0.3.6pre0
+- **UPDATED** Updated longtail to 0.3.6pre1
 
 ## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4

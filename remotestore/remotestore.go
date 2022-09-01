@@ -988,12 +988,12 @@ func NewRemoteBlockStore(
 		defaultClient:    defaultClient}
 
 	s.workerCount = workerCount
-	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
-	s.getBlockChan = make(chan getBlockMessage, s.workerCount*8)
-	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)
-	s.deleteBlockChan = make(chan deleteBlockMessage, s.workerCount*8)
+	s.putBlockChan = make(chan putBlockMessage, 16+s.workerCount*8)
+	s.getBlockChan = make(chan getBlockMessage, 32+s.workerCount*4)
+	s.prefetchBlockChan = make(chan prefetchBlockMessage, 16+s.workerCount*2048)
+	s.deleteBlockChan = make(chan deleteBlockMessage, 16+s.workerCount*8)
 	s.preflightGetChan = make(chan preflightGetMessage, 16)
-	s.blockIndexChan = make(chan blockIndexMessage, s.workerCount*2048)
+	s.blockIndexChan = make(chan blockIndexMessage, 16+s.workerCount*2048)
 	s.getExistingContentChan = make(chan getExistingContentMessage, 16)
 	s.pruneBlocksChan = make(chan pruneBlocksMessage, 1)
 	s.workerFlushChan = make(chan int, s.workerCount)

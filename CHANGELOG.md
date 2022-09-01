@@ -14,7 +14,8 @@
 - **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 - **FIXED** Corrected some function names logging
 - **FIXED** splitURI handles mixed forward and backward slash better
-- **UPDATED** Updated longtail to 0.3.6pre1
+- **FIXED** Reduced memory consumption when doing downsync/get of version
+- **UPDATED** Updated longtail to 0.3.6pre9
 
 ## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4

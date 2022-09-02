@@ -1,11 +1,11 @@
 ##
-- **
 - **CHANGED** commands now logs input details at `info` level
 - **CHANGED** Improved logging in remotestore with `info` level
 - **CHANGED** Stats output is now printed to StdOut and with formatted logging to log file if `--log-file-path` is enabled
 - **CHANGED** All logging now goes through logrus with the default logrus text formatting
 - **CHANGED** Progress output in console now goes to StdOut instead of StdErr
 - **CHANGED** Add NativeBuffer to avoid copying of bytes to Golang array and remove signed 32-bit integer length of arrays (`WriteStoredBlockToBuffer`, `WriteBlockIndexToBuffer`, `WriteVersionIndexToBuffer`, `WriteStoreIndexToBuffer`)
+- **CHANGED** `--min-block-usage-percent` now defaults to 80 to balance download size vs patch size
 - **ADDED** `--log-to-console` option, default is on, disable all logging output in console with `--no-log-to-console`
 - **ADDED** `--log-file-path` option, default is no log file output, add path to json formatted log file
 - **ADDED** `--log-coloring` option, enables colored logging output in console, default is non-colored
@@ -14,7 +14,8 @@
 - **FIXED** Full support for windows extended length paths (fixes: UNC path may not contain forward slashes (#214))
 - **FIXED** Corrected some function names logging
 - **FIXED** splitURI handles mixed forward and backward slash better
-- **UPDATED** Updated longtail to 0.3.5
+- **FIXED** Reduced memory consumption when doing downsync/get of version
+- **UPDATED** Updated longtail to 0.3.6
 
 ## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4

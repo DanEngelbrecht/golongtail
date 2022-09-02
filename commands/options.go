@@ -81,7 +81,7 @@ type StoreIndexPathOption struct {
 }
 
 type MinBlockUsagePercentOption struct {
-	MinBlockUsagePercent uint32 `name:"min-block-usage-percent" help:"Minimum percent of block content than must match for it to be considered \"existing\". Default is zero = use all" default:"0"`
+	MinBlockUsagePercent uint32 `name:"min-block-usage-percent" help:"Minimum percent of block content than must match for it to be considered \"existing\". Default is 80, allowing for up to 20% redundant data in blocks. Use 0 to use any block use all and 100 for no redundant data in blocks" default:"80"`
 }
 
 type TargetChunkSizeOption struct {

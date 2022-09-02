@@ -225,6 +225,7 @@ func getStoredBlock(
 	}
 
 	storedBlock, err := longtaillib.ReadStoredBlockFromBuffer(storedBlockData)
+	storedBlockData = nil
 	if err != nil {
 		atomic.AddUint64(&s.stats.StatU64[longtaillib.Longtail_BlockStoreAPI_StatU64_GetStoredBlock_FailCount], 1)
 		err = errors.Wrap(err, fmt.Sprintf("Failed to parse stored block `%s`", key))
@@ -285,6 +286,7 @@ func fetchBlock(
 	s.fetchedBlocksSync.Lock()
 	prefetchedBlock, exists := s.prefetchBlocks[getMsg.blockHash]
 	if exists && prefetchedBlock == nil {
+		fmt.Printf("Prefetch in background while fetching block, dropping duplicate\n")
 		storedBlock.Dispose()
 		s.fetchedBlocksSync.Unlock()
 		return
@@ -303,6 +305,7 @@ func fetchBlock(
 			continue
 		}
 		blockCopy, err := longtaillib.ReadStoredBlockFromBuffer(buf.ToBuffer())
+		fmt.Printf("Making block copy due to multiple waiters\n")
 		buf.Dispose()
 		if err != nil {
 			c.OnComplete(longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname))
@@ -370,6 +373,7 @@ func prefetchBlock(
 
 	prefetchedBlock, exists = s.prefetchBlocks[prefetchMsg.blockHash]
 	if prefetchedBlock == nil {
+		fmt.Printf("Dropping prefetched block due to background prefetch\n")
 		storedBlock.Dispose()
 		s.fetchedBlocksSync.Unlock()
 		return
@@ -984,12 +988,12 @@ func NewRemoteBlockStore(
 		defaultClient:    defaultClient}
 
 	s.workerCount = workerCount
-	s.putBlockChan = make(chan putBlockMessage, s.workerCount*8)
-	s.getBlockChan = make(chan getBlockMessage, s.workerCount*2048)
-	s.prefetchBlockChan = make(chan prefetchBlockMessage, s.workerCount*2048)
-	s.deleteBlockChan = make(chan deleteBlockMessage, s.workerCount*8)
+	s.putBlockChan = make(chan putBlockMessage, 16+s.workerCount*8)
+	s.getBlockChan = make(chan getBlockMessage, 32+s.workerCount*4)
+	s.prefetchBlockChan = make(chan prefetchBlockMessage, 16+s.workerCount*2048)
+	s.deleteBlockChan = make(chan deleteBlockMessage, 16+s.workerCount*8)
 	s.preflightGetChan = make(chan preflightGetMessage, 16)
-	s.blockIndexChan = make(chan blockIndexMessage, s.workerCount*2048)
+	s.blockIndexChan = make(chan blockIndexMessage, 16+s.workerCount*2048)
 	s.getExistingContentChan = make(chan getExistingContentMessage, 16)
 	s.pruneBlocksChan = make(chan pruneBlocksMessage, 1)
 	s.workerFlushChan = make(chan int, s.workerCount)

@@ -301,7 +301,12 @@ func splitURI(uri string) (string, string) {
 	if i == -1 {
 		return "", uri
 	}
-	return uri[:i], uri[i+1:]
+	parent := uri[:i]
+	name := uri[i+1:]
+	if parent == "" && (uri[0] == '\\' || uri[0] == '/') {
+		parent = "/"
+	}
+	return parent, name
 }
 
 // ReadFromURI ...

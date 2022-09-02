@@ -15,6 +15,7 @@
 - **FIXED** Corrected some function names logging
 - **FIXED** splitURI handles mixed forward and backward slash better
 - **FIXED** Reduced memory consumption when doing downsync/get of version
+- **FIXED** `put` with `--target-path` without folder in path (local or absolute) now writes to current folder instead of root
 - **UPDATED** Updated longtail to 0.3.6
 
 ## v0.3.5

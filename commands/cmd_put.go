@@ -60,7 +60,7 @@ func put(
 	timeStats := []longtailutils.TimeStat{}
 
 	targetName := targetPath
-	parentPath := ""
+	parentPath := "."
 	pathDelimiter := strings.LastIndexAny(targetPath, "\\/")
 	if pathDelimiter != -1 {
 		parentPath = targetPath[0:pathDelimiter]

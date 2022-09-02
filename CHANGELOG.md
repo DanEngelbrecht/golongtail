@@ -15,7 +15,7 @@
 - **FIXED** Corrected some function names logging
 - **FIXED** splitURI handles mixed forward and backward slash better
 - **FIXED** Reduced memory consumption when doing downsync/get of version
-- **UPDATED** Updated longtail to 0.3.6pre9
+- **UPDATED** Updated longtail to 0.3.6
 
 ## v0.3.5
 - **UPDATED** Updated longtail to 0.3.4

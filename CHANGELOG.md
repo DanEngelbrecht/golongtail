@@ -1,5 +1,5 @@
 ##
-- **UPDATED** Updated longtail to 0.3.7-pre0
+- **UPDATED** Updated longtail to 0.3.7-pre1
 
 ## v0.3.6
 - **CHANGED** commands now logs input details at `info` level

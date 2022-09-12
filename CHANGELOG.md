@@ -1,4 +1,7 @@
 ##
+- **UPDATED** Updated longtail to 0.3.7-pre0
+
+## v0.3.6
 - **CHANGED** commands now logs input details at `info` level
 - **CHANGED** Improved logging in remotestore with `info` level
 - **CHANGED** Stats output is now printed to StdOut and with formatted logging to log file if `--log-file-path` is enabled

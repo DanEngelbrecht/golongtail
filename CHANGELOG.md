@@ -1,4 +1,7 @@
 ##
+- **CHANGED** Migrated to `unsafe.Slice` for buffer to slice conversions.
+
+## v0.3.6
 - **CHANGED** commands now logs input details at `info` level
 - **CHANGED** Improved logging in remotestore with `info` level
 - **CHANGED** Stats output is now printed to StdOut and with formatted logging to log file if `--log-file-path` is enabled

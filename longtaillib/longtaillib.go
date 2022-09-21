@@ -6,7 +6,6 @@ import "C"
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"sync/atomic"
 	"unsafe"
 
@@ -411,10 +410,7 @@ func UnrefPointer(ptr unsafe.Pointer) {
 }
 
 func (b *NativeBuffer) ToBuffer() []byte {
-	if b.size == 0 {
-		return nil
-	}
-	return (*[1 << 30]byte)(unsafe.Pointer((*byte)(b.buffer)))[:b.size]
+	return carray2sliceByte((*C.uint8_t)(b.buffer), int(b.size))
 }
 
 func (b *NativeBuffer) Dispose() {
@@ -427,6 +423,22 @@ func (b *NativeBuffer) Dispose() {
 
 func (b *NativeBuffer) Size() int {
 	return int(b.size)
+}
+
+func carray2slice64(array *C.uint64_t, len int) []uint64 {
+	return unsafe.Slice((*uint64)(array), len)
+}
+
+func carray2slice32(array *C.uint32_t, len int) []uint32 {
+	return unsafe.Slice((*uint32)(array), len)
+}
+
+func carray2slice16(array *C.uint16_t, len int) []uint16 {
+	return unsafe.Slice((*uint16)(array), len)
+}
+
+func carray2sliceByte(array *C.uint8_t, len int) []byte {
+	return unsafe.Slice((*byte)(array), len)
 }
 
 // ReadFromStorage ...
@@ -580,42 +592,6 @@ func (fileInfos *Longtail_FileInfos) Dispose() {
 		C.Longtail_Free(unsafe.Pointer(fileInfos.cFileInfos))
 		fileInfos.cFileInfos = nil
 	}
-}
-
-func carray2slice64(array *C.uint64_t, len int) []uint64 {
-	var list []uint64
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = len
-	sliceHeader.Len = len
-	sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	return list
-}
-
-func carray2slice32(array *C.uint32_t, len int) []uint32 {
-	var list []uint32
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = len
-	sliceHeader.Len = len
-	sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	return list
-}
-
-func carray2slice16(array *C.uint16_t, len int) []uint16 {
-	var list []uint16
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = len
-	sliceHeader.Len = len
-	sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	return list
-}
-
-func carray2sliceByte(array *C.char, len int) []byte {
-	var list []byte
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&list)))
-	sliceHeader.Cap = len
-	sliceHeader.Len = len
-	sliceHeader.Data = uintptr(unsafe.Pointer(array))
-	return list
 }
 
 func (fileInfos *Longtail_FileInfos) GetFileCount() uint32 {
@@ -1270,7 +1246,7 @@ func (storedBlock *Longtail_StoredBlock) GetBlockSize() int {
 
 func (storedBlock *Longtail_StoredBlock) GetChunksBlockData() []byte {
 	size := int(storedBlock.cStoredBlock.m_BlockChunksDataSize)
-	return carray2sliceByte((*C.char)(storedBlock.cStoredBlock.m_BlockData), size)
+	return carray2sliceByte((*C.uint8_t)(storedBlock.cStoredBlock.m_BlockData), size)
 }
 
 func (storedBlock *Longtail_StoredBlock) GetBlockHash() uint64 {

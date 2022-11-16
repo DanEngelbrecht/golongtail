@@ -28,7 +28,8 @@ func downsync(
 	excludeFilterRegEx string,
 	scanTarget bool,
 	cacheTargetIndex bool,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	mergeVersions []string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -47,6 +48,7 @@ func downsync(
 		"scanTarget":                 scanTarget,
 		"cacheTargetIndex":           cacheTargetIndex,
 		"enableFileMapping":          enableFileMapping,
+		"mergeVersions":              mergeVersions,
 	})
 	log.Info(fname)
 
@@ -389,6 +391,7 @@ type DownsyncCmd struct {
 	ScanTargetOption
 	CacheTargetIndexOption
 	EnableFileMappingOption
+	MergeVersionsOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -407,7 +410,8 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
 		r.CacheTargetIndex,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.MergeVersions)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

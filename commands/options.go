@@ -107,3 +107,7 @@ type CacheTargetIndexOption struct {
 type EnableFileMappingOption struct {
 	EnableFileMapping bool `name:"enable-file-mapping" help:"Enabled memory mapped file for file reads"`
 }
+
+type MergeVersionsOption struct {
+	MergeVersions []string `name"merge-versions" arg:"" optional:"" help"Additional version indexes to be merge in to the base source version index"`
+}

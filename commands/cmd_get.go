@@ -94,7 +94,8 @@ func get(
 		excludeFilterRegEx,
 		scanTarget,
 		cacheTargetIndex,
-		enableFileMapping)
+		enableFileMapping,
+		make([]string, 0))
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)

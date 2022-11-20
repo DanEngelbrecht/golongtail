@@ -11,6 +11,8 @@ The command line tool can upload to and download from a GCS or S3 bucket but req
 
 The tool provides many options when it comes to both compression and hashing, defaulting to Blake3 for hashing and ZStd for compression, but others can be selected which will trade speed and or size depending on options.
 
+Discord chat at https://discord.com/invite/4VmZK9QBnv
+
 ## Cloning
 git clone https://github.com/DanEngelbrecht/golongtail.git
 

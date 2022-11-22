@@ -61,7 +61,7 @@ type SourceUriOption struct {
 }
 
 type MultiSourceUrisOption struct {
-	SourcePaths []string `name:"source-path(s)" help:"Source file uri" required:""`
+	SourcePaths []string `name:"source-path" help:"Source file uri(s)" required:""`
 }
 
 type ValidateTargetOption struct {
@@ -73,7 +73,7 @@ type VersionLocalStoreIndexPathOption struct {
 }
 
 type MultiVersionLocalStoreIndexPathsOption struct {
-	VersionLocalStoreIndexPaths []string `name:"version-local-store-index-path(s)" help:"Path to an optimized store index matching the source. If the file(s) cant be read it will fall back to the master store index"`
+	VersionLocalStoreIndexPaths []string `name:"version-local-store-index-path" help:"Path(s) to an optimized store index matching the source. If any of the file(s) cant be read it will fall back to the master store index"`
 }
 
 type VersionIndexPathOption struct {

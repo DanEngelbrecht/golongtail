@@ -87,7 +87,7 @@ func get(
 		numWorkerCount,
 		blobStoreURI,
 		s3EndpointResolverURI,
-		sourceFilePath,
+		[]string{sourceFilePath},
 		targetFolderPath,
 		targetIndexPath,
 		localCachePath,

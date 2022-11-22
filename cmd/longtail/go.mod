@@ -6,7 +6,7 @@ require (
 	github.com/DanEngelbrecht/golongtail/commands v0.0.0-00010101000000-000000000000
 	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0-00010101000000-000000000000
 	github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0-00010101000000-000000000000
-	github.com/alecthomas/kong v0.5.0
+	github.com/alecthomas/kong v0.7.1
 	github.com/sirupsen/logrus v1.8.1
 )
 

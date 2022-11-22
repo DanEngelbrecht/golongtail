@@ -936,7 +936,7 @@ func GetMeowHashIdentifier() uint32 {
 	return uint32(C.Longtail_GetMeowHashType())
 }
 
-//// Longtail_AsyncPutStoredBlockAPI::OnComplete() ...
+// // Longtail_AsyncPutStoredBlockAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncPutStoredBlockAPI) OnComplete(err error) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
 		return
@@ -944,7 +944,7 @@ func (asyncCompleteAPI *Longtail_AsyncPutStoredBlockAPI) OnComplete(err error) {
 	C.Longtail_AsyncPutStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, errorToErrno(err, C.EIO))
 }
 
-//// Longtail_AsyncGetStoredBlockAPI::OnComplete() ...
+// // Longtail_AsyncGetStoredBlockAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block Longtail_StoredBlock, err error) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
 		return
@@ -952,7 +952,7 @@ func (asyncCompleteAPI *Longtail_AsyncGetStoredBlockAPI) OnComplete(stored_block
 	C.Longtail_AsyncGetStoredBlock_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, stored_block.cStoredBlock, errorToErrno(err, C.EIO))
 }
 
-//// Longtail_AsyncGetExistingContentAPI::OnComplete() ...
+// // Longtail_AsyncGetExistingContentAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncGetExistingContentAPI) OnComplete(store_index Longtail_StoreIndex, err error) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
 		return
@@ -960,7 +960,7 @@ func (asyncCompleteAPI *Longtail_AsyncGetExistingContentAPI) OnComplete(store_in
 	C.Longtail_AsyncGetExistingContent_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, store_index.cStoreIndex, errorToErrno(err, C.EIO))
 }
 
-//// Longtail_AsyncPruneBlocksAPI::OnComplete() ...
+// // Longtail_AsyncPruneBlocksAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncPruneBlocksAPI) OnComplete(pruned_block_count uint32, err error) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
 		return
@@ -968,7 +968,7 @@ func (asyncCompleteAPI *Longtail_AsyncPruneBlocksAPI) OnComplete(pruned_block_co
 	C.Longtail_AsyncPruneBlocks_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.uint32_t(pruned_block_count), errorToErrno(err, C.EIO))
 }
 
-//// Longtail_AsyncPreflightStartedAPI::OnComplete() ...
+// // Longtail_AsyncPreflightStartedAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncPreflightStartedAPI) OnComplete(blockHashes []uint64, err error) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
 		return
@@ -981,7 +981,7 @@ func (asyncCompleteAPI *Longtail_AsyncPreflightStartedAPI) OnComplete(blockHashe
 	C.Longtail_AsyncPreflightStarted_OnComplete(asyncCompleteAPI.cAsyncCompleteAPI, C.uint32_t(blockCount), cblockHashes, errorToErrno(err, C.EIO))
 }
 
-//// Longtail_AsyncFlushAPI::OnComplete() ...
+// // Longtail_AsyncFlushAPI::OnComplete() ...
 func (asyncCompleteAPI *Longtail_AsyncFlushAPI) OnComplete(err error) {
 	if asyncCompleteAPI.cAsyncCompleteAPI == nil {
 		return
@@ -1070,7 +1070,7 @@ func (blockStoreAPI *Longtail_BlockStoreAPI) Dispose() {
 	}
 }
 
-//// PutStoredBlock() ...
+// // PutStoredBlock() ...
 func (blockStoreAPI *Longtail_BlockStoreAPI) PutStoredBlock(
 	storedBlock Longtail_StoredBlock,
 	asyncCompleteAPI Longtail_AsyncPutStoredBlockAPI) error {
@@ -1831,6 +1831,20 @@ func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index L
 	return Longtail_StoreIndex{cStoreIndex: sIndex}, nil
 }
 
+func MergeVersionIndex(base_version_index Longtail_VersionIndex, overlay_version_index Longtail_VersionIndex) (Longtail_VersionIndex, error) {
+	const fname = "MergeStoreIndex"
+
+	var vIndex *C.struct_Longtail_VersionIndex
+	errno := C.Longtail_MergeVersionIndex(
+		base_version_index.cVersionIndex,
+		overlay_version_index.cVersionIndex,
+		&vIndex)
+	if errno != 0 {
+		return Longtail_VersionIndex{cVersionIndex: nil}, errors.Wrap(errnoToError(errno), fname)
+	}
+	return Longtail_VersionIndex{cVersionIndex: vIndex}, nil
+}
+
 // WriteStoreIndexToBuffer ...
 func WriteStoreIndexToBuffer(index Longtail_StoreIndex) (NativeBuffer, error) {
 	const fname = "WriteStoreIndexToBuffer"
@@ -2167,7 +2181,7 @@ func WriteVersion(
 	return nil
 }
 
-//CreateVersionDiff do we really need this? Maybe ChangeVersion should create one on the fly?
+// CreateVersionDiff do we really need this? Maybe ChangeVersion should create one on the fly?
 func CreateVersionDiff(
 	hashAPI Longtail_HashAPI,
 	sourceVersionIndex Longtail_VersionIndex,
@@ -2186,7 +2200,7 @@ func CreateVersionDiff(
 	return Longtail_VersionDiff{cVersionDiff: versionDiff}, nil
 }
 
-//ChangeVersion ...
+// ChangeVersion ...
 func ChangeVersion(
 	contentBlockStoreAPI Longtail_BlockStoreAPI,
 	versionStorageAPI Longtail_StorageAPI,
@@ -2387,13 +2401,13 @@ func getLoggerFunc(logger Logger) C.Longtail_Log {
 	return C.Longtail_Log(C.LogProxy_Log)
 }
 
-//SetLogger ...
+// SetLogger ...
 func SetLogger(logger Logger) {
 	cLoggerContext := SavePointer(logger)
 	C.Longtail_SetLog(getLoggerFunc(logger), cLoggerContext)
 }
 
-//SetLogLevel ...
+// SetLogLevel ...
 func SetLogLevel(level int) {
 	C.Longtail_SetLogLevel(C.int(level))
 }
@@ -2407,7 +2421,7 @@ func getAssertFunc(assert Assert) C.Longtail_Assert {
 
 var activeAssert Assert
 
-//SetAssert ...
+// SetAssert ...
 func SetAssert(assert Assert) {
 	C.Longtail_SetAssert(getAssertFunc(assert))
 	activeAssert = assert
@@ -2420,18 +2434,18 @@ func AssertProxy_Assert(expression *C.char, file *C.char, line C.int) {
 	}
 }
 
-//EnableMemtrace ...
+// EnableMemtrace ...
 func EnableMemtrace() {
 	C.EnableMemtrace()
 }
 
-//MemTraceSummary ...
+// MemTraceSummary ...
 const MemTraceSummary = 0
 
-//MemTraceDetailed ...
+// MemTraceDetailed ...
 const MemTraceDetailed = 1
 
-//GetMemTraceStats ...
+// GetMemTraceStats ...
 func GetMemTraceStats(logLevel int) string {
 	var cLogLevel C.uint32_t
 	switch logLevel {
@@ -2446,12 +2460,12 @@ func GetMemTraceStats(logLevel int) string {
 	return stats
 }
 
-//DisableMemtrace ...
+// DisableMemtrace ...
 func DisableMemtrace() {
 	C.DisableMemtrace()
 }
 
-//MemTraceDumpStats ...
+// MemTraceDumpStats ...
 func MemTraceDumpStats(path string) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))

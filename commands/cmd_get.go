@@ -71,9 +71,13 @@ func get(
 		err = fmt.Errorf("missing source-path in get-config `%s`", getConfigPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
-	var versionLocalStoreIndexPath string
+
+	var versionLocalStoreIndexPaths []string
 	if v.IsSet("version-local-store-index-path") {
-		versionLocalStoreIndexPath = v.GetString("version-local-store-index-path")
+		path := v.GetString("version-local-store-index-path")
+		if path != "" {
+			versionLocalStoreIndexPaths = append(versionLocalStoreIndexPaths, path)
+		}
 	}
 
 	readGetConfigTime := time.Since(readGetConfigStartTime)
@@ -89,13 +93,12 @@ func get(
 		localCachePath,
 		retainPermissions,
 		validate,
-		versionLocalStoreIndexPath,
+		versionLocalStoreIndexPaths,
 		includeFilterRegEx,
 		excludeFilterRegEx,
 		scanTarget,
 		cacheTargetIndex,
-		enableFileMapping,
-		make([]string, 0))
+		enableFileMapping)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)

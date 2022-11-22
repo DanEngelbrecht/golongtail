@@ -23,32 +23,30 @@ func downsync(
 	localCachePath string,
 	retainPermissions bool,
 	validate bool,
-	versionLocalStoreIndexPath string,
+	versionLocalStoreIndexPaths []string,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
 	cacheTargetIndex bool,
-	enableFileMapping bool,
-	mergeVersions []string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":                      fname,
-		"numWorkerCount":             numWorkerCount,
-		"blobStoreURI":               blobStoreURI,
-		"s3EndpointResolverURI":      s3EndpointResolverURI,
-		"sourceFilePath":             sourceFilePath,
-		"targetFolderPath":           targetFolderPath,
-		"targetIndexPath":            targetIndexPath,
-		"localCachePath":             localCachePath,
-		"retainPermissions":          retainPermissions,
-		"validate":                   validate,
-		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
-		"includeFilterRegEx":         includeFilterRegEx,
-		"excludeFilterRegEx":         excludeFilterRegEx,
-		"scanTarget":                 scanTarget,
-		"cacheTargetIndex":           cacheTargetIndex,
-		"enableFileMapping":          enableFileMapping,
-		"mergeVersions":              mergeVersions,
+		"fname":                       fname,
+		"numWorkerCount":              numWorkerCount,
+		"blobStoreURI":                blobStoreURI,
+		"s3EndpointResolverURI":       s3EndpointResolverURI,
+		"sourceFilePath":              sourceFilePath,
+		"targetFolderPath":            targetFolderPath,
+		"targetIndexPath":             targetIndexPath,
+		"localCachePath":              localCachePath,
+		"retainPermissions":           retainPermissions,
+		"validate":                    validate,
+		"versionLocalStoreIndexPaths": versionLocalStoreIndexPaths,
+		"includeFilterRegEx":          includeFilterRegEx,
+		"excludeFilterRegEx":          excludeFilterRegEx,
+		"scanTarget":                  scanTarget,
+		"cacheTargetIndex":            cacheTargetIndex,
+		"enableFileMapping":           enableFileMapping,
 	})
 	log.Info(fname)
 
@@ -143,7 +141,7 @@ func downsync(
 	defer localFS.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPath, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPaths, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -385,13 +383,12 @@ type DownsyncCmd struct {
 	CachePathOption
 	RetainPermissionsOption
 	ValidateTargetOption
-	VersionLocalStoreIndexPathOption
+	MultiVersionLocalStoreIndexPathsOption
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
 	ScanTargetOption
 	CacheTargetIndexOption
 	EnableFileMappingOption
-	MergeVersionsOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -405,13 +402,12 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.CachePath,
 		r.RetainPermissions,
 		r.Validate,
-		r.VersionLocalStoreIndexPath,
+		r.VersionLocalStoreIndexPaths,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
 		r.CacheTargetIndex,
-		r.EnableFileMapping,
-		r.MergeVersions)
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

@@ -60,12 +60,20 @@ type SourceUriOption struct {
 	SourcePath string `name:"source-path" help:"Source file uri" required:""`
 }
 
+type MultiSourceUrisOption struct {
+	SourcePaths []string `name:"source-path(s)" help:"Source file uri" required:""`
+}
+
 type ValidateTargetOption struct {
 	Validate bool `name:"validate" help:"Validate target path once completed"`
 }
 
 type VersionLocalStoreIndexPathOption struct {
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file cant be read it will fall back to the master store index"`
+}
+
+type MultiVersionLocalStoreIndexPathsOption struct {
+	VersionLocalStoreIndexPaths []string `name:"version-local-store-index-path(s)" help:"Path to an optimized store index matching the source. If the file(s) cant be read it will fall back to the master store index"`
 }
 
 type VersionIndexPathOption struct {
@@ -106,8 +114,4 @@ type CacheTargetIndexOption struct {
 
 type EnableFileMappingOption struct {
 	EnableFileMapping bool `name:"enable-file-mapping" help:"Enabled memory mapped file for file reads"`
-}
-
-type MergeVersionsOption struct {
-	MergeVersions []string `name"merge-versions" arg:"" optional:"" help"Additional version indexes to be merge in to the base source version index"`
 }

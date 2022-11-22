@@ -22,7 +22,7 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadOnly)
 	if err != nil {
@@ -112,7 +112,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadOnly)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -194,7 +194,7 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -257,7 +257,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -289,7 +289,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -337,7 +337,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -526,7 +526,7 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		Init)
 	if err != nil {
@@ -582,7 +582,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -646,7 +646,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {
@@ -672,7 +672,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"",
+		nil,
 		runtime.NumCPU(),
 		ReadWrite)
 	if err != nil {

@@ -1,5 +1,7 @@
 ##
 - **CHANGED** Migrated to `unsafe.Slice` for buffer to slice conversions.
+- **ADDED** `downsync` and `get` command now allows multiple sources allowing for merging of version in one go. All sources must use the same `storage-uri`
+- **FIXED** Updated to longtail 0.3.7 (fixes https://github.com/DanEngelbrecht/longtail/issues/211)
 
 ## v0.3.6
 - **CHANGED** commands now logs input details at `info` level

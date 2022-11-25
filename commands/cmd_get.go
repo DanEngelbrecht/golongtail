@@ -13,7 +13,7 @@ import (
 
 func get(
 	numWorkerCount int,
-	getConfigPath string,
+	getConfigPaths []string,
 	s3EndpointResolverURI string,
 	targetFolderPath string,
 	targetIndexPath string,
@@ -29,7 +29,7 @@ func get(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                 fname,
 		"numWorkerCount":        numWorkerCount,
-		"getConfigPath":         getConfigPath,
+		"getConfigPaths":        getConfigPaths,
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"targetFolderPath":      targetFolderPath,
 		"targetIndexPath":       targetIndexPath,
@@ -49,35 +49,55 @@ func get(
 
 	readGetConfigStartTime := time.Now()
 
-	vbuffer, err := longtailutils.ReadFromURI(getConfigPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
-	if err != nil {
+	if len(getConfigPaths) < 1 {
+		err := fmt.Errorf("source-path is missing")
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
-	v := viper.New()
-	v.SetConfigType("json")
-	err = v.ReadConfig(bytes.NewBuffer(vbuffer))
-	if err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-
-	blobStoreURI := v.GetString("storage-uri")
-	if blobStoreURI == "" {
-		err = fmt.Errorf("missing storage-uri in get-config `%s`", getConfigPath)
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-	sourceFilePath := v.GetString("source-path")
-	if sourceFilePath == "" {
-		err = fmt.Errorf("missing source-path in get-config `%s`", getConfigPath)
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-
+	blobStoreURI := ""
+	var sourceFilePaths []string
 	var versionLocalStoreIndexPaths []string
-	if v.IsSet("version-local-store-index-path") {
-		path := v.GetString("version-local-store-index-path")
-		if path != "" {
-			versionLocalStoreIndexPaths = append(versionLocalStoreIndexPaths, path)
+	for _, getConfigPath := range getConfigPaths {
+		vbuffer, err := longtailutils.ReadFromURI(getConfigPath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
+
+		v := viper.New()
+		v.SetConfigType("json")
+		err = v.ReadConfig(bytes.NewBuffer(vbuffer))
+		if err != nil {
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+
+		localBlobStoreURI := v.GetString("storage-uri")
+		if localBlobStoreURI == "" {
+			err = fmt.Errorf("missing storage-uri in get-config `%s`", getConfigPath)
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		} else if blobStoreURI == "" {
+			blobStoreURI = localBlobStoreURI
+		} else if blobStoreURI != localBlobStoreURI {
+			err = fmt.Errorf("storage-uri in get-config `%s` does not match inital storage-uri `%s`", getConfigPath, blobStoreURI)
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+
+		sourceFilePath := v.GetString("source-path")
+		if sourceFilePath == "" {
+			err = fmt.Errorf("missing source-path in get-config `%s`", getConfigPath)
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+		sourceFilePaths = append(sourceFilePaths, sourceFilePath)
+
+		if v.IsSet("version-local-store-index-path") {
+			versionLocalStoreIndexPath := v.GetString("version-local-store-index-path")
+			if versionLocalStoreIndexPath != "" {
+				versionLocalStoreIndexPaths = append(versionLocalStoreIndexPaths, versionLocalStoreIndexPath)
+			}
+		}
+	}
+
+	if len(versionLocalStoreIndexPaths) != len(sourceFilePaths) {
+		versionLocalStoreIndexPaths = []string{}
 	}
 
 	readGetConfigTime := time.Since(readGetConfigStartTime)
@@ -87,7 +107,7 @@ func get(
 		numWorkerCount,
 		blobStoreURI,
 		s3EndpointResolverURI,
-		[]string{sourceFilePath},
+		sourceFilePaths,
 		targetFolderPath,
 		targetIndexPath,
 		localCachePath,
@@ -107,7 +127,7 @@ func get(
 }
 
 type GetCmd struct {
-	GetConfigURI string `name:"source-path" help:"File uri for json formatted get-config file" required:""`
+	GetConfigURIs []string `name:"source-path" help:"File uri(s) for json formatted get-config file" required:"" sep:" "`
 	S3EndpointResolverURLOption
 	TargetPathOption
 	TargetIndexUriOption
@@ -125,7 +145,7 @@ type GetCmd struct {
 func (r *GetCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := get(
 		ctx.NumWorkerCount,
-		r.GetConfigURI,
+		r.GetConfigURIs,
 		r.S3EndpointResolverURL,
 		r.TargetPath,
 		r.TargetIndexPath,

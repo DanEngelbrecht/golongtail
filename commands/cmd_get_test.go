@@ -106,3 +106,32 @@ func TestGetWithLSIAndCache(t *testing.T) {
 	}
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
+
+func TestMultiVersionGet(t *testing.T) {
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createLayeredData(t, fsBlobPathPrefix)
+	executeCommandLine("put", "--exclude-filter-regex", ".*layer2$**.*layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/base.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi")
+	executeCommandLine("put", "--include-filter-regex", ".*/$**.*\\.layer2$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer2.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer2.lsi")
+	executeCommandLine("put", "--include-filter-regex", ".*/$**.*\\.layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer3.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer3.lsi")
+
+	cmd, err := executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/base.json "+fsBlobPathPrefix+"/index/layer2.json "+fsBlobPathPrefix+"/index/layer3.json", "--target-path", testPath+"/target")
+	if err != nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+	validateContent(t, fsBlobPathPrefix, "target", layerData)
+}
+
+func TestMultiVersionGetMismatchStoreURI(t *testing.T) {
+	testPath, _ := ioutil.TempDir("", "test")
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createLayeredData(t, fsBlobPathPrefix)
+	executeCommandLine("put", "--exclude-filter-regex", ".*layer2$**.*layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/base.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi")
+	executeCommandLine("put", "--include-filter-regex", ".*/$**.*\\.layer2$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer2.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer2.lsi")
+	executeCommandLine("put", "--include-filter-regex", ".*/$**.*\\.layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer3.json", "--storage-uri", fsBlobPathPrefix+"/bad_storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer3.lsi")
+
+	cmd, err := executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/base.json "+fsBlobPathPrefix+"/index/layer2.json "+fsBlobPathPrefix+"/index/layer3.json", "--target-path", testPath+"/target")
+	if err == nil {
+		t.Errorf("%s: %s", cmd, err)
+	}
+}

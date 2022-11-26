@@ -308,7 +308,7 @@ func TestDownsyncMissingIndex(t *testing.T) {
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
-func TestMultiVersion(t *testing.T) {
+func TestMultiVersionDownsync(t *testing.T) {
 	testPath, _ := ioutil.TempDir("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createLayeredData(t, fsBlobPathPrefix)

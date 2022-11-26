@@ -99,6 +99,21 @@ var (
 		"morestuff.txt":                              "we have some more stuff",
 		"folder2/anotherabitoftextinasubfolder2.txt": "and some more text that we need",
 	}
+	layerData = map[string]string{
+		"empty-file":                                    "",
+		"abitoftext.txt":                                "this is a test file",
+		"abitoftext.layer2":                             "second layer test file",
+		"folder/abitoftextmvinasubfolder.txt":           "this is a test file in a subfolder",
+		"folder/abitoftextmvinasubfolder.layer2":        "layer 2 data in folder",
+		"folder/anotherabitoftextinasubfolder.txt":      "this is a second test file in a subfolder",
+		"stuff.txt":                                     "we have some stuff",
+		"blobby/fluff.layer2":                           "more fluff is always essential",
+		"glob.layer2":                                   "glob is all you need",
+		"morestuff.txt":                                 "we have some more stuff",
+		"folder2/anotherabitoftextinasubfolder2.txt":    "and some more text that we need",
+		"folder2/anotherabitoftextinasubfolder2.layer3": "stuff for layer 3 is good stuff for any layer",
+		"folder3/wefewef.layer3":                        "layer3 on top of the world",
+	}
 )
 
 func createVersionData(t *testing.T, baseURI string) {
@@ -106,4 +121,9 @@ func createVersionData(t *testing.T, baseURI string) {
 	createContent(store, "version/v1/", v1FilesCreate)
 	createContent(store, "version/v2/", v2FilesCreate)
 	createContent(store, "version/v3/", v3FilesCreate)
+}
+
+func createLayeredData(t *testing.T, baseURI string) {
+	store, _ := longtailstorelib.CreateBlobStoreForURI(baseURI)
+	createContent(store, "source/", layerData)
 }

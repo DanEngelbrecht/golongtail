@@ -6,17 +6,17 @@ require (
 	github.com/DanEngelbrecht/golongtail/commands v0.0.0-00010101000000-000000000000
 	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0-00010101000000-000000000000
 	github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0-00010101000000-000000000000
-	github.com/alecthomas/kong v0.5.0
+	github.com/alecthomas/kong v0.7.1
 	github.com/sirupsen/logrus v1.8.1
 )
 
 require (
-	github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0-00010101000000-000000000000 // indirect
-	github.com/DanEngelbrecht/golongtail/remotestore v0.0.0-00010101000000-000000000000 // indirect
 	cloud.google.com/go v0.102.0 // indirect
 	cloud.google.com/go/compute v1.6.1 // indirect
 	cloud.google.com/go/iam v0.3.0 // indirect
 	cloud.google.com/go/storage v1.22.1 // indirect
+	github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0-00010101000000-000000000000 // indirect
+	github.com/DanEngelbrecht/golongtail/remotestore v0.0.0-00010101000000-000000000000 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.16.4 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.1 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.15.9 // indirect
@@ -64,7 +64,6 @@ require (
 	google.golang.org/genproto v0.0.0-20220527130721-00d5c0f3be58 // indirect
 	google.golang.org/grpc v1.46.2 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ini.v1 v1.66.5 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

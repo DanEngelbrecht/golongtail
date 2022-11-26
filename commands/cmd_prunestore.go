@@ -155,7 +155,7 @@ func gatherBlocksToKeep(
 		"dryRun":                      dryRun,
 	})
 	log.Debug(fname)
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
@@ -359,7 +359,7 @@ func pruneStore(
 		fmt.Printf("Prune would keep %d blocks", len(blocksToKeep))
 		return storeStats, timeStats, nil
 	}
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, "", jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

@@ -13,17 +13,31 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+func readVersionIndex(sourceFilePath string, opts ...longtailstorelib.BlobStoreOption) (longtaillib.Longtail_VersionIndex, error) {
+	const fname = "readVersionIndex"
+	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath, opts...)
+	if err != nil {
+		return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
+	}
+	sourceVersionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
+	if err != nil {
+		err = errors.Wrapf(err, "Cant parse version index from `%s`", sourceFilePath)
+		return longtaillib.Longtail_VersionIndex{}, errors.Wrap(err, fname)
+	}
+	return sourceVersionIndex, nil
+}
+
 func downsync(
 	numWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
-	sourceFilePath string,
+	sourceFilePaths []string,
 	targetFolderPath string,
 	targetIndexPath string,
 	localCachePath string,
 	retainPermissions bool,
 	validate bool,
-	versionLocalStoreIndexPath string,
+	versionLocalStoreIndexPaths []string,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
 	scanTarget bool,
@@ -31,22 +45,22 @@ func downsync(
 	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":                      fname,
-		"numWorkerCount":             numWorkerCount,
-		"blobStoreURI":               blobStoreURI,
-		"s3EndpointResolverURI":      s3EndpointResolverURI,
-		"sourceFilePath":             sourceFilePath,
-		"targetFolderPath":           targetFolderPath,
-		"targetIndexPath":            targetIndexPath,
-		"localCachePath":             localCachePath,
-		"retainPermissions":          retainPermissions,
-		"validate":                   validate,
-		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
-		"includeFilterRegEx":         includeFilterRegEx,
-		"excludeFilterRegEx":         excludeFilterRegEx,
-		"scanTarget":                 scanTarget,
-		"cacheTargetIndex":           cacheTargetIndex,
-		"enableFileMapping":          enableFileMapping,
+		"fname":                       fname,
+		"numWorkerCount":              numWorkerCount,
+		"blobStoreURI":                blobStoreURI,
+		"s3EndpointResolverURI":       s3EndpointResolverURI,
+		"sourceFilePaths":             sourceFilePaths,
+		"targetFolderPath":            targetFolderPath,
+		"targetIndexPath":             targetIndexPath,
+		"localCachePath":              localCachePath,
+		"retainPermissions":           retainPermissions,
+		"validate":                    validate,
+		"versionLocalStoreIndexPaths": versionLocalStoreIndexPaths,
+		"includeFilterRegEx":          includeFilterRegEx,
+		"excludeFilterRegEx":          excludeFilterRegEx,
+		"scanTarget":                  scanTarget,
+		"cacheTargetIndex":            cacheTargetIndex,
+		"enableFileMapping":           enableFileMapping,
 	})
 	log.Info(fname)
 
@@ -58,6 +72,15 @@ func downsync(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
+	if len(sourceFilePaths) < 1 {
+		err := fmt.Errorf("please provide at least one source path uri")
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+	if sourceFilePaths[0] == "" {
+		err := fmt.Errorf("please provide at least one source path uri")
+		return storeStats, timeStats, errors.Wrap(err, fname)
+	}
+
 	pathFilter, err := longtailutils.MakeRegexPathFilter(includeFilterRegEx, excludeFilterRegEx)
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
@@ -65,14 +88,14 @@ func downsync(
 
 	resolvedTargetFolderPath := ""
 	if targetFolderPath == "" {
-		normalizedSourceFilePath := longtailstorelib.NormalizeFileSystemPath(sourceFilePath)
+		normalizedSourceFilePath := longtailstorelib.NormalizeFileSystemPath(sourceFilePaths[0])
 		normalizedSourceFilePath = strings.ReplaceAll(normalizedSourceFilePath, "\\", "/")
 		urlSplit := strings.Split(normalizedSourceFilePath, "/")
 		sourceName := urlSplit[len(urlSplit)-1]
 		sourceNameSplit := strings.Split(sourceName, ".")
 		resolvedTargetFolderPath = sourceNameSplit[0]
 		if resolvedTargetFolderPath == "" {
-			err = fmt.Errorf("unable to resolve target path using `%s` as base", sourceFilePath)
+			err = fmt.Errorf("unable to resolve target path using `%s` as base", sourceFilePaths[0])
 			return storeStats, timeStats, errors.Wrap(err, fname)
 		}
 	} else {
@@ -104,14 +127,27 @@ func downsync(
 
 	readSourceStartTime := time.Now()
 
-	vbuffer, err := longtailutils.ReadFromURI(sourceFilePath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
-	if err != nil {
-		return storeStats, timeStats, errors.Wrap(err, fname)
-	}
-	sourceVersionIndex, err := longtaillib.ReadVersionIndexFromBuffer(vbuffer)
-	if err != nil {
-		err = errors.Wrapf(err, "Cant parse version index from `%s`", sourceFilePath)
-		return storeStats, timeStats, errors.Wrap(err, fname)
+	var sourceVersionIndex longtaillib.Longtail_VersionIndex
+	for index, sourceFilePath := range sourceFilePaths {
+		oneVersionIndex, err := readVersionIndex(sourceFilePath, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+		if err != nil {
+			err = errors.Wrapf(err, "Cant read version index from `%s`", sourceFilePath)
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+		if index == 0 {
+			sourceVersionIndex = oneVersionIndex
+			continue
+		}
+		mergedVersionIndex, err := longtaillib.MergeVersionIndex(sourceVersionIndex, oneVersionIndex)
+		if err != nil {
+			sourceVersionIndex.Dispose()
+			oneVersionIndex.Dispose()
+			err = errors.Wrapf(err, "Cant mnerge version index from `%s`", sourceFilePath)
+			return storeStats, timeStats, errors.Wrap(err, fname)
+		}
+		sourceVersionIndex.Dispose()
+		oneVersionIndex.Dispose()
+		sourceVersionIndex = mergedVersionIndex
 	}
 	defer sourceVersionIndex.Dispose()
 
@@ -141,7 +177,7 @@ func downsync(
 	defer localFS.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPath, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPaths, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -192,7 +228,7 @@ func downsync(
 		targetVersionIndex,
 		sourceVersionIndex)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to create version diff. `%s` -> `%s`", targetFolderPath, sourceFilePath)
+		err = errors.Wrapf(err, "Failed to create version diff. `%s` -> `%s`", targetFolderPath, sourceFilePaths[0])
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 	defer versionDiff.Dispose()
@@ -201,7 +237,7 @@ func downsync(
 		sourceVersionIndex,
 		versionDiff)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed to get required chunk hashes. `%s` -> `%s`", targetFolderPath, sourceFilePath)
+		err = errors.Wrapf(err, "Failed to get required chunk hashes. `%s` -> `%s`", targetFolderPath, sourceFilePaths[0])
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
@@ -236,7 +272,7 @@ func downsync(
 		longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
 		retainPermissions)
 	if err != nil {
-		err = errors.Wrapf(err, "Failed writing version `%s` to `%s`", sourceFilePath, targetFolderPath)
+		err = errors.Wrapf(err, "Failed writing version `%s` to `%s`", sourceFilePaths[0], targetFolderPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
 
@@ -377,13 +413,13 @@ func downsync(
 type DownsyncCmd struct {
 	StorageURIOption
 	S3EndpointResolverURLOption
-	SourceUriOption
+	MultiSourceUrisOption
 	TargetPathOption
 	TargetIndexUriOption
 	CachePathOption
 	RetainPermissionsOption
 	ValidateTargetOption
-	VersionLocalStoreIndexPathOption
+	MultiVersionLocalStoreIndexPathsOption
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
 	ScanTargetOption
@@ -396,13 +432,13 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		ctx.NumWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
-		r.SourcePath,
+		r.SourcePaths,
 		r.TargetPath,
 		r.TargetIndexPath,
 		r.CachePath,
 		r.RetainPermissions,
 		r.Validate,
-		r.VersionLocalStoreIndexPath,
+		r.VersionLocalStoreIndexPaths,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,

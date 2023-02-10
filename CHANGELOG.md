@@ -1,4 +1,5 @@
 ##
+- **CHANGED** Only `init` operation will try to rebuild the store index from blocks
 - **UPDATED** All golang module dependencies updated
 
 ## v0.3.6

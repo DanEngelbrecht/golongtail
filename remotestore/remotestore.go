@@ -25,7 +25,7 @@ type AccessType int
 const (
 	// Init - read/write access with forced rebuild of store index
 	Init AccessType = iota
-	// ReadWrite - read/write access with optional rebuild of store index
+	// ReadWrite - read/write access
 	ReadWrite
 	// ReadOnly - read only access
 	ReadOnly
@@ -1900,13 +1900,13 @@ func readRemoteStoreIndex(
 				log.WithError(err).Info("Failed reading existsing store index")
 			}
 		}
-	}
-
-	if storeIndex.IsValid() {
-		return storeIndex, nil
+		if storeIndex.IsValid() {
+			return storeIndex, nil
+		}
 	}
 
 	if accessType == ReadOnly {
+		log.Info("No remote index found, using empty store index")
 		storeIndex, err = longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
 		if err != nil {
 			err := errors.Wrap(err, "Failed creating empty store index")
@@ -1915,26 +1915,30 @@ func readRemoteStoreIndex(
 		return storeIndex, nil
 	}
 
-	log.Info("bulding store index from blocks")
-	storeIndex, err = buildStoreIndexFromStoreBlocks(
-		ctx,
-		blobStore,
-		client,
-		workerCount)
+	if accessType == Init {
+		log.Info("bulding store index from blocks")
+		storeIndex, err = buildStoreIndexFromStoreBlocks(
+			ctx,
+			blobStore,
+			client,
+			workerCount)
 
-	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		}
+		log.Infof("Rebuilt remote index with %d blocks", len(storeIndex.GetBlockHashes()))
+		newStoreIndex, err := addToRemoteStoreIndex(ctx, client, storeIndex)
+		if err != nil {
+			log.WithError(err).Error("Failed to update store index")
+		}
+		if newStoreIndex.IsValid() {
+			storeIndex.Dispose()
+			storeIndex = newStoreIndex
+		}
+		return storeIndex, nil
 	}
-	log.Infof("Rebuilt remote index with %d blocks", len(storeIndex.GetBlockHashes()))
-	newStoreIndex, err := addToRemoteStoreIndex(ctx, client, storeIndex)
-	if err != nil {
-		log.WithError(err).Error("Failed to update store index")
-	}
-	if newStoreIndex.IsValid() {
-		storeIndex.Dispose()
-		storeIndex = newStoreIndex
-	}
-	return storeIndex, nil
+
+	return storeIndex, errors.Wrap(err, fname)
 }
 
 func getBlockPath(basePath string, blockHash uint64) string {

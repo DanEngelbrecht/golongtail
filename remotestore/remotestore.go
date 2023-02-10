@@ -1687,9 +1687,24 @@ func getStoreStoreIndexes(
 	log.Debug(fname)
 
 	var items []string
+	retryCount := 0
+	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
 	blobs, err := client.GetObjects("store")
-	if err != nil {
-		return nil, errors.Wrapf(err, fname)
+	for err != nil {
+		if longtaillib.IsNotExist(err) {
+			return items, nil
+		}
+		if retryCount == len(retryDelay) {
+			err = errors.Wrapf(err, "Failed list store indexes in store %s", client.String())
+			log.Error(err)
+			return nil, errors.Wrap(err, fname)
+		}
+		err = errors.Wrapf(err, "Retrying list store indexes in store %s with %s delay", client.String(), retryDelay[retryCount])
+		log.Info(err)
+
+		time.Sleep(retryDelay[retryCount])
+		retryCount++
+		blobs, err = client.GetObjects("store")
 	}
 
 	for _, blob := range blobs {

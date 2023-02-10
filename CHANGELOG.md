@@ -1,4 +1,5 @@
 ##
+- **ADDED** Added retry logic when reading remote store index
 - **UPDATED** All golang module dependencies updated
 
 ## v0.3.6

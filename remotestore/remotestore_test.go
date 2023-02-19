@@ -958,23 +958,3 @@ func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
 
 	testStoreIndexSync(blobStore, t)
 }
-
-func TestNewIndexStrategy(t *testing.T) {
-	Longtail_HashAPI hashapi = longtaillib.CreateBlake3HashAPI()
-		//	storePath, err := ioutil.TempDir("", "test")
-	//	if err != nil {
-	//		t.Errorf("ioutil.TempDir() err == %s", err)
-	//	}
-	var blocks []longtaillib.Longtail_StoredBlock
-	for n := 0; n < 16; n++ {
-		storedBlock, err := generateStoredBlock(t, uint8(n+1))
-		if err != nil {
-			t.Errorf("longtailstorelib.NewFSBlobStore() err == %s", err)
-		}
-		blocks = append(blocks, storedBlock)
-	}
-	if len(blocks) != 16 {
-		t.Errorf("Bad panda")
-	}
-
-}

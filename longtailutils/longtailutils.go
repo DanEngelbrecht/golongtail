@@ -421,7 +421,7 @@ func ReadBlobWithRetry(
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	if !exists {
-		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s does not exist", key))
+		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s/%s does not exist", client.String(), key))
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}

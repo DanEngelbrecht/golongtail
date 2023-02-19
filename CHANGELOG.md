@@ -1,6 +1,8 @@
 ##
 - **CHANGED** Only `init` operation will try to rebuild the store index from blocks
 - **ADDED** Added retry logic when reading remote store index
+- **FIXED** Don't do fatal exit if reading store index fails, just report error back to caller and log error at exit
+- **FIXED** Gracefully handle missing store.lsi condition as separate from failing to read existing store index
 - **UPDATED** All golang module dependencies updated
 
 ## v0.3.6

@@ -1,0 +1,263 @@
+{"file":"D:\\a\\longtail\\longtail\\lib\\filestorage\\longtail_filestorage.c","func":"Longtail_CreateFSStorageAPI","level":"info","line":679,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"close_file_func":"00007FF75EF0FA40","concat_path_func":"00007FF75EF0F680","create_dir_func":"00007FF75EF0F930","dispose_func":"00007FF75EF0E770","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeStorageAPI","get_permissions_func":"00007FF75EF0FAA0","get_size_func":"00007FF75EF0FDD0","is_dir_func":"00007FF75EF0F5D0","is_file_func":"00007FF75EF0F520","level":"info","line":326,"mem":"0000024E85131BD0","msg":"[ctx]","open_read_file_func":"00007FF75EF0EFE0","open_write_file_func":"00007FF75EF0ED00","read_func":"00007FF75EF0EE80","rename_file_func":"00007FF75EF0F7D0","set_permissions_func":"00007FF75EF0FBB0","set_size_func":"00007FF75EF0FCC0","time":"2022-07-30T12:59:49+02:00","write_func":"00007FF75EF0EBA0"}
+{"file":"D:\\a\\longtail\\longtail\\lib\\bikeshed\\longtail_bikeshed.c","func":"Longtail_CreateBikeshedJobAPI","level":"info","line":651,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00","worker_count":"12","worker_priority":"0"}
+{"file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_GetFilesRecursively","level":"info","line":1588,"msg":"[ctx]","optional_cancel_api":"0000000000000000","optional_cancel_token":"0000000000000000","optional_path_filter_api":"0000000000000000","out_file_infos":"000000C00059E008","root_path":"msi-test","storage_api":"0000024E85131BD0","time":"2022-07-30T12:59:49+02:00"}
+{"add_dependecies_func":"00007FF75EF013A0","create_jobs_func":"00007FF75EF01CC0","dispose_func":"00007FF75EF00C20","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeJobAPI","get_max_batch_count_func":"00007FF75EF008B0","get_worker_count_func":"00007FF75EF009F0","level":"info","line":442,"mem":"0000024E85131CC0","msg":"[ctx]","ready_jobs_func":"00007FF75EF02700","reserve_jobs_func":"00007FF75EF02AA0","resume_job_func":"00007FF75EF00B30","time":"2022-07-30T12:59:49+02:00","wait_for_all_jobs_func":"00007FF75EF01660"}
+{"file":"D:\\a\\longtail\\longtail\\lib\\blake2\\longtail_blake2.c","func":"Longtail_CreateBlake2HashAPI","level":"info","line":137,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"file":"D:\\a\\longtail\\longtail\\lib\\blake3\\longtail_blake3.c","func":"Longtail_CreateBlake3HashAPI","level":"info","line":131,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EF14420","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeHashRegistryAPI","get_hash_api_func":"00007FF75EF14290","level":"info","line":188,"mem":"0000024EAA633700","msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"compression_type_count":"3","create_api_funcs":"000000737D5FF730","file":"D:\\a\\longtail\\longtail\\lib\\compressionregistry\\longtail_compression_registry.c","func":"Longtail_CreateDefaultCompressionRegistry","level":"info","line":111,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"file":"D:\\a\\longtail\\longtail\\lib\\hpcdcchunker\\longtail_hpcdcchunker.c","func":"Longtail_CreateHPCDCChunkerAPI","level":"info","line":512,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EFF23D0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeCompressionRegistryAPI","get_compression_api_func":"00007FF75EFF2160","level":"info","line":249,"mem":"0000024EAA633770","msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"create_chunker_func":"00007FF75EF15340","dispose_chunker_func":"00007FF75EF14C30","dispose_func":"00007FF75EF14B90","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeChunkerAPI","get_min_chunk_size_func":"00007FF75EF14780","level":"info","line":491,"mem":"0000024EAA6337F0","msg":"[ctx]","next_chunk_from_buffer":"00007FF75EF148D0","next_chunk_func":"00007FF75EF14D90","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EEDF9D0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeProgressAPI","level":"info","line":401,"mem":"0000024E851381E0","msg":"[ctx]","on_progress_func":"00007FF75EEDF970","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EF20D60","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeProgressAPI","level":"info","line":401,"mem":"0000024EAA633840","msg":"[ctx]","on_progress_func":"00007FF75EF20D90","time":"2022-07-30T12:59:49+02:00"}
+{"chunker_api":"0000024EAA6337F0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","file_infos":"0000024EAA620090","func":"Longtail_CreateVersionIndex","hash_api":"0000024EAA633660","job_api":"0000024E85131CC0","level":"info","line":2566,"msg":"[ctx]","optional_asset_tags":"4998176","optional_cancel_api":"0000000000000000","optional_cancel_token":"0000000000000000","out_version_index":"000000C00059E018","progress_api":"0000024EAA633840","root_path":"msi-test","storage_api":"0000024E85131BD0","target_chunk_size":"32768","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024EAA633840","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E851381E0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024EAA6337F0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"chunk_count":"0","chunk_hashes":"0000024EAA633B30","chunk_sizes":"0000024EAA633B30","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_CreateStoreIndex","hash_api":"0000024EAA633660","level":"info","line":6182,"max_block_size":"8388608","max_chunks_per_block":"1024","msg":"[ctx]","optional_chunk_tags":"0000024EAA633B30","out_store_index":"000000C0000D6040","time":"2022-07-30T12:59:49+02:00"}
+{"block_count":"0","block_indexes":"0000000000000000","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_CreateStoreIndexFromBlocks","level":"info","line":7583,"msg":"[ctx]","out_store_index":"000000C0000D6040","time":"2022-07-30T12:59:49+02:00"}
+{"file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_CreateArchiveIndex","level":"info","line":8220,"msg":"[ctx]","out_archive_index":"000000C0000D6048","store_index":"0000024EAA6337F0","time":"2022-07-30T12:59:49+02:00","version_index":"0000024EAA633980"}
+{"archive_index":"0000024EAA633C70","archive_path":"msi-test.la","enable_mmap_reading":"0","enable_write":"1","file":"D:\\a\\longtail\\longtail\\lib\\archiveblockstore\\longtail_archiveblockstore.c","func":"Longtail_CreateArchiveBlockStore","level":"info","line":572,"msg":"[ctx]","storage_api":"0000024E85131BD0","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EEFFE70","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","flush_func":"00007FF75EEFF2A0","func":"Longtail_MakeBlockStoreAPI","get_existing_content_func":"00007FF75EEFF610","get_stats_func":"00007FF75EEFF480","get_stored_block_func":"00007FF75EEFF8D0","level":"info","line":701,"mem":"0000024E8513DDC0","msg":"[ctx]","preflight_get_func":"00007FF75EEFF180","prune_blocks_func":"00007FF75EEFEF60","put_stored_block_func":"00007FF75EEFFC30","time":"2022-07-30T12:59:49+02:00"}
+{"backing_block_store":"0000024E8513DDC0","compression_registry":"0000024EAA633770","file":"D:\\a\\longtail\\longtail\\lib\\compressblockstore\\longtail_compressblockstore.c","func":"Longtail_CreateCompressBlockStoreAPI","level":"info","line":639,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EF0DB90","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","flush_func":"00007FF75EF0CCA0","func":"Longtail_MakeBlockStoreAPI","get_existing_content_func":"00007FF75EF0C7D0","get_stats_func":"00007FF75EF0CDF0","get_stored_block_func":"00007FF75EF0D020","level":"info","line":701,"mem":"0000024E8513DF90","msg":"[ctx]","preflight_get_func":"00007FF75EF0CA70","prune_blocks_func":"00007FF75EF0C5C0","put_stored_block_func":"00007FF75EF0D6D0","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EEDF9D0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeProgressAPI","level":"info","line":401,"mem":"0000024E8513E1C0","msg":"[ctx]","on_progress_func":"00007FF75EEDF970","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EF20D60","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeProgressAPI","level":"info","line":401,"mem":"0000024EAA6338A0","msg":"[ctx]","on_progress_func":"00007FF75EF20D90","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EEDFE30","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeAsyncFlushAPI","level":"info","line":662,"mem":"0000024E8513E490","msg":"[ctx]","on_complete_func":"00007FF75EEDFDE0","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E8513E490","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"dispose_func":"00007FF75EEDFE30","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_MakeAsyncFlushAPI","level":"info","line":662,"mem":"0000024E8513E430","msg":"[ctx]","on_complete_func":"00007FF75EEDFDE0","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E8513E430","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024EAA6338A0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E8513E1C0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E8513DF90","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E8513DDC0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024EAA633770","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024EAA633700","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E85131CC0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"api":"0000024E85131BD0","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_DisposeAPI","level":"info","line":739,"msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"file":"D:\\a\\longtail\\longtail\\lib\\filestorage\\longtail_filestorage.c","func":"FSStorageAPI_Dispose","level":"info","line":32,"msg":"[ctx]","storage_api":"0000024E85131BD0","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  FSStorageAPI","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         5752","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          824","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       10","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   208","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  Bikeshed","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         5.50 mb (5768460)","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          5.50 mb (5768460)","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       18","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        18","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 16","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   5.50 mb (5768460)","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  GetFilesRecursively","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         74223","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          73998","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       16","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        8","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   73768","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  Strdup","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         32","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          20","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       3","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  MakeWCharString","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         644","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          90","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       10","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  ConcatPath","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         993","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          309","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       17","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        6","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  MakeUTF8String","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         66","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          11","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       8","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  Blake2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  Blake 3","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  MeowHashAPI","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  DefaultHashRegistry","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         76","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          76","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   76","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  CompressionRegistry","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         92","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          92","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   92","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  HPCDCCreateChunker","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         56","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          56","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   56","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  Longtail_Alloc","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         96","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          48","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       4","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   24","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  RateLimitedProgress","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         80","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          40","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   40","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  CreateVersionIndex","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         961","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          961","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       3","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        3","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   192","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  ChunkAssets","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         1056","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          1056","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   1056","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  AllocChunkAssetsData","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         32","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          32","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  CreateStoreIndexFromBlocks","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         96","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          96","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  Longtail_CreateArchive","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         856","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          856","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  ArchiveBlockStoreAPI","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         432","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          432","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  FSBlockStoreAPI","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         8","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          8","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 1","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"gMemTracer_Context:  CompressBlockStore","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_mem:         464","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_mem:       0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_mem:          464","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  total_count:       2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  current_count:     0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  peak_count:        2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_count: 2","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"  global_peak_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"total_mem:     5.58 mb (5854619)","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"current_mem:   0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"peak_mem:      5.57 mb (5844116)","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"total_count:   105","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"current_count: 0","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"level":"info","mem":"peak_count:    33","msg":"stats","time":"2022-07-30T12:59:49+02:00"}
+{"context":"0000000000000000","file":"D:\\a\\longtail\\longtail\\src\\longtail.c","func":"Longtail_SetLog","level":"info","line":792,"log_func":"0000000000000000","msg":"[ctx]","time":"2022-07-30T12:59:49+02:00"}
+{"Flush_Count":"1","Flush_FailCount":"0","GetExistingContent_Count":"0","GetExistingContent_FailCount":"0","GetExistingContent_RetryCount":"0","GetStats_Count":"1","GetStoredBlock_Byte_Count":"0 B","GetStoredBlock_Chunk_Count":"0","GetStoredBlock_Count":"0","GetStoredBlock_FailCount":"0","GetStoredBlock_RetryCount":"0","PreflightGet_Count":"0","PreflightGet_FailCount":"0","PreflightGet_RetryCount":"0","PutStoredBlock_Byte_Count":"0 B","PutStoredBlock_Chunk_Count":"0","PutStoredBlock_Count":"0","PutStoredBlock_FailCount":"0","PutStoredBlock_RetryCount":"0","Store":"Compress","level":"info","msg":"store stats","time":"2022-07-30T12:59:49+02:00"}
+{"Flush_Count":"1","Flush_FailCount":"0","GetExistingContent_Count":"0","GetExistingContent_FailCount":"0","GetExistingContent_RetryCount":"0","GetStats_Count":"1","GetStoredBlock_Byte_Count":"0 B","GetStoredBlock_Chunk_Count":"0","GetStoredBlock_Count":"0","GetStoredBlock_FailCount":"0","GetStoredBlock_RetryCount":"0","PreflightGet_Count":"0","PreflightGet_FailCount":"0","PreflightGet_RetryCount":"0","PutStoredBlock_Byte_Count":"0 B","PutStoredBlock_Chunk_Count":"0","PutStoredBlock_Count":"0","PutStoredBlock_FailCount":"0","PutStoredBlock_RetryCount":"0","Store":"Archive","level":"info","msg":"store stats","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"2.9995ms","level":"info","msg":"stats","name":"Init","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"15.4989ms","level":"info","msg":"stats","name":"Setup","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"25.5483ms","level":"info","msg":"stats","name":"Read source index","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"5.0032ms","level":"info","msg":"stats","name":"Create archive index","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"0s","level":"info","msg":"stats","name":"Write version content","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"6.9992ms","level":"info","msg":"stats","name":"Flush","time":"2022-07-30T12:59:49+02:00"}
+{"duration":"494.5085ms","level":"info","msg":"stats","name":"Execution","time":"2022-07-30T12:59:49+02:00"}

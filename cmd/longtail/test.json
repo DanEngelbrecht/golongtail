@@ -1,0 +1,5 @@
+{
+  "source-path": "./version-data/version-index/test.lvi",
+  "storage-uri": "./store",
+  "version-local-store-index-path": "./version-data/version-store-index/test.lsi"
+}

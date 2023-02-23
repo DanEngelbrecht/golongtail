@@ -1,0 +1,121 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Prune issue 229",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["prune-store", "--source-paths", "C:\\temp\\repro-issue-229\\repro\\epic_prune.txt", "--storage-uri", "C:\\temp\\repro-issue-229\\repro\\epic_store\\storage", "--log-level", "debug"],
+            "cwd": "C:\\temp\\repro-issue-229"
+        },
+        {
+            "name": "Pack",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["pack", "--source-path", "msi-test", "--log-level", "debug", "--target-path", "msi-test.la"],
+            "cwd": "${workspaceFolder}/cmd/longtail"
+        },
+        {
+            "name": "put root",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["put", "--source-path", "C:\\MSI", "--target-path", "/dis.json", "--log-level", "info"],
+            "cwd": "${workspaceFolder}/cmd/longtail"
+        },
+        {
+            "name": "put root",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["put", "--source-path", "C:\\MSI", "--target-path", "/dis.json", "--log-level", "info"],
+            "cwd": "${workspaceFolder}/cmd/longtail"
+        },
+        {
+            "name": "put fsblob",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["put", "--source-path", "C:\\MSI", "--target-path", "fsblob://C:\\msi-store\\msi.json", "--log-level", "info"],
+            "cwd": "${workspaceFolder}/cmd/longtail"
+        },
+        {
+            "name": "put fs",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["put", "--source-path", "C:\\MSI", "--target-path", "C:\\msi-store\\msi.json", "--log-level", "info"],
+            "cwd": "${workspaceFolder}/cmd/longtail"
+        },
+        {
+            "name": "Pack-fail",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["pack", "--source-path", "msi-test", "--target-path", "msi-test.la", "--log-file-path", "console.log", "--show-stats", "--show-store-stats"],
+            "cwd": "${workspaceFolder}/cmd/longtail"
+        },
+        {
+            "name": "Test Commands",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/commands",
+        },
+        {
+            "name": "Test Remotestore",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/remotestore",
+        },
+        {
+            "name": "Push",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["push"],
+            "cwd": "C:\\temp\\test"
+        },
+        {
+            "name": "Pop",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["pop", "--offset", "10"],
+            "cwd": "C:\\temp\\test"
+        },
+        {
+            "name": "put s3 with custom endpoint",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["put", "--source-path", ".", "--target-path", "s3://mybucket/myversion.lvi", "--s3-endpoint-resolver-uri", "http://what-is-this/the/endpoint"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "put with unc path",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/longtail/main.go",
+            "args": ["put", "--source-path", "\\\\?\\c:\\temp\\xxx", "--target-path", "\\\\?\\c:\\temp\\xxx.lvi"],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

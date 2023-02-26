@@ -446,6 +446,64 @@ func ReadBlobWithRetry(
 	return blobData, retryCount, nil
 }
 
+func WriteBlobWithRetry(
+	ctx context.Context,
+	client longtailstorelib.BlobClient,
+	key string,
+	blob []byte) (int, error) {
+	const fname = "WriteBlobWithRetry"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"client": client,
+		"key":    key,
+		"blob":   blob,
+	})
+
+	log.Debug(fname)
+
+	retryCount := 0
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return retryCount, errors.Wrap(err, fname)
+	}
+	if exists, err := objHandle.Exists(); err == nil && !exists {
+		var sleepTimes = [...]time.Duration{100 * time.Millisecond, 500 * time.Millisecond, 2 * time.Second}
+		ok, err := objHandle.Write(blob)
+		if err != nil {
+			err := errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, client))
+			err = errors.Wrap(err, fname)
+			log.Error(err)
+			return retryCount, err
+		}
+		if !ok {
+			for _, sleepTime := range sleepTimes {
+				retryCount++
+				log.Warningf("retrying putBlob (sleeping %s)", sleepTime)
+				time.Sleep(sleepTime)
+				ok, err = objHandle.Write(blob)
+				if err != nil {
+					err = errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, client))
+					err = errors.Wrap(err, fname)
+					log.Error(err)
+					return retryCount, err
+				}
+				if ok {
+					break
+				}
+			}
+			if !ok {
+				err = fmt.Errorf("failed to put stored block at `%s` in `%s` even after retries", key, client)
+				err = errors.Wrap(err, fname)
+				log.Error(err)
+				return retryCount, err
+			}
+		}
+	}
+	log.Infof("wrote %d bytes", len(blob))
+	return retryCount, nil
+}
+
 func GetCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)

@@ -1,20 +1,16 @@
 package remotestore
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"sort"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 )
-
-type LSIStore interface {
-	LSIStore_ListLSIs() ([]string, []int64, error)
-	LSIStore_Read(Name string) ([]byte, error)
-	LSIStore_Write(Name string, buffer []byte) error
-	LSIStore_Delete(Name string) error
-}
 
 // Get current index
 // -------------------------
@@ -45,25 +41,25 @@ type LSIStore interface {
 // Save G to store uri
 // Remove E from store uri
 
-func PutStoreLSI(remoteStore *LSIStore, LSI longtaillib.Longtail_StoreIndex) error {
+func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobClient, LSI longtaillib.Longtail_StoreIndex) error {
 	const fname = "PutStoreLSI"
 	buffer, err := longtaillib.WriteStoreIndexToBuffer(LSI)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
-	remoteLSINames, _, err := (*remoteStore).LSIStore_ListLSIs()
+	remoteLSIs, err := remoteStore.GetObjects("store")
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
 	sha256 := sha256.Sum256(buffer.ToBuffer())
 	newName := fmt.Sprintf("store_%x.lsi", sha256)
-	for _, name := range remoteLSINames {
-		if name == newName {
+	for _, remoteLSI := range remoteLSIs {
+		if remoteLSI.Name == newName {
 			return nil
 		}
 	}
 	// TODO: Advanced version will merge LSI with smallest existing LSI = A, merge A with LSI = B, upload B and remove A
-	err = (*remoteStore).LSIStore_Write(newName, buffer.ToBuffer())
+	_, err = longtailutils.WriteBlobWithRetry(ctx, remoteStore, newName, buffer.ToBuffer())
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
@@ -71,24 +67,24 @@ func PutStoreLSI(remoteStore *LSIStore, LSI longtaillib.Longtail_StoreIndex) err
 }
 
 // If caller get an IsNotExist(err) it should likely call GetStoreLSI again as the list of store LSI has changed (one that we found was removed)
-func GetStoreLSI(remoteStore *LSIStore, localStore *LSIStore) (longtaillib.Longtail_StoreIndex, error) {
+func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobClient, localStore longtailstorelib.BlobClient) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "GetStoreLSI"
 	//	log.Debug(fname)
-	remoteLSINames, _, err := (*remoteStore).LSIStore_ListLSIs()
+
+	remoteLSIs, err := remoteStore.GetObjects("store")
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
-	var localLSINames []string
-	if localStore != nil {
-		localLSINames, _, err = (*localStore).LSIStore_ListLSIs()
-		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-		}
+	sort.Slice(remoteLSIs, func(i, j int) bool { return remoteLSIs[i].Name < remoteLSIs[j].Name })
+
+	localLSIs, err := localStore.GetObjects("store")
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
-	sort.Strings(remoteLSINames)
-	sort.Strings(localLSINames)
-	remoteCount := len(remoteLSINames)
-	localCount := len(localLSINames)
+	sort.Slice(localLSIs, func(i, j int) bool { return localLSIs[i].Name < localLSIs[j].Name })
+
+	remoteCount := len(remoteLSIs)
+	localCount := len(localLSIs)
 	localIndex := 0
 	remoteIndex := 0
 	newLSIs := []string{}
@@ -100,8 +96,11 @@ func GetStoreLSI(remoteStore *LSIStore, localStore *LSIStore) (longtaillib.Longt
 	}(LSIs)
 
 	for remoteIndex < remoteCount && localIndex < localCount {
-		if remoteLSINames[remoteIndex] == localLSINames[localIndex] {
-			buffer, err := (*localStore).LSIStore_Read(localLSINames[localIndex])
+		if remoteLSIs[remoteIndex].Name == localLSIs[localIndex].Name {
+			buffer, _, err := longtailutils.ReadBlobWithRetry(
+				ctx,
+				localStore,
+				localLSIs[localIndex].Name)
 			if err != nil {
 				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 			}
@@ -114,35 +113,58 @@ func GetStoreLSI(remoteStore *LSIStore, localStore *LSIStore) (longtaillib.Longt
 			localIndex++
 			continue
 		}
-		if remoteLSINames[remoteIndex] < localLSINames[localIndex] {
-			newLSIs = append(newLSIs, remoteLSINames[remoteIndex])
+		if remoteLSIs[remoteIndex].Name < localLSIs[localIndex].Name {
+			newLSIs = append(newLSIs, remoteLSIs[remoteIndex].Name)
 			remoteIndex++
 			continue
 		}
-		if remoteLSINames[remoteIndex] > localLSINames[localIndex] {
-			err = (*localStore).LSIStore_Delete((localLSINames[localIndex]))
+		if remoteLSIs[remoteIndex].Name > localLSIs[localIndex].Name {
+			obj, err := localStore.NewObject(localLSIs[localIndex].Name)
 			if err != nil {
 				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			}
+			err = obj.Delete()
+			if err != nil {
+				if !longtaillib.IsNotExist(err) {
+					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+				}
 			}
 			localIndex++
 			continue
 		}
 	}
 	for remoteIndex < remoteCount {
-		newLSIs = append(newLSIs, remoteLSINames[remoteIndex])
+		newLSIs = append(newLSIs, remoteLSIs[remoteIndex].Name)
 		remoteIndex++
 	}
 	for localIndex < localCount {
-		(*localStore).LSIStore_Delete(localLSINames[localIndex])
-		localIndex++
-	}
-	for _, newLSIName := range newLSIs {
-		buffer, err := (*remoteStore).LSIStore_Read(newLSIName)
+		obj, err := localStore.NewObject(localLSIs[localIndex].Name)
 		if err != nil {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
+		err = obj.Delete()
+		if err != nil {
+			if !longtaillib.IsNotExist(err) {
+				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			}
+		}
+		localIndex++
+	}
+	for _, newLSIName := range newLSIs {
+		buffer, _, err := longtailutils.ReadBlobWithRetry(
+			ctx,
+			remoteStore,
+			newLSIName)
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		}
+
 		if localStore != nil {
-			err = (*localStore).LSIStore_Write(newLSIName, buffer)
+			_, err = longtailutils.WriteBlobWithRetry(
+				ctx,
+				localStore,
+				newLSIName,
+				buffer)
 			if err != nil {
 				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 			}
@@ -168,17 +190,4 @@ func GetStoreLSI(remoteStore *LSIStore, localStore *LSIStore) (longtaillib.Longt
 		return result, nil
 	}
 	return longtaillib.Longtail_StoreIndex{}, nil
-}
-
-type nilLSIStore struct {
-}
-
-func (store *nilLSIStore) LSIStore_ListLSIs() ([]string, []int64, error)   { return nil, nil, nil }
-func (store *nilLSIStore) LSIStore_Read(Name string) ([]byte, error)       { return nil, nil }
-func (store *nilLSIStore) LSIStore_Write(Name string, buffer []byte) error { return nil }
-func (store *nilLSIStore) LSIStore_Delete(Name string) error               { return nil }
-
-func NewNilLSIStore() (LSIStore, error) {
-	s := &nilLSIStore{}
-	return s, nil
 }

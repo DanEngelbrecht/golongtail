@@ -456,7 +456,6 @@ func WriteBlobWithRetry(
 		"fname":  fname,
 		"client": client,
 		"key":    key,
-		"blob":   blob,
 	})
 
 	log.Debug(fname)
@@ -502,6 +501,36 @@ func WriteBlobWithRetry(
 	}
 	log.Infof("wrote %d bytes", len(blob))
 	return retryCount, nil
+}
+
+func DeleteBlob(
+	ctx context.Context,
+	client longtailstorelib.BlobClient,
+	key string) error {
+	const fname = "DeleteBlob"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"client": client,
+		"key":    key,
+	})
+	log.Debug(fname)
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	exists, err := objHandle.Exists()
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	if !exists {
+		return nil
+	}
+	err = objHandle.Delete()
+	if err == nil || longtaillib.IsNotExist(err) {
+		return nil
+	}
+	return errors.Wrap(err, fname)
 }
 
 func GetCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {

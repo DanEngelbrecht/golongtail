@@ -421,8 +421,8 @@ func (b *NativeBuffer) Dispose() {
 	}
 }
 
-func (b *NativeBuffer) Size() int {
-	return int(b.size)
+func (b *NativeBuffer) Size() int64 {
+	return int64(b.size)
 }
 
 func carray2slice64(array *C.uint64_t, len int) []uint64 {

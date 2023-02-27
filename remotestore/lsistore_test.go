@@ -69,7 +69,7 @@ func TestPutGet(t *testing.T) {
 	}
 	localClient, _ := localBlobStore.NewClient(context.Background())
 
-	err = PutStoreLSI(context.Background(), remoteClient, storeIndex)
+	err = PutStoreLSI(context.Background(), remoteClient, storeIndex, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
@@ -93,7 +93,7 @@ func TestPutGet(t *testing.T) {
 	}
 	defer remoteStoreIndexCached.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteClient, storeIndex)
+	err = PutStoreLSI(context.Background(), remoteClient, storeIndex, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
@@ -110,7 +110,7 @@ func TestPutGet(t *testing.T) {
 	}
 	defer storeIndex2.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteClient, storeIndex2)
+	err = PutStoreLSI(context.Background(), remoteClient, storeIndex2, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return

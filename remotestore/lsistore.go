@@ -218,30 +218,62 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		}
 		localIndex++
 	}
-	for _, newLSIName := range newLSIs {
-		buffer, _, err := longtailutils.ReadBlobWithRetry(
-			ctx,
-			remoteClient,
-			newLSIName)
-		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-		}
 
-		if localStore != nil {
-			_, err = longtailutils.WriteBlobWithRetry(
-				ctx,
-				localClient,
-				newLSIName,
-				buffer)
+	type Result struct {
+		LSI   longtaillib.Longtail_StoreIndex
+		Error error
+	}
+	storeIndexChan := make(chan Result, len(newLSIs))
+
+	for _, newLSIName := range newLSIs {
+		go func(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, lsiName string, resultChan chan Result) {
+			remoteClient, err := remoteStore.NewClient(ctx)
 			if err != nil {
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+				resultChan <- Result{Error: err}
+				return
 			}
-		}
-		LSI, err := longtaillib.ReadStoreIndexFromBuffer(buffer)
-		if err != nil {
+			buffer, _, err := longtailutils.ReadBlobWithRetry(
+				ctx,
+				remoteClient,
+				lsiName)
+			if err != nil {
+				resultChan <- Result{Error: err}
+				return
+			}
+
+			LSI, err := longtaillib.ReadStoreIndexFromBuffer(buffer)
+			if err != nil {
+				resultChan <- Result{Error: err}
+				return
+			}
+
+			if localStore != nil {
+				localClient, err := (*localStore).NewClient(ctx)
+				if err != nil {
+					resultChan <- Result{Error: err}
+					return
+				}
+				_, err = longtailutils.WriteBlobWithRetry(
+					ctx,
+					localClient,
+					lsiName,
+					buffer)
+				if err != nil {
+					resultChan <- Result{Error: err}
+					return
+				}
+			}
+			resultChan <- Result{LSI: LSI}
+		}(ctx, remoteStore, localStore, newLSIName, storeIndexChan)
+	}
+	//	wg.Wait()
+
+	for _ = range newLSIs {
+		LSIResult := <-storeIndexChan
+		if LSIResult.Error != nil {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
-		LSIs = append(LSIs, LSI)
+		LSIs = append(LSIs, LSIResult.LSI)
 	}
 	if len(LSIs) > 0 {
 		result := LSIs[0]

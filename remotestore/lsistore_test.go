@@ -148,13 +148,13 @@ func TestPutGet(t *testing.T) {
 	}
 }
 
-func TestdMergeAtPut(t *testing.T) {
+func TestMergeAtPut(t *testing.T) {
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
 	remoteClient, _ := remoteStore.NewClient(context.Background())
 
 	localBlobStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 
-	storeIndex1, _ := generateStoreIndex(t, 1, uint8(77))
+	storeIndex1, _ := generateStoreIndex(t, 1, uint8(11))
 	defer storeIndex1.Dispose()
 
 	err := PutStoreLSI(context.Background(), remoteStore, storeIndex1, 0)
@@ -163,7 +163,7 @@ func TestdMergeAtPut(t *testing.T) {
 		return
 	}
 
-	storeIndex2, _ := generateStoreIndex(t, 3, uint8(33))
+	storeIndex2, _ := generateStoreIndex(t, 2, uint8(22))
 	defer storeIndex2.Dispose()
 
 	err = PutStoreLSI(context.Background(), remoteStore, storeIndex2, 0)
@@ -172,10 +172,19 @@ func TestdMergeAtPut(t *testing.T) {
 		return
 	}
 
-	storeIndex3, _ := generateStoreIndex(t, 2, uint8(66))
+	storeIndex3, _ := generateStoreIndex(t, 3, uint8(33))
 	defer storeIndex3.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteStore, storeIndex3, 1024*1024*1024)
+	err = PutStoreLSI(context.Background(), remoteStore, storeIndex3, 0)
+	if err != nil {
+		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
+		return
+	}
+
+	storeIndex4, _ := generateStoreIndex(t, 4, uint8(44))
+	defer storeIndex4.Dispose()
+
+	err = PutStoreLSI(context.Background(), remoteStore, storeIndex4, 500)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
@@ -192,8 +201,8 @@ func TestdMergeAtPut(t *testing.T) {
 		return
 	}
 	defer resultStoreIndex.Dispose()
-	if resultStoreIndex.GetBlockCount() != 6 {
-		t.Errorf("TestCleanPut() resultStoreIndex.GetBlockCount() == %d, expected 6)", resultStoreIndex.GetBlockCount())
+	if resultStoreIndex.GetBlockCount() != 10 {
+		t.Errorf("TestCleanPut() resultStoreIndex.GetBlockCount() == %d, expected 10)", resultStoreIndex.GetBlockCount())
 		return
 	}
 
@@ -203,8 +212,8 @@ func TestdMergeAtPut(t *testing.T) {
 		return
 	}
 	defer noCacheStoreIndex.Dispose()
-	if noCacheStoreIndex.GetBlockCount() != 6 {
-		t.Errorf("TestCleanPut() noCacheStoreIndex.GetBlockCount() == %d, expected 6)", noCacheStoreIndex.GetBlockCount())
+	if noCacheStoreIndex.GetBlockCount() != 10 {
+		t.Errorf("TestCleanPut() noCacheStoreIndex.GetBlockCount() == %d, expected 10)", noCacheStoreIndex.GetBlockCount())
 		return
 	}
 }

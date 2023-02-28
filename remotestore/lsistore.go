@@ -86,7 +86,8 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 	if len(remoteLSIs) > 0 {
 		sort.Slice(remoteLSIs, func(i, j int) bool { return remoteLSIs[i].Size < remoteLSIs[j].Size })
 		for i := 0; i < len(remoteLSIs); i++ {
-			if remoteLSIs[i].Size+buffer.Size() > maxStoreIndexSize {
+			mergedSize := remoteLSIs[i].Size + buffer.Size()
+			if mergedSize > maxStoreIndexSize {
 				break
 			}
 			remoteBuffer, _, err := longtailutils.ReadBlobWithRetry(

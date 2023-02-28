@@ -58,7 +58,7 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 		return errors.Wrap(err, fname)
 	}
 
-	mergedName := ""
+	mergedNames := []string{}
 	if len(remoteLSIs) > 0 {
 		sort.Slice(remoteLSIs, func(i, j int) bool { return remoteLSIs[i].Size < remoteLSIs[j].Size })
 		for i := 0; i < len(remoteLSIs); i++ {
@@ -85,7 +85,7 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 				if err != nil {
 					return errors.Wrap(err, fname)
 				}
-				mergedName = remoteLSIs[i].Name
+				mergedNames = append(mergedNames, remoteLSIs[i].Name)
 				break
 			}
 		}
@@ -105,9 +105,9 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
-	if mergedName != "" {
+	for _, mergedName := range mergedNames {
 		err = longtailutils.DeleteBlob(ctx, remoteClient, mergedName)
-		if err != nil {
+		if err != nil && !longtaillib.IsNotExist(err) {
 			return errors.Wrap(err, fname)
 		}
 	}

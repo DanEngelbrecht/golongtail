@@ -696,6 +696,13 @@ func (storeIndex *Longtail_StoreIndex) GetChunkSizes() []uint32 {
 	return carray2slice32(storeIndex.cStoreIndex.m_ChunkSizes, size)
 }
 
+func (storeIndex *Longtail_StoreIndex) GetSize() int64 {
+	if storeIndex.cStoreIndex == nil {
+		return int64(C.Longtail_GetStoreIndexSize(0, 0))
+	}
+	return int64(C.Longtail_GetStoreIndexSize(*storeIndex.cStoreIndex.m_BlockCount, *storeIndex.cStoreIndex.m_ChunkCount))
+}
+
 func (versionIndex *Longtail_VersionIndex) IsValid() bool {
 	return versionIndex.cVersionIndex != nil
 }

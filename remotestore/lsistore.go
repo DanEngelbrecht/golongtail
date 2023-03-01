@@ -226,6 +226,8 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	storeIndexChan := make(chan Result, len(newLSIs))
 
 	for _, newLSIName := range newLSIs {
+		// TODO: We probably need to limit the number of goroutines we spawn ere as each one
+		// wil do a network request
 		go func(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, lsiName string, resultChan chan Result) {
 			remoteClient, err := remoteStore.NewClient(ctx)
 			if err != nil {
@@ -266,15 +268,20 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 			resultChan <- Result{LSI: LSI}
 		}(ctx, remoteStore, localStore, newLSIName, storeIndexChan)
 	}
-	//	wg.Wait()
 
 	for _ = range newLSIs {
 		LSIResult := <-storeIndexChan
 		if LSIResult.Error != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			if err == nil {
+				err = LSIResult.Error
+			}
 		}
 		LSIs = append(LSIs, LSIResult.LSI)
 	}
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+
 	if len(LSIs) > 0 {
 		result := LSIs[0]
 		for i := 1; i < len(LSIs); i++ {

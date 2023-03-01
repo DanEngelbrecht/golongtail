@@ -55,16 +55,17 @@ func TestPutGet(t *testing.T) {
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
 	remoteClient, _ := remoteStore.NewClient(context.Background())
 
-	localBlobStore, _ := longtailstorelib.NewMemBlobStore("local", true)
-	localClient, _ := localBlobStore.NewClient(context.Background())
+	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
+	localClient, _ := localStore.NewClient(context.Background())
 
-	err := PutStoreLSI(context.Background(), remoteStore, storeIndex, 0)
+	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	defer LSI1.Dispose()
 
-	remoteStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localBlobStore)
+	remoteStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
 		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
 		return
@@ -75,18 +76,20 @@ func TestPutGet(t *testing.T) {
 	if len(LocalNames) != 1 {
 		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 1) %s", len(LocalNames), err)
 	}
-	remoteStoreIndexCached, err := GetStoreLSI(context.Background(), remoteStore, &localBlobStore)
+	remoteStoreIndexCached, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
 		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
 		return
 	}
 	defer remoteStoreIndexCached.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteStore, storeIndex, 0)
+	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	defer LSI2.Dispose()
+
 	RemoteNames1 := getLSIs(remoteClient)
 	if len(RemoteNames1) != 1 {
 		t.Errorf("TestCleanPut() len(RemoteNames) == %d, expected 1) %s", len(RemoteNames1), err)
@@ -99,11 +102,12 @@ func TestPutGet(t *testing.T) {
 	}
 	defer storeIndex2.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteStore, storeIndex2, 0)
+	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	defer LSI3.Dispose()
 
 	RemoteNames2 := getLSIs(remoteClient)
 	if len(RemoteNames2) != 2 {
@@ -115,7 +119,7 @@ func TestPutGet(t *testing.T) {
 		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 1) %s", len(LocalNames), err)
 	}
 
-	remoteStoreIndexMerged, err := GetStoreLSI(context.Background(), remoteStore, &localBlobStore)
+	remoteStoreIndexMerged, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
 		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
 		return
@@ -136,7 +140,7 @@ func TestPutGet(t *testing.T) {
 		t.Errorf("TestCleanPut() obj.Delete()) %s", err)
 	}
 
-	remoteStoreIndexPruned, err := GetStoreLSI(context.Background(), remoteStore, &localBlobStore)
+	remoteStoreIndexPruned, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
 		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
 		return
@@ -152,50 +156,54 @@ func TestMergeAtPut(t *testing.T) {
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
 	remoteClient, _ := remoteStore.NewClient(context.Background())
 
-	localBlobStore, _ := longtailstorelib.NewMemBlobStore("local", true)
+	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 
 	storeIndex1, _ := generateStoreIndex(t, 1, uint8(11))
 	defer storeIndex1.Dispose()
 
-	err := PutStoreLSI(context.Background(), remoteStore, storeIndex1, 0)
+	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex1, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	defer LSI1.Dispose()
 
 	storeIndex2, _ := generateStoreIndex(t, 2, uint8(22))
 	defer storeIndex2.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteStore, storeIndex2, 0)
+	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	LSI2.Dispose()
 
 	storeIndex3, _ := generateStoreIndex(t, 3, uint8(33))
 	defer storeIndex3.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteStore, storeIndex3, 0)
+	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex3, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	defer LSI3.Dispose()
 
 	storeIndex4, _ := generateStoreIndex(t, 4, uint8(44))
 	defer storeIndex4.Dispose()
 
-	err = PutStoreLSI(context.Background(), remoteStore, storeIndex4, 500)
+	LSI4, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex4, 530)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
+	defer LSI4.Dispose()
 
 	lsis := getLSIs(remoteClient)
 	if len(lsis) != 2 {
 		t.Errorf("TestForcedMerge() len(lsis) == %d, expected 2) %s", len(lsis), err)
 	}
 
-	resultStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localBlobStore)
+	resultStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
 		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
 		return

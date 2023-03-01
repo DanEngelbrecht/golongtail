@@ -148,7 +148,13 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 	return nil
 }
 
-func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore) ([]longtaillib.Longtail_StoreIndex, error) {
+type LSIEntry struct {
+	Name string
+	Size int64
+	LSI  longtaillib.Longtail_StoreIndex
+}
+
+func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore) ([]LSIEntry, error) {
 	const fname = "GetStoreLSIs"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
@@ -191,11 +197,11 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 	remoteIndex := 0
 	newLSIs := []string{}
 	success := false
-	LSIs := []longtaillib.Longtail_StoreIndex{}
+	LSIs := []LSIEntry{}
 	defer func() {
 		if !success {
-			for _, LSI := range LSIs {
-				LSI.Dispose()
+			for _, Entry := range LSIs {
+				Entry.LSI.Dispose()
 			}
 		}
 	}()
@@ -213,7 +219,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 			if err != nil {
 				return nil, errors.Wrap(err, fname)
 			}
-			LSIs = append(LSIs, LSI)
+			LSIs = append(LSIs, LSIEntry{Name: localLSIs[localIndex].Name, Size: localLSIs[localIndex].Size, LSI: LSI})
 			remoteIndex++
 			localIndex++
 			continue
@@ -245,7 +251,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 	}
 
 	type Result struct {
-		LSI   longtaillib.Longtail_StoreIndex
+		Entry LSIEntry
 		Error error
 	}
 	storeIndexChan := make(chan Result, len(newLSIs))
@@ -290,7 +296,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 					return
 				}
 			}
-			resultChan <- Result{LSI: LSI}
+			resultChan <- Result{Entry: LSIEntry{Name: lsiName, Size: int64(len(buffer)), LSI: LSI}}
 		}(ctx, remoteStore, localStore, newLSIName, storeIndexChan)
 	}
 
@@ -304,7 +310,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 				err = LSIResult.Error
 			}
 		}
-		LSIs = append(LSIs, LSIResult.LSI)
+		LSIs = append(LSIs, LSIResult.Entry)
 	}
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
@@ -330,17 +336,17 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	}
 
 	if len(LSIs) > 0 {
-		result := LSIs[0]
+		result := LSIs[0].LSI
 		for i := 1; i < len(LSIs); i++ {
-			newLSI, err := longtaillib.MergeStoreIndex(result, LSIs[i])
+			newLSI, err := longtaillib.MergeStoreIndex(result, LSIs[i].LSI)
 			if err != nil {
 				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 			}
 			result.Dispose()
-			LSIs[i].Dispose()
+			LSIs[i].LSI.Dispose()
 			result = newLSI
 		}
-		LSIs[0] = longtaillib.Longtail_StoreIndex{}
+		LSIs[0].LSI = longtaillib.Longtail_StoreIndex{}
 		return result, nil
 	}
 	return longtaillib.Longtail_StoreIndex{}, nil

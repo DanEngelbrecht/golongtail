@@ -148,9 +148,8 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 	return nil
 }
 
-// If caller get an IsNotExist(err) it should likely call GetStoreLSI again as the list of store LSI has changed (one that we found was removed)
-func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore) (longtaillib.Longtail_StoreIndex, error) {
-	const fname = "GetStoreLSI"
+func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore) ([]longtaillib.Longtail_StoreIndex, error) {
+	const fname = "GetStoreLSIs"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
 		"ctx":         ctx,
@@ -158,21 +157,22 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		"localStore":  localStore,
 	})
 	log.Debug(fname)
+
 	remoteClient, err := remoteStore.NewClient(ctx)
 	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		return nil, errors.Wrap(err, fname)
 	}
 	var localClient longtailstorelib.BlobClient
 	if localStore != nil {
 		localClient, err = (*localStore).NewClient(ctx)
 		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			return nil, errors.Wrap(err, fname)
 		}
 	}
 
 	remoteLSIs, err := remoteClient.GetObjects("store")
 	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		return nil, errors.Wrap(err, fname)
 	}
 	sort.Slice(remoteLSIs, func(i, j int) bool { return remoteLSIs[i].Name < remoteLSIs[j].Name })
 
@@ -180,7 +180,7 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	if localStore != nil {
 		localLSIs, err = localClient.GetObjects("store")
 		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			return nil, errors.Wrap(err, fname)
 		}
 		sort.Slice(localLSIs, func(i, j int) bool { return localLSIs[i].Name < localLSIs[j].Name })
 	}
@@ -190,12 +190,15 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	localIndex := 0
 	remoteIndex := 0
 	newLSIs := []string{}
+	success := false
 	LSIs := []longtaillib.Longtail_StoreIndex{}
-	defer func(LSIs []longtaillib.Longtail_StoreIndex) {
-		for _, LSI := range LSIs {
-			LSI.Dispose()
+	defer func() {
+		if !success {
+			for _, LSI := range LSIs {
+				LSI.Dispose()
+			}
 		}
-	}(LSIs)
+	}()
 
 	for remoteIndex < remoteCount && localIndex < localCount {
 		if remoteLSIs[remoteIndex].Name == localLSIs[localIndex].Name {
@@ -204,11 +207,11 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 				localClient,
 				localLSIs[localIndex].Name)
 			if err != nil {
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+				return nil, errors.Wrap(err, fname)
 			}
 			LSI, err := longtaillib.ReadStoreIndexFromBuffer(buffer)
 			if err != nil {
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+				return nil, errors.Wrap(err, fname)
 			}
 			LSIs = append(LSIs, LSI)
 			remoteIndex++
@@ -223,7 +226,7 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		if remoteLSIs[remoteIndex].Name > localLSIs[localIndex].Name {
 			err = longtailutils.DeleteBlob(ctx, localClient, localLSIs[localIndex].Name)
 			if err != nil {
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+				return nil, errors.Wrap(err, fname)
 			}
 			localIndex++
 			continue
@@ -236,7 +239,7 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	for localIndex < localCount {
 		err = longtailutils.DeleteBlob(ctx, localClient, localLSIs[localIndex].Name)
 		if err != nil {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			return nil, errors.Wrap(err, fname)
 		}
 		localIndex++
 	}
@@ -303,6 +306,25 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		}
 		LSIs = append(LSIs, LSIResult.LSI)
 	}
+	if err != nil {
+		return nil, errors.Wrap(err, fname)
+	}
+	success = true
+	return LSIs, nil
+}
+
+// If caller get an IsNotExist(err) it should likely call GetStoreLSI again as the list of store LSI has changed (one that we found was removed)
+func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore) (longtaillib.Longtail_StoreIndex, error) {
+	const fname = "GetStoreLSI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":       fname,
+		"ctx":         ctx,
+		"remoteStore": remoteStore,
+		"localStore":  localStore,
+	})
+	log.Debug(fname)
+
+	LSIs, err := GetStoreLSIs(ctx, remoteStore, localStore)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}

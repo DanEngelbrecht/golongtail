@@ -10,6 +10,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Get current index
@@ -43,6 +44,12 @@ import (
 
 func mergeLSIs(localBuffer []byte, remoteBuffer []byte) (longtaillib.NativeBuffer, error) {
 	const fname = "mergeLSIs"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":        fname,
+		"localBuffer":  len(localBuffer),
+		"remoteBuffer": len(remoteBuffer),
+	})
+	log.Debug(fname)
 	remoteLSI, err := longtaillib.ReadStoreIndexFromBuffer(remoteBuffer)
 	if err != nil {
 		return longtaillib.NativeBuffer{}, errors.Wrap(err, fname)
@@ -67,6 +74,15 @@ func mergeLSIs(localBuffer []byte, remoteBuffer []byte) (longtaillib.NativeBuffe
 
 func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64) error {
 	const fname = "PutStoreLSI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":             fname,
+		"ctx":               ctx,
+		"remoteStore":       remoteStore,
+		"LSI":               LSI,
+		"maxStoreIndexSize": maxStoreIndexSize,
+	})
+	log.Debug(fname)
+
 	buffer, err := longtaillib.WriteStoreIndexToBuffer(LSI)
 	if err != nil {
 		return errors.Wrap(err, fname)
@@ -135,7 +151,13 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LS
 // If caller get an IsNotExist(err) it should likely call GetStoreLSI again as the list of store LSI has changed (one that we found was removed)
 func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "GetStoreLSI"
-	//	log.Debug(fname)
+	log := logrus.WithFields(logrus.Fields{
+		"fname":       fname,
+		"ctx":         ctx,
+		"remoteStore": remoteStore,
+		"localStore":  localStore,
+	})
+	log.Debug(fname)
 	remoteClient, err := remoteStore.NewClient(ctx)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
@@ -272,6 +294,9 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	for _ = range newLSIs {
 		LSIResult := <-storeIndexChan
 		if LSIResult.Error != nil {
+			log.WithFields(logrus.Fields{
+				"error": LSIResult.Error,
+			}).Error("failed reading remote lsi")
 			if err == nil {
 				err = LSIResult.Error
 			}

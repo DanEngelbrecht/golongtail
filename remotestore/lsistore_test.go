@@ -64,6 +64,10 @@ func TestPutGet(t *testing.T) {
 		return
 	}
 	defer LSI1.Dispose()
+	if LSI1.GetBlockCount() != 1 {
+		t.Errorf("TestCleanPut() LSI1.GetBlockCount() == %d, expected 1) %s", LSI1.GetBlockCount(), err)
+		return
+	}
 
 	remoteStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
@@ -89,6 +93,10 @@ func TestPutGet(t *testing.T) {
 		return
 	}
 	defer LSI2.Dispose()
+	if LSI2.GetBlockCount() != 1 {
+		t.Errorf("TestCleanPut() LSI2.GetBlockCount() == %d, expected 1) %s", LSI2.GetBlockCount(), err)
+		return
+	}
 
 	RemoteNames1 := getLSIs(remoteClient)
 	if len(RemoteNames1) != 1 {
@@ -108,6 +116,10 @@ func TestPutGet(t *testing.T) {
 		return
 	}
 	defer LSI3.Dispose()
+	if LSI3.GetBlockCount() != 5 {
+		t.Errorf("TestCleanPut() LSI3.GetBlockCount() == %d, expected 5) %s", LSI3.GetBlockCount(), err)
+		return
+	}
 
 	RemoteNames2 := getLSIs(remoteClient)
 	if len(RemoteNames2) != 2 {
@@ -167,6 +179,10 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 	defer LSI1.Dispose()
+	if LSI1.GetBlockCount() != 1 {
+		t.Errorf("TestCleanPut() LSI1.GetBlockCount() == %d, expected 1)", LSI1.GetBlockCount())
+		return
+	}
 
 	storeIndex2, _ := generateStoreIndex(t, 2, uint8(22))
 	defer storeIndex2.Dispose()
@@ -176,7 +192,11 @@ func TestMergeAtPut(t *testing.T) {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
 		return
 	}
-	LSI2.Dispose()
+	defer LSI2.Dispose()
+	if LSI2.GetBlockCount() != 3 {
+		t.Errorf("TestCleanPut() LSI2.GetBlockCount() == %d, expected 3)", LSI2.GetBlockCount())
+		return
+	}
 
 	storeIndex3, _ := generateStoreIndex(t, 3, uint8(33))
 	defer storeIndex3.Dispose()
@@ -187,6 +207,10 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 	defer LSI3.Dispose()
+	if LSI3.GetBlockCount() != 6 {
+		t.Errorf("TestCleanPut() LSI3.GetBlockCount() == %d, expected 6)", LSI3.GetBlockCount())
+		return
+	}
 
 	storeIndex4, _ := generateStoreIndex(t, 4, uint8(44))
 	defer storeIndex4.Dispose()
@@ -197,6 +221,10 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 	defer LSI4.Dispose()
+	if LSI4.GetBlockCount() != 10 {
+		t.Errorf("TestCleanPut() LSI4.GetBlockCount() == %d, expected 10)", LSI4.GetBlockCount())
+		return
+	}
 
 	lsis := getLSIs(remoteClient)
 	if len(lsis) != 2 {

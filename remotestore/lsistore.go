@@ -54,13 +54,16 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	log.Debug(fname)
 
 	LSIs, err := GetStoreLSIs(ctx, remoteStore, localStore)
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+
 	defer func() {
 		for _, LSI := range LSIs {
 			LSI.LSI.Dispose()
 		}
 	}()
 
-	unmergedLSIs := []longtaillib.Longtail_StoreIndex{}
 	ConsolidatedLSI := longtaillib.Longtail_StoreIndex{}
 	DisposeConsolidatedLSI := true
 	defer func() {
@@ -69,29 +72,31 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		}
 	}()
 
+	unmergedLSIs := []int{}
 	mergedLSIs := []int{}
 	if len(LSIs) > 0 {
 		sort.Slice(LSIs, func(i, j int) bool { return LSIs[i].LSI.GetSize() < LSIs[j].LSI.GetSize() })
 		for i := 0; i < len(LSIs); i++ {
 			mergedSize := LSIs[i].LSI.GetSize() + LSI.GetSize()
 			if mergedSize > maxStoreIndexSize {
-				unmergedLSIs = append(unmergedLSIs, LSIs[i].LSI)
+				unmergedLSIs = append(unmergedLSIs, i)
 				continue
 			}
 
 			if ConsolidatedLSI.IsValid() {
-				MergedLSI, err := longtaillib.MergeStoreIndex(LSIs[i].LSI, ConsolidatedLSI)
+				MergedLSI, err := longtaillib.MergeStoreIndex(ConsolidatedLSI, LSIs[i].LSI)
 				if err != nil {
 					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 				}
 				ConsolidatedLSI.Dispose()
 				ConsolidatedLSI = MergedLSI
 			} else {
-				ConsolidatedLSI, err = longtaillib.MergeStoreIndex(LSIs[i].LSI, LSI)
+				ConsolidatedLSI, err = longtaillib.MergeStoreIndex(LSI, LSIs[i].LSI)
 				if err != nil {
 					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 				}
 			}
+			LSIs[i].LSI.Dispose()
 			mergedLSIs = append(mergedLSIs, i)
 		}
 	}
@@ -163,8 +168,8 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		}
 	}()
 
-	for _, LSI := range unmergedLSIs {
-		mergedLSI, err := longtaillib.MergeStoreIndex(result, LSI)
+	for _, i := range unmergedLSIs {
+		mergedLSI, err := longtaillib.MergeStoreIndex(result, LSIs[i].LSI)
 		if err != nil {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
@@ -172,6 +177,7 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 			result.Dispose()
 		}
 		result = mergedLSI
+		LSIs[i].LSI.Dispose()
 		disposeResult = true
 	}
 
@@ -364,6 +370,11 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
+	defer func() {
+		for _, LSI := range LSIs {
+			LSI.LSI.Dispose()
+		}
+	}()
 
 	if len(LSIs) > 0 {
 		result := LSIs[0].LSI

@@ -9,7 +9,8 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 )
 
-func getLSIs(client longtailstorelib.BlobClient) []string {
+func getLSIs(store longtailstorelib.BlobStore) []string {
+	client, _ := store.NewClient(context.Background())
 	items, err := client.GetObjects("store")
 	if err != nil {
 		return nil
@@ -53,10 +54,7 @@ func TestPutGet(t *testing.T) {
 	defer storeIndex.Dispose()
 
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
-	remoteClient, _ := remoteStore.NewClient(context.Background())
-
 	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
-	localClient, _ := localStore.NewClient(context.Background())
 
 	emptyStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	if err != nil {
@@ -87,7 +85,7 @@ func TestPutGet(t *testing.T) {
 	}
 	defer remoteStoreIndex.Dispose()
 
-	LocalNames := getLSIs(localClient)
+	LocalNames := getLSIs(localStore)
 	if len(LocalNames) != 1 {
 		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 1) %s", len(LocalNames), err)
 	}
@@ -109,7 +107,7 @@ func TestPutGet(t *testing.T) {
 		return
 	}
 
-	RemoteNames1 := getLSIs(remoteClient)
+	RemoteNames1 := getLSIs(remoteStore)
 	if len(RemoteNames1) != 1 {
 		t.Errorf("TestCleanPut() len(RemoteNames) == %d, expected 1) %s", len(RemoteNames1), err)
 	}
@@ -132,12 +130,12 @@ func TestPutGet(t *testing.T) {
 		return
 	}
 
-	RemoteNames2 := getLSIs(remoteClient)
+	RemoteNames2 := getLSIs(remoteStore)
 	if len(RemoteNames2) != 2 {
 		t.Errorf("TestCleanPut() len(RemoteNames) == %d, expected 2) %s", len(RemoteNames2), err)
 	}
 
-	LocalNames = getLSIs(localClient)
+	LocalNames = getLSIs(localStore)
 	if len(LocalNames) != 1 {
 		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 1) %s", len(LocalNames), err)
 	}
@@ -153,11 +151,12 @@ func TestPutGet(t *testing.T) {
 		return
 	}
 
-	LocalNames = getLSIs(localClient)
+	LocalNames = getLSIs(localStore)
 	if len(LocalNames) != 2 {
 		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 2) %s", len(LocalNames), err)
 	}
 
+	remoteClient, _ := remoteStore.NewClient(context.Background())
 	err = longtailutils.DeleteBlob(context.Background(), remoteClient, RemoteNames1[0])
 	if err != nil {
 		t.Errorf("TestCleanPut() obj.Delete()) %s", err)
@@ -177,8 +176,6 @@ func TestPutGet(t *testing.T) {
 
 func TestMergeAtPut(t *testing.T) {
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
-	remoteClient, _ := remoteStore.NewClient(context.Background())
-
 	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 
 	storeIndex1, _ := generateStoreIndex(t, 1, uint8(11))
@@ -237,7 +234,7 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 
-	lsis := getLSIs(remoteClient)
+	lsis := getLSIs(remoteStore)
 	if len(lsis) != 2 {
 		t.Errorf("TestForcedMerge() len(lsis) == %d, expected 2) %s", len(lsis), err)
 	}

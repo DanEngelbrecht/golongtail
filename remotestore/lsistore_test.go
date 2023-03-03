@@ -58,6 +58,17 @@ func TestPutGet(t *testing.T) {
 	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 	localClient, _ := localStore.NewClient(context.Background())
 
+	emptyStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	if err != nil {
+		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
+		return
+	}
+	defer emptyStoreIndex.Dispose()
+	if emptyStoreIndex.GetBlockCount() != 0 {
+		t.Errorf("TestCleanPut() emptyStoreIndex.GetBlockCount() == %d, expected 0) %s", emptyStoreIndex.GetBlockCount(), err)
+		return
+	}
+
 	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
 	if err != nil {
 		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)

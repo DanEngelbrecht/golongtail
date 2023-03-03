@@ -87,7 +87,7 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, errors.Wrap(err, fname)
 	}
 

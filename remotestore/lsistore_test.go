@@ -7,6 +7,7 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/stretchr/testify/assert"
 )
 
 func getLSIs(store longtailstorelib.BlobStore) []string {
@@ -65,31 +66,17 @@ func TestOverwrite(t *testing.T) {
 	addStoreIndex(remoteStore, 44)
 	addStoreIndex(remoteStore, 55)
 	unprunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
-	if err != nil {
-		t.Errorf("TestOverwrite() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting LSI")
 	defer unprunedStoreIndex.Dispose()
-	if unprunedStoreIndex.GetBlockCount() != 14 {
-		t.Errorf("TestCleanPut() unprunedStoreIndex.GetBlockCount() == %d, expected 14) %s", unprunedStoreIndex.GetBlockCount(), err)
-	}
+	assert.Equal(t, unprunedStoreIndex.GetBlockCount(), uint32(14), "unpruned store index mismatch")
 
 	storeIndex, _ := generateStoreIndex(7, uint8(77))
 	err = OverwriteStoreLSI(context.Background(), remoteStore, storeIndex)
-	if err != nil {
-		t.Errorf("TestOverwrite() OverwriteStoreLSI() %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed overwriting LSI")
 	prunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
-	if err != nil {
-		t.Errorf("TestOverwrite() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting pruned LSI")
 	defer prunedStoreIndex.Dispose()
-	if prunedStoreIndex.GetBlockCount() != 7 {
-		t.Errorf("TestCleanPut() emptyStoreIndex.GetBlockCount() == %d, expected 7) %s", prunedStoreIndex.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, prunedStoreIndex.GetBlockCount(), uint32(7), "pruned store index mismatch")
 }
 
 func TestPutGet(t *testing.T) {
@@ -100,121 +87,65 @@ func TestPutGet(t *testing.T) {
 	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 
 	emptyStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting empty LSI")
 	defer emptyStoreIndex.Dispose()
-	if emptyStoreIndex.GetBlockCount() != 0 {
-		t.Errorf("TestCleanPut() emptyStoreIndex.GetBlockCount() == %d, expected 0) %s", emptyStoreIndex.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, emptyStoreIndex.GetBlockCount(), uint32(0), "empty LSI is not empty")
 
 	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI1")
 	defer LSI1.Dispose()
-	if LSI1.GetBlockCount() != 1 {
-		t.Errorf("TestCleanPut() LSI1.GetBlockCount() == %d, expected 1) %s", LSI1.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, LSI1.GetBlockCount(), uint32(1), "Put LSI1 did not result in expected store index")
 
 	remoteStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting LSI")
 	defer remoteStoreIndex.Dispose()
 
 	LocalNames := getLSIs(localStore)
-	if len(LocalNames) != 1 {
-		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 1) %s", len(LocalNames), err)
-	}
+	assert.Equal(t, len(LocalNames), 1, "unexpeced number of indexes in local store")
+
 	remoteStoreIndexCached, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting cached LSI")
 	defer remoteStoreIndexCached.Dispose()
 
 	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI2")
 	defer LSI2.Dispose()
-	if LSI2.GetBlockCount() != 1 {
-		t.Errorf("TestCleanPut() LSI2.GetBlockCount() == %d, expected 1) %s", LSI2.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, LSI2.GetBlockCount(), uint32(1), "Put LSI2 did not result in expected store index")
 
 	RemoteNames1 := getLSIs(remoteStore)
-	if len(RemoteNames1) != 1 {
-		t.Errorf("TestCleanPut() len(RemoteNames) == %d, expected 1) %s", len(RemoteNames1), err)
-	}
+	assert.Equal(t, len(RemoteNames1), 1, "unexpeced number of indexes in remote store")
 
 	storeIndex2, err := generateStoreIndex(4, uint8(33))
-	if err != nil {
-		t.Errorf("TestCleanPut() generateStoreIndex(1, uint8(33)) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed generating storeIndex2")
 	defer storeIndex2.Dispose()
 
 	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI3")
 	defer LSI3.Dispose()
-	if LSI3.GetBlockCount() != 5 {
-		t.Errorf("TestCleanPut() LSI3.GetBlockCount() == %d, expected 5) %s", LSI3.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, LSI3.GetBlockCount(), uint32(5), "Put LSI3 did not result in expected store index")
 
 	RemoteNames2 := getLSIs(remoteStore)
-	if len(RemoteNames2) != 2 {
-		t.Errorf("TestCleanPut() len(RemoteNames) == %d, expected 2) %s", len(RemoteNames2), err)
-	}
+	assert.Equal(t, len(RemoteNames2), 2, "unexpeced number of indexes in remote store")
 
 	LocalNames = getLSIs(localStore)
-	if len(LocalNames) != 1 {
-		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 1) %s", len(LocalNames), err)
-	}
+	assert.Equal(t, len(LocalNames), 1, "unexpeced number of indexes in local store")
 
 	remoteStoreIndexMerged, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting remoteStoreIndexMerged")
 	defer remoteStoreIndexMerged.Dispose()
-	if remoteStoreIndexMerged.GetBlockCount() != 5 {
-		t.Errorf("TestCleanPut() remoteStoreIndexMerged.GetBlockCount() == %d, expected 5) %s", remoteStoreIndexMerged.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, remoteStoreIndexMerged.GetBlockCount(), uint32(5), "Get remoteStoreIndexMerged did not result in expected store index")
 
 	LocalNames = getLSIs(localStore)
-	if len(LocalNames) != 2 {
-		t.Errorf("TestCleanPut() len(LocalNames) == %d, expected 2) %s", len(LocalNames), err)
-	}
+	assert.Equal(t, len(LocalNames), 2, "unexpeced number of indexes in local store")
 
 	remoteClient, _ := remoteStore.NewClient(context.Background())
 	err = longtailutils.DeleteBlob(context.Background(), remoteClient, RemoteNames1[0])
-	if err != nil {
-		t.Errorf("TestCleanPut() obj.Delete()) %s", err)
-	}
+	assert.Equal(t, err, nil, "failed deleting remote blob")
 
 	remoteStoreIndexPruned, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting remoteStoreIndexPruned")
 	defer remoteStoreIndexPruned.Dispose()
-	if remoteStoreIndexPruned.GetBlockCount() != 4 {
-		t.Errorf("TestCleanPut() remoteStoreIndexMerged.GetBlockCount() == %d, expected 1) %s", remoteStoreIndexPruned.GetBlockCount(), err)
-		return
-	}
+	assert.Equal(t, remoteStoreIndexPruned.GetBlockCount(), uint32(4), "Get remoteStoreIndexPruned did not result in expected store index")
 }
 
 func TestMergeAtPut(t *testing.T) {
@@ -225,82 +156,44 @@ func TestMergeAtPut(t *testing.T) {
 	defer storeIndex1.Dispose()
 
 	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex1, 0)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI1")
 	defer LSI1.Dispose()
-	if LSI1.GetBlockCount() != 1 {
-		t.Errorf("TestCleanPut() LSI1.GetBlockCount() == %d, expected 1)", LSI1.GetBlockCount())
-		return
-	}
+	assert.Equal(t, LSI1.GetBlockCount(), uint32(1), "Put LSI1 did not result in expected store index")
 
 	storeIndex2, _ := generateStoreIndex(2, uint8(22))
 	defer storeIndex2.Dispose()
 
 	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI2")
 	defer LSI2.Dispose()
-	if LSI2.GetBlockCount() != 3 {
-		t.Errorf("TestCleanPut() LSI2.GetBlockCount() == %d, expected 3)", LSI2.GetBlockCount())
-		return
-	}
+	assert.Equal(t, LSI2.GetBlockCount(), uint32(3), "Put LSI2 did not result in expected store index")
 
 	storeIndex3, _ := generateStoreIndex(3, uint8(33))
 	defer storeIndex3.Dispose()
 
 	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex3, 0)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI3")
 	defer LSI3.Dispose()
-	if LSI3.GetBlockCount() != 6 {
-		t.Errorf("TestCleanPut() LSI3.GetBlockCount() == %d, expected 6)", LSI3.GetBlockCount())
-		return
-	}
+	assert.Equal(t, LSI3.GetBlockCount(), uint32(6), "Put LSI3 did not result in expected store index")
 
 	storeIndex4, _ := generateStoreIndex(4, uint8(44))
 	defer storeIndex4.Dispose()
 
 	LSI4, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex4, 530)
-	if err != nil {
-		t.Errorf("TestCleanPut() PutStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed putting LSI4")
 	defer LSI4.Dispose()
-	if LSI4.GetBlockCount() != 10 {
-		t.Errorf("TestCleanPut() LSI4.GetBlockCount() == %d, expected 10)", LSI4.GetBlockCount())
-		return
-	}
+	assert.Equal(t, LSI4.GetBlockCount(), uint32(10), "Put LSI4 did not result in expected store index")
 
 	lsis := getLSIs(remoteStore)
-	if len(lsis) != 2 {
-		t.Errorf("TestForcedMerge() len(lsis) == %d, expected 2) %s", len(lsis), err)
-	}
+	assert.Equal(t, len(lsis), 2, "Unexpeced number of store indexes in remote store")
 
 	resultStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting resultStoreIndex")
 	defer resultStoreIndex.Dispose()
-	if resultStoreIndex.GetBlockCount() != 10 {
-		t.Errorf("TestCleanPut() resultStoreIndex.GetBlockCount() == %d, expected 10)", resultStoreIndex.GetBlockCount())
-		return
-	}
+	assert.Equal(t, resultStoreIndex.GetBlockCount(), uint32(10), "Gut resultStoreIndex did not result in expected store index")
 
 	noCacheStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
-	if err != nil {
-		t.Errorf("TestCleanPut() GetStoreLSI()) %s", err)
-		return
-	}
+	assert.Equal(t, err, nil, "failed getting noCacheStoreIndex")
 	defer noCacheStoreIndex.Dispose()
-	if noCacheStoreIndex.GetBlockCount() != 10 {
-		t.Errorf("TestCleanPut() noCacheStoreIndex.GetBlockCount() == %d, expected 10)", noCacheStoreIndex.GetBlockCount())
-		return
-	}
+	assert.Equal(t, noCacheStoreIndex.GetBlockCount(), uint32(10), "Gut noCacheStoreIndex did not result in expected store index")
 }

@@ -768,7 +768,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				if err != nil {
 					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %s", err)
 				}
-				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, blocksIndex)
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), true, client, blocksIndex)
 				blocksIndex.Dispose()
 				if err != nil {
 					t.Errorf("addToRemoteStoreIndex() failed with %s", err)
@@ -792,7 +792,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				if err != nil {
 					t.Errorf("longtaillib.CreateStoreIndexFromBlocks() failed with %s", err)
 				}
-				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), client, generatedBlocksIndex)
+				newStoreIndex, err := addToRemoteStoreIndex(context.Background(), true, client, generatedBlocksIndex)
 				if err != nil {
 					t.Errorf("addToRemoteStoreIndex() failed with %s", err)
 				}
@@ -824,7 +824,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 	if !client.SupportsLocking() {
 		// Consolidate indexes
 		updateIndex, _ := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-		newStoreIndex, _ := addToRemoteStoreIndex(context.Background(), client, updateIndex)
+		newStoreIndex, _ := addToRemoteStoreIndex(context.Background(), true, client, updateIndex)
 		updateIndex.Dispose()
 		newStoreIndex.Dispose()
 	}

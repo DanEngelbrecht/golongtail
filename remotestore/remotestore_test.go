@@ -22,6 +22,7 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -112,6 +113,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -146,6 +148,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -194,6 +197,7 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -235,7 +239,7 @@ func TestGetExistingContent(t *testing.T) {
 	_ = remoteStore.Flush(longtaillib.CreateAsyncFlushAPI(remoteStoreFlushComplete))
 	remoteStoreFlushComplete.wg.Wait()
 
-	existingContent, err := getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, _ := getExistingContent(t, storeAPI, chunkHashes, 0)
 	defer existingContent.Dispose()
 	if !existingContent.IsValid() {
 		t.Errorf("TestGetExistingContent() g.err %t != %t", existingContent.IsValid(), true)
@@ -257,6 +261,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -289,6 +294,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -299,7 +305,7 @@ func TestRestoreStore(t *testing.T) {
 
 	chunkHashes := []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3}
 
-	existingContent, err := getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, _ := getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestRestoreStore() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -314,7 +320,7 @@ func TestRestoreStore(t *testing.T) {
 
 	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
 
-	existingContent, err = getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, _ = getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestRestoreStore() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -337,6 +343,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -347,7 +354,7 @@ func TestRestoreStore(t *testing.T) {
 
 	chunkHashes = []uint64{uint64(0) + 1, uint64(0) + 2, uint64(10) + 1, uint64(10) + 3, uint64(30) + 1}
 
-	existingContent, err = getExistingContent(t, storeAPI, chunkHashes, 0)
+	existingContent, _ = getExistingContent(t, storeAPI, chunkHashes, 0)
 	if !existingContent.IsValid() {
 		t.Errorf("TestRestoreStore() g.err %t != %t", existingContent.IsValid(), true)
 	}
@@ -363,34 +370,34 @@ func TestRestoreStore(t *testing.T) {
 	storeAPI.Dispose()
 }
 
-func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (longtaillib.Longtail_StoredBlock, error) {
-	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
-	chunkHashes := make([]uint64, chunkCount)
-	chunkSizes := make([]uint32, chunkCount)
-	blockOffset := uint32(0)
-	for index, _ := range chunkHashes {
-		chunkHashes[index] = uint64(index+1) * 4711
-		chunkSizes[index] = uint32(index+1) * 10
-		blockOffset += uint32(chunkSizes[index])
-	}
-	blockData := make([]uint8, blockOffset)
-	blockOffset = 0
-	for chunkIndex, _ := range chunkHashes {
-		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
-			blockData[blockOffset+index] = uint8(chunkIndex + 1)
-		}
-		blockOffset += uint32(chunkSizes[chunkIndex])
-	}
-
-	return longtaillib.CreateStoredBlock(
-		blockHash,
-		hashIdentifier,
-		chunkCount+uint32(10000),
-		chunkHashes,
-		chunkSizes,
-		blockData,
-		false)
-}
+//func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (longtaillib.Longtail_StoredBlock, error) {
+//	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
+//	chunkHashes := make([]uint64, chunkCount)
+//	chunkSizes := make([]uint32, chunkCount)
+//	blockOffset := uint32(0)
+//	for index := range chunkHashes {
+//		chunkHashes[index] = uint64(index+1) * 4711
+//		chunkSizes[index] = uint32(index+1) * 10
+//		blockOffset += uint32(chunkSizes[index])
+//	}
+//	blockData := make([]uint8, blockOffset)
+//	blockOffset = 0
+//	for chunkIndex := range chunkHashes {
+//		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
+//			blockData[blockOffset+index] = uint8(chunkIndex + 1)
+//		}
+//		blockOffset += uint32(chunkSizes[chunkIndex])
+//	}
+//
+//	return longtaillib.CreateStoredBlock(
+//		blockHash,
+//		hashIdentifier,
+//		chunkCount+uint32(10000),
+//		chunkHashes,
+//		chunkSizes,
+//		blockData,
+//		false)
+//}
 
 func storeBlock(blobClient longtailstorelib.BlobClient, storedBlock longtaillib.Longtail_StoredBlock, blockHashOffset uint64, parentPath string) uint64 {
 	bytes, _ := longtaillib.WriteStoredBlockToBuffer(storedBlock)
@@ -526,6 +533,7 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		Init)
@@ -582,6 +590,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -646,6 +655,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -657,7 +667,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	keepBlockHashes := make([]uint64, 2)
 	keepBlockHashes[0] = blockHashes[0]
 	keepBlockHashes[1] = blockHashes[2]
-	pruneBlockCount, err := pruneBlocksSync(storeAPI, keepBlockHashes)
+	pruneBlockCount, _ := pruneBlocksSync(storeAPI, keepBlockHashes)
 	if pruneBlockCount != 1 {
 		t.Errorf("pruneBlocksSync() pruneBlockCount %d != %d", 1, pruneBlockCount)
 	}
@@ -672,6 +682,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)

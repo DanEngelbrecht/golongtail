@@ -936,6 +936,7 @@ func contentIndexWorker(
 func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore longtailstorelib.BlobStore,
+	useLegacyStore bool,
 	optionalStoreIndexPaths []string,
 	workerCount int,
 	accessType AccessType,
@@ -986,7 +987,7 @@ func NewRemoteBlockStore(
 		err := contentIndexWorker(
 			ctx,
 			s,
-			true,
+			useLegacyStore,
 			optionalStoreIndexPaths,
 			s.preflightGetChan,
 			s.prefetchBlockChan,
@@ -1449,6 +1450,7 @@ func getBlockPath(basePath string, blockHash uint64) string {
 
 func CreateBlockStoreForURI(
 	uri string,
+	useLegacyStore bool,
 	optionalStoreIndexPaths []string,
 	jobAPI longtaillib.Longtail_JobAPI,
 	numWorkerCount int,
@@ -1477,6 +1479,7 @@ func CreateBlockStoreForURI(
 		fsBlockStore, err := NewRemoteBlockStore(
 			jobAPI,
 			fsBlobStore,
+			useLegacyStore,
 			optionalStoreIndexPaths,
 			numWorkerCount,
 			accessType,
@@ -1498,6 +1501,7 @@ func CreateBlockStoreForURI(
 			gcsBlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				gcsBlobStore,
+				useLegacyStore,
 				optionalStoreIndexPaths,
 				numWorkerCount,
 				accessType,
@@ -1514,6 +1518,7 @@ func CreateBlockStoreForURI(
 			s3BlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				s3BlobStore,
+				useLegacyStore,
 				optionalStoreIndexPaths,
 				numWorkerCount,
 				accessType,

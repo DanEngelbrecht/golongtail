@@ -104,6 +104,8 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	})
 	log.Debug(fname)
 
+	// TODO: Can we bypass some logic if we write the same index as already exists? Seems like we do that on Init
+
 	LSIs, err := GetStoreLSIs(ctx, remoteStore, localStore)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
@@ -192,6 +194,9 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	}
 
 	for Index := range mergedLSIs {
+		if LSIs[Index].Name == newName {
+			continue
+		}
 		err = longtailutils.DeleteBlob(ctx, remoteClient, LSIs[Index].Name)
 		if err != nil && !longtaillib.IsNotExist(err) {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)

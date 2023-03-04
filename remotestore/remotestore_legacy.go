@@ -505,3 +505,37 @@ func readStoreStoreIndexWithItemsLegacy(
 		log.Infof("Retrying reading remote store index")
 	}
 }
+
+func addToRemoteStoreIndexLegacy(
+	ctx context.Context,
+	blobClient longtailstorelib.BlobClient,
+	addStoreIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
+	const fname = "addToRemoteStoreIndexLegacy"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":      fname,
+		"blobClient": blobClient,
+	})
+	log.Debug(fname)
+
+	errorRetries := 0
+	for {
+		ok, newStoreIndex, err := tryAddRemoteStoreIndexLegacy(
+			ctx,
+			addStoreIndex,
+			blobClient)
+		if ok {
+			return newStoreIndex, nil
+		}
+		if err != nil {
+			errorRetries++
+			if errorRetries == 3 {
+				log.Errorf("Failed updating remote store after %d tryAddRemoteStoreIndex: %s", 3, err)
+				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			} else {
+				log.Warnf("Error from tryAddRemoteStoreIndex %s", err)
+			}
+		}
+		log.Debug("Retrying updating remote store index")
+	}
+	return longtaillib.Longtail_StoreIndex{}, nil
+}

@@ -592,7 +592,10 @@ func addBlocksToRemoteStoreIndex(
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	defer addedStoreIndex.Dispose()
-	return addToRemoteStoreIndex(ctx, useLegacyStore, blobClient, addedStoreIndex)
+	if !useLegacyStore {
+		return PutStoreLSI(ctx, s.blobStore, nil, addedStoreIndex, 1024*1024*512)
+	}
+	return addToRemoteStoreIndexLegacy(ctx, blobClient, addedStoreIndex)
 }
 
 func onPreflighMessage(
@@ -655,7 +658,11 @@ func onPruneBlocksMessage(
 		return 0, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 
-	err = tryOverwriteStoreIndexWithRetryLegacy(ctx, prunedIndex, blobClient)
+	if useLegacyStore {
+		err = tryOverwriteStoreIndexWithRetryLegacy(ctx, prunedIndex, blobClient)
+	} else {
+		err = OverwriteStoreLSI(ctx, s.blobStore, prunedIndex)
+	}
 	if err != nil {
 		prunedIndex.Dispose()
 		return 0, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
@@ -1101,41 +1108,6 @@ func (s *remoteStore) Close() {
 	s.defaultClient.Close()
 }
 
-func addToRemoteStoreIndex(
-	ctx context.Context,
-	useLegacyStore bool,
-	blobClient longtailstorelib.BlobClient,
-	addStoreIndex longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_StoreIndex, error) {
-	const fname = "addToRemoteStoreIndex"
-	log := logrus.WithFields(logrus.Fields{
-		"fname":      fname,
-		"blobClient": blobClient,
-	})
-	log.Debug(fname)
-
-	errorRetries := 0
-	for {
-		ok, newStoreIndex, err := tryAddRemoteStoreIndexLegacy(
-			ctx,
-			addStoreIndex,
-			blobClient)
-		if ok {
-			return newStoreIndex, nil
-		}
-		if err != nil {
-			errorRetries++
-			if errorRetries == 3 {
-				log.Errorf("Failed updating remote store after %d tryAddRemoteStoreIndex: %s", 3, err)
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-			} else {
-				log.Warnf("Error from tryAddRemoteStoreIndex %s", err)
-			}
-		}
-		log.Debug("Retrying updating remote store index")
-	}
-	return longtaillib.Longtail_StoreIndex{}, nil
-}
-
 func getStoreIndexFromBlocks(
 	ctx context.Context,
 	blobStore longtailstorelib.BlobStore,
@@ -1385,7 +1357,12 @@ func readRemoteStoreIndex(
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
 		log.Infof("Rebuilt remote index with %d blocks", len(storeIndex.GetBlockHashes()))
-		newStoreIndex, err := addToRemoteStoreIndex(ctx, useLegacyStore, client, storeIndex)
+		var newStoreIndex longtaillib.Longtail_StoreIndex
+		if useLegacyStore {
+			newStoreIndex, err = addToRemoteStoreIndexLegacy(ctx, client, storeIndex)
+		} else {
+			newStoreIndex, err = PutStoreLSI(ctx, blobStore, nil, storeIndex, 1024*1024*512)
+		}
 		if err != nil {
 			log.WithError(err).Error("Failed to update store index")
 		}
@@ -1424,7 +1401,12 @@ func readRemoteStoreIndex(
 		return storeIndex, nil
 	}
 
-	storeIndex, _, err = readStoreStoreIndexWithItemsLegacy(ctx, client)
+	if useLegacyStore {
+		storeIndex, _, err = readStoreStoreIndexWithItemsLegacy(ctx, client)
+	} else {
+		storeIndex, err = GetStoreLSI(ctx, blobStore, nil)
+	}
+
 	if err == nil {
 		return storeIndex, nil
 	} else if !longtaillib.IsNotExist(err) {

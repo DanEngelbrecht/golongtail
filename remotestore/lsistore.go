@@ -34,6 +34,65 @@ import (
 // Save G to store uri
 // Remove E from store uri
 
+func OverwriteStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, LSI longtaillib.Longtail_StoreIndex) error {
+	const fname = "OverwriteStoreLSI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":       fname,
+		"ctx":         ctx,
+		"remoteStore": remoteStore,
+		"LSI":         LSI,
+	})
+	log.Debug(fname)
+
+	remoteClient, err := remoteStore.NewClient(ctx)
+	if err != nil {
+		return errors.Wrap(err, fname)
+	}
+	remoteLSIs, err := remoteClient.GetObjects("store")
+	if err != nil && !longtaillib.IsNotExist(err) {
+		return errors.Wrap(err, fname)
+	}
+	log.Infof("found %d store indexes in remote store", len(remoteLSIs))
+	buffer, err := longtaillib.WriteStoreIndexToBuffer(LSI)
+	if err != nil && !longtaillib.IsNotExist(err) {
+		return errors.Wrap(err, fname)
+	}
+	defer buffer.Dispose()
+
+	saveBuffer := buffer.ToBuffer()
+
+	exists := false
+	sha256 := sha256.Sum256(saveBuffer)
+	newName := fmt.Sprintf("store_%x.lsi", sha256)
+	for _, remoteLSI := range remoteLSIs {
+		if remoteLSI.Name == newName {
+			exists = true
+			break
+		}
+	}
+
+	if !exists {
+		_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newName, saveBuffer)
+		if err != nil {
+			return errors.Wrap(err, fname)
+		}
+		log.Infof("stored new store index `%s`", newName)
+	}
+
+	for _, remoteLSI := range remoteLSIs {
+		if remoteLSI.Name == newName {
+			continue
+		}
+		err = longtailutils.DeleteBlob(ctx, remoteClient, remoteLSI.Name)
+		if err != nil && !longtaillib.IsNotExist(err) {
+			return errors.Wrap(err, fname)
+		}
+		log.Infof("deleted pruned store index `%s`", remoteLSI.Name)
+	}
+
+	return nil
+}
+
 func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, LSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "PutStoreLSI"
 	log := logrus.WithFields(logrus.Fields{

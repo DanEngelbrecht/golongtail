@@ -406,7 +406,7 @@ func storeBlock(blobClient longtailstorelib.BlobClient, storedBlock longtaillib.
 	return storedBlockHash
 }
 
-func generateStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_StoredBlock, error) {
+func generateStoredBlock(seed uint8) (longtaillib.Longtail_StoredBlock, error) {
 	chunkHashes := []uint64{uint64(seed) + 1, uint64(seed) + 2, uint64(seed) + 3}
 	chunkSizes := []uint32{uint32(seed) + 10, uint32(seed) + 20, uint32(seed) + 30}
 
@@ -448,7 +448,7 @@ func generateUniqueStoredBlock(t *testing.T, seed uint8) (longtaillib.Longtail_S
 
 func storeBlockFromSeed(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (longtaillib.Longtail_StoredBlock, error) {
 	const fname = "storeBlockFromSeed"
-	storedBlock, err := generateStoredBlock(t, seed)
+	storedBlock, err := generateStoredBlock(seed)
 	if err != nil {
 		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname)
 	}
@@ -509,16 +509,16 @@ func TestBlockScanning(t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("", true)
 	blobClient, _ := blobStore.NewClient(context.Background())
 
-	goodBlockInCorrectPath, _ := generateStoredBlock(t, 7)
+	goodBlockInCorrectPath, _ := generateStoredBlock(7)
 	goodBlockInCorrectPathHash := storeBlock(blobClient, goodBlockInCorrectPath, 0, "")
 
-	badBlockInCorrectPath, _ := generateStoredBlock(t, 14)
+	badBlockInCorrectPath, _ := generateStoredBlock(14)
 	badBlockInCorrectPathHash := storeBlock(blobClient, badBlockInCorrectPath, 1, "")
 
-	goodBlockInBadPath, _ := generateStoredBlock(t, 21)
+	goodBlockInBadPath, _ := generateStoredBlock(21)
 	goodBlockInBadPathHash := storeBlock(blobClient, goodBlockInBadPath, 0, "chunks")
 
-	badBlockInBatPath, _ := generateStoredBlock(t, 33)
+	badBlockInBatPath, _ := generateStoredBlock(33)
 	badBlockInBatPathHash := storeBlock(blobClient, badBlockInBatPath, 2, "chunks")
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
@@ -715,14 +715,14 @@ func TestPruneStoreWithoutLocking(t *testing.T) {
 }
 
 func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_StoreIndex, client longtailstorelib.BlobClient) bool {
-	storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+	storeIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
 	defer storeIndex.Dispose()
 	if err != nil {
-		log.Printf("readStoreStoreIndexWithItems() failed with %s", err)
+		log.Printf("readStoreStoreIndexWithItemsLegacy() failed with %s", err)
 		return false
 	}
 	if !storeIndex.IsValid() {
-		log.Printf("readStoreStoreIndexWithItems() returned invalid store index")
+		log.Printf("readStoreStoreIndexWithItemsLegacy() returned invalid store index")
 		return false
 	}
 
@@ -776,9 +776,9 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				newStoreIndex.Dispose()
 			}
 
-			readStoreIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+			readStoreIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
 			if err != nil {
-				t.Errorf("readStoreStoreIndexWithItems() failed with %s", err)
+				t.Errorf("readStoreStoreIndexWithItemsLegacy() failed with %s", err)
 			}
 			readStoreIndex.Dispose()
 
@@ -829,9 +829,9 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 		newStoreIndex.Dispose()
 	}
 
-	storeIndex, _, err := readStoreStoreIndexWithItems(context.Background(), client)
+	storeIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
 	if err != nil {
-		t.Errorf("readStoreStoreIndexWithItems() failed with %s", err)
+		t.Errorf("readStoreStoreIndexWithItemsLegacy() failed with %s", err)
 	}
 	defer storeIndex.Dispose()
 	if len(storeIndex.GetBlockHashes()) != blockGenerateCount*workerCount {

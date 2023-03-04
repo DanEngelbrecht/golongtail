@@ -22,7 +22,7 @@ func getLSIs(store longtailstorelib.BlobStore) []string {
 	return names
 }
 
-func generateStoreIndex(t *testing.T, blockCount uint8, seed uint8) (longtaillib.Longtail_StoreIndex, error) {
+func generateStoreIndex(blockCount uint8, seed uint8) (longtaillib.Longtail_StoreIndex, error) {
 	blocks := make([]longtaillib.Longtail_StoredBlock, 0)
 	defer func(blocks []longtaillib.Longtail_StoredBlock) {
 		for _, b := range blocks {
@@ -32,9 +32,8 @@ func generateStoreIndex(t *testing.T, blockCount uint8, seed uint8) (longtaillib
 	blockIndexes := make([]longtaillib.Longtail_BlockIndex, 0)
 
 	for block := uint8(0); block < blockCount; block++ {
-		storedBlock, err := generateStoredBlock(t, seed+block)
+		storedBlock, err := generateStoredBlock(seed + block)
 		if err != nil {
-			t.Errorf("TestCleanPut() generateStoredBlock(t, 77)) %s", err)
 			return longtaillib.Longtail_StoreIndex{}, err
 		}
 		blocks = append(blocks, storedBlock)
@@ -43,14 +42,58 @@ func generateStoreIndex(t *testing.T, blockCount uint8, seed uint8) (longtaillib
 
 	storeIndex, err := longtaillib.CreateStoreIndexFromBlocks(blockIndexes)
 	if err != nil {
-		t.Errorf("TestCleanPut() CreateStoreIndexFromBlocks()) %s", err)
 		return longtaillib.Longtail_StoreIndex{}, err
 	}
 	return storeIndex, nil
 }
 
+func addStoreIndex(remoteStore longtailstorelib.BlobStore, seed uint8) error {
+	storeIndex, _ := generateStoreIndex(seed/10, uint8(seed))
+	defer storeIndex.Dispose()
+	resultStoreIndex, err := PutStoreLSI(context.Background(), remoteStore, nil, storeIndex, 0)
+	if err != nil {
+		return err
+	}
+	defer resultStoreIndex.Dispose()
+	return nil
+}
+
+func TestOverwrite(t *testing.T) {
+	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
+	addStoreIndex(remoteStore, 22)
+	addStoreIndex(remoteStore, 33)
+	addStoreIndex(remoteStore, 44)
+	addStoreIndex(remoteStore, 55)
+	unprunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
+	if err != nil {
+		t.Errorf("TestOverwrite() GetStoreLSI()) %s", err)
+		return
+	}
+	defer unprunedStoreIndex.Dispose()
+	if unprunedStoreIndex.GetBlockCount() != 14 {
+		t.Errorf("TestCleanPut() unprunedStoreIndex.GetBlockCount() == %d, expected 14) %s", unprunedStoreIndex.GetBlockCount(), err)
+	}
+
+	storeIndex, _ := generateStoreIndex(7, uint8(77))
+	err = OverwriteStoreLSI(context.Background(), remoteStore, storeIndex)
+	if err != nil {
+		t.Errorf("TestOverwrite() OverwriteStoreLSI() %s", err)
+		return
+	}
+	prunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
+	if err != nil {
+		t.Errorf("TestOverwrite() GetStoreLSI()) %s", err)
+		return
+	}
+	defer prunedStoreIndex.Dispose()
+	if prunedStoreIndex.GetBlockCount() != 7 {
+		t.Errorf("TestCleanPut() emptyStoreIndex.GetBlockCount() == %d, expected 7) %s", prunedStoreIndex.GetBlockCount(), err)
+		return
+	}
+}
+
 func TestPutGet(t *testing.T) {
-	storeIndex, _ := generateStoreIndex(t, 1, uint8(77))
+	storeIndex, _ := generateStoreIndex(1, uint8(77))
 	defer storeIndex.Dispose()
 
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
@@ -112,9 +155,9 @@ func TestPutGet(t *testing.T) {
 		t.Errorf("TestCleanPut() len(RemoteNames) == %d, expected 1) %s", len(RemoteNames1), err)
 	}
 
-	storeIndex2, err := generateStoreIndex(t, 4, uint8(33))
+	storeIndex2, err := generateStoreIndex(4, uint8(33))
 	if err != nil {
-		t.Errorf("TestCleanPut() generateStoreIndex(t, 1, uint8(33)) %s", err)
+		t.Errorf("TestCleanPut() generateStoreIndex(1, uint8(33)) %s", err)
 		return
 	}
 	defer storeIndex2.Dispose()
@@ -178,7 +221,7 @@ func TestMergeAtPut(t *testing.T) {
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
 	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 
-	storeIndex1, _ := generateStoreIndex(t, 1, uint8(11))
+	storeIndex1, _ := generateStoreIndex(1, uint8(11))
 	defer storeIndex1.Dispose()
 
 	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex1, 0)
@@ -192,7 +235,7 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 
-	storeIndex2, _ := generateStoreIndex(t, 2, uint8(22))
+	storeIndex2, _ := generateStoreIndex(2, uint8(22))
 	defer storeIndex2.Dispose()
 
 	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
@@ -206,7 +249,7 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 
-	storeIndex3, _ := generateStoreIndex(t, 3, uint8(33))
+	storeIndex3, _ := generateStoreIndex(3, uint8(33))
 	defer storeIndex3.Dispose()
 
 	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex3, 0)
@@ -220,7 +263,7 @@ func TestMergeAtPut(t *testing.T) {
 		return
 	}
 
-	storeIndex4, _ := generateStoreIndex(t, 4, uint8(44))
+	storeIndex4, _ := generateStoreIndex(4, uint8(44))
 	defer storeIndex4.Dispose()
 
 	LSI4, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex4, 530)

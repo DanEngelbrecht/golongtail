@@ -470,5 +470,5 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		LSIs[0].LSI = longtaillib.Longtail_StoreIndex{}
 		return result, nil
 	}
-	return longtaillib.Longtail_StoreIndex{}, nil
+	return longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
 }

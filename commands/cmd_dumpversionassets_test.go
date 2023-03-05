@@ -3,6 +3,8 @@ package commands
 import (
 	"io/ioutil"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDumpVersionAssets(t *testing.T) {
@@ -14,17 +16,11 @@ func TestDumpVersionAssets(t *testing.T) {
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
 
 	cmd, err := executeCommandLine("dump-version-assets", "--version-index-path", fsBlobPathPrefix+"/index/v1.lvi")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	cmd, err = executeCommandLine("dump-version-assets", "--version-index-path", fsBlobPathPrefix+"/index/v2.lvi")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	cmd, err = executeCommandLine("dump-version-assets", "--version-index-path", fsBlobPathPrefix+"/index/v3.lvi")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 }
 
 func TestDumpVersionAssetsWithDetails(t *testing.T) {
@@ -36,15 +32,9 @@ func TestDumpVersionAssetsWithDetails(t *testing.T) {
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
 
 	cmd, err := executeCommandLine("dump-version-assets", "--version-index-path", fsBlobPathPrefix+"/index/v1.lvi", "--details")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	cmd, err = executeCommandLine("dump-version-assets", "--version-index-path", fsBlobPathPrefix+"/index/v2.lvi", "--details")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	cmd, err = executeCommandLine("dump-version-assets", "--version-index-path", fsBlobPathPrefix+"/index/v3.lvi", "--details")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 }

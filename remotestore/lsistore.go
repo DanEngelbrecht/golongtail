@@ -48,11 +48,12 @@ func OverwriteStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobSto
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
+	defer remoteClient.Close()
 	remoteLSIs, err := remoteClient.GetObjects("store")
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
 	}
-	log.Infof("found %d store indexes in remote store", len(remoteLSIs))
+	log.Debugf("found %d store indexes in remote store", len(remoteLSIs))
 	buffer, err := longtaillib.WriteStoreIndexToBuffer(LSI)
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
@@ -76,18 +77,18 @@ func OverwriteStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobSto
 		if err != nil {
 			return errors.Wrap(err, fname)
 		}
-		log.Infof("stored new store index `%s`", newName)
+		log.Debugf("stored new store index `%s`", newName)
 	}
 
 	for _, remoteLSI := range remoteLSIs {
 		if remoteLSI.Name == newName {
 			continue
 		}
-		err = longtailutils.DeleteBlob(ctx, remoteClient, remoteLSI.Name)
+		_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, remoteLSI.Name)
 		if err != nil && !longtaillib.IsNotExist(err) {
 			return errors.Wrap(err, fname)
 		}
-		log.Infof("deleted pruned store index `%s`", remoteLSI.Name)
+		log.Debugf("deleted pruned store index `%s`", remoteLSI.Name)
 	}
 
 	return nil
@@ -107,6 +108,12 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	// TODO: Can we bypass some logic if we write the same index as already exists? Seems like we do that on Init
 
 	LSIs, err := GetStoreLSIs(ctx, remoteStore, localStore)
+
+	// We retry as long as we get a "does not exist" error as that indicates that GetStoreLSIs detected a change in the remote store while reading it
+	for err != nil && longtaillib.IsNotExist(err) {
+		LSIs, err = GetStoreLSIs(ctx, remoteStore, localStore)
+	}
+
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
@@ -130,7 +137,8 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	if len(LSIs) > 0 {
 		sort.Slice(LSIs, func(i, j int) bool { return LSIs[i].LSI.GetSize() < LSIs[j].LSI.GetSize() })
 		for i := 0; i < len(LSIs); i++ {
-			if LSIs[i].LSI.GetSize() > maxStoreIndexSize {
+			lsiSize := LSIs[i].LSI.GetSize()
+			if lsiSize > maxStoreIndexSize {
 				unmergedLSIs = append(unmergedLSIs, i)
 				continue
 			}
@@ -157,14 +165,14 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 
 			ConsolidatedLSI.Dispose()
 			ConsolidatedLSI = MergedLSI
-			log.Infof("merged store index `%s`", LSIs[i].Name)
+			log.Debugf("merged store index `%s`", LSIs[i].Name)
 
 			LSIs[i].LSI.Dispose()
 			mergedLSIs = append(mergedLSIs, i)
 		}
 	}
 
-	log.Infof("merged in %d store indexes, leaving %d unmerged", len(mergedLSIs), len(unmergedLSIs))
+	log.Debugf("merged in %d store indexes, leaving %d unmerged", len(mergedLSIs), len(unmergedLSIs))
 
 	var buffer longtaillib.NativeBuffer
 	if ConsolidatedLSI.IsValid() {
@@ -193,23 +201,24 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
+	defer remoteClient.Close()
 	if !exists {
 		_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newName, saveBuffer)
 		if err != nil {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
-		log.Infof("stored new store index `%s`", newName)
+		log.Debugf("stored new store index `%s`", newName)
 	}
 
 	for Index := range mergedLSIs {
 		if LSIs[Index].Name == newName {
 			continue
 		}
-		err = longtailutils.DeleteBlob(ctx, remoteClient, LSIs[Index].Name)
+		_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, LSIs[Index].Name)
 		if err != nil && !longtaillib.IsNotExist(err) {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			log.WithError(err).Warnf("failed to delete `%s` from store `%s`", LSIs[Index].Name, remoteClient.String())
 		}
-		log.Infof("deleted merged store index `%s`", LSIs[Index].Name)
+		log.Debugf("deleted merged store index `%s`", LSIs[Index].Name)
 	}
 
 	if len(unmergedLSIs) == 0 {
@@ -249,7 +258,7 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		result = mergedLSI
 		LSIs[i].LSI.Dispose()
 		disposeResult = true
-		log.Infof("merged in store index `%s` into result", LSIs[i].Name)
+		log.Debugf("merged in store index `%s` into result", LSIs[i].Name)
 	}
 
 	disposeResult = false
@@ -275,11 +284,12 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
+	defer remoteClient.Close()
 	remoteLSIs, err := remoteClient.GetObjects("store")
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return nil, errors.Wrap(err, fname)
 	}
-	log.Infof("found %d store indexes in remote store", len(remoteLSIs))
+	log.Debugf("found %d store indexes in remote store", len(remoteLSIs))
 	sort.Slice(remoteLSIs, func(i, j int) bool { return remoteLSIs[i].Name < remoteLSIs[j].Name })
 
 	var localClient longtailstorelib.BlobClient
@@ -288,6 +298,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		if err != nil {
 			return nil, errors.Wrap(err, fname)
 		}
+		defer localClient.Close()
 	}
 
 	var localLSIs []longtailstorelib.BlobProperties
@@ -296,7 +307,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		if err != nil && !longtaillib.IsNotExist(err) {
 			return nil, errors.Wrap(err, fname)
 		}
-		log.Infof("found %d store indexes in local store", len(localLSIs))
+		log.Debugf("found %d store indexes in local store", len(localLSIs))
 		sort.Slice(localLSIs, func(i, j int) bool { return localLSIs[i].Name < localLSIs[j].Name })
 	}
 
@@ -340,18 +351,18 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		if remoteLSIs[remoteIndex].Name < localLSIs[localIndex].Name {
 			newLSIs = append(newLSIs, remoteLSIs[remoteIndex].Name)
 			remoteIndex++
-			log.Infof("found new store index `%s` in remote store", remoteLSIs[remoteIndex].Name)
+			log.Debugf("found new store index `%s` in remote store", remoteLSIs[remoteIndex].Name)
 			continue
 		}
 
 		// Exists in cache but not in remote
 		if remoteLSIs[remoteIndex].Name > localLSIs[localIndex].Name {
-			err = longtailutils.DeleteBlob(ctx, localClient, localLSIs[localIndex].Name)
+			_, err = longtailutils.DeleteBlobWithRetry(ctx, localClient, localLSIs[localIndex].Name)
 			if err != nil {
-				return nil, errors.Wrap(err, fname)
+				log.WithError(err).Warnf("failed to delete `%s` from store `%s`", localLSIs[localIndex].Name, localClient.String())
 			}
 			localIndex++
-			log.Infof("removed obsolete store index `%s` from local store", localLSIs[localIndex].Name)
+			log.Debugf("removed obsolete store index `%s` from local store", localLSIs[localIndex].Name)
 			continue
 		}
 	}
@@ -360,9 +371,9 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		remoteIndex++
 	}
 	for localIndex < localCount {
-		err = longtailutils.DeleteBlob(ctx, localClient, localLSIs[localIndex].Name)
+		_, err = longtailutils.DeleteBlobWithRetry(ctx, localClient, localLSIs[localIndex].Name)
 		if err != nil {
-			return nil, errors.Wrap(err, fname)
+			log.WithError(err).Warnf("failed to delete `%s` from store `%s`", localLSIs[localIndex].Name, localClient.String())
 		}
 		localIndex++
 	}
@@ -383,6 +394,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 				resultChan <- Result{Error: err}
 				return
 			}
+			defer remoteClient.Close()
 			buffer, _, err := longtailutils.ReadBlobWithRetry(
 				ctx,
 				remoteClient,
@@ -406,6 +418,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 					resultChan <- Result{Error: err}
 					return
 				}
+				defer localClient.Close()
 				_, err = longtailutils.WriteBlobWithRetry(
 					ctx,
 					localClient,
@@ -417,7 +430,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 					return
 				}
 			}
-			log.Infof("added store index `%s` to local store", lsiName)
+			log.Debugf("added store index `%s` to local store", lsiName)
 			resultChan <- Result{Entry: LSIEntry{Name: lsiName, LSI: LSI}}
 		}(ctx, remoteStore, localStore, newLSIName, storeIndexChan)
 	}
@@ -425,9 +438,15 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 	for _ = range newLSIs {
 		LSIResult := <-storeIndexChan
 		if LSIResult.Error != nil {
-			log.WithFields(logrus.Fields{
-				"error": LSIResult.Error,
-			}).Error("failed reading remote lsi")
+			if longtaillib.IsNotExist(LSIResult.Error) {
+				log.WithFields(logrus.Fields{
+					"error": LSIResult.Error,
+				}).Debug("failed reading remote lsi")
+			} else {
+				log.WithFields(logrus.Fields{
+					"error": LSIResult.Error,
+				}).Error("failed reading remote lsi")
+			}
 			if err == nil {
 				err = LSIResult.Error
 			}
@@ -438,7 +457,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		return nil, errors.Wrap(err, fname)
 	}
 	success = true
-	log.Infof("found %d store indexes", len(LSIs))
+	log.Debugf("found %d store indexes", len(LSIs))
 	return LSIs, nil
 }
 

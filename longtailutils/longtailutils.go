@@ -437,10 +437,7 @@ func ReadBlobWithRetry(
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	exists, err := objHandle.Exists()
-	if err != nil {
-		return nil, retryCount, errors.Wrap(err, fname)
-	}
-	if !exists {
+	if err == nil && !exists {
 		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s/%s does not exist", client.String(), key))
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
@@ -462,7 +459,7 @@ func ReadBlobWithRetry(
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
-	log.Infof("read %d bytes", len(blobData))
+	log.Infof("read %d bytes from `%s`", len(blobData), key)
 	return blobData, retryCount, nil
 }
 
@@ -519,14 +516,14 @@ func WriteBlobWithRetry(
 			}
 		}
 	}
-	log.Infof("wrote %d bytes", len(blob))
+	log.Infof("wrote %d bytes to `%s`", len(blob), key)
 	return retryCount, nil
 }
 
-func DeleteBlob(
+func DeleteBlobWithRetry(
 	ctx context.Context,
 	client longtailstorelib.BlobClient,
-	key string) error {
+	key string) (int, error) {
 	const fname = "DeleteBlob"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":  fname,
@@ -535,22 +532,35 @@ func DeleteBlob(
 	})
 	log.Debug(fname)
 
+	retryCount := 0
 	objHandle, err := client.NewObject(key)
 	if err != nil {
-		return errors.Wrap(err, fname)
+		return retryCount, errors.Wrap(err, fname)
 	}
 	exists, err := objHandle.Exists()
-	if err != nil {
-		return errors.Wrap(err, fname)
+	if err == nil && !exists {
+		return retryCount, nil
 	}
-	if !exists {
-		return nil
-	}
+	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
 	err = objHandle.Delete()
-	if err == nil || longtaillib.IsNotExist(err) {
-		return nil
+	for err != nil {
+		if longtaillib.IsNotExist(err) {
+			return retryCount, nil
+		}
+		if retryCount == len(retryDelay) {
+			err = errors.Wrapf(err, "Failed deleteBlob %s in store %s", key, client.String())
+			log.Error(err)
+			return retryCount, errors.Wrap(err, fname)
+		}
+		err = errors.Wrapf(err, "Retrying deleteBlob %s in store %s with %s delay", key, client.String(), retryDelay[retryCount])
+		log.Info(err)
+
+		time.Sleep(retryDelay[retryCount])
+		retryCount++
+		err = objHandle.Delete()
 	}
-	return errors.Wrap(err, fname)
+	log.Infof("deleted `%s`", key)
+	return retryCount, nil
 }
 
 func GetCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {

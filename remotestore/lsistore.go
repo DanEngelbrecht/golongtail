@@ -130,25 +130,33 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	if len(LSIs) > 0 {
 		sort.Slice(LSIs, func(i, j int) bool { return LSIs[i].LSI.GetSize() < LSIs[j].LSI.GetSize() })
 		for i := 0; i < len(LSIs); i++ {
-			mergedSize := LSIs[i].LSI.GetSize() + LSI.GetSize()
-			if mergedSize > maxStoreIndexSize {
+			if LSIs[i].LSI.GetSize() > maxStoreIndexSize {
 				unmergedLSIs = append(unmergedLSIs, i)
 				continue
 			}
 
+			MergedLSI := longtaillib.Longtail_StoreIndex{}
+
 			if ConsolidatedLSI.IsValid() {
-				MergedLSI, err := longtaillib.MergeStoreIndex(ConsolidatedLSI, LSIs[i].LSI)
+				MergedLSI, err = longtaillib.MergeStoreIndex(ConsolidatedLSI, LSIs[i].LSI)
 				if err != nil {
 					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 				}
-				ConsolidatedLSI.Dispose()
-				ConsolidatedLSI = MergedLSI
 			} else {
-				ConsolidatedLSI, err = longtaillib.MergeStoreIndex(LSI, LSIs[i].LSI)
+				MergedLSI, err = longtaillib.MergeStoreIndex(LSI, LSIs[i].LSI)
 				if err != nil {
 					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 				}
 			}
+
+			if MergedLSI.GetSize() > maxStoreIndexSize {
+				MergedLSI.Dispose()
+				unmergedLSIs = append(unmergedLSIs, i)
+				continue
+			}
+
+			ConsolidatedLSI.Dispose()
+			ConsolidatedLSI = MergedLSI
 			log.Infof("merged store index `%s`", LSIs[i].Name)
 
 			LSIs[i].LSI.Dispose()

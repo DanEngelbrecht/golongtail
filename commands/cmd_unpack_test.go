@@ -3,6 +3,8 @@ package commands
 import (
 	"io/ioutil"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUnpack(t *testing.T) {
@@ -14,19 +16,15 @@ func TestUnpack(t *testing.T) {
 	executeCommandLine("pack", "--source-path", testPath+"/version/v3", "--target-path", testPath+"/index/v3.la")
 
 	cmd, err := executeCommandLine("unpack", "--source-path", testPath+"/index/v1.la", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	validateContent(t, testPath, "version/current", v1FilesCreate)
+
 	cmd, err = executeCommandLine("unpack", "--source-path", testPath+"/index/v2.la", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	validateContent(t, testPath, "version/current", v2FilesCreate)
+
 	cmd, err = executeCommandLine("unpack", "--source-path", testPath+"/index/v3.la", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	validateContent(t, testPath, "version/current", v3FilesCreate)
 }
 
@@ -39,18 +37,14 @@ func TestUnpackWithValidate(t *testing.T) {
 	executeCommandLine("pack", "--source-path", testPath+"/version/v3", "--target-path", testPath+"/index/v3.la")
 
 	cmd, err := executeCommandLine("unpack", "--source-path", testPath+"/index/v1.la", "--target-path", testPath+"/version/current", "--validate")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	validateContent(t, testPath, "version/current", v1FilesCreate)
+
 	cmd, err = executeCommandLine("unpack", "--source-path", testPath+"/index/v2.la", "--target-path", testPath+"/version/current", "--validate")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	validateContent(t, testPath, "version/current", v2FilesCreate)
+
 	cmd, err = executeCommandLine("unpack", "--source-path", testPath+"/index/v3.la", "--target-path", testPath+"/version/current", "--validate")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, err, nil, cmd)
 	validateContent(t, testPath, "version/current", v3FilesCreate)
 }

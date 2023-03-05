@@ -12,18 +12,17 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreateRemoteBlobStore(t *testing.T) {
+func TestCreateRemoteBlobStoreLegacy(t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("the_path", true)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -32,88 +31,14 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	defer storeAPI.Dispose()
 }
 
-type getExistingContentCompletionAPI struct {
-	wg         sync.WaitGroup
-	storeIndex longtaillib.Longtail_StoreIndex
-	err        error
-}
-
-func (a *getExistingContentCompletionAPI) OnComplete(storeIndex longtaillib.Longtail_StoreIndex, err error) {
-	a.storeIndex = storeIndex
-	a.err = err
-	a.wg.Done()
-}
-
-type putStoredBlockCompletionAPI struct {
-	wg  sync.WaitGroup
-	err error
-}
-
-func (a *putStoredBlockCompletionAPI) OnComplete(err error) {
-	a.err = err
-	a.wg.Done()
-}
-
-type getStoredBlockCompletionAPI struct {
-	wg          sync.WaitGroup
-	storedBlock longtaillib.Longtail_StoredBlock
-	err         error
-}
-
-func (a *getStoredBlockCompletionAPI) OnComplete(storedBlock longtaillib.Longtail_StoredBlock, err error) {
-	a.storedBlock = storedBlock
-	a.err = err
-	a.wg.Done()
-}
-
-func getExistingContent(storeAPI longtaillib.Longtail_BlockStoreAPI, chunkHashes []uint64, minBlockUsagePercent uint32) (longtaillib.Longtail_StoreIndex, error) {
-	const fname = "getExistingContent"
-	g := &getExistingContentCompletionAPI{}
-	g.wg.Add(1)
-	err := storeAPI.GetExistingContent(chunkHashes, minBlockUsagePercent, longtaillib.CreateAsyncGetExistingContentAPI(g))
-	if err != nil {
-		g.wg.Done()
-		g.wg.Wait()
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-	}
-	g.wg.Wait()
-	return g.storeIndex, errors.Wrap(g.err, fname)
-}
-
-type pruneBlocksCompletionAPI struct {
-	wg               sync.WaitGroup
-	prunedBlockCount uint32
-	err              error
-}
-
-func (a *pruneBlocksCompletionAPI) OnComplete(prunedBlockCount uint32, err error) {
-	a.err = err
-	a.prunedBlockCount = prunedBlockCount
-	a.wg.Done()
-}
-
-func pruneBlocksSync(indexStore longtaillib.Longtail_BlockStoreAPI, keepBlockHashes []uint64) (uint32, error) {
-	const fname = "pruneBlocksSync"
-	pruneBlocksComplete := &pruneBlocksCompletionAPI{}
-	pruneBlocksComplete.wg.Add(1)
-	err := indexStore.PruneBlocks(keepBlockHashes, longtaillib.CreateAsyncPruneBlocksAPI(pruneBlocksComplete))
-	if err != nil {
-		pruneBlocksComplete.wg.Done()
-		pruneBlocksComplete.wg.Wait()
-		return 0, errors.Wrap(err, fname)
-	}
-	pruneBlocksComplete.wg.Wait()
-	return pruneBlocksComplete.prunedBlockCount, errors.Wrap(pruneBlocksComplete.err, fname)
-}
-
-func TestEmptyGetExistingContent(t *testing.T) {
+func TestEmptyGetExistingContentLegacy(t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("the_path", true)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -130,14 +55,14 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	assert.NotEqual(t, existingContent.GetBlockCount(), 0)
 }
 
-func TestPutGetStoredBlock(t *testing.T) {
+func TestPutGetStoredBlockLegacy(t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("the_path", true)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -157,24 +82,14 @@ func TestPutGetStoredBlock(t *testing.T) {
 	validateBlockFromSeed(t, 0, storedBlockCopy)
 }
 
-type flushCompletionAPI struct {
-	wg  sync.WaitGroup
-	err error
-}
-
-func (a *flushCompletionAPI) OnComplete(err error) {
-	a.err = err
-	a.wg.Done()
-}
-
-func TestGetExistingContent(t *testing.T) {
+func TestGetExistingContentLegacy(t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("the_path", true)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -210,14 +125,14 @@ func TestGetExistingContent(t *testing.T) {
 	assert.Equal(t, existingContent.GetChunkCount(), uint32(18))
 }
 
-func TestRestoreStore(t *testing.T) {
+func TestRestoreStoreLegacy(t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("the_path", true)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -242,7 +157,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -274,7 +189,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -294,139 +209,7 @@ func TestRestoreStore(t *testing.T) {
 	storeAPI.Dispose()
 }
 
-//func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (longtaillib.Longtail_StoredBlock, error) {
-//	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
-//	chunkHashes := make([]uint64, chunkCount)
-//	chunkSizes := make([]uint32, chunkCount)
-//	blockOffset := uint32(0)
-//	for index := range chunkHashes {
-//		chunkHashes[index] = uint64(index+1) * 4711
-//		chunkSizes[index] = uint32(index+1) * 10
-//		blockOffset += uint32(chunkSizes[index])
-//	}
-//	blockData := make([]uint8, blockOffset)
-//	blockOffset = 0
-//	for chunkIndex := range chunkHashes {
-//		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
-//			blockData[blockOffset+index] = uint8(chunkIndex + 1)
-//		}
-//		blockOffset += uint32(chunkSizes[chunkIndex])
-//	}
-//
-//	return longtaillib.CreateStoredBlock(
-//		blockHash,
-//		hashIdentifier,
-//		chunkCount+uint32(10000),
-//		chunkHashes,
-//		chunkSizes,
-//		blockData,
-//		false)
-//}
-
-func storeBlock(blobClient longtailstorelib.BlobClient, storedBlock longtaillib.Longtail_StoredBlock, blockHashOffset uint64, parentPath string) uint64 {
-	bytes, _ := longtaillib.WriteStoredBlockToBuffer(storedBlock)
-	defer bytes.Dispose()
-	blockIndex := storedBlock.GetBlockIndex()
-	storedBlockHash := blockIndex.GetBlockHash() + blockHashOffset
-	path := getBlockPath("chunks", storedBlockHash)
-	if len(parentPath) > 0 {
-		path = parentPath + "/" + path
-	}
-	blobObject, _ := blobClient.NewObject(path)
-	blobObject.Write(bytes.ToBuffer())
-	return storedBlockHash
-}
-
-func generateStoredBlock(seed uint8) (longtaillib.Longtail_StoredBlock, error) {
-	chunkHashes := []uint64{uint64(seed) + 1, uint64(seed) + 2, uint64(seed) + 3}
-	chunkSizes := []uint32{uint32(seed) + 10, uint32(seed) + 20, uint32(seed) + 30}
-
-	blockDataLen := (int)(chunkSizes[0] + chunkSizes[1] + chunkSizes[2])
-	blockData := make([]uint8, blockDataLen)
-	for p := 0; p < blockDataLen; p++ {
-		blockData[p] = seed
-	}
-
-	return longtaillib.CreateStoredBlock(
-		uint64(seed)+21412151,
-		997,
-		2,
-		chunkHashes,
-		chunkSizes,
-		blockData,
-		false)
-}
-
-func generateUniqueStoredBlock(seed uint8) (longtaillib.Longtail_StoredBlock, error) {
-	chunkHashes := []uint64{uint64(seed)<<8 + 1, uint64(seed)<<8 + 2, uint64(seed)<<8 + 3}
-	chunkSizes := []uint32{uint32(seed)<<8 + 10, uint32(seed)<<8 + 20, uint32(seed)<<8 + 30}
-
-	blockDataLen := (int)(chunkSizes[0] + chunkSizes[1] + chunkSizes[2])
-	blockData := make([]uint8, blockDataLen)
-	for p := 0; p < blockDataLen; p++ {
-		blockData[p] = seed
-	}
-
-	return longtaillib.CreateStoredBlock(
-		uint64(seed)<<16+21412151,
-		997,
-		2,
-		chunkHashes,
-		chunkSizes,
-		blockData,
-		false)
-}
-
-func storeBlockFromSeed(storeAPI longtaillib.Longtail_BlockStoreAPI, seed uint8) (longtaillib.Longtail_StoredBlock, error) {
-	const fname = "storeBlockFromSeed"
-	storedBlock, err := generateStoredBlock(seed)
-	if err != nil {
-		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname)
-	}
-
-	p := &putStoredBlockCompletionAPI{}
-	p.wg.Add(1)
-	err = storeAPI.PutStoredBlock(storedBlock, longtaillib.CreateAsyncPutStoredBlockAPI(p))
-	if err != nil {
-		p.wg.Done()
-		storedBlock.Dispose()
-		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname)
-	}
-	p.wg.Wait()
-
-	if p.err != nil {
-		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(p.err, fname)
-	}
-	return storedBlock, nil
-}
-
-func fetchBlockFromStore(t *testing.T, storeAPI longtaillib.Longtail_BlockStoreAPI, blockHash uint64) (longtaillib.Longtail_StoredBlock, error) {
-	const fname = "fetchBlockFromStore"
-	g := &getStoredBlockCompletionAPI{}
-	g.wg.Add(1)
-	err := storeAPI.GetStoredBlock(blockHash, longtaillib.CreateAsyncGetStoredBlockAPI(g))
-	if err != nil {
-		g.wg.Done()
-		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(err, fname)
-	}
-	g.wg.Wait()
-
-	if g.err != nil {
-		return longtaillib.Longtail_StoredBlock{}, errors.Wrap(g.err, fname)
-	}
-	return g.storedBlock, nil
-}
-
-func validateBlockFromSeed(t *testing.T, seed uint8, storedBlock longtaillib.Longtail_StoredBlock) {
-	assert.True(t, storedBlock.IsValid())
-
-	storedBlockIndex := storedBlock.GetBlockIndex()
-
-	assert.Equal(t, storedBlockIndex.GetBlockHash(), uint64(seed)+21412151)
-	assert.Equal(t, storedBlockIndex.GetChunkCount(), uint32(3))
-}
-
-func TestBlockScanning(t *testing.T) {
+func TestBlockScanningLegacy(t *testing.T) {
 	// Create stored blocks
 	// Create/move stored blocks to faulty path
 	// Scan and make sure we only get the blocks in the currect path
@@ -450,7 +233,7 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		Init)
@@ -486,14 +269,14 @@ func TestBlockScanning(t *testing.T) {
 	assert.Equal(t, len(existingContent.GetChunkHashes()), len(goodBlockInCorrectPathIndex.GetChunkHashes()))
 }
 
-func PruneStoreTest(syncStore bool, t *testing.T) {
+func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	blobStore, _ := longtailstorelib.NewMemBlobStore("the_path", syncStore)
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
 	defer jobs.Dispose()
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -543,7 +326,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -566,7 +349,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		true,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -589,15 +372,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	storeAPI.Dispose()
 }
 
-func TestPruneStoreWithLocking(t *testing.T) {
-	PruneStoreTest(true, t)
-}
-
-func TestPruneStoreWithoutLocking(t *testing.T) {
-	PruneStoreTest(false, t)
-}
-
-func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_StoreIndex, client longtailstorelib.BlobClient) bool {
+func validateThatBlocksArePresentLegacy(generatedBlocksIndex longtaillib.Longtail_StoreIndex, client longtailstorelib.BlobClient) bool {
 	storeIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
 	defer storeIndex.Dispose()
 	if err != nil {
@@ -625,7 +400,7 @@ func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_Stor
 	return true
 }
 
-func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
+func testStoreIndexSyncLegacy(blobStore longtailstorelib.BlobStore, t *testing.T) {
 
 	blockGenerateCount := 4
 	workerCount := 21
@@ -673,7 +448,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 			}
 
 			for i := 0; i < 5; i++ {
-				if validateThatBlocksArePresent(generatedBlocksIndex, client) {
+				if validateThatBlocksArePresentLegacy(generatedBlocksIndex, client) {
 					break
 				}
 				log.Printf("Could not find generated blocks in store index, retrying...\n")
@@ -719,19 +494,19 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 	}
 }
 
-func TestStoreIndexSyncWithLocking(t *testing.T) {
+func TestStoreIndexSyncWithLockingLegacy(t *testing.T) {
 	blobStore, err := longtailstorelib.NewMemBlobStore("locking_store", true)
 	assert.Equal(t, err, nil)
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }
 
-func TestStoreIndexSyncWithoutLocking(t *testing.T) {
+func TestStoreIndexSyncWithoutLockingLegacy(t *testing.T) {
 	blobStore, err := longtailstorelib.NewMemBlobStore("locking_store", false)
 	assert.Equal(t, err, nil)
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }
 
-func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
+func TestGCSStoreIndexSyncWithLockingLegacy(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
@@ -745,10 +520,10 @@ func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }
 
-func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
+func TestGCSStoreIndexSyncWithoutLockingLegacy(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
@@ -762,10 +537,10 @@ func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }
 
-func TestS3StoreIndexSync(t *testing.T) {
+func TestS3StoreIndexSyncLegacy(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
@@ -773,10 +548,10 @@ func TestS3StoreIndexSync(t *testing.T) {
 	assert.Equal(t, err, nil)
 
 	blobStore, _ := longtailstorelib.NewS3BlobStore(u)
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }
 
-func TestFSStoreIndexSyncWithLocking(t *testing.T) {
+func TestFSStoreIndexSyncWithLockingLegacy(t *testing.T) {
 	storePath, err := ioutil.TempDir("", "longtail-test")
 	assert.Equal(t, err, nil)
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, true)
@@ -786,10 +561,10 @@ func TestFSStoreIndexSyncWithLocking(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }
 
-func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
+func TestFSStoreIndexSyncWithoutLockingLegacy(t *testing.T) {
 	storePath, err := ioutil.TempDir("", "test")
 	assert.Equal(t, err, nil)
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
@@ -799,5 +574,5 @@ func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSyncLegacy(blobStore, t)
 }

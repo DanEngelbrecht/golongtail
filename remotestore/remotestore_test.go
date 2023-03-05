@@ -3,12 +3,10 @@ package remotestore
 import (
 	"context"
 	"io/ioutil"
-	"log"
 	"net/url"
 	"runtime"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
@@ -597,35 +595,7 @@ func TestPruneStoreWithoutLocking(t *testing.T) {
 	PruneStoreTest(false, t)
 }
 
-func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_StoreIndex, client longtailstorelib.BlobClient) bool {
-	storeIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
-	defer storeIndex.Dispose()
-	if err != nil {
-		log.Printf("readStoreStoreIndexWithItemsLegacy() failed with %s", err)
-		return false
-	}
-	if !storeIndex.IsValid() {
-		log.Printf("readStoreStoreIndexWithItemsLegacy() returned invalid store index")
-		return false
-	}
-
-	lookup := map[uint64]bool{}
-	for _, h := range storeIndex.GetBlockHashes() {
-		lookup[h] = true
-	}
-
-	blockHashes := generatedBlocksIndex.GetBlockHashes()
-	for _, h := range blockHashes {
-		_, exists := lookup[h]
-		if !exists {
-			log.Printf("Missing direct block %d", h)
-			return false
-		}
-	}
-	return true
-}
-
-func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
+func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxStoreIndexSize int64) {
 
 	blockGenerateCount := 4
 	workerCount := 21
@@ -649,13 +619,13 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 
 				blocksIndex, err := longtaillib.CreateStoreIndexFromBlocks(blocks)
 				assert.Equal(t, err, nil)
-				newStoreIndex, err := addToRemoteStoreIndexLegacy(context.Background(), client, blocksIndex)
-				blocksIndex.Dispose()
+				newStoreIndex, err := PutStoreLSI(context.Background(), blobStore, nil, blocksIndex, maxStoreIndexSize)
 				assert.Equal(t, err, nil)
+				blocksIndex.Dispose()
 				newStoreIndex.Dispose()
 			}
 
-			readStoreIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
+			readStoreIndex, err := GetStoreLSI(context.Background(), blobStore, nil)
 			assert.Equal(t, err, nil)
 			readStoreIndex.Dispose()
 
@@ -667,17 +637,9 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 				}
 				generatedBlocksIndex, err = longtaillib.CreateStoreIndexFromBlocks(blocks)
 				assert.Equal(t, err, nil)
-				newStoreIndex, err := addToRemoteStoreIndexLegacy(context.Background(), client, generatedBlocksIndex)
+				newStoreIndex, err := PutStoreLSI(context.Background(), blobStore, nil, generatedBlocksIndex, maxStoreIndexSize)
 				assert.Equal(t, err, nil)
 				newStoreIndex.Dispose()
-			}
-
-			for i := 0; i < 5; i++ {
-				if validateThatBlocksArePresent(generatedBlocksIndex, client) {
-					break
-				}
-				log.Printf("Could not find generated blocks in store index, retrying...\n")
-				time.Sleep(1 * time.Second)
 			}
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()
@@ -694,15 +656,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 
-	if !client.SupportsLocking() {
-		// Consolidate indexes
-		updateIndex, _ := longtaillib.CreateStoreIndexFromBlocks([]longtaillib.Longtail_BlockIndex{})
-		newStoreIndex, _ := addToRemoteStoreIndexLegacy(context.Background(), client, updateIndex)
-		updateIndex.Dispose()
-		newStoreIndex.Dispose()
-	}
-
-	storeIndex, _, err := readStoreStoreIndexWithItemsLegacy(context.Background(), client)
+	storeIndex, err := GetStoreLSI(context.Background(), blobStore, nil)
 	assert.Equal(t, err, nil)
 	defer storeIndex.Dispose()
 	assert.Equal(t, len(storeIndex.GetBlockHashes()), blockGenerateCount*workerCount)
@@ -719,19 +673,27 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T) {
 	}
 }
 
-func TestStoreIndexSyncWithLocking(t *testing.T) {
-	blobStore, err := longtailstorelib.NewMemBlobStore("locking_store", true)
+func TestStoreIndexSyncNeverMerge(t *testing.T) {
+	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
 	assert.Equal(t, err, nil)
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSync(blobStore, t, 0)
 }
 
-func TestStoreIndexSyncWithoutLocking(t *testing.T) {
-	blobStore, err := longtailstorelib.NewMemBlobStore("locking_store", false)
+func TestStoreIndexSyncAlwaysMerge(t *testing.T) {
+	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
 	assert.Equal(t, err, nil)
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSync(blobStore, t, 0x7fffffffffffffff)
 }
 
-func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
+func TestStoreIndexSyncSometimesMerge(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
+		assert.Equal(t, err, nil)
+		testStoreIndexSync(blobStore, t, 420)
+	}
+}
+
+func TestGCSStoreIndexSync(t *testing.T) {
 	// This test uses hardcoded paths in S3 and is disabled
 	t.Skip()
 
@@ -745,24 +707,7 @@ func TestGCSStoreIndexSyncWithLocking(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t)
-}
-
-func TestGCSStoreIndexSyncWithoutLocking(t *testing.T) {
-	// This test uses hardcoded paths in S3 and is disabled
-	t.Skip()
-
-	u, err := url.Parse("gs://longtail-test-de/test-gcs-blob-store-sync")
-	assert.Equal(t, err, nil)
-
-	blobStore, err := longtailstorelib.NewGCSBlobStore(u, true)
-	assert.Equal(t, err, nil)
-	client, _ := blobStore.NewClient(context.Background())
-	defer client.Close()
-	object, _ := client.NewObject("store.lsi")
-	object.Delete()
-
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSync(blobStore, t, 1024)
 }
 
 func TestS3StoreIndexSync(t *testing.T) {
@@ -773,24 +718,11 @@ func TestS3StoreIndexSync(t *testing.T) {
 	assert.Equal(t, err, nil)
 
 	blobStore, _ := longtailstorelib.NewS3BlobStore(u)
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSync(blobStore, t, 1024)
 }
 
-func TestFSStoreIndexSyncWithLocking(t *testing.T) {
+func TestFSStoreIndexSync(t *testing.T) {
 	storePath, err := ioutil.TempDir("", "longtail-test")
-	assert.Equal(t, err, nil)
-	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, true)
-	assert.Equal(t, err, nil)
-	client, _ := blobStore.NewClient(context.Background())
-	defer client.Close()
-	object, _ := client.NewObject("store.lsi")
-	object.Delete()
-
-	testStoreIndexSync(blobStore, t)
-}
-
-func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
-	storePath, err := ioutil.TempDir("", "test")
 	assert.Equal(t, err, nil)
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
 	assert.Equal(t, err, nil)
@@ -799,5 +731,5 @@ func TestFSStoreIndexSyncWithoutLocking(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t)
+	testStoreIndexSync(blobStore, t, 1024)
 }

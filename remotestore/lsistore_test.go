@@ -139,7 +139,7 @@ func TestPutGet(t *testing.T) {
 	assert.Equal(t, len(LocalNames), 2, "unexpeced number of indexes in local store")
 
 	remoteClient, _ := remoteStore.NewClient(context.Background())
-	err = longtailutils.DeleteBlob(context.Background(), remoteClient, RemoteNames1[0])
+	_, err = longtailutils.DeleteBlobWithRetry(context.Background(), remoteClient, RemoteNames1[0])
 	assert.Equal(t, err, nil, "failed deleting remote blob")
 
 	remoteStoreIndexPruned, err := GetStoreLSI(context.Background(), remoteStore, &localStore)

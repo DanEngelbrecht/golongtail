@@ -101,7 +101,7 @@ func TestPutGet(t *testing.T) {
 	defer remoteStoreIndex.Dispose()
 
 	LocalNames := getLSIs(localStore)
-	assert.Equal(t, len(LocalNames), 1, "unexpeced number of indexes in local store")
+	assert.Equal(t, 1, len(LocalNames), "unexpeced number of indexes in local store")
 
 	remoteStoreIndexCached, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	assert.Equal(t, err, nil, "failed getting cached LSI")
@@ -113,7 +113,7 @@ func TestPutGet(t *testing.T) {
 	assert.Equal(t, LSI2.GetBlockCount(), uint32(1), "Put LSI2 did not result in expected store index")
 
 	RemoteNames1 := getLSIs(remoteStore)
-	assert.Equal(t, len(RemoteNames1), 1, "unexpeced number of indexes in remote store")
+	assert.Equal(t, 1, len(RemoteNames1), "unexpeced number of indexes in remote store")
 
 	storeIndex2, err := generateStoreIndex(4, uint8(33))
 	assert.Equal(t, err, nil, "failed generating storeIndex2")
@@ -125,10 +125,10 @@ func TestPutGet(t *testing.T) {
 	assert.Equal(t, LSI3.GetBlockCount(), uint32(5), "Put LSI3 did not result in expected store index")
 
 	RemoteNames2 := getLSIs(remoteStore)
-	assert.Equal(t, len(RemoteNames2), 2, "unexpeced number of indexes in remote store")
+	assert.Equal(t, 2, len(RemoteNames2), "unexpeced number of indexes in remote store")
 
 	LocalNames = getLSIs(localStore)
-	assert.Equal(t, len(LocalNames), 1, "unexpeced number of indexes in local store")
+	assert.Equal(t, 1, len(LocalNames), "unexpeced number of indexes in local store")
 
 	remoteStoreIndexMerged, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	assert.Equal(t, err, nil, "failed getting remoteStoreIndexMerged")
@@ -136,7 +136,7 @@ func TestPutGet(t *testing.T) {
 	assert.Equal(t, remoteStoreIndexMerged.GetBlockCount(), uint32(5), "Get remoteStoreIndexMerged did not result in expected store index")
 
 	LocalNames = getLSIs(localStore)
-	assert.Equal(t, len(LocalNames), 2, "unexpeced number of indexes in local store")
+	assert.Equal(t, 2, len(LocalNames), "unexpeced number of indexes in local store")
 
 	remoteClient, _ := remoteStore.NewClient(context.Background())
 	_, err = longtailutils.DeleteBlobWithRetry(context.Background(), remoteClient, RemoteNames1[0])
@@ -185,7 +185,7 @@ func TestMergeAtPut(t *testing.T) {
 	assert.Equal(t, LSI4.GetBlockCount(), uint32(10), "Put LSI4 did not result in expected store index")
 
 	lsis := getLSIs(remoteStore)
-	assert.Equal(t, len(lsis), 2, "Unexpeced number of store indexes in remote store")
+	assert.Equal(t, 2, len(lsis), "Unexpeced number of store indexes in remote store")
 
 	resultStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
 	assert.Equal(t, err, nil, "failed getting resultStoreIndex")

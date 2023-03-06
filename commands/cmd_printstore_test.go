@@ -17,19 +17,19 @@ func TestPrintStoreIndex(t *testing.T) {
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	lsiName := lsis[0].Name
 
 	cmd, err := executeCommandLine("print-store", "--store-index-path", fsBlobPathPrefix+"/"+lsiName)
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("print-store", "--store-index-path", fsBlobPathPrefix+"/"+lsiName, "--compact")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("print-store", "--store-index-path", fsBlobPathPrefix+"/"+lsiName, "--details")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("print-store", "--store-index-path", fsBlobPathPrefix+"/"+lsiName, "--compact", "--details")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 }

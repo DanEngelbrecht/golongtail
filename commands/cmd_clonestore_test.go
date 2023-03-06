@@ -78,16 +78,16 @@ func TestCloneStore(t *testing.T) {
 		"--source-paths", sourcePath+"/source-files.txt",
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v1.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v2.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v3.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
 
 	// Run again, now it will skip all existing
@@ -98,7 +98,7 @@ func TestCloneStore(t *testing.T) {
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current",
 		"--skip-validate")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	// Run again, now it will validate all existing
 	cmd, err = executeCommandLine("clone-store",
@@ -107,7 +107,7 @@ func TestCloneStore(t *testing.T) {
 		"--source-paths", sourcePath+"/source-files.txt",
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 }
 
 func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {
@@ -139,18 +139,18 @@ func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current",
 		"--create-version-local-store-index")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v1.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--version-local-store-index-path", fsTargetBlobPathPrefix+"/index/v1.lsi", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v1FilesCreate)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v2.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--version-local-store-index-path", fsTargetBlobPathPrefix+"/index/v2.lsi", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v2FilesCreate)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v3.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--version-local-store-index-path", fsTargetBlobPathPrefix+"/index/v3.lsi", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
@@ -197,17 +197,17 @@ func TestCloneStoreZipFallback(t *testing.T) {
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current",
 		"--create-version-local-store-index")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v1.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v1FilesCreate)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v2.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v2FilesCreate)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v3.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
 }

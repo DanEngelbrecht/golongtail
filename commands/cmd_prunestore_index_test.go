@@ -22,23 +22,23 @@ func TestPruneIndex(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName)
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	assert.NotEqual(t, err, nil, cmd)
+	assert.NotEqual(t, nil, err, cmd)
 }
 
 func TestPruneIndexWithLSI(t *testing.T) {
@@ -60,8 +60,8 @@ func TestPruneIndexWithLSI(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName)
@@ -104,8 +104,8 @@ func TestPruneIndexWithLSIAndWriteLSI(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--write-version-local-store-index")
@@ -143,8 +143,8 @@ func TestPruneIndexDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--dry-run")
@@ -187,8 +187,8 @@ func TestPruneIndexWithLSIDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--dry-run")
@@ -231,8 +231,8 @@ func TestPruneIndexWithLSIAndWriteLSIDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--write-version-local-store-index", "--dry-run")

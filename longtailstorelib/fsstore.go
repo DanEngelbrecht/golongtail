@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
@@ -19,7 +18,6 @@ import (
 type fsBlobStore struct {
 	enableLocking bool
 	prefix        string
-	lock          sync.Mutex
 }
 
 type fsBlobClient struct {
@@ -131,9 +129,7 @@ func (blobObject *fsBlobObject) Read() ([]byte, error) {
 		defer filelock.Unlock()
 	}
 
-	blobObject.client.store.lock.Lock()
 	data, err := ioutil.ReadFile(blobObject.path)
-	blobObject.client.store.lock.Unlock()
 	if err == nil {
 		return data, nil
 	}
@@ -263,9 +259,12 @@ func (blobObject *fsBlobObject) Write(data []byte) (bool, error) {
 		}
 	}
 
-	blobObject.client.store.lock.Lock()
-	err = ioutil.WriteFile(blobObject.path, data, 0644)
-	blobObject.client.store.lock.Unlock()
+	tmpPath := blobObject.path + ".tmp"
+	err = ioutil.WriteFile(tmpPath, data, 0644)
+	if err != nil {
+		return false, errors.Wrap(err, fname)
+	}
+	err = os.Rename(tmpPath, blobObject.path)
 	if err != nil {
 		return false, errors.Wrap(err, fname)
 	}
@@ -302,9 +301,7 @@ func (blobObject *fsBlobObject) Delete() error {
 		}
 	}
 
-	blobObject.client.store.lock.Lock()
 	err := os.Remove(blobObject.path)
-	blobObject.client.store.lock.Unlock()
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}

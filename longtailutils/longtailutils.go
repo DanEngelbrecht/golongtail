@@ -355,7 +355,7 @@ func ReadFromURI(uri string, opts ...longtailstorelib.BlobStoreOption) ([]byte, 
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
-	log.Infof("read %d bytes", len(vbuffer))
+	log.Debugf("read %d bytes from `%s`", len(vbuffer), uri)
 	return vbuffer, nil
 }
 
@@ -385,7 +385,7 @@ func WriteToURI(uri string, data []byte, opts ...longtailstorelib.BlobStoreOptio
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
-	log.Infof("wrote %d bytes", len(data))
+	log.Debugf("wrote %d bytes to `%s`", len(data), uri)
 	return nil
 }
 
@@ -415,7 +415,7 @@ func DeleteByURI(uri string, opts ...longtailstorelib.BlobStoreOption) error {
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
 	}
-	log.Info("deleted file")
+	log.Debugf("deleted `%s`", uri)
 	return nil
 }
 
@@ -459,7 +459,11 @@ func ReadBlobWithRetry(
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
-	log.Infof("read %d bytes from `%s`", len(blobData), key)
+	if retryCount > 0 {
+		log.Infof("read %d bytes from `%s` after %d retries", len(blobData), key, retryCount)
+	} else {
+		log.Debugf("read %d bytes from `%s`", len(blobData), key)
+	}
 	return blobData, retryCount, nil
 }
 
@@ -516,7 +520,11 @@ func WriteBlobWithRetry(
 			}
 		}
 	}
-	log.Infof("wrote %d bytes to `%s`", len(blob), key)
+	if retryCount > 0 {
+		log.Infof("wrote %d bytes to `%s` after %d retries", len(blob), key, retryCount)
+	} else {
+		log.Debugf("wrote %d bytes to `%s`", len(blob), key)
+	}
 	return retryCount, nil
 }
 
@@ -559,7 +567,11 @@ func DeleteBlobWithRetry(
 		retryCount++
 		err = objHandle.Delete()
 	}
-	log.Infof("deleted `%s`", key)
+	if retryCount > 0 {
+		log.Infof("deleted `%s` after %d retries", key, retryCount)
+	} else {
+		log.Debugf("deleted `%s`", key)
+	}
 	return retryCount, nil
 }
 

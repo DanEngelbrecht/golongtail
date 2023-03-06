@@ -23,7 +23,7 @@ func TestPruneStoreBlocks(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lvi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
-	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
@@ -38,7 +38,7 @@ func TestPruneStoreBlocks(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer blobClient.Close()
 
-	blobObjects, err := blobClient.GetObjects("storage/chunks")
+	blobObjects, err := blobClient.GetObjects("storage/chunks", "")
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, 3, len(blobObjects))
@@ -46,7 +46,7 @@ func TestPruneStoreBlocks(t *testing.T) {
 	cmd, err = executeCommandLine("prune-store-blocks", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--blocks-root-path", fsBlobPathPrefix+"/storage/chunks")
 	assert.Equal(t, nil, err, cmd)
 
-	blobObjects, err = blobClient.GetObjects("storage/chunks")
+	blobObjects, err = blobClient.GetObjects("storage/chunks", "")
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, 2, len(blobObjects))
@@ -65,7 +65,7 @@ func TestPruneStoreBlocksDryRun(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lvi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
-	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
@@ -80,7 +80,7 @@ func TestPruneStoreBlocksDryRun(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer blobClient.Close()
 
-	blobObjects, err := blobClient.GetObjects("storage/chunks")
+	blobObjects, err := blobClient.GetObjects("storage/chunks", "")
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, 3, len(blobObjects))
@@ -88,7 +88,7 @@ func TestPruneStoreBlocksDryRun(t *testing.T) {
 	cmd, err = executeCommandLine("prune-store-blocks", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--blocks-root-path", fsBlobPathPrefix+"/storage/chunks", "--dry-run")
 	assert.Equal(t, nil, err, cmd)
 
-	blobObjects, err = blobClient.GetObjects("storage/chunks")
+	blobObjects, err = blobClient.GetObjects("storage/chunks", "")
 	assert.Equal(t, nil, err)
 
 	assert.Equal(t, 3, len(blobObjects))

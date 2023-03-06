@@ -230,7 +230,7 @@ func TestDownsyncMissingIndex(t *testing.T) {
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
 
-	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
 	assert.Equal(t, nil, err)
 	for _, lsi := range lsis {
 		longtailutils.DeleteByURI(fsBlobPathPrefix + "/" + lsi.Name)

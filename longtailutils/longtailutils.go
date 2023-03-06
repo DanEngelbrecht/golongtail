@@ -309,7 +309,7 @@ func splitURI(uri string) (string, string) {
 	return parent, name
 }
 
-func GetObjectsByURI(uri string, pathPrefix string, opts ...longtailstorelib.BlobStoreOption) ([]longtailstorelib.BlobProperties, error) {
+func GetObjectsByURI(uri string, pathPrefix string, pathSuffix string, opts ...longtailstorelib.BlobStoreOption) ([]longtailstorelib.BlobProperties, error) {
 	const fname = "DeleteByURI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname": fname,
@@ -326,7 +326,7 @@ func GetObjectsByURI(uri string, pathPrefix string, opts ...longtailstorelib.Blo
 		return nil, errors.Wrap(err, fname)
 	}
 	defer client.Close()
-	return client.GetObjects(uriName + "/" + pathPrefix)
+	return client.GetObjects(uriName+"/"+pathPrefix, pathSuffix)
 }
 
 // ReadFromURI ...

@@ -49,7 +49,7 @@ func OverwriteStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobSto
 		return errors.Wrap(err, fname)
 	}
 	defer remoteClient.Close()
-	remoteLSIs, err := remoteClient.GetObjects("store")
+	remoteLSIs, err := remoteClient.GetObjects("store", ".lsi")
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
 	}
@@ -285,7 +285,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		return nil, errors.Wrap(err, fname)
 	}
 	defer remoteClient.Close()
-	remoteLSIs, err := remoteClient.GetObjects("store")
+	remoteLSIs, err := remoteClient.GetObjects("store", ".lsi")
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return nil, errors.Wrap(err, fname)
 	}
@@ -303,7 +303,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 
 	var localLSIs []longtailstorelib.BlobProperties
 	if localStore != nil {
-		localLSIs, err = localClient.GetObjects("store")
+		localLSIs, err = localClient.GetObjects("store", ".lsi")
 		if err != nil && !longtaillib.IsNotExist(err) {
 			return nil, errors.Wrap(err, fname)
 		}

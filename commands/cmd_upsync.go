@@ -29,7 +29,8 @@ func upsync(
 	excludeFilterRegEx string,
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	maxStoreIndexSize int64) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "upsync"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -49,6 +50,7 @@ func upsync(
 		"minBlockUsagePercent":       minBlockUsagePercent,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"enableFileMapping":          enableFileMapping,
+		"maxStoreIndexSize":          maxStoreIndexSize,
 	})
 	log.Info(fname)
 
@@ -99,7 +101,7 @@ func upsync(
 		enableFileMapping,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, true, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, maxStoreIndexSize == -1, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -240,6 +242,7 @@ type UpsyncCmd struct {
 	SourcePathIncludeRegExOption
 	SourcePathExcludeRegExOption
 	EnableFileMappingOption
+	MaxStoreIndexSizeOption
 }
 
 func (r *UpsyncCmd) Run(ctx *Context) error {
@@ -259,7 +262,8 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 		r.ExcludeFilterRegEx,
 		r.MinBlockUsagePercent,
 		r.VersionLocalStoreIndexPath,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.MaxStoreIndexSize)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

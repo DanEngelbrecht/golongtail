@@ -510,7 +510,8 @@ func cloneStore(
 	compression string,
 	minBlockUsagePercent uint32,
 	skipValidate bool,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	maxStoreIndexSize int64) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cloneStore"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
@@ -532,6 +533,7 @@ func cloneStore(
 		"compression":                  compression,
 		"minBlockUsagePercent":         minBlockUsagePercent,
 		"skipValidate":                 skipValidate,
+		"maxStoreIndexSize":            maxStoreIndexSize,
 	})
 	log.Info(fname)
 
@@ -553,7 +555,7 @@ func cloneStore(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, true, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(sourceEndpointResolverURI))
+	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, false, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(sourceEndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -581,7 +583,7 @@ func cloneStore(
 	sourceStore := longtaillib.CreateShareBlockStore(sourceLRUBlockStore)
 	defer sourceStore.Dispose()
 
-	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, true, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
+	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, maxStoreIndexSize == -1, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -681,15 +683,15 @@ func cloneStore(
 
 type CloneStoreCmd struct {
 	SourceStorageURI             string `name:"source-storage-uri" help:"Source storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
-	SourceS3EndpointResolverURL  string `name:"source-s3-endpoint-resolver-uri" help"Optional URI for source S3 endpoint resolver"`
+	SourceS3EndpointResolverURL  string `name:"source-s3-endpoint-resolver-uri" help:"Optional URI for source S3 endpoint resolver"`
 	TargetStorageURI             string `name:"target-storage-uri" help:"Target storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
-	TargetS3EndpointResolverURL  string `name:"target-s3-endpoint-resolver-uri" help"Optional URI for target S3 endpoint resolver"`
+	TargetS3EndpointResolverURL  string `name:"target-s3-endpoint-resolver-uri" help:"Optional URI for target S3 endpoint resolver"`
 	TargetPath                   string `name:"target-path" help:"Target folder path" required:""`
 	SourcePaths                  string `name:"source-paths" help:"File containing list of source longtail uris" required:""`
 	SourceZipPaths               string `name:"source-zip-paths" help:"File containing list of source zip uris"`
 	TargetPaths                  string `name:"target-paths" help:"File containing list of target longtail uris" required:""`
 	CreateVersionLocalStoreIndex bool   `name:"create-version-local-store-index" help:"Generate an store index optimized for the versions"`
-	SkipValidate                 bool   `name"skip-validate" help:"Skip validation of already cloned versions"`
+	SkipValidate                 bool   `name:"skip-validate" help:"Skip validation of already cloned versions"`
 	CachePathOption
 	RetainPermissionsOption
 	MaxChunksPerBlockOption
@@ -698,6 +700,7 @@ type CloneStoreCmd struct {
 	CompressionOption
 	MinBlockUsagePercentOption
 	EnableFileMappingOption
+	MaxStoreIndexSizeOption
 }
 
 func (r *CloneStoreCmd) Run(ctx *Context) error {
@@ -720,7 +723,8 @@ func (r *CloneStoreCmd) Run(ctx *Context) error {
 		r.Compression,
 		r.MinBlockUsagePercent,
 		r.SkipValidate,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.MaxStoreIndexSize)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

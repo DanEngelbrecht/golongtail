@@ -32,7 +32,8 @@ func put(
 	versionLocalStoreIndexPath string,
 	targetPath string,
 	disableVersionLocalStoreIndex bool,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	maxStoreIndexSize int64) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "put"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -53,6 +54,7 @@ func put(
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"targetPath":                 targetPath,
 		"enableFileMapping":          enableFileMapping,
+		"maxStoreIndexSize":          maxStoreIndexSize,
 	})
 	log.Info(fname)
 
@@ -104,7 +106,8 @@ func put(
 		excludeFilterRegEx,
 		minBlockUsagePercent,
 		versionLocalStoreIndexPath,
-		enableFileMapping)
+		enableFileMapping,
+		maxStoreIndexSize)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
@@ -171,6 +174,7 @@ type PutCmd struct {
 	SourcePathExcludeRegExOption
 	MinBlockUsagePercentOption
 	EnableFileMappingOption
+	MaxStoreIndexSizeOption
 }
 
 func (r *PutCmd) Run(ctx *Context) error {
@@ -192,7 +196,8 @@ func (r *PutCmd) Run(ctx *Context) error {
 		r.VersionLocalStoreIndexPath,
 		r.GetConfigURI,
 		r.DisableVersionLocalStoreIndex,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.MaxStoreIndexSize)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

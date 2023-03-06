@@ -50,7 +50,7 @@ func tryAddRemoteStoreIndexWithLockingLegacy(
 			return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
 		defer remoteStoreIndex.Dispose()
-		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": len(blob)}).Info("read store index")
+		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": len(blob)}).Debug("read store index")
 
 		newStoreIndex, err := longtaillib.MergeStoreIndex(remoteStoreIndex, addStoreIndex)
 		if err != nil {
@@ -75,7 +75,7 @@ func tryAddRemoteStoreIndexWithLockingLegacy(
 			newStoreIndex.Dispose()
 			return false, longtaillib.Longtail_StoreIndex{}, nil
 		}
-		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Info("wrote store index")
+		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Debug("wrote store index")
 		return ok, newStoreIndex, nil
 	}
 	storeBlob, err := longtaillib.WriteStoreIndexToBuffer(addStoreIndex)
@@ -90,7 +90,7 @@ func tryAddRemoteStoreIndexWithLockingLegacy(
 		return false, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	if ok {
-		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Info("wrote store index")
+		log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Debug("wrote store index")
 	}
 	return ok, longtaillib.Longtail_StoreIndex{}, nil
 }
@@ -145,7 +145,7 @@ func tryWriteRemoteStoreIndexLegacy(
 		return ok, errors.Wrap(err, fname)
 	}
 
-	log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Info("wrote store index")
+	log.WithFields(logrus.Fields{"path": objHandle.String(), "bytes": storeBlob.Size()}).Debug("wrote store index")
 
 	for _, item := range existingIndexItems {
 		objHandle, err := blobClient.NewObject(item)
@@ -485,7 +485,7 @@ func readStoreStoreIndexWithItemsLegacy(
 			log.Info("created empty store index")
 			return storeIndex, nil, nil
 		} else {
-			log.WithFields(logrus.Fields{"items": items}).Info("read store index items")
+			log.WithFields(logrus.Fields{"items": items}).Debug("read store index items")
 		}
 
 		storeIndex, usedItems, err := mergeStoreIndexItemsLegacy(ctx, client, items)

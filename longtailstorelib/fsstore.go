@@ -64,7 +64,7 @@ func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
 	return &fsBlobObject{client: blobClient, path: fsPath, metageneration: -1}, nil
 }
 
-func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+func (blobClient *fsBlobClient) GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error) {
 	const fname = "fsBlobClient.GetObjects"
 	searchPath := blobClient.store.prefix
 
@@ -83,7 +83,8 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		if len(leafPath) < len(pathPrefix) {
 			return nil
 		}
-		if leafPath[:len(pathPrefix)] == pathPrefix {
+		if strings.HasPrefix(leafPath, pathPrefix) &&
+			strings.HasSuffix(leafPath, pathSuffix) {
 			props := BlobProperties{Size: info.Size(), Name: leafPath}
 			objects = append(objects, props)
 		}

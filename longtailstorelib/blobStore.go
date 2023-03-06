@@ -48,7 +48,7 @@ type BlobProperties struct {
 // BlobClient
 type BlobClient interface {
 	NewObject(path string) (BlobObject, error)
-	GetObjects(pathPrefix string) ([]BlobProperties, error)
+	GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error)
 	SupportsLocking() bool
 	String() string
 	Close()

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
@@ -89,7 +90,7 @@ func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {
 		nil
 }
 
-func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+func (blobClient *gcsBlobClient) GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error) {
 	const fname = "gcsBlobClient.GetObjects"
 	var items []BlobProperties
 	it := blobClient.bucket.Objects(blobClient.ctx, &storage.Query{
@@ -105,7 +106,9 @@ func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties
 			return nil, errors.Wrap(err, fname)
 		}
 		itemName := attrs.Name[len(blobClient.store.prefix):]
-		items = append(items, BlobProperties{Size: attrs.Size, Name: itemName})
+		if strings.HasSuffix(itemName, pathSuffix) {
+			items = append(items, BlobProperties{Size: attrs.Size, Name: itemName})
+		}
 	}
 	return items, nil
 }

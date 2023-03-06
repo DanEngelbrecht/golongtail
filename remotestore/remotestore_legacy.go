@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
@@ -391,7 +390,7 @@ func getStoreStoreIndexesLegacy(
 	var items []string
 	retryCount := 0
 	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
-	blobs, err := client.GetObjects("store")
+	blobs, err := client.GetObjects("store", ".lsi")
 	for err != nil {
 		if longtaillib.IsNotExist(err) {
 			return items, nil
@@ -406,16 +405,14 @@ func getStoreStoreIndexesLegacy(
 
 		time.Sleep(retryDelay[retryCount])
 		retryCount++
-		blobs, err = client.GetObjects("store")
+		blobs, err = client.GetObjects("store", ".lsi")
 	}
 
 	for _, blob := range blobs {
 		if blob.Size == 0 {
 			continue
 		}
-		if strings.HasSuffix(blob.Name, ".lsi") {
-			items = append(items, blob.Name)
-		}
+		items = append(items, blob.Name)
 	}
 	return items, nil
 }

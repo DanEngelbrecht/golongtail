@@ -44,7 +44,7 @@ func TestInitRemoteStore(t *testing.T) {
 	executeCommandLine("put", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.json", "--storage-uri", fsBlobPathPrefix+"/storage")
 
 	// Kill the index file so we can do init again
-	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
 	assert.Equal(t, nil, err)
 	for _, lsi := range lsis {
 		longtailutils.DeleteByURI(fsBlobPathPrefix + "/" + lsi.Name)
@@ -61,7 +61,7 @@ func TestInitRemoteStore(t *testing.T) {
 	executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 
-	lsis, err = longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
+	lsis, err = longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
 	assert.Equal(t, nil, err)
 	for _, lsi := range lsis {
 		longtailutils.DeleteByURI(fsBlobPathPrefix + "/" + lsi.Name)

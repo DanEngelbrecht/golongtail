@@ -51,12 +51,12 @@ func (blobClient *memBlobClient) NewObject(filepath string) (BlobObject, error) 
 	return &memBlobObject{client: blobClient, path: filepath}, nil
 }
 
-func (blobClient *memBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+func (blobClient *memBlobClient) GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error) {
 	blobClient.store.blobsMutex.RLock()
 	defer blobClient.store.blobsMutex.RUnlock()
 	properties := make([]BlobProperties, 0)
 	for key, blob := range blobClient.store.blobs {
-		if strings.HasPrefix(key, pathPrefix) {
+		if strings.HasPrefix(key, pathPrefix) && strings.HasSuffix(key, pathSuffix) {
 			properties = append(properties, BlobProperties{Name: key, Size: int64(len(blob.data))})
 		}
 	}

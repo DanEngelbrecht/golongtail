@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -86,7 +87,7 @@ func (blobClient *s3BlobClient) NewObject(path string) (BlobObject, error) {
 		nil
 }
 
-func (blobClient *s3BlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+func (blobClient *s3BlobClient) GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error) {
 	const fname = "s3BlobClient.GetObjects"
 	var items []BlobProperties
 	output, err := blobClient.client.ListObjectsV2(blobClient.ctx, &s3.ListObjectsV2Input{
@@ -98,7 +99,9 @@ func (blobClient *s3BlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 	}
 	for _, object := range output.Contents {
 		itemName := aws.ToString(object.Key)[len(blobClient.store.prefix):]
-		items = append(items, BlobProperties{Size: object.Size, Name: itemName})
+		if strings.HasSuffix(itemName, pathSuffix) {
+			items = append(items, BlobProperties{Size: object.Size, Name: itemName})
+		}
 	}
 	return items, nil
 }

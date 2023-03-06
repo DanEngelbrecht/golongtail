@@ -12,7 +12,7 @@ import (
 
 func getLSIs(store longtailstorelib.BlobStore) []string {
 	client, _ := store.NewClient(context.Background())
-	items, err := client.GetObjects("store")
+	items, err := client.GetObjects("store", ".lsi")
 	if err != nil {
 		return nil
 	}

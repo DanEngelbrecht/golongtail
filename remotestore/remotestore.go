@@ -1246,7 +1246,7 @@ func buildStoreIndexFromStoreBlocks(
 	log.Debug(fname)
 
 	var items []string
-	blobs, err := blobClient.GetObjects("")
+	blobs, err := blobClient.GetObjects("", "")
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrapf(err, fname)
 	}

@@ -115,3 +115,7 @@ type CacheTargetIndexOption struct {
 type EnableFileMappingOption struct {
 	EnableFileMapping bool `name:"enable-file-mapping" help:"Enabled memory mapped file for file reads"`
 }
+
+type MaxStoreIndexSizeOption struct {
+	MaxStoreIndexSize int64 `name:"max-store-index-size" help:"Set the max size in bytes each remote store index should be, smaller number means more store<sha>.lsi files in remote store. Default is -1 which enables legacy behaviour with single store.lsi file. 0 disables all merging of remote .lsi files" default:"-1"`
+}

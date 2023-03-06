@@ -24,32 +24,32 @@ func TestPruneStoreBlocks(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName)
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	blobStore, err := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 
 	blobClient, err := blobStore.NewClient(context.Background())
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 	defer blobClient.Close()
 
 	blobObjects, err := blobClient.GetObjects("storage/chunks")
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 
-	assert.Equal(t, len(blobObjects), 3)
+	assert.Equal(t, 3, len(blobObjects))
 
 	cmd, err = executeCommandLine("prune-store-blocks", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--blocks-root-path", fsBlobPathPrefix+"/storage/chunks")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	blobObjects, err = blobClient.GetObjects("storage/chunks")
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 
-	assert.Equal(t, len(blobObjects), 2)
+	assert.Equal(t, 2, len(blobObjects))
 }
 
 func TestPruneStoreBlocksDryRun(t *testing.T) {
@@ -66,30 +66,30 @@ func TestPruneStoreBlocksDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store")
-	assert.Equal(t, err, nil)
-	assert.Equal(t, len(lsis), 1)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
 	storeIndexName := lsis[0].Name
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName)
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	blobStore, err := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 
 	blobClient, err := blobStore.NewClient(context.Background())
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 	defer blobClient.Close()
 
 	blobObjects, err := blobClient.GetObjects("storage/chunks")
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 
-	assert.Equal(t, len(blobObjects), 3)
+	assert.Equal(t, 3, len(blobObjects))
 
 	cmd, err = executeCommandLine("prune-store-blocks", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--blocks-root-path", fsBlobPathPrefix+"/storage/chunks", "--dry-run")
-	assert.Equal(t, err, nil, cmd)
+	assert.Equal(t, nil, err, cmd)
 
 	blobObjects, err = blobClient.GetObjects("storage/chunks")
-	assert.Equal(t, err, nil)
+	assert.Equal(t, nil, err)
 
-	assert.Equal(t, len(blobObjects), 3)
+	assert.Equal(t, 3, len(blobObjects))
 }

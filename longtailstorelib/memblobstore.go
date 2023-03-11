@@ -107,6 +107,9 @@ func (blobObject *memBlobObject) LockWriteVersion() (bool, error) {
 }
 
 func (blobObject *memBlobObject) Write(data []byte) (bool, error) {
+	dataCopy := make([]byte, len(data))
+	copy(dataCopy, data)
+
 	blobObject.client.store.blobsMutex.Lock()
 	defer blobObject.client.store.blobsMutex.Unlock()
 
@@ -121,9 +124,6 @@ func (blobObject *memBlobObject) Write(data []byte) (bool, error) {
 			return false, nil
 		}
 	}
-
-	dataCopy := make([]byte, len(data))
-	copy(dataCopy, data)
 
 	if !exists {
 		blob = &memBlob{generation: 0, path: blobObject.path, data: dataCopy}

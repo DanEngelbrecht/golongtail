@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -133,7 +133,7 @@ func (blobObject *s3BlobObject) Read() ([]byte, error) {
 		}
 		return nil, err
 	}
-	data, err := ioutil.ReadAll(result.Body)
+	data, err := io.ReadAll(result.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}

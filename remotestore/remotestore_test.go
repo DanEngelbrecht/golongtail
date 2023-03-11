@@ -2,8 +2,9 @@ package remotestore
 
 import (
 	"context"
-	"io/ioutil"
+	"log"
 	"net/url"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -595,51 +596,124 @@ func TestPruneStoreWithoutLocking(t *testing.T) {
 	PruneStoreTest(false, t)
 }
 
+func validateThatAllBlocksAreInIndex(generatedBlocksIndex longtaillib.Longtail_StoreIndex, storeIndex longtaillib.Longtail_StoreIndex) bool {
+	if !storeIndex.IsValid() {
+		log.Printf("PutStoreLSI() returned invalid store index")
+		return false
+	}
+
+	lookup := map[uint64]bool{}
+	for _, h := range storeIndex.GetBlockHashes() {
+		lookup[h] = true
+	}
+
+	blockHashes := generatedBlocksIndex.GetBlockHashes()
+	for _, h := range blockHashes {
+		_, exists := lookup[h]
+		if !exists {
+			log.Printf("Missing direct block %d", h)
+			return false
+		}
+	}
+	return true
+}
+
+func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_StoreIndex, blobStore longtailstorelib.BlobStore) bool {
+	storeIndex, err := GetStoreLSI(context.Background(), blobStore, nil)
+	if err != nil {
+		log.Printf("GetStoreLSI() failed with %s", err)
+		return false
+	}
+	defer storeIndex.Dispose()
+	return validateThatAllBlocksAreInIndex(generatedBlocksIndex, storeIndex)
+}
+
 func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxStoreIndexSize int64) {
 
 	blockGenerateCount := 4
-	workerCount := 21
+	workerCount := 51
+	assert.True(t, blockGenerateCount*(workerCount+1) < 255)
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
 
 	var wg sync.WaitGroup
+	wg.Add(workerCount)
 	for n := 0; n < workerCount; n++ {
-		wg.Add(1)
-		seedBase := blockGenerateCount * n
+		seedBase := blockGenerateCount * (n + 1)
 		go func(blockGenerateCount int, seedBase int) {
+			defer wg.Done()
 			client, _ := blobStore.NewClient(context.Background())
 			defer client.Close()
+			blocks := []longtaillib.Longtail_StoredBlock{}
+			defer func() {
+				for _, block := range blocks {
+					block.Dispose()
+				}
+			}()
 
-			blocks := []longtaillib.Longtail_BlockIndex{}
+			blockIndexes := []longtaillib.Longtail_BlockIndex{}
 			{
 				for i := 0; i < blockGenerateCount-1; i++ {
-					block, _ := generateUniqueStoredBlock(uint8(seedBase + i))
-					blocks = append(blocks, block.GetBlockIndex())
+					block, err := generateUniqueStoredBlock(uint8(seedBase + i))
+					assert.Equal(t, nil, err)
+					blocks = append(blocks, block)
+					blockIndexes = append(blockIndexes, block.GetBlockIndex())
 				}
 
-				blocksIndex, err := longtaillib.CreateStoreIndexFromBlocks(blocks)
+				blocksIndex, err := longtaillib.CreateStoreIndexFromBlocks(blockIndexes)
 				assert.Equal(t, nil, err)
-				newStoreIndex, err := PutStoreLSI(context.Background(), blobStore, nil, blocksIndex, maxStoreIndexSize)
+				for {
+					var newStoreIndex longtaillib.Longtail_StoreIndex
+					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, blocksIndex, maxStoreIndexSize)
+					if err == nil {
+						assert.True(t, validateThatAllBlocksAreInIndex(blocksIndex, newStoreIndex))
+						newStoreIndex.Dispose()
+						break
+					}
+				}
 				assert.Equal(t, nil, err)
+				//				allBlocksArePresent := false
+				//				for i := 0; i < 1; i++ {
+				//					if validateThatBlocksArePresent(blocksIndex, blobStore) {
+				//						allBlocksArePresent = true
+				//						break
+				//					}
+				//					time.Sleep(2 * time.Millisecond)
+				//				}
+				//				assert.True(t, allBlocksArePresent)
 				blocksIndex.Dispose()
-				newStoreIndex.Dispose()
 			}
-
-			readStoreIndex, err := GetStoreLSI(context.Background(), blobStore, nil)
-			assert.Equal(t, nil, err)
-			readStoreIndex.Dispose()
 
 			generatedBlocksIndex := longtaillib.Longtail_StoreIndex{}
 			{
 				for i := blockGenerateCount - 1; i < blockGenerateCount; i++ {
-					block, _ := generateUniqueStoredBlock(uint8(seedBase + i))
-					blocks = append(blocks, block.GetBlockIndex())
+					block, err := generateUniqueStoredBlock(uint8(seedBase + i))
+					assert.Equal(t, nil, err)
+					blocks = append(blocks, block)
+					blockIndexes = append(blockIndexes, block.GetBlockIndex())
 				}
-				generatedBlocksIndex, err = longtaillib.CreateStoreIndexFromBlocks(blocks)
+				var err error
+				generatedBlocksIndex, err = longtaillib.CreateStoreIndexFromBlocks(blockIndexes)
 				assert.Equal(t, nil, err)
-				newStoreIndex, err := PutStoreLSI(context.Background(), blobStore, nil, generatedBlocksIndex, maxStoreIndexSize)
+				for {
+					var newStoreIndex longtaillib.Longtail_StoreIndex
+					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, generatedBlocksIndex, maxStoreIndexSize)
+					if err == nil {
+						assert.True(t, validateThatAllBlocksAreInIndex(generatedBlocksIndex, newStoreIndex))
+						newStoreIndex.Dispose()
+						break
+					}
+				}
 				assert.Equal(t, nil, err)
-				newStoreIndex.Dispose()
+				//				allBlocksArePresent := false
+				//				for i := 0; i < 1; i++ {
+				//					if validateThatBlocksArePresent(generatedBlocksIndex, blobStore) {
+				//						allBlocksArePresent = true
+				//						break
+				//					}
+				//					time.Sleep(2 * time.Millisecond)
+				//				}
+				//				assert.True(t, allBlocksArePresent)
 			}
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()
@@ -648,8 +722,6 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				generatedBlockHashes <- h
 			}
 			generatedBlocksIndex.Dispose()
-
-			wg.Done()
 		}(blockGenerateCount, seedBase)
 	}
 	wg.Wait()
@@ -662,6 +734,8 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 	assert.Equal(t, blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
 	lookup := map[uint64]bool{}
 	for _, h := range storeIndex.GetBlockHashes() {
+		_, exists := lookup[h]
+		assert.False(t, exists)
 		lookup[h] = true
 	}
 	assert.Equal(t, blockGenerateCount*workerCount, len(lookup))
@@ -722,7 +796,7 @@ func TestS3StoreIndexSync(t *testing.T) {
 }
 
 func TestFSStoreIndexSync(t *testing.T) {
-	storePath, err := ioutil.TempDir("", "longtail-test")
+	storePath, err := os.MkdirTemp("", "TestFSStoreIndexSync")
 	assert.Equal(t, nil, err)
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
 	assert.Equal(t, nil, err)

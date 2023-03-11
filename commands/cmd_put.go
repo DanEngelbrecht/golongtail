@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -125,7 +124,7 @@ func put(
 		if versionLocalStoreIndexPath != "" {
 			v.Set("version-local-store-index-path", versionLocalStoreIndexPath)
 		}
-		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
+		tmpFile, err := os.CreateTemp(os.TempDir(), "longtail-")
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
@@ -137,7 +136,7 @@ func put(
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 
-		bytes, err := ioutil.ReadFile(tmpFilePath)
+		bytes, err := os.ReadFile(tmpFilePath)
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
@@ -160,7 +159,7 @@ type PutCmd struct {
 	GetConfigURI               string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
 	TargetFileIndexPath        string `name:"target-version-index-path" help:"Target version index file uri"`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
-	OptionalStorageURI         string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
+	OptionalStorageURI         string `name:"storage-uri" help:"Storage URI (local file system, GCS and S3 bucket URI supported)"`
 	S3EndpointResolverURLOption
 	SourcePath                    string `name:"source-path" help:"Source folder path" required:""`
 	SourceIndexPath               string `name:"source-index-path" help:"Optional pre-computed index of source-path"`

@@ -1,4 +1,8 @@
+
 ##
+- **UPDATED** Updated to longtail 0.3.7 (fixes isses with duplicated asset entries due to upper/lower case letters)
+
+## v0.3.8
 - **CHANGED** Only `init` operation will try to rebuild the store index from blocks
 - **ADDED** Added retry logic when reading remote store index
 - **FIXED** Don't do fatal exit if reading store index fails, just report error back to caller and log error at exit
@@ -6,7 +10,7 @@
 - **UPDATED** All golang module dependencies updated
 - **UPDATED** Build with golang 1.19
 
-## v0.3.6
+## v0.3.7
 - **ADDED** `downsync` and `get` command now allows multiple sources allowing for merging of version in one go. All sources must use the same `storage-uri`
 - **FIXED** Updated to longtail 0.3.7 (fixes https://github.com/DanEngelbrecht/longtail/issues/211)
 - **CHANGED** Migrated to `unsafe.Slice` for buffer to slice conversions

@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
@@ -292,35 +293,6 @@ func TestRestoreStore(t *testing.T) {
 
 	storeAPI.Dispose()
 }
-
-//func createStoredBlock(chunkCount uint32, hashIdentifier uint32) (longtaillib.Longtail_StoredBlock, error) {
-//	blockHash := uint64(0xdeadbeef500177aa) + uint64(chunkCount)
-//	chunkHashes := make([]uint64, chunkCount)
-//	chunkSizes := make([]uint32, chunkCount)
-//	blockOffset := uint32(0)
-//	for index := range chunkHashes {
-//		chunkHashes[index] = uint64(index+1) * 4711
-//		chunkSizes[index] = uint32(index+1) * 10
-//		blockOffset += uint32(chunkSizes[index])
-//	}
-//	blockData := make([]uint8, blockOffset)
-//	blockOffset = 0
-//	for chunkIndex := range chunkHashes {
-//		for index := uint32(0); index < uint32(chunkSizes[chunkIndex]); index++ {
-//			blockData[blockOffset+index] = uint8(chunkIndex + 1)
-//		}
-//		blockOffset += uint32(chunkSizes[chunkIndex])
-//	}
-//
-//	return longtaillib.CreateStoredBlock(
-//		blockHash,
-//		hashIdentifier,
-//		chunkCount+uint32(10000),
-//		chunkHashes,
-//		chunkSizes,
-//		blockData,
-//		false)
-//}
 
 func storeBlock(blobClient longtailstorelib.BlobClient, storedBlock longtaillib.Longtail_StoredBlock, blockHashOffset uint64, parentPath string) uint64 {
 	bytes, _ := longtaillib.WriteStoredBlockToBuffer(storedBlock)
@@ -611,7 +583,6 @@ func validateThatAllBlocksAreInIndex(generatedBlocksIndex longtaillib.Longtail_S
 	for _, h := range blockHashes {
 		_, exists := lookup[h]
 		if !exists {
-			log.Printf("Missing direct block %d", h)
 			return false
 		}
 	}
@@ -672,15 +643,9 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 					}
 				}
 				assert.Equal(t, nil, err)
-				//				allBlocksArePresent := false
-				//				for i := 0; i < 1; i++ {
-				//					if validateThatBlocksArePresent(blocksIndex, blobStore) {
-				//						allBlocksArePresent = true
-				//						break
-				//					}
-				//					time.Sleep(2 * time.Millisecond)
-				//				}
-				//				assert.True(t, allBlocksArePresent)
+				for !validateThatBlocksArePresent(blocksIndex, blobStore) {
+					time.Sleep(2 * time.Millisecond)
+				}
 				blocksIndex.Dispose()
 			}
 
@@ -705,15 +670,9 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 					}
 				}
 				assert.Equal(t, nil, err)
-				//				allBlocksArePresent := false
-				//				for i := 0; i < 1; i++ {
-				//					if validateThatBlocksArePresent(generatedBlocksIndex, blobStore) {
-				//						allBlocksArePresent = true
-				//						break
-				//					}
-				//					time.Sleep(2 * time.Millisecond)
-				//				}
-				//				assert.True(t, allBlocksArePresent)
+				for !validateThatBlocksArePresent(generatedBlocksIndex, blobStore) {
+					time.Sleep(2 * time.Millisecond)
+				}
 			}
 
 			blockHashes := generatedBlocksIndex.GetBlockHashes()
@@ -721,10 +680,21 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				h := blockHashes[n]
 				generatedBlockHashes <- h
 			}
+			for !validateThatBlocksArePresent(generatedBlocksIndex, blobStore) {
+				time.Sleep(2 * time.Millisecond)
+			}
 			generatedBlocksIndex.Dispose()
 		}(blockGenerateCount, seedBase)
 	}
 	wg.Wait()
+
+	generatedBlocks := map[uint64]bool{}
+	for n := 0; n < workerCount*blockGenerateCount; n++ {
+		h := <-generatedBlockHashes
+		generatedBlocks[h] = true
+	}
+	assert.Equal(t, blockGenerateCount*workerCount, len(generatedBlocks))
+
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 
@@ -736,15 +706,11 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 	for _, h := range storeIndex.GetBlockHashes() {
 		_, exists := lookup[h]
 		assert.False(t, exists)
+		_, generated := generatedBlocks[h]
+		assert.True(t, generated)
 		lookup[h] = true
 	}
 	assert.Equal(t, blockGenerateCount*workerCount, len(lookup))
-
-	for n := 0; n < workerCount*blockGenerateCount; n++ {
-		h := <-generatedBlockHashes
-		_, exists := lookup[h]
-		assert.True(t, exists)
-	}
 }
 
 func TestStoreIndexSyncNeverMerge(t *testing.T) {

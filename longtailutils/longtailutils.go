@@ -580,6 +580,24 @@ func DeleteBlobWithRetry(
 	return retryCount, nil
 }
 
+func BlobExists(ctx context.Context,
+	client longtailstorelib.BlobClient,
+	key string) (bool, error) {
+	const fname = "BlobExists"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"client": client,
+		"key":    key,
+	})
+	log.Debug(fname)
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return false, errors.Wrap(err, fname)
+	}
+	return objHandle.Exists()
+}
+
 func GetCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {
 	pathCount := fileInfos.GetFileCount()
 	compressionTypes := make([]uint32, pathCount)

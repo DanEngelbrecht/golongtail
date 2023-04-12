@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -131,8 +132,44 @@ func mergeLSIs(LSIs []longtaillib.Longtail_StoreIndex) (longtaillib.Longtail_Sto
 	return result, nil
 }
 
-func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64) (longtaillib.Longtail_StoreIndex, error) {
-	const fname = "PutStoreLSI"
+func makeLSIBuffer(lsi longtaillib.Longtail_StoreIndex) (longtaillib.NativeBuffer, string, error) {
+	const fname = "makeLSIBuffer"
+	log := logrus.WithFields(logrus.Fields{
+		"LSI": lsi,
+	})
+	log.Debug(fname)
+
+	buffer, err := longtaillib.WriteStoreIndexToBuffer(lsi)
+	if err != nil {
+		return longtaillib.NativeBuffer{}, "", errors.Wrap(err, fname)
+	}
+
+	sha256 := sha256.Sum256(buffer.ToBuffer())
+	newName := fmt.Sprintf("store_%x.lsi", sha256)
+	return buffer, newName, nil
+}
+
+/*
+	1)	Get all LSIs: ExistingLSIs
+	2)	Sort LSIs by smallest size to biggest size: MergeCandidates
+	3)	Filter all LSIs that are larger or equal in size to newLSI: ConsumeCandidates
+			Do a merge to each ConsumeCandidate LSI and see if it consumes all of newLSI into it
+			If we find one that consumes newLSI, merge all ExistingLSIs and return that
+	4)  Set MergeBase to newLSI
+	5)	Attempt merge each MergeCandidate int MergeBase
+		- If size of merged result <= maxStoreIndexSize, set MergeBase to merged result, add MergeCandidate to mergedLSIs
+		- Else add MergeCandidate to unmergedLSIs
+	6)	Check that all LSIs in mergedLSIs still exists, if not, goto 1) (or return NotFound?)
+	7)	Write MergeBase to remoteStore (and localStore?)
+	8)	Delete all remote LSIs in mergedLSIs
+	9)	Merge all unmergedLSIs into MergeBase
+	10)	Return MergeBase
+
+	This still leaves a small hole in between 6 and 7 where LSIs are picked up by someone else causing redundant LSIs in the store.
+*/
+
+func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64) (longtaillib.Longtail_StoreIndex, error) {
+	const fname = "attemptPutLSI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":             fname,
 		"ctx":               ctx,
@@ -154,110 +191,170 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 
-	defer func() {
-		for _, LSI := range LSIs {
-			LSI.LSI.Dispose()
-		}
-	}()
-
-	ResultLSI := newLSI
-	DisposeResultLSI := false
-	defer func() {
-		if DisposeResultLSI {
-			ResultLSI.Dispose()
-		}
-	}()
-
-	unmergedLSIs := []int{}
-	mergedLSIs := []int{}
-	if len(LSIs) > 0 {
-		sort.Slice(LSIs, func(i, j int) bool { return LSIs[i].LSI.GetSize() < LSIs[j].LSI.GetSize() })
-		for i := 0; i < len(LSIs); i++ {
-			lsiSize := LSIs[i].LSI.GetSize()
-			if lsiSize > maxStoreIndexSize {
-				for i < len(LSIs) {
-					unmergedLSIs = append(unmergedLSIs, i)
-					i++
-				}
-				break
-			}
-
-			MergedLSI, err := longtaillib.MergeStoreIndex(ResultLSI, LSIs[i].LSI)
-			if err != nil {
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-			}
-
-			if MergedLSI.GetSize() > maxStoreIndexSize {
-				MergedLSI.Dispose()
-				unmergedLSIs = append(unmergedLSIs, i)
-				continue
-			}
-
-			if DisposeResultLSI {
-				ResultLSI.Dispose()
-			}
-			ResultLSI = MergedLSI
-			DisposeResultLSI = true
-			log.Debugf("merged store index `%s`", LSIs[i].Name)
-			mergedLSIs = append(mergedLSIs, i)
-
-			// We don't need the source LSI anymore
-			LSIs[i].LSI.Dispose()
-		}
-	}
-
-	log.Debugf("merged in %d store indexes, leaving %d unmerged", len(mergedLSIs), len(unmergedLSIs))
-
-	buffer, err := longtaillib.WriteStoreIndexToBuffer(ResultLSI)
-	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-	}
-	defer buffer.Dispose()
-
-	saveBuffer := buffer.ToBuffer()
-
-	sha256 := sha256.Sum256(saveBuffer)
-	newName := fmt.Sprintf("store_%x.lsi", sha256)
-
 	remoteClient, err := remoteStore.NewClient(ctx)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	defer remoteClient.Close()
 
-	_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newName, saveBuffer)
-	if err != nil {
-		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-	}
-	log.Debugf("stored new store index `%s`", newName)
-
-	{
-		for _, Index := range mergedLSIs {
-			if LSIs[Index].Name == newName {
-				continue
-			}
-			_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, LSIs[Index].Name)
-			if err == nil || longtaillib.IsNotExist(err) {
-				log.Debugf("deleted merged store index `%s`", LSIs[Index].Name)
-				continue
-			}
-			log.WithError(err).Warnf("failed to delete `%s` from store `%s`", LSIs[Index].Name, remoteClient.String())
+	if len(LSIs) == 0 {
+		nativeBuffer, name, err := makeLSIBuffer(newLSI)
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
-	}
+		defer nativeBuffer.Dispose()
 
-	if len(unmergedLSIs) == 0 {
-		if DisposeResultLSI {
-			DisposeResultLSI = false
-			return ResultLSI, nil
+		_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, name, nativeBuffer.ToBuffer())
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
-		CopyLSI, err := ResultLSI.Copy()
+		log.Debugf("stored new store index `%s`", name)
+
+		CopyLSI, err := newLSI.Copy()
 		if err != nil {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
 		return CopyLSI, nil
 	}
 
-	toMerge := []longtaillib.Longtail_StoreIndex{ResultLSI}
+	defer func() {
+		for _, LSI := range LSIs {
+			LSI.LSI.Dispose()
+		}
+	}()
+
+	newBlockCount := newLSI.GetBlockCount()
+	newChunkCount := newLSI.GetChunkCount()
+
+	sort.Slice(LSIs, func(i, j int) bool { return LSIs[i].LSI.GetSize() < LSIs[j].LSI.GetSize() })
+
+	// Attempt merge to see if all of newLSI is consumed by an existing LSI
+	for i := 0; i < len(LSIs); i++ {
+		candidateBlockCount := LSIs[i].LSI.GetBlockCount()
+		candidateChunkCount := LSIs[i].LSI.GetChunkCount()
+		if candidateBlockCount >= newBlockCount && candidateChunkCount >= newChunkCount {
+			MergedLSI, err := longtaillib.MergeStoreIndex(newLSI, LSIs[i].LSI)
+			if err != nil {
+				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			}
+			mergedBlockCount := MergedLSI.GetBlockCount()
+			MergedLSI.Dispose()
+
+			// If block count is unchanged newLSI did not add any content, so we are all good and don't need to write anything
+			if mergedBlockCount == candidateBlockCount {
+				if len(LSIs) == 1 {
+					CopyLSI, err := LSIs[i].LSI.Copy()
+					if err != nil {
+						return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+					}
+					return CopyLSI, nil
+				}
+				toMerge := []longtaillib.Longtail_StoreIndex{}
+				for _, entry := range LSIs {
+					toMerge = append(toMerge, entry.LSI)
+				}
+				fullLSI, err := mergeLSIs(toMerge)
+				if err != nil {
+					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+				}
+				return fullLSI, nil
+			}
+		}
+	}
+
+	unmergedLSIs := []int{}
+	mergedLSIs := []int{}
+
+	WriteLSI := newLSI
+	DisposeWriteLSI := false
+	defer func() {
+		if DisposeWriteLSI {
+			WriteLSI.Dispose()
+		}
+	}()
+
+	for i := 0; i < len(LSIs); i++ {
+		lsiSize := LSIs[i].LSI.GetSize()
+
+		MergedLSI, err := longtaillib.MergeStoreIndex(WriteLSI, LSIs[i].LSI)
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		}
+
+		mergedLSISize := MergedLSI.GetSize()
+		if mergedLSISize > maxStoreIndexSize && mergedLSISize > lsiSize {
+			MergedLSI.Dispose()
+			unmergedLSIs = append(unmergedLSIs, i)
+			continue
+		}
+
+		if DisposeWriteLSI {
+			WriteLSI.Dispose()
+		}
+		WriteLSI = MergedLSI
+		DisposeWriteLSI = true
+		log.Debugf("merged store index `%s`", LSIs[i].Name)
+		mergedLSIs = append(mergedLSIs, i)
+
+		// We don't need the source LSI anymore
+		LSIs[i].LSI.Dispose()
+	}
+
+	nativeBuffer, newName, err := makeLSIBuffer(WriteLSI)
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+	defer nativeBuffer.Dispose()
+
+	// Did any of the merged LSIs get deleted while we built our LSI?
+	// If so bail as we want to avoid merging in the same LSIs to multiple places.
+	// There is room for the same LSI to be picked up by two operations between us checking
+	// for deleted LSIs and us writing our LSI, which will lead to redundant LSI data.
+	// This is unwanted but not critical as any reduncancies will be removed when fetching LSIs.
+	for _, Index := range mergedLSIs {
+		exists, err := longtailutils.BlobExists(ctx, remoteClient, LSIs[Index].Name)
+		if err == nil && !exists {
+			err = errors.Wrapf(os.ErrNotExist, "%s merged object already deleted", LSIs[Index].Name)
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		}
+	}
+
+	_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newName, nativeBuffer.ToBuffer())
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+	log.Debugf("stored new store index `%s`", newName)
+
+	// There is still a potential for holes here where things gets deleted before we have finished our
+	// delete cleanup. That will result in redundancy in the list of LSIs which is unwanted but not critical problem.
+	// We do our best to avoid it, but we can't make this 100% airtight.
+	for _, Index := range mergedLSIs {
+		if LSIs[Index].Name == newName {
+			continue
+		}
+		_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, LSIs[Index].Name)
+		if err == nil || longtaillib.IsNotExist(err) {
+			log.Debugf("deleted merged store index `%s`", LSIs[Index].Name)
+			continue
+		}
+		log.WithError(err).Warnf("failed to delete `%s` from store `%s`", LSIs[Index].Name, remoteClient.String())
+	}
+
+	if len(unmergedLSIs) == 0 {
+		if DisposeWriteLSI {
+			DisposeWriteLSI = false
+			return WriteLSI, nil
+		}
+		CopyLSI, err := WriteLSI.Copy()
+		if err != nil {
+			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		}
+		return CopyLSI, nil
+	}
+
+	// Merge in all unmergedLSIs
+
+	toMerge := []longtaillib.Longtail_StoreIndex{WriteLSI}
 	for _, i := range unmergedLSIs {
 		toMerge = append(toMerge, LSIs[i].LSI)
 	}
@@ -266,6 +363,30 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	return fullLSI, nil
+}
+
+func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64) (longtaillib.Longtail_StoreIndex, error) {
+	const fname = "PutStoreLSI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":             fname,
+		"ctx":               ctx,
+		"remoteStore":       remoteStore,
+		"LSI":               newLSI,
+		"maxStoreIndexSize": maxStoreIndexSize,
+	})
+	log.Debug(fname)
+
+	result, err := attemptPutLSI(ctx, remoteStore, localStore, newLSI, maxStoreIndexSize)
+	for longtaillib.IsNotExist(err) {
+		time.Sleep(2 * time.Millisecond)
+		result, err = attemptPutLSI(ctx, remoteStore, localStore, newLSI, maxStoreIndexSize)
+	}
+
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+
+	return result, err
 }
 
 type LSIEntry struct {

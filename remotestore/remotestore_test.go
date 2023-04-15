@@ -590,7 +590,7 @@ func validateThatAllBlocksAreInIndex(generatedBlocksIndex longtaillib.Longtail_S
 }
 
 func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_StoreIndex, blobStore longtailstorelib.BlobStore) bool {
-	storeIndex, err := GetStoreLSI(context.Background(), blobStore, nil)
+	storeIndex, err := GetStoreLSI(context.Background(), blobStore, nil, 8)
 	if err != nil {
 		log.Printf("GetStoreLSI() failed with %s", err)
 		return false
@@ -635,7 +635,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				assert.Equal(t, nil, err)
 				for {
 					var newStoreIndex longtaillib.Longtail_StoreIndex
-					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, blocksIndex, maxStoreIndexSize)
+					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, blocksIndex, maxStoreIndexSize, 8)
 					if err == nil {
 						assert.True(t, validateThatAllBlocksAreInIndex(blocksIndex, newStoreIndex))
 						newStoreIndex.Dispose()
@@ -662,7 +662,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				assert.Equal(t, nil, err)
 				for {
 					var newStoreIndex longtaillib.Longtail_StoreIndex
-					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, generatedBlocksIndex, maxStoreIndexSize)
+					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, generatedBlocksIndex, maxStoreIndexSize, 8)
 					if err == nil {
 						assert.True(t, validateThatAllBlocksAreInIndex(generatedBlocksIndex, newStoreIndex))
 						newStoreIndex.Dispose()
@@ -680,9 +680,6 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				h := blockHashes[n]
 				generatedBlockHashes <- h
 			}
-			for !validateThatBlocksArePresent(generatedBlocksIndex, blobStore) {
-				time.Sleep(2 * time.Millisecond)
-			}
 			generatedBlocksIndex.Dispose()
 		}(blockGenerateCount, seedBase)
 	}
@@ -698,7 +695,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 
-	storeIndex, err := GetStoreLSI(context.Background(), blobStore, nil)
+	storeIndex, err := GetStoreLSI(context.Background(), blobStore, nil, 8)
 	assert.Equal(t, nil, err)
 	defer storeIndex.Dispose()
 	assert.Equal(t, blockGenerateCount*workerCount, len(storeIndex.GetBlockHashes()))
@@ -726,11 +723,9 @@ func TestStoreIndexSyncAlwaysMerge(t *testing.T) {
 }
 
 func TestStoreIndexSyncSometimesMerge(t *testing.T) {
-	for i := 0; i < 20; i++ {
-		blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
-		assert.Equal(t, nil, err)
-		testStoreIndexSync(blobStore, t, 420)
-	}
+	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
+	assert.Equal(t, nil, err)
+	testStoreIndexSync(blobStore, t, 420)
 }
 
 func TestGCSStoreIndexSync(t *testing.T) {

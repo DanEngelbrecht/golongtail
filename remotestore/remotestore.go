@@ -593,7 +593,7 @@ func addBlocksToRemoteStoreIndex(
 	}
 	defer addedStoreIndex.Dispose()
 	if !useLegacyStore {
-		return PutStoreLSI(ctx, s.blobStore, nil, addedStoreIndex, 1024*1024*512)
+		return PutStoreLSI(ctx, s.blobStore, nil, addedStoreIndex, 1024*1024*512, 8)
 	}
 	return addToRemoteStoreIndexLegacy(ctx, blobClient, addedStoreIndex)
 }
@@ -1361,7 +1361,7 @@ func readRemoteStoreIndex(
 		if useLegacyStore {
 			newStoreIndex, err = addToRemoteStoreIndexLegacy(ctx, client, storeIndex)
 		} else {
-			newStoreIndex, err = PutStoreLSI(ctx, blobStore, nil, storeIndex, 1024*1024*512)
+			newStoreIndex, err = PutStoreLSI(ctx, blobStore, nil, storeIndex, 1024*1024*512, 8)
 		}
 		if err != nil {
 			log.WithError(err).Error("Failed to update store index")
@@ -1404,7 +1404,7 @@ func readRemoteStoreIndex(
 	if useLegacyStore {
 		storeIndex, _, err = readStoreStoreIndexWithItemsLegacy(ctx, client)
 	} else {
-		storeIndex, err = GetStoreLSI(ctx, blobStore, nil)
+		storeIndex, err = GetStoreLSI(ctx, blobStore, nil, 8)
 	}
 
 	if err == nil {

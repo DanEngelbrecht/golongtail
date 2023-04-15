@@ -51,7 +51,7 @@ func generateStoreIndex(blockCount uint8, seed uint8) (longtaillib.Longtail_Stor
 func addStoreIndex(remoteStore longtailstorelib.BlobStore, seed uint8) error {
 	storeIndex, _ := generateStoreIndex(seed/10, uint8(seed))
 	defer storeIndex.Dispose()
-	resultStoreIndex, err := PutStoreLSI(context.Background(), remoteStore, nil, storeIndex, 0)
+	resultStoreIndex, err := PutStoreLSI(context.Background(), remoteStore, nil, storeIndex, 0, 8)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func TestOverwrite(t *testing.T) {
 	addStoreIndex(remoteStore, 33)
 	addStoreIndex(remoteStore, 44)
 	addStoreIndex(remoteStore, 55)
-	unprunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
+	unprunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil, 8)
 	assert.Equal(t, err, nil, "failed getting LSI")
 	defer unprunedStoreIndex.Dispose()
 	assert.Equal(t, unprunedStoreIndex.GetBlockCount(), uint32(14), "unpruned store index mismatch")
@@ -73,7 +73,7 @@ func TestOverwrite(t *testing.T) {
 	storeIndex, _ := generateStoreIndex(7, uint8(77))
 	err = OverwriteStoreLSI(context.Background(), remoteStore, storeIndex)
 	assert.Equal(t, err, nil, "failed overwriting LSI")
-	prunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
+	prunedStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil, 8)
 	assert.Equal(t, err, nil, "failed getting pruned LSI")
 	defer prunedStoreIndex.Dispose()
 	assert.Equal(t, prunedStoreIndex.GetBlockCount(), uint32(7), "pruned store index mismatch")
@@ -86,28 +86,28 @@ func TestPutGet(t *testing.T) {
 	remoteStore, _ := longtailstorelib.NewMemBlobStore("remote", true)
 	localStore, _ := longtailstorelib.NewMemBlobStore("local", true)
 
-	emptyStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	emptyStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore, 8)
 	assert.Equal(t, err, nil, "failed getting empty LSI")
 	defer emptyStoreIndex.Dispose()
 	assert.Equal(t, emptyStoreIndex.GetBlockCount(), uint32(0), "empty LSI is not empty")
 
-	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
+	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0, 8)
 	assert.Equal(t, err, nil, "failed putting LSI1")
 	defer LSI1.Dispose()
 	assert.Equal(t, LSI1.GetBlockCount(), uint32(1), "Put LSI1 did not result in expected store index")
 
-	remoteStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	remoteStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore, 8)
 	assert.Equal(t, err, nil, "failed getting LSI")
 	defer remoteStoreIndex.Dispose()
 
 	LocalNames := getLSIs(localStore)
 	assert.Equal(t, 1, len(LocalNames), "unexpeced number of indexes in local store")
 
-	remoteStoreIndexCached, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	remoteStoreIndexCached, err := GetStoreLSI(context.Background(), remoteStore, &localStore, 8)
 	assert.Equal(t, err, nil, "failed getting cached LSI")
 	defer remoteStoreIndexCached.Dispose()
 
-	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0)
+	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex, 0, 8)
 	assert.Equal(t, err, nil, "failed putting LSI2")
 	defer LSI2.Dispose()
 	assert.Equal(t, LSI2.GetBlockCount(), uint32(1), "Put LSI2 did not result in expected store index")
@@ -119,7 +119,7 @@ func TestPutGet(t *testing.T) {
 	assert.Equal(t, err, nil, "failed generating storeIndex2")
 	defer storeIndex2.Dispose()
 
-	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
+	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0, 8)
 	assert.Equal(t, err, nil, "failed putting LSI3")
 	defer LSI3.Dispose()
 	assert.Equal(t, LSI3.GetBlockCount(), uint32(5), "Put LSI3 did not result in expected store index")
@@ -130,7 +130,7 @@ func TestPutGet(t *testing.T) {
 	LocalNames = getLSIs(localStore)
 	assert.Equal(t, 1, len(LocalNames), "unexpeced number of indexes in local store")
 
-	remoteStoreIndexMerged, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	remoteStoreIndexMerged, err := GetStoreLSI(context.Background(), remoteStore, &localStore, 8)
 	assert.Equal(t, err, nil, "failed getting remoteStoreIndexMerged")
 	defer remoteStoreIndexMerged.Dispose()
 	assert.Equal(t, remoteStoreIndexMerged.GetBlockCount(), uint32(5), "Get remoteStoreIndexMerged did not result in expected store index")
@@ -142,7 +142,7 @@ func TestPutGet(t *testing.T) {
 	_, err = longtailutils.DeleteBlobWithRetry(context.Background(), remoteClient, RemoteNames1[0])
 	assert.Equal(t, err, nil, "failed deleting remote blob")
 
-	remoteStoreIndexPruned, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	remoteStoreIndexPruned, err := GetStoreLSI(context.Background(), remoteStore, &localStore, 8)
 	assert.Equal(t, err, nil, "failed getting remoteStoreIndexPruned")
 	defer remoteStoreIndexPruned.Dispose()
 	assert.Equal(t, remoteStoreIndexPruned.GetBlockCount(), uint32(4), "Get remoteStoreIndexPruned did not result in expected store index")
@@ -155,7 +155,7 @@ func TestMergeAtPut(t *testing.T) {
 	storeIndex1, _ := generateStoreIndex(1, uint8(11))
 	defer storeIndex1.Dispose()
 
-	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex1, 0)
+	LSI1, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex1, 0, 8)
 	assert.Equal(t, err, nil, "failed putting LSI1")
 	defer LSI1.Dispose()
 	assert.Equal(t, LSI1.GetBlockCount(), uint32(1), "Put LSI1 did not result in expected store index")
@@ -163,7 +163,7 @@ func TestMergeAtPut(t *testing.T) {
 	storeIndex2, _ := generateStoreIndex(2, uint8(22))
 	defer storeIndex2.Dispose()
 
-	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0)
+	LSI2, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex2, 0, 8)
 	assert.Equal(t, err, nil, "failed putting LSI2")
 	defer LSI2.Dispose()
 	assert.Equal(t, LSI2.GetBlockCount(), uint32(3), "Put LSI2 did not result in expected store index")
@@ -171,7 +171,7 @@ func TestMergeAtPut(t *testing.T) {
 	storeIndex3, _ := generateStoreIndex(3, uint8(33))
 	defer storeIndex3.Dispose()
 
-	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex3, 0)
+	LSI3, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex3, 0, 8)
 	assert.Equal(t, err, nil, "failed putting LSI3")
 	defer LSI3.Dispose()
 	assert.Equal(t, LSI3.GetBlockCount(), uint32(6), "Put LSI3 did not result in expected store index")
@@ -179,7 +179,7 @@ func TestMergeAtPut(t *testing.T) {
 	storeIndex4, _ := generateStoreIndex(4, uint8(44))
 	defer storeIndex4.Dispose()
 
-	LSI4, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex4, 530)
+	LSI4, err := PutStoreLSI(context.Background(), remoteStore, &localStore, storeIndex4, 530, 8)
 	assert.Equal(t, err, nil, "failed putting LSI4")
 	defer LSI4.Dispose()
 	assert.Equal(t, LSI4.GetBlockCount(), uint32(10), "Put LSI4 did not result in expected store index")
@@ -187,12 +187,12 @@ func TestMergeAtPut(t *testing.T) {
 	lsis := getLSIs(remoteStore)
 	assert.Equal(t, 2, len(lsis), "Unexpeced number of store indexes in remote store")
 
-	resultStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore)
+	resultStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, &localStore, 8)
 	assert.Equal(t, err, nil, "failed getting resultStoreIndex")
 	defer resultStoreIndex.Dispose()
 	assert.Equal(t, resultStoreIndex.GetBlockCount(), uint32(10), "Gut resultStoreIndex did not result in expected store index")
 
-	noCacheStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil)
+	noCacheStoreIndex, err := GetStoreLSI(context.Background(), remoteStore, nil, 8)
 	assert.Equal(t, err, nil, "failed getting noCacheStoreIndex")
 	defer noCacheStoreIndex.Dispose()
 	assert.Equal(t, noCacheStoreIndex.GetBlockCount(), uint32(10), "Gut noCacheStoreIndex did not result in expected store index")

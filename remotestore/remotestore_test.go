@@ -2,9 +2,10 @@ package remotestore
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/url"
-	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -23,7 +24,7 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -113,7 +114,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -137,7 +138,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -174,7 +175,7 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -217,7 +218,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -242,7 +243,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -274,7 +275,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -421,7 +422,7 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		Init)
@@ -464,7 +465,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -514,7 +515,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -537,7 +538,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		false,
+		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -599,10 +600,13 @@ func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_Stor
 	return validateThatAllBlocksAreInIndex(generatedBlocksIndex, storeIndex)
 }
 
-func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxStoreIndexSize int64) {
+func testStoreIndexSync(t *testing.T, blobStore longtailstorelib.BlobStore, tempDir string, maxStoreIndexSize int64) {
 
 	blockGenerateCount := 4
 	workerCount := 51
+	if tempDir != "" {
+		workerCount = 17
+	}
 	assert.True(t, blockGenerateCount*(workerCount+1) < 255)
 
 	generatedBlockHashes := make(chan uint64, blockGenerateCount*workerCount)
@@ -621,6 +625,11 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 					block.Dispose()
 				}
 			}()
+			var localCache longtailstorelib.BlobStore
+			if tempDir != "" {
+				localCachePath := filepath.Join(tempDir, "localcache", fmt.Sprintf("%d", seedBase))
+				localCache, _ = longtailstorelib.NewFSBlobStore(localCachePath, false)
+			}
 
 			blockIndexes := []longtaillib.Longtail_BlockIndex{}
 			{
@@ -635,7 +644,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				assert.Equal(t, nil, err)
 				for {
 					var newStoreIndex longtaillib.Longtail_StoreIndex
-					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, blocksIndex, maxStoreIndexSize, 8)
+					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, localCache, blocksIndex, maxStoreIndexSize, 8)
 					if err == nil {
 						assert.True(t, validateThatAllBlocksAreInIndex(blocksIndex, newStoreIndex))
 						newStoreIndex.Dispose()
@@ -662,7 +671,7 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 				assert.Equal(t, nil, err)
 				for {
 					var newStoreIndex longtaillib.Longtail_StoreIndex
-					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, nil, generatedBlocksIndex, maxStoreIndexSize, 8)
+					newStoreIndex, err = PutStoreLSI(context.Background(), blobStore, localCache, generatedBlocksIndex, maxStoreIndexSize, 8)
 					if err == nil {
 						assert.True(t, validateThatAllBlocksAreInIndex(generatedBlocksIndex, newStoreIndex))
 						newStoreIndex.Dispose()
@@ -713,19 +722,37 @@ func testStoreIndexSync(blobStore longtailstorelib.BlobStore, t *testing.T, maxS
 func TestStoreIndexSyncNeverMerge(t *testing.T) {
 	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
 	assert.Equal(t, nil, err)
-	testStoreIndexSync(blobStore, t, 0)
+	testStoreIndexSync(t, blobStore, "", 0)
 }
 
 func TestStoreIndexSyncAlwaysMerge(t *testing.T) {
 	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
 	assert.Equal(t, nil, err)
-	testStoreIndexSync(blobStore, t, 0x7fffffffffffffff)
+	testStoreIndexSync(t, blobStore, "", 0x7fffffffffffffff)
 }
 
 func TestStoreIndexSyncSometimesMerge(t *testing.T) {
 	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
 	assert.Equal(t, nil, err)
-	testStoreIndexSync(blobStore, t, 420)
+	testStoreIndexSync(t, blobStore, "", 420)
+}
+
+func TestStoreIndexSyncCachedNeverMerge(t *testing.T) {
+	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
+	assert.Equal(t, nil, err)
+	testStoreIndexSync(t, blobStore, t.TempDir(), 0)
+}
+
+func TestStoreIndexSyncCachedAlwaysMerge(t *testing.T) {
+	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
+	assert.Equal(t, nil, err)
+	testStoreIndexSync(t, blobStore, t.TempDir(), 0x7fffffffffffffff)
+}
+
+func TestStoreIndexSyncCachedSometimesMerge(t *testing.T) {
+	blobStore, err := longtailstorelib.NewMemBlobStore("store", false)
+	assert.Equal(t, nil, err)
+	testStoreIndexSync(t, blobStore, t.TempDir(), 420)
 }
 
 func TestGCSStoreIndexSync(t *testing.T) {
@@ -742,7 +769,7 @@ func TestGCSStoreIndexSync(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t, 1024)
+	testStoreIndexSync(t, blobStore, t.TempDir(), 1024)
 }
 
 func TestS3StoreIndexSync(t *testing.T) {
@@ -753,12 +780,11 @@ func TestS3StoreIndexSync(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	blobStore, _ := longtailstorelib.NewS3BlobStore(u)
-	testStoreIndexSync(blobStore, t, 1024)
+	testStoreIndexSync(t, blobStore, t.TempDir(), 1024)
 }
 
 func TestFSStoreIndexSync(t *testing.T) {
-	storePath, err := os.MkdirTemp("", "TestFSStoreIndexSync")
-	assert.Equal(t, nil, err)
+	storePath := t.TempDir()
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
 	assert.Equal(t, nil, err)
 	client, _ := blobStore.NewClient(context.Background())
@@ -766,5 +792,17 @@ func TestFSStoreIndexSync(t *testing.T) {
 	object, _ := client.NewObject("store.lsi")
 	object.Delete()
 
-	testStoreIndexSync(blobStore, t, 1024)
+	testStoreIndexSync(t, blobStore, "", 1024)
+}
+
+func TestFSStoreIndexCachedSync(t *testing.T) {
+	storePath := t.TempDir()
+	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
+	assert.Equal(t, nil, err)
+	client, _ := blobStore.NewClient(context.Background())
+	defer client.Close()
+	object, _ := client.NewObject("store.lsi")
+	object.Delete()
+
+	testStoreIndexSync(t, blobStore, storePath, 2048)
 }

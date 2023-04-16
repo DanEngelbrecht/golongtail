@@ -22,7 +22,7 @@ func TestCreateRemoteBlobStoreLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -38,7 +38,7 @@ func TestEmptyGetExistingContentLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadOnly)
@@ -62,7 +62,7 @@ func TestPutGetStoredBlockLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -89,7 +89,7 @@ func TestGetExistingContentLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -132,7 +132,7 @@ func TestRestoreStoreLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -157,7 +157,7 @@ func TestRestoreStoreLegacy(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -189,7 +189,7 @@ func TestRestoreStoreLegacy(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -233,7 +233,7 @@ func TestBlockScanningLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		Init)
@@ -276,7 +276,7 @@ func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -326,7 +326,7 @@ func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)
@@ -349,7 +349,7 @@ func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		true,
+		-1,
 		nil,
 		runtime.NumCPU(),
 		ReadWrite)

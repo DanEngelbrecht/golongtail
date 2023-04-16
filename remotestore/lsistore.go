@@ -310,11 +310,21 @@ func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, 
 	// There is room for the same LSI to be picked up by two operations between us checking
 	// for deleted LSIs and us writing our LSI, which will lead to redundant LSI data.
 	// This is unwanted but not critical as any reduncancies will be removed when fetching LSIs.
-	for _, Index := range mergedLSIs {
-		exists, err := longtailutils.BlobExists(ctx, remoteClient, LSIs[Index].Name)
-		if err == nil && !exists {
-			err = errors.Wrapf(os.ErrNotExist, "%s merged object already deleted", LSIs[Index].Name)
+	if len(mergedLSIs) > 0 {
+		verifyLSIs, err := remoteClient.GetObjects("store", ".lsi")
+		if err != nil && !longtaillib.IsNotExist(err) {
 			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+		}
+		verifyNames := map[string]bool{}
+		for _, verifyLSI := range verifyLSIs {
+			verifyNames[verifyLSI.Name] = true
+		}
+		for _, Index := range mergedLSIs {
+			_, exists := verifyNames[LSIs[Index].Name]
+			if !exists {
+				err = errors.Wrapf(os.ErrNotExist, "%s merged object has been deleted", LSIs[Index].Name)
+				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+			}
 		}
 	}
 

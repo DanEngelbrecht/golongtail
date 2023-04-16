@@ -101,7 +101,7 @@ func upsync(
 		enableFileMapping,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, maxStoreIndexSize == -1, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, maxStoreIndexSize, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}

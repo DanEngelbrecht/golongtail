@@ -168,7 +168,7 @@ func makeLSIBuffer(lsi longtaillib.Longtail_StoreIndex) (longtaillib.NativeBuffe
 	This still leaves a small hole in between 6 and 7 where LSIs are picked up by someone else causing redundant LSIs in the store.
 */
 
-func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, newLSIBlocks map[uint64]bool, maxStoreIndexSize int64, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
+func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, newLSIBlocks map[uint64]bool, maxStoreIndexSize int64, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "attemptPutLSI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":             fname,
@@ -364,7 +364,7 @@ func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, 
 	return fullLSI, nil
 }
 
-func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
+func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, maxStoreIndexSize int64, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "PutStoreLSI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":             fname,
@@ -398,7 +398,7 @@ type LSIEntry struct {
 	LSI  longtaillib.Longtail_StoreIndex
 }
 
-func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, workerCount int) ([]LSIEntry, error) {
+func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, workerCount int) ([]LSIEntry, error) {
 	const fname = "GetStoreLSIs"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
@@ -422,7 +422,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 
 	var localClient longtailstorelib.BlobClient
 	if localStore != nil {
-		localClient, err = (*localStore).NewClient(ctx)
+		localClient, err = localStore.NewClient(ctx)
 		if err != nil {
 			return nil, errors.Wrap(err, fname)
 		}
@@ -537,7 +537,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 
 			var localClient longtailstorelib.BlobClient
 			if localStore != nil {
-				localClient, err = (*localStore).NewClient(ctx)
+				localClient, err = localStore.NewClient(ctx)
 				if err == nil {
 					defer localClient.Close()
 				}
@@ -618,7 +618,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 	return LSIs, nil
 }
 
-func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore *longtailstorelib.BlobStore, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
+func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "GetStoreLSI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,

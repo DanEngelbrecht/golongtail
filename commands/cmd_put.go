@@ -20,6 +20,7 @@ func put(
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetIndexFilePath string,
+	lsiCacheStorePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -42,6 +43,7 @@ func put(
 		"sourceFolderPath":           sourceFolderPath,
 		"sourceIndexPath":            sourceIndexPath,
 		"targetIndexFilePath":        targetIndexFilePath,
+		"lsiCacheStorePath":          lsiCacheStorePath,
 		"targetChunkSize":            targetChunkSize,
 		"targetBlockSize":            targetBlockSize,
 		"maxChunksPerBlock":          maxChunksPerBlock,
@@ -96,6 +98,7 @@ func put(
 		sourceFolderPath,
 		sourceIndexPath,
 		targetIndexFilePath,
+		lsiCacheStorePath,
 		targetChunkSize,
 		targetBlockSize,
 		maxChunksPerBlock,
@@ -164,6 +167,7 @@ type PutCmd struct {
 	SourcePath                    string `name:"source-path" help:"Source folder path" required:""`
 	SourceIndexPath               string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	DisableVersionLocalStoreIndex bool   `name:"no-version-local-store-index" help:"Disable saving of store index optimized for this particular version"`
+	CachePathOption
 	TargetChunkSizeOption
 	TargetBlockSizeOption
 	MaxChunksPerBlockOption
@@ -184,6 +188,7 @@ func (r *PutCmd) Run(ctx *Context) error {
 		r.SourcePath,
 		r.SourceIndexPath,
 		r.TargetFileIndexPath,
+		r.CachePath,
 		r.TargetChunkSize,
 		r.TargetBlockSize,
 		r.MaxChunksPerBlock,

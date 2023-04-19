@@ -76,10 +76,11 @@ type pendingPrefetchedBlock struct {
 }
 
 type remoteStore struct {
-	jobAPI           longtaillib.Longtail_JobAPI
-	blobStore        longtailstorelib.BlobStore
-	blobStoreOptions []longtailstorelib.BlobStoreOption
-	defaultClient    longtailstorelib.BlobClient
+	jobAPI            longtaillib.Longtail_JobAPI
+	blobStore         longtailstorelib.BlobStore
+	lsiCacheBlobStore longtailstorelib.BlobStore
+	blobStoreOptions  []longtailstorelib.BlobStoreOption
+	defaultClient     longtailstorelib.BlobClient
 
 	workerCount int
 
@@ -593,7 +594,7 @@ func addBlocksToRemoteStoreIndex(
 	}
 	defer addedStoreIndex.Dispose()
 	if maxStoreIndexSize != -1 {
-		return PutStoreLSI(ctx, s.blobStore, nil, addedStoreIndex, maxStoreIndexSize, 8)
+		return PutStoreLSI(ctx, s.blobStore, s.lsiCacheBlobStore, addedStoreIndex, maxStoreIndexSize, 8)
 	}
 	return addToRemoteStoreIndexLegacy(ctx, blobClient, addedStoreIndex)
 }
@@ -710,7 +711,7 @@ func getCurrentStoreIndex(
 	log.Debug(fname)
 	var err error = nil
 	if !storeIndex.IsValid() {
-		storeIndex, err = readRemoteStoreIndex(ctx, optionalStoreIndexPaths, s.blobStore, useLegacyStore, client, accessType, s.workerCount)
+		storeIndex, err = readRemoteStoreIndex(ctx, optionalStoreIndexPaths, s.blobStore, s.lsiCacheBlobStore, useLegacyStore, client, accessType, s.workerCount)
 		if err != nil {
 			return storeIndex, longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 		}
@@ -944,6 +945,7 @@ func contentIndexWorker(
 func NewRemoteBlockStore(
 	jobAPI longtaillib.Longtail_JobAPI,
 	blobStore longtailstorelib.BlobStore,
+	lsiCacheStorePath string,
 	maxStoreIndexSize int64,
 	optionalStoreIndexPaths []string,
 	workerCount int,
@@ -965,11 +967,20 @@ func NewRemoteBlockStore(
 		return nil, errors.Wrap(err, fname)
 	}
 
+	var lsiCacheBlobStore longtailstorelib.BlobStore
+	if lsiCacheStorePath != "" {
+		lsiCacheBlobStore, err = longtailstorelib.NewFSBlobStore(lsiCacheStorePath, false)
+		if err != nil {
+			return nil, errors.Wrap(err, fname)
+		}
+	}
+
 	s := &remoteStore{
-		jobAPI:           jobAPI,
-		blobStore:        blobStore,
-		blobStoreOptions: opts,
-		defaultClient:    defaultClient}
+		jobAPI:            jobAPI,
+		blobStore:         blobStore,
+		lsiCacheBlobStore: lsiCacheBlobStore,
+		blobStoreOptions:  opts,
+		defaultClient:     defaultClient}
 
 	s.workerCount = workerCount
 	s.putBlockChan = make(chan putBlockMessage, 16+s.workerCount*8)
@@ -1328,6 +1339,7 @@ func readRemoteStoreIndex(
 	ctx context.Context,
 	optionalStoreIndexPaths []string,
 	blobStore longtailstorelib.BlobStore,
+	lsiCacheBlobStore longtailstorelib.BlobStore,
 	useLegacyStore bool,
 	client longtailstorelib.BlobClient,
 	accessType AccessType,
@@ -1362,7 +1374,7 @@ func readRemoteStoreIndex(
 		if useLegacyStore {
 			newStoreIndex, err = addToRemoteStoreIndexLegacy(ctx, client, storeIndex)
 		} else {
-			newStoreIndex, err = PutStoreLSI(ctx, blobStore, nil, storeIndex, 1024*1024*512, 8)
+			newStoreIndex, err = PutStoreLSI(ctx, blobStore, lsiCacheBlobStore, storeIndex, 1024*1024*512, 8)
 		}
 		if err != nil {
 			log.WithError(err).Error("Failed to update store index")
@@ -1405,7 +1417,7 @@ func readRemoteStoreIndex(
 	if useLegacyStore {
 		storeIndex, _, err = readStoreStoreIndexWithItemsLegacy(ctx, client)
 	} else {
-		storeIndex, err = GetStoreLSI(ctx, blobStore, nil, workerCount)
+		storeIndex, err = GetStoreLSI(ctx, blobStore, lsiCacheBlobStore, workerCount)
 	}
 
 	if err == nil {
@@ -1432,7 +1444,8 @@ func getBlockPath(basePath string, blockHash uint64) string {
 }
 
 func CreateBlockStoreForURI(
-	uri string,
+	storeUri string,
+	lsiCacheStorePath string,
 	maxStoreIndexSize int64,
 	optionalStoreIndexPaths []string,
 	jobAPI longtaillib.Longtail_JobAPI,
@@ -1444,24 +1457,30 @@ func CreateBlockStoreForURI(
 	opts ...longtailstorelib.BlobStoreOption) (longtaillib.Longtail_BlockStoreAPI, error) {
 	const fname = "CreateBlockStoreForURI"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":             fname,
-		"numWorkerCount":    numWorkerCount,
-		"targetBlockSize":   targetBlockSize,
-		"maxChunksPerBlock": maxChunksPerBlock,
-		"accessType":        accessType,
-		"opts":              opts,
+		"fname":                   fname,
+		"storeUri":                storeUri,
+		"lsiCacheStorePath":       lsiCacheStorePath,
+		"maxStoreIndexSize":       maxStoreIndexSize,
+		"optionalStoreIndexPaths": optionalStoreIndexPaths,
+		"numWorkerCount":          numWorkerCount,
+		"targetBlockSize":         targetBlockSize,
+		"maxChunksPerBlock":       maxChunksPerBlock,
+		"accessType":              accessType,
+		"enableFileMapping":       enableFileMapping,
+		"opts":                    opts,
 	})
 	log.Debug(fname)
 
 	// Special case since filepaths may not parse nicely as a url
-	if strings.HasPrefix(uri, "fsblob://") {
-		fsBlobStore, err := longtailstorelib.NewFSBlobStore(uri[len("fsblob://"):], true)
+	if strings.HasPrefix(storeUri, "fsblob://") {
+		fsBlobStore, err := longtailstorelib.NewFSBlobStore(storeUri[len("fsblob://"):], maxStoreIndexSize == -1)
 		if err != nil {
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		}
 		fsBlockStore, err := NewRemoteBlockStore(
 			jobAPI,
 			fsBlobStore,
+			lsiCacheStorePath,
 			maxStoreIndexSize,
 			optionalStoreIndexPaths,
 			numWorkerCount,
@@ -1473,7 +1492,7 @@ func CreateBlockStoreForURI(
 		return longtaillib.CreateBlockStoreAPI(fsBlockStore), nil
 	}
 
-	blobStoreURL, err := url.Parse(uri)
+	blobStoreURL, err := url.Parse(storeUri)
 	if err == nil {
 		switch blobStoreURL.Scheme {
 		case "gs":
@@ -1484,6 +1503,7 @@ func CreateBlockStoreForURI(
 			gcsBlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				gcsBlobStore,
+				lsiCacheStorePath,
 				maxStoreIndexSize,
 				optionalStoreIndexPaths,
 				numWorkerCount,
@@ -1501,6 +1521,7 @@ func CreateBlockStoreForURI(
 			s3BlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				s3BlobStore,
+				lsiCacheStorePath,
 				maxStoreIndexSize,
 				optionalStoreIndexPaths,
 				numWorkerCount,
@@ -1511,14 +1532,14 @@ func CreateBlockStoreForURI(
 			}
 			return longtaillib.CreateBlockStoreAPI(s3BlockStore), nil
 		case "abfs":
-			err := fmt.Errorf("azure Gen1 storage not yet implemented for path %s", uri)
+			err := fmt.Errorf("azure Gen1 storage not yet implemented for path %s", storeUri)
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		case "abfss":
-			err := fmt.Errorf("azure Gen2 storage not yet implemented for path %s", uri)
+			err := fmt.Errorf("azure Gen2 storage not yet implemented for path %s", storeUri)
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		case "file":
 			return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), blobStoreURL.Path[1:], ".lsb", enableFileMapping), nil
 		}
 	}
-	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), uri, ".lsb", enableFileMapping), nil
+	return longtaillib.CreateFSBlockStore(jobAPI, longtaillib.CreateFSStorageAPI(), storeUri, ".lsb", enableFileMapping), nil
 }

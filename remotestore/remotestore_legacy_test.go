@@ -22,6 +22,7 @@ func TestCreateRemoteBlobStoreLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -38,6 +39,7 @@ func TestEmptyGetExistingContentLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -62,6 +64,7 @@ func TestPutGetStoredBlockLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -89,6 +92,7 @@ func TestGetExistingContentLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -132,6 +136,7 @@ func TestRestoreStoreLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -157,6 +162,7 @@ func TestRestoreStoreLegacy(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -189,6 +195,7 @@ func TestRestoreStoreLegacy(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -233,6 +240,7 @@ func TestBlockScanningLegacy(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -276,6 +284,7 @@ func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -326,6 +335,7 @@ func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),
@@ -349,6 +359,7 @@ func PruneStoreTestLegacy(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		-1,
 		nil,
 		runtime.NumCPU(),

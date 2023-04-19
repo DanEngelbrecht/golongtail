@@ -24,6 +24,7 @@ func TestCreateRemoteBlobStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"",
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -114,6 +115,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -138,6 +140,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -175,6 +178,7 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -218,6 +222,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -243,6 +248,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -275,6 +281,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -422,6 +429,7 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -465,6 +473,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -515,6 +524,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -538,6 +548,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
+		"", // TODO: Test with lsi cache path?
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),

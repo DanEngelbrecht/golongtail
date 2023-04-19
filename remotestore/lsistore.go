@@ -179,12 +179,12 @@ func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, 
 	})
 	log.Debug(fname)
 
-	LSIs, err := GetStoreLSIs(ctx, remoteStore, localStore, workerCount)
+	LSIs, err := getStoreLSIs(ctx, remoteStore, localStore, workerCount)
 
-	// We retry as long as we get a "does not exist" error as that indicates that GetStoreLSIs detected a change in the remote store while reading it
+	// We retry as long as we get a "does not exist" error as that indicates that getStoreLSIs detected a change in the remote store while reading it
 	for longtaillib.IsNotExist(err) {
 		time.Sleep(2 * time.Millisecond)
-		LSIs, err = GetStoreLSIs(ctx, remoteStore, localStore, workerCount)
+		LSIs, err = getStoreLSIs(ctx, remoteStore, localStore, workerCount)
 	}
 
 	if err != nil {
@@ -408,8 +408,8 @@ type LSIEntry struct {
 	LSI  longtaillib.Longtail_StoreIndex
 }
 
-func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, workerCount int) ([]LSIEntry, error) {
-	const fname = "GetStoreLSIs"
+func getStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, workerCount int) ([]LSIEntry, error) {
+	const fname = "getStoreLSIs"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":       fname,
 		"ctx":         ctx,
@@ -594,7 +594,7 @@ func GetStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 	}
 	close(fetchLSIChannel)
 
-	for _ = range newLSIs {
+	for range newLSIs {
 		LSIResult := <-storeIndexChan
 		if LSIResult.Error != nil {
 			if longtaillib.IsNotExist(LSIResult.Error) {
@@ -638,12 +638,12 @@ func GetStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 	})
 	log.Debug(fname)
 
-	LSIs, err := GetStoreLSIs(ctx, remoteStore, localStore, workerCount)
+	LSIs, err := getStoreLSIs(ctx, remoteStore, localStore, workerCount)
 
-	// We retry as long as we get a "does not exist" error as that indicates that GetStoreLSIs detected a change in the remote store while reading it
+	// We retry as long as we get a "does not exist" error as that indicates that getStoreLSIs detected a change in the remote store while reading it
 	for longtaillib.IsNotExist(err) {
 		time.Sleep(2 * time.Millisecond)
-		LSIs, err = GetStoreLSIs(ctx, remoteStore, localStore, workerCount)
+		LSIs, err = getStoreLSIs(ctx, remoteStore, localStore, workerCount)
 	}
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)

@@ -35,7 +35,8 @@ func initRemoteStore(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, maxStoreIndexSize, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.Init, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	// TODO: Cache store uri
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", maxStoreIndexSize, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.Init, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

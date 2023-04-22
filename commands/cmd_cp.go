@@ -20,7 +20,8 @@ func cpVersionIndex(
 	localCachePath string,
 	sourcePath string,
 	targetPath string,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	storeIndexCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cpVersionIndex"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                 fname,
@@ -32,6 +33,7 @@ func cpVersionIndex(
 		"sourcePath":            sourcePath,
 		"targetPath":            targetPath,
 		"enableFileMapping":     enableFileMapping,
+		"storeIndexCachePath":   storeIndexCachePath,
 	})
 	log.Info(fname)
 
@@ -48,8 +50,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	// TODO: Cache store uri
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", 1024*1024*16, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, storeIndexCachePath, -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -216,6 +217,7 @@ type CpCmd struct {
 	SourcePath string `name:"source path" arg:"" help:"Source path inside the version index to copy"`
 	TargetPath string `name:"target path" arg:"" help:"Target uri path"`
 	EnableFileMappingOption
+	StoreIndexCachePathOption
 }
 
 func (r *CpCmd) Run(ctx *Context) error {
@@ -227,7 +229,8 @@ func (r *CpCmd) Run(ctx *Context) error {
 		r.CachePath,
 		r.SourcePath,
 		r.TargetPath,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.StoreIndexCachePath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

@@ -510,8 +510,7 @@ func cloneStore(
 	compression string,
 	minBlockUsagePercent uint32,
 	skipValidate bool,
-	enableFileMapping bool,
-	maxStoreIndexSize int64) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cloneStore"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
@@ -533,7 +532,6 @@ func cloneStore(
 		"compression":                  compression,
 		"minBlockUsagePercent":         minBlockUsagePercent,
 		"skipValidate":                 skipValidate,
-		"maxStoreIndexSize":            maxStoreIndexSize,
 	})
 	log.Info(fname)
 
@@ -555,8 +553,7 @@ func cloneStore(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	// TODO: Cache store uri
-	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", 1024*1024*16, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(sourceEndpointResolverURI))
+	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, "", -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(sourceEndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -584,8 +581,7 @@ func cloneStore(
 	sourceStore := longtaillib.CreateShareBlockStore(sourceLRUBlockStore)
 	defer sourceStore.Dispose()
 
-	// TODO: Cache store uri
-	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", maxStoreIndexSize, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
+	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, "", -1, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -702,7 +698,6 @@ type CloneStoreCmd struct {
 	CompressionOption
 	MinBlockUsagePercentOption
 	EnableFileMappingOption
-	MaxStoreIndexSizeOption
 }
 
 func (r *CloneStoreCmd) Run(ctx *Context) error {
@@ -725,8 +720,7 @@ func (r *CloneStoreCmd) Run(ctx *Context) error {
 		r.Compression,
 		r.MinBlockUsagePercent,
 		r.SkipValidate,
-		r.EnableFileMapping,
-		r.MaxStoreIndexSize)
+		r.EnableFileMapping)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

@@ -14,13 +14,15 @@ func validateVersion(
 	numWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
-	versionIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	versionIndexPath string,
+	storeIndexCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "validateVersion"
 	log := logrus.WithFields(logrus.Fields{
 		"numWorkerCount":        numWorkerCount,
 		"blobStoreURI":          blobStoreURI,
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"versionIndexPath":      versionIndexPath,
+		"storeIndexCachePath":   storeIndexCachePath,
 	})
 	log.Info(fname)
 
@@ -33,8 +35,7 @@ func validateVersion(
 	defer jobs.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	// TODO: Cache store uri
-	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, "", 1024*1024*16, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, storeIndexCachePath, -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -81,6 +82,7 @@ type ValidateVersionCmd struct {
 	StorageURIOption
 	S3EndpointResolverURLOption
 	VersionIndexPathOption
+	StoreIndexCachePathOption
 }
 
 func (r *ValidateVersionCmd) Run(ctx *Context) error {
@@ -88,7 +90,8 @@ func (r *ValidateVersionCmd) Run(ctx *Context) error {
 		ctx.NumWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
-		r.VersionIndexPath)
+		r.VersionIndexPath,
+		r.StoreIndexCachePath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

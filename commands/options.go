@@ -119,3 +119,7 @@ type EnableFileMappingOption struct {
 type MaxStoreIndexSizeOption struct {
 	MaxStoreIndexSize int64 `name:"max-store-index-size" help:"Set the max size in bytes each remote store index should be, smaller number means more store<sha>.lsi files in remote store. Default is -1 which enables legacy behaviour with single store.lsi file. 0 disables all merging of remote .lsi files" default:"-1"`
 }
+
+type StoreIndexCachePathOption struct {
+	StoreIndexCachePath string `name:"store-index-cache-path" help:"Location for cached store indexes. If specified the new store index strategy is enabled regardless of max-store-index-size setting"`
+}

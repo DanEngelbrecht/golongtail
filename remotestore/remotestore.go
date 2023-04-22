@@ -786,7 +786,7 @@ func contentIndexWorker(
 		select {
 		case preflightGetMsg := <-preflightGetMessages:
 			received++
-			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
 				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, errors.Wrap(err, fname))
@@ -805,7 +805,7 @@ func contentIndexWorker(
 			}
 		case getExistingContentMessage := <-getExistingContentMessages:
 			received++
-			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
 				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname))
@@ -825,7 +825,7 @@ func contentIndexWorker(
 				continue
 			}
 			received++
-			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
 				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, errors.Wrap(err, fname))
@@ -833,10 +833,10 @@ func contentIndexWorker(
 				prunedCount := uint32(0)
 				prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
 				if updatedStoreIndex.IsValid() {
-					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
+					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
 					updatedStoreIndex.Dispose()
 				} else {
-					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
+					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
 				}
 				if prunedStoreIndex.IsValid() {
 					storeIndex.Dispose()
@@ -867,7 +867,7 @@ func contentIndexWorker(
 			}
 			flushReplyMessages <- nil
 		case preflightGetMsg := <-preflightGetMessages:
-			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
 				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, errors.Wrap(err, fname))
@@ -884,7 +884,7 @@ func contentIndexWorker(
 				run = false
 			}
 		case getExistingContentMessage := <-getExistingContentMessages:
-			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
 				getExistingContentMessage.asyncCompleteAPI.OnComplete(longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname))
@@ -903,7 +903,7 @@ func contentIndexWorker(
 				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, errors.Wrap(longtaillib.AccessViolationErr(), fname))
 				continue
 			}
-			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
+			storeIndex, updatedStoreIndex, err = getCurrentStoreIndex(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, optionalStoreIndexPaths, client, accessType, storeIndex, addedBlockIndexes)
 			if err != nil {
 				storeIndex.Dispose()
 				pruneBlocksMessage.asyncCompleteAPI.OnComplete(0, errors.Wrap(err, fname))
@@ -911,10 +911,10 @@ func contentIndexWorker(
 				prunedCount := uint32(0)
 				prunedStoreIndex := longtaillib.Longtail_StoreIndex{}
 				if updatedStoreIndex.IsValid() {
-					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
+					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, client, updatedStoreIndex, pruneBlocksMessage.keepBlockHashes)
 					updatedStoreIndex.Dispose()
 				} else {
-					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
+					prunedCount, prunedStoreIndex, err = onPruneBlocksMessage(ctx, s, maxStoreIndexSize == -1 && s.lsiCacheBlobStore == nil, client, storeIndex, pruneBlocksMessage.keepBlockHashes)
 				}
 				if prunedStoreIndex.IsValid() {
 					storeIndex.Dispose()
@@ -1473,7 +1473,7 @@ func CreateBlockStoreForURI(
 
 	// Special case since filepaths may not parse nicely as a url
 	if strings.HasPrefix(storeUri, "fsblob://") {
-		fsBlobStore, err := longtailstorelib.NewFSBlobStore(storeUri[len("fsblob://"):], maxStoreIndexSize == -1)
+		fsBlobStore, err := longtailstorelib.NewFSBlobStore(storeUri[len("fsblob://"):], maxStoreIndexSize == -1 && lsiCacheStorePath == "")
 		if err != nil {
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		}

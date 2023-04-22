@@ -513,6 +513,7 @@ func getStoreLSIs(ctx context.Context, remoteStore longtailstorelib.BlobStore, l
 		if err != nil {
 			log.WithError(err).Warnf("failed to delete `%s` from store `%s`", localLSIs[localIndex].Name, localClient.String())
 		}
+		log.Debugf("removed obsolete store index `%s` from local store", localLSIs[localIndex].Name)
 		localIndex++
 	}
 

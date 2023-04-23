@@ -115,7 +115,7 @@ func TestEmptyGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		"",
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -140,7 +140,7 @@ func TestPutGetStoredBlock(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		"",
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -178,7 +178,7 @@ func TestGetExistingContent(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		"",
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -222,7 +222,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		"",
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -248,7 +248,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		fmt.Sprintf("%s/cache_path1", t.TempDir()),
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -281,7 +281,7 @@ func TestRestoreStore(t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		fmt.Sprintf("%s/cache_path2", t.TempDir()),
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -429,7 +429,7 @@ func TestBlockScanning(t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		"",
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -473,7 +473,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err := NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		fmt.Sprintf("%s/prune1", t.TempDir()),
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -524,7 +524,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		fmt.Sprintf("%s/prune2", t.TempDir()),
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),
@@ -548,7 +548,7 @@ func PruneStoreTest(syncStore bool, t *testing.T) {
 	remoteStore, err = NewRemoteBlockStore(
 		jobs,
 		blobStore,
-		"", // TODO: Test with lsi cache path?
+		fmt.Sprintf("%s/prune3", t.TempDir()),
 		1024*1024*32,
 		nil,
 		runtime.NumCPU(),

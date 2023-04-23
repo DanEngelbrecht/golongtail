@@ -103,7 +103,6 @@ func upsync(
 		enableFileMapping,
 		&sourceFolderScanner)
 
-	// TODO: Cache store uri
 	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, lsiCacheStorePath, maxStoreIndexSize, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
@@ -234,7 +233,7 @@ type UpsyncCmd struct {
 	SourceIndexPath            string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	TargetPath                 string `name:"target-path" help:"Target file uri" required:""`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
-	CachePathOption
+	StoreIndexCachePathOption
 	TargetChunkSizeOption
 	MaxChunksPerBlockOption
 	TargetBlockSizeOption
@@ -257,7 +256,7 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 		r.SourcePath,
 		r.SourceIndexPath,
 		r.TargetPath,
-		r.CachePath,
+		r.StoreIndexCachePath,
 		r.TargetChunkSize,
 		r.TargetBlockSize,
 		r.MaxChunksPerBlock,

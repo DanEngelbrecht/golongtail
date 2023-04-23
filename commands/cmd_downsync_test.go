@@ -10,7 +10,9 @@ import (
 )
 
 func TestDownsync(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -31,7 +33,9 @@ func TestDownsync(t *testing.T) {
 }
 
 func TestDownsyncNoTargetPath(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1b.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -55,7 +59,9 @@ func TestDownsyncNoTargetPath(t *testing.T) {
 }
 
 func TestDownsyncWithVersionLSI(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 
@@ -77,7 +83,9 @@ func TestDownsyncWithVersionLSI(t *testing.T) {
 }
 
 func TestDownsyncWithCache(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -98,7 +106,9 @@ func TestDownsyncWithCache(t *testing.T) {
 }
 
 func TestDownsyncWithLSIAndCache(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -119,7 +129,9 @@ func TestDownsyncWithLSIAndCache(t *testing.T) {
 }
 
 func TestDownsyncWithValidate(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -139,8 +151,33 @@ func TestDownsyncWithValidate(t *testing.T) {
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
+func TestDownsyncWithLSICacheAndValidate(t *testing.T) {
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--store-index-cache-path", testPath+"/uplsicache")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--store-index-cache-path", testPath+"/uplsicache")
+	executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--store-index-cache-path", testPath+"/uplsicache")
+
+	cmd, err := executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage", "--validate", "--store-index-cache-path", testPath+"/downlsicache")
+	assert.Equal(t, nil, err, cmd)
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
+
+	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage", "--validate", "--store-index-cache-path", testPath+"/downlsicache")
+	assert.Equal(t, nil, err, cmd)
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
+
+	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage", "--validate", "--store-index-cache-path", testPath+"/downlsicache")
+	assert.Equal(t, nil, err, cmd)
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
+}
+
 func TestDownsyncWithVersionLSIWithValidate(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 
@@ -162,7 +199,9 @@ func TestDownsyncWithVersionLSIWithValidate(t *testing.T) {
 }
 
 func TestDownsyncWithCacheWithValidate(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -182,8 +221,36 @@ func TestDownsyncWithCacheWithValidate(t *testing.T) {
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
+func TestDownsyncWithLSICacheWithValidate(t *testing.T) {
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
+	fsBlobPathPrefix := "fsblob://" + testPath
+	createVersionData(t, fsBlobPathPrefix)
+	_, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--store-index-cache-path", testPath+"/uplsicache")
+	assert.Equal(t, nil, err)
+	_, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v2", "--target-path", fsBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--store-index-cache-path", testPath+"/uplsicache")
+	assert.Equal(t, nil, err)
+	_, err = executeCommandLine("upsync", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--store-index-cache-path", testPath+"/uplsicache")
+	assert.Equal(t, nil, err)
+
+	cmd, err := executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage", "--cache-path", testPath+"/cache", "--validate", "--store-index-cache-path", testPath+"/downlsicache")
+	assert.Equal(t, nil, err, cmd)
+	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
+
+	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage", "--cache-path", testPath+"/cache", "--validate", "--store-index-cache-path", testPath+"/downlsicache")
+	assert.Equal(t, nil, err, cmd)
+	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
+
+	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage", "--cache-path", testPath+"/cache", "--validate", "--store-index-cache-path", testPath+"/downlsicache")
+	assert.Equal(t, nil, err, cmd)
+	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
+}
+
 func TestDownsyncWithLSIAndCacheWithValidate(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -204,7 +271,9 @@ func TestDownsyncWithLSIAndCacheWithValidate(t *testing.T) {
 }
 
 func TestDownsyncMissingChunks(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -222,7 +291,9 @@ func TestDownsyncMissingChunks(t *testing.T) {
 }
 
 func TestDownsyncMissingIndex(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -259,7 +330,9 @@ func TestDownsyncMissingIndex(t *testing.T) {
 }
 
 func TestMultiVersionDownsync(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := path.Join(t.TempDir(), "test")
+	err := os.Mkdir(testPath, os.ModeDir)
+	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createLayeredData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--exclude-filter-regex", ".*layer2$**.*layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/base.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi")

@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,7 +8,7 @@ import (
 
 func TestPack(t *testing.T) {
 
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	createVersionData(t, testPath)
 	cmd, err := executeCommandLine("pack", "--source-path", testPath+"/version/v1", "--target-path", testPath+"/index/v1.la")
 	assert.Equal(t, nil, err, cmd)
@@ -23,7 +22,7 @@ func TestPack(t *testing.T) {
 
 func TestPackCompressionAlgos(t *testing.T) {
 
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	createVersionData(t, testPath)
 	cmd, err := executeCommandLine("pack", "--source-path", testPath+"/version/v1", "--target-path", testPath+"/index/v1.la", "--compression-algorithm", "none")
 	assert.Equal(t, nil, err, cmd)

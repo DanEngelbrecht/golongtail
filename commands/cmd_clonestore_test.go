@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -49,14 +50,14 @@ func createZipForFolder(searchPath string) (bytes.Buffer, error) {
 }
 
 func TestCloneStore(t *testing.T) {
-	sourcePath, _ := os.MkdirTemp("", "source")
+	sourcePath := path.Join(t.TempDir(), "source")
 	fsSourceBlobPathPrefix := "fsblob://" + sourcePath
 	createVersionData(t, fsSourceBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v1", "--target-path", fsSourceBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v2", "--target-path", fsSourceBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v3", "--target-path", fsSourceBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 
-	targetPath, _ := os.MkdirTemp("", "target")
+	targetPath := path.Join(t.TempDir(), "target")
 	fsTargetBlobPathPrefix := "fsblob://" + targetPath
 
 	sourceFilesContent := []byte(
@@ -110,13 +111,14 @@ func TestCloneStore(t *testing.T) {
 }
 
 func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {
-	sourcePath, _ := os.MkdirTemp("", "source")
+	sourcePath := path.Join(t.TempDir(), "source")
 	fsSourceBlobPathPrefix := "fsblob://" + sourcePath
 	createVersionData(t, fsSourceBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v1", "--target-path", fsSourceBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v2", "--target-path", fsSourceBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v3", "--target-path", fsSourceBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
-	targetPath, _ := os.MkdirTemp("", "target")
+
+	targetPath := path.Join(t.TempDir(), "target")
 	fsTargetBlobPathPrefix := "fsblob://" + targetPath
 
 	sourceFilesContent := []byte(
@@ -154,7 +156,7 @@ func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {
 }
 
 func TestCloneStoreZipFallback(t *testing.T) {
-	sourcePath, _ := os.MkdirTemp("", "source")
+	sourcePath := path.Join(t.TempDir(), "source")
 	fsSourceBlobPathPrefix := "fsblob://" + sourcePath
 	createVersionData(t, fsSourceBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v1", "--target-path", fsSourceBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
@@ -167,7 +169,7 @@ func TestCloneStoreZipFallback(t *testing.T) {
 	v3ZipBuffer, _ := createZipForFolder(sourcePath + "/version/v3")
 	os.WriteFile(sourcePath+"/index/v3.zip", v3ZipBuffer.Bytes(), 0644)
 
-	targetPath, _ := os.MkdirTemp("", "target")
+	targetPath := path.Join(t.TempDir(), "target")
 	fsTargetBlobPathPrefix := "fsblob://" + targetPath
 
 	sourceFilesContent := []byte(

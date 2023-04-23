@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"runtime"
 	"testing"
 
@@ -31,7 +30,7 @@ func runInitRemoteStore(t *testing.T, storageURI string) {
 }
 
 func TestInitRemoteStore(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 
 	// Init an empty store

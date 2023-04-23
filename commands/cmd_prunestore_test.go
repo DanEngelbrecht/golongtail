@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"os"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
@@ -9,7 +8,7 @@ import (
 )
 
 func TestPrune(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -37,7 +36,7 @@ func TestPrune(t *testing.T) {
 }
 
 func TestPruneWithValidate(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -65,7 +64,7 @@ func TestPruneWithValidate(t *testing.T) {
 }
 
 func TestPruneWithLSI(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -98,7 +97,7 @@ func TestPruneWithLSI(t *testing.T) {
 }
 
 func TestPruneWithLSIAndWriteLSI(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -131,7 +130,7 @@ func TestPruneWithLSIAndWriteLSI(t *testing.T) {
 }
 
 func TestPruneDryRun(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -159,7 +158,7 @@ func TestPruneDryRun(t *testing.T) {
 }
 
 func TestPruneWithLSIDryRun(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -192,7 +191,7 @@ func TestPruneWithLSIDryRun(t *testing.T) {
 }
 
 func TestPruneWithLSIAndWriteLSIDryRun(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -225,7 +224,7 @@ func TestPruneWithLSIAndWriteLSIDryRun(t *testing.T) {
 }
 
 func TestPruneWithValidateAndLSIAndWriteLSIDryRun(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")

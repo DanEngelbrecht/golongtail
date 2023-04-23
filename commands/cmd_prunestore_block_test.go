@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestPruneStoreBlocks(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -53,7 +52,7 @@ func TestPruneStoreBlocks(t *testing.T) {
 }
 
 func TestPruneStoreBlocksDryRun(t *testing.T) {
-	testPath, _ := os.MkdirTemp("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")

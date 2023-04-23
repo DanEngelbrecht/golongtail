@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/url"
-	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -563,8 +562,7 @@ func TestS3StoreIndexSyncLegacy(t *testing.T) {
 }
 
 func TestFSStoreIndexSyncWithLockingLegacy(t *testing.T) {
-	storePath, err := os.MkdirTemp("", "longtail-test")
-	assert.Equal(t, nil, err)
+	storePath := t.TempDir()
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, true)
 	assert.Equal(t, nil, err)
 	client, _ := blobStore.NewClient(context.Background())
@@ -576,8 +574,7 @@ func TestFSStoreIndexSyncWithLockingLegacy(t *testing.T) {
 }
 
 func TestFSStoreIndexSyncWithoutLockingLegacy(t *testing.T) {
-	storePath, err := os.MkdirTemp("", "test")
-	assert.Equal(t, nil, err)
+	storePath := t.TempDir()
 	blobStore, err := longtailstorelib.NewFSBlobStore(storePath, false)
 	assert.Equal(t, nil, err)
 	client, _ := blobStore.NewClient(context.Background())

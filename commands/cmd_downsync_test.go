@@ -11,7 +11,7 @@ import (
 
 func TestDownsync(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -34,7 +34,7 @@ func TestDownsync(t *testing.T) {
 
 func TestDownsyncNoTargetPath(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -60,7 +60,7 @@ func TestDownsyncNoTargetPath(t *testing.T) {
 
 func TestDownsyncWithVersionLSI(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -84,7 +84,7 @@ func TestDownsyncWithVersionLSI(t *testing.T) {
 
 func TestDownsyncWithCache(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -107,7 +107,7 @@ func TestDownsyncWithCache(t *testing.T) {
 
 func TestDownsyncWithLSIAndCache(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -130,7 +130,7 @@ func TestDownsyncWithLSIAndCache(t *testing.T) {
 
 func TestDownsyncWithValidate(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -153,7 +153,7 @@ func TestDownsyncWithValidate(t *testing.T) {
 
 func TestDownsyncWithLSICacheAndValidate(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -176,7 +176,7 @@ func TestDownsyncWithLSICacheAndValidate(t *testing.T) {
 
 func TestDownsyncWithVersionLSIWithValidate(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -200,7 +200,7 @@ func TestDownsyncWithVersionLSIWithValidate(t *testing.T) {
 
 func TestDownsyncWithCacheWithValidate(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -223,7 +223,7 @@ func TestDownsyncWithCacheWithValidate(t *testing.T) {
 
 func TestDownsyncWithLSICacheWithValidate(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -249,7 +249,7 @@ func TestDownsyncWithLSICacheWithValidate(t *testing.T) {
 
 func TestDownsyncWithLSIAndCacheWithValidate(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -272,7 +272,7 @@ func TestDownsyncWithLSIAndCacheWithValidate(t *testing.T) {
 
 func TestDownsyncMissingChunks(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -292,7 +292,7 @@ func TestDownsyncMissingChunks(t *testing.T) {
 
 func TestDownsyncMissingIndex(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
@@ -331,7 +331,7 @@ func TestDownsyncMissingIndex(t *testing.T) {
 
 func TestMultiVersionDownsync(t *testing.T) {
 	testPath := path.Join(t.TempDir(), "test")
-	err := os.Mkdir(testPath, os.ModeDir)
+	err := os.Mkdir(testPath, os.ModePerm)
 	assert.Equal(t, nil, err)
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createLayeredData(t, fsBlobPathPrefix)

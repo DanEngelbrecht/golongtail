@@ -66,24 +66,24 @@ func OverwriteStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobSto
 
 	exists := false
 	sha256 := sha256.Sum256(saveBuffer)
-	newName := fmt.Sprintf("store_%x.lsi", sha256)
+	newLSIName := fmt.Sprintf("store_%x.lsi", sha256)
 	for _, remoteLSI := range remoteLSIs {
-		if remoteLSI.Name == newName {
+		if remoteLSI.Name == newLSIName {
 			exists = true
 			break
 		}
 	}
 
 	if !exists {
-		_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newName, saveBuffer)
+		_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newLSIName, saveBuffer)
 		if err != nil {
 			return errors.Wrap(err, fname)
 		}
-		log.Debugf("stored new store index `%s`", newName)
+		log.Debugf("stored new store index `%s`", newLSIName)
 	}
 
 	for _, remoteLSI := range remoteLSIs {
-		if remoteLSI.Name == newName {
+		if remoteLSI.Name == newLSIName {
 			continue
 		}
 		_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, remoteLSI.Name)
@@ -145,8 +145,29 @@ func makeLSIBuffer(lsi longtaillib.Longtail_StoreIndex) (longtaillib.NativeBuffe
 	}
 
 	sha256 := sha256.Sum256(buffer.ToBuffer())
-	newName := fmt.Sprintf("store_%x.lsi", sha256)
-	return buffer, newName, nil
+	newLSIName := fmt.Sprintf("store_%x.lsi", sha256)
+	return buffer, newLSIName, nil
+}
+
+func validateMergedLSIsExists(remoteClient longtailstorelib.BlobClient, mergedLSIs []string) error {
+	if len(mergedLSIs) == 0 {
+		return nil
+	}
+	verifyLSIs, err := remoteClient.GetObjects("store", ".lsi")
+	if err != nil {
+		return err
+	}
+	verifyNames := map[string]bool{}
+	for _, verifyLSI := range verifyLSIs {
+		verifyNames[verifyLSI.Name] = true
+	}
+	for _, lsiName := range mergedLSIs {
+		_, exists := verifyNames[lsiName]
+		if !exists {
+			return errors.Wrapf(os.ErrNotExist, "%s merged object has been deleted", lsiName)
+		}
+	}
+	return nil
 }
 
 /*
@@ -168,7 +189,7 @@ func makeLSIBuffer(lsi longtaillib.Longtail_StoreIndex) (longtaillib.NativeBuffe
 	This still leaves a small hole in between 6 and 7 where LSIs are picked up by someone else causing redundant LSIs in the store.
 */
 
-func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, newLSIBlocks map[uint64]bool, maxStoreIndexSize int64, workerCount int) (longtaillib.Longtail_StoreIndex, error) {
+func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, localStore longtailstorelib.BlobStore, newLSI longtaillib.Longtail_StoreIndex, newLSIBlocks map[uint64]bool, maxStoreIndexSize int64, workerCount int, isRetry bool) (longtaillib.Longtail_StoreIndex, error) {
 	const fname = "attemptPutLSI"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":             fname,
@@ -228,35 +249,38 @@ func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, 
 
 	sort.Slice(LSIs, func(i, j int) bool { return LSIs[i].LSI.GetSize() < LSIs[j].LSI.GetSize() })
 
-	// Attempt merge to see if all of newLSI is consumed by an existing LSI
-	for i := 0; i < len(LSIs); i++ {
-		candidateBlockCount := LSIs[i].LSI.GetBlockCount()
-		candidateChunkCount := LSIs[i].LSI.GetChunkCount()
-		if candidateBlockCount >= newBlockCount && candidateChunkCount >= newChunkCount {
-			hitCount := 0
-			for _, blockHash := range LSIs[i].LSI.GetBlockHashes() {
-				_, exists := newLSIBlocks[blockHash]
-				if exists {
-					hitCount++
+	// Attempt merge to see if all of newLSI is consumed by an existing LSI, do this if we are retrying
+	// to check if a different operation have picked up the LSI we temporarily wrote the last time
+	if isRetry {
+		for i := 0; i < len(LSIs); i++ {
+			candidateBlockCount := LSIs[i].LSI.GetBlockCount()
+			candidateChunkCount := LSIs[i].LSI.GetChunkCount()
+			if candidateBlockCount >= newBlockCount && candidateChunkCount >= newChunkCount {
+				hitCount := 0
+				for _, blockHash := range LSIs[i].LSI.GetBlockHashes() {
+					_, exists := newLSIBlocks[blockHash]
+					if exists {
+						hitCount++
+					}
 				}
-			}
-			if hitCount == len(newLSIBlocks) {
-				if len(LSIs) == 1 {
-					CopyLSI, err := LSIs[i].LSI.Copy()
+				if hitCount == len(newLSIBlocks) {
+					if len(LSIs) == 1 {
+						CopyLSI, err := LSIs[i].LSI.Copy()
+						if err != nil {
+							return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+						}
+						return CopyLSI, nil
+					}
+					toMerge := []longtaillib.Longtail_StoreIndex{}
+					for _, entry := range LSIs {
+						toMerge = append(toMerge, entry.LSI)
+					}
+					fullLSI, err := mergeLSIs(toMerge)
 					if err != nil {
 						return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 					}
-					return CopyLSI, nil
+					return fullLSI, nil
 				}
-				toMerge := []longtaillib.Longtail_StoreIndex{}
-				for _, entry := range LSIs {
-					toMerge = append(toMerge, entry.LSI)
-				}
-				fullLSI, err := mergeLSIs(toMerge)
-				if err != nil {
-					return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-				}
-				return fullLSI, nil
 			}
 		}
 	}
@@ -299,54 +323,52 @@ func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, 
 		LSIs[i].LSI.Dispose()
 	}
 
-	nativeBuffer, newName, err := makeLSIBuffer(WriteLSI)
+	nativeBuffer, newLSIName, err := makeLSIBuffer(WriteLSI)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
 	defer nativeBuffer.Dispose()
 
-	// Did any of the merged LSIs get deleted while we built our LSI?
-	// If so bail as we want to avoid merging in the same LSIs to multiple places.
-	// There is room for the same LSI to be picked up by two operations between us checking
-	// for deleted LSIs and us writing our LSI, which will lead to redundant LSI data.
-	// This is unwanted but not critical as any reduncancies will be removed when fetching LSIs.
-	if len(mergedLSIs) > 0 {
-		verifyLSIs, err := remoteClient.GetObjects("store", ".lsi")
-		if err != nil && !longtaillib.IsNotExist(err) {
-			return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-		}
-		verifyNames := map[string]bool{}
-		for _, verifyLSI := range verifyLSIs {
-			verifyNames[verifyLSI.Name] = true
-		}
-		for _, Index := range mergedLSIs {
-			_, exists := verifyNames[LSIs[Index].Name]
-			if !exists {
-				err = errors.Wrapf(os.ErrNotExist, "%s merged object has been deleted", LSIs[Index].Name)
-				return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
-			}
-		}
+	mergedLsiNames := []string{}
+	for _, Index := range mergedLSIs {
+		mergedLsiNames = append(mergedLsiNames, LSIs[Index].Name)
 	}
 
-	_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newName, nativeBuffer.ToBuffer())
+	err = validateMergedLSIsExists(remoteClient, mergedLsiNames)
 	if err != nil {
 		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
 	}
-	log.Debugf("stored new store index `%s`", newName)
 
-	// There is still a potential for holes here where things gets deleted before we have finished our
-	// delete cleanup. That will result in redundancy in the list of LSIs which is unwanted but not critical problem.
-	// We do our best to avoid it, but we can't make this 100% airtight.
-	for _, Index := range mergedLSIs {
-		if LSIs[Index].Name == newName {
+	_, err = longtailutils.WriteBlobWithRetry(ctx, remoteClient, newLSIName, nativeBuffer.ToBuffer())
+	if err != nil {
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+	log.Debugf("stored new store index `%s`", newLSIName)
+
+	// Did any of the merged LSIs get deleted while we built our LSI?
+	// If so, delete our newly written LSI and bail.
+	// There is room for the newly written LSI to be picked up by a simultaneous operation running
+	// in parallell causing our new blocks to be written twice when we retry.
+	// This case is handled when setting isRetry to true.
+	err = validateMergedLSIsExists(remoteClient, mergedLsiNames)
+	if err != nil {
+		_, err2 := longtailutils.DeleteBlobWithRetry(ctx, remoteClient, newLSIName)
+		if (err2 != nil) && !longtaillib.IsNotExist(err2) {
+			log.WithError(err2).Warnf("failed to delete new `%s` from store `%s` when aborting due to removed merged lsis", newLSIName, remoteClient.String())
+		}
+		return longtaillib.Longtail_StoreIndex{}, errors.Wrap(err, fname)
+	}
+
+	for _, mergeLSIName := range mergedLsiNames {
+		if mergeLSIName == newLSIName {
 			continue
 		}
-		_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, LSIs[Index].Name)
+		_, err = longtailutils.DeleteBlobWithRetry(ctx, remoteClient, mergeLSIName)
 		if err == nil || longtaillib.IsNotExist(err) {
-			log.Debugf("deleted merged store index `%s`", LSIs[Index].Name)
+			log.Debugf("deleted merged store index `%s`", mergeLSIName)
 			continue
 		}
-		log.WithError(err).Warnf("failed to delete `%s` from store `%s`", LSIs[Index].Name, remoteClient.String())
+		log.WithError(err).Warnf("failed to delete `%s` from store `%s`", mergeLSIName, remoteClient.String())
 	}
 
 	if len(unmergedLSIs) == 0 {
@@ -362,7 +384,6 @@ func attemptPutLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, 
 	}
 
 	// Merge in all unmergedLSIs
-
 	toMerge := []longtaillib.Longtail_StoreIndex{WriteLSI}
 	for _, i := range unmergedLSIs {
 		toMerge = append(toMerge, LSIs[i].LSI)
@@ -390,10 +411,10 @@ func PutStoreLSI(ctx context.Context, remoteStore longtailstorelib.BlobStore, lo
 		blockMap[blockHash] = true
 	}
 
-	result, err := attemptPutLSI(ctx, remoteStore, localStore, newLSI, blockMap, maxStoreIndexSize, workerCount)
+	result, err := attemptPutLSI(ctx, remoteStore, localStore, newLSI, blockMap, maxStoreIndexSize, workerCount, false)
 	for longtaillib.IsNotExist(err) {
 		time.Sleep(2 * time.Millisecond)
-		result, err = attemptPutLSI(ctx, remoteStore, localStore, newLSI, blockMap, maxStoreIndexSize, workerCount)
+		result, err = attemptPutLSI(ctx, remoteStore, localStore, newLSI, blockMap, maxStoreIndexSize, workerCount, true)
 	}
 
 	if err != nil {

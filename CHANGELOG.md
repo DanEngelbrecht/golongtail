@@ -1,4 +1,6 @@
 ##
+- **UPDATED** Updated all golang dependencies
+- **UPDATED** Updated Github Actions Linux runners to 20.04
 
 ## v0.3.9
 - **UPDATED** Updated to longtail 0.3.7 (fixes isses with duplicated asset entries due to upper/lower case letters)

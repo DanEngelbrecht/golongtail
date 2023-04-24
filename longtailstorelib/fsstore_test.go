@@ -2,7 +2,7 @@ package longtailstorelib
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestFSBlobStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -37,7 +37,7 @@ func TestFSBlobStore(t *testing.T) {
 }
 
 func TestListObjectsInEmptyFSStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -62,7 +62,7 @@ func TestListObjectsInEmptyFSStore(t *testing.T) {
 }
 
 func TestFSBlobStoreVersioning(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -120,7 +120,7 @@ func TestFSBlobStoreVersioning(t *testing.T) {
 	if err == nil {
 		t.Error("object.Delete() err != nil")
 	}
-	exists, err = object.LockWriteVersion()
+	_, err = object.LockWriteVersion()
 	if err != nil {
 		t.Errorf("object.LockWriteVersion() err == %s", err)
 	}
@@ -131,7 +131,7 @@ func TestFSBlobStoreVersioning(t *testing.T) {
 }
 
 func TestFSBlobStoreVersioningStressTest(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -180,7 +180,7 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 }
 
 func TestFSGetObjects(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, false)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)

@@ -65,7 +65,7 @@ func (l *Lock) LockWithTimeout(timeout time.Duration) (err error) {
 		}
 		elapsed := time.Since(start)
 		if timeout > 0 && elapsed > timeout {
-			err := fmt.Errorf("Retry timed out for lock file %s, waited %s", l.filename, elapsed.String())
+			err := fmt.Errorf("retry timed out for lock file %s, waited %s", l.filename, elapsed.String())
 			return errors.Wrap(err, fname)
 		}
 		retry_delay += 2000

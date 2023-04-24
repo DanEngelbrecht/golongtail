@@ -206,7 +206,7 @@ func downsync(
 	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
-	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+	_, err = hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
 		err = errors.Wrapf(err, "Unsupported hash identifier `%d`", hashIdentifier)
 		return storeStats, timeStats, errors.Wrap(err, fname)

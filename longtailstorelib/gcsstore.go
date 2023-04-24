@@ -3,7 +3,7 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"os"
 	"strings"
@@ -66,7 +66,7 @@ func (blobStore *gcsBlobStore) NewClient(ctx context.Context) (BlobClient, error
 	const fname = "gcsBlobStore.NewClient"
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		err := fmt.Errorf("Failed to create client for `%s`", blobStore.String())
+		err := fmt.Errorf("failed to create client for `%s`", blobStore.String())
 		return nil, errors.Wrap(err, fname)
 	}
 
@@ -135,7 +135,7 @@ func (blobObject *gcsBlobObject) Read() ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	err2 := reader.Close()
 	if errors.Is(err2, storage.ErrObjectNotExist) {
 		err = errors.Wrapf(os.ErrNotExist, "%v", err)

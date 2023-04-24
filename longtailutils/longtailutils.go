@@ -491,7 +491,7 @@ func WriteBlobWithRetry(
 		var sleepTimes = [...]time.Duration{100 * time.Millisecond, 500 * time.Millisecond, 2 * time.Second}
 		ok, err := objHandle.Write(blob)
 		if err != nil {
-			err := errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, client))
+			err := errors.Wrap(err, fmt.Sprintf("failed putBlob at `%s` in `%s`", key, client))
 			err = errors.Wrap(err, fname)
 			log.Error(err)
 			return retryCount, err
@@ -503,7 +503,7 @@ func WriteBlobWithRetry(
 				time.Sleep(sleepTime)
 				ok, err = objHandle.Write(blob)
 				if err != nil {
-					err = errors.Wrap(err, fmt.Sprintf("failed to put stored block at `%s` in `%s`", key, client))
+					err = errors.Wrap(err, fmt.Sprintf("failed putBlob at `%s` in `%s`", key, client))
 					err = errors.Wrap(err, fname)
 					log.Error(err)
 					return retryCount, err
@@ -513,7 +513,7 @@ func WriteBlobWithRetry(
 				}
 			}
 			if !ok {
-				err = fmt.Errorf("failed to put stored block at `%s` in `%s` even after retries", key, client)
+				err = fmt.Errorf("putBlob at `%s` in `%s` even after retries", key, client)
 				err = errors.Wrap(err, fname)
 				log.Error(err)
 				return retryCount, err
@@ -553,6 +553,11 @@ func DeleteBlobWithRetry(
 	err = objHandle.Delete()
 	for err != nil {
 		if longtaillib.IsNotExist(err) {
+			if retryCount > 0 {
+				log.Infof("someone else deleted `%s` after %d retries", key, retryCount)
+			} else {
+				log.Debugf("someone else deleted `%s`", key)
+			}
 			return retryCount, nil
 		}
 		if retryCount == len(retryDelay) {

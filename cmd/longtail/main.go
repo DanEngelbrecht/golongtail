@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -87,7 +87,7 @@ func runCommand() error {
 		})
 		logrus.SetOutput(os.Stdout)
 	} else {
-		logrus.SetOutput(ioutil.Discard)
+		logrus.SetOutput(io.Discard)
 	}
 
 	if commands.Cli.WorkerCount == 0 {

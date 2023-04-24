@@ -1,4 +1,17 @@
 ##
+- **ADDED** New store index strategy allowing incremental download/upload of store index files for remote stores. Options to control and enable new strategy are `--max-store-index-size` and `--store-index-cache-path`.
+- **ADDED** New options for `cp` command: `--max-store-index-size`
+- **ADDED** New options for `create-version-store-index` command: `--store-index-cache-path`
+- **ADDED** New options for `downsync` command: `--store-index-cache-path`
+- **ADDED** New options for `get` command: `--store-index-cache-path`
+- **ADDED** New options for `print-version-usage` command: `--store-index-cache-path`
+- **ADDED** New options for `prune-store` command: `--store-index-cache-path`
+- **ADDED** New options for `put` command: `--store-index-cache-path` and `--max-store-index-size`
+- **ADDED** New options for `upsync` command: `--store-index-cache-path` and `--max-store-index-size`
+- **ADDED** New options for `validate-version` command: `--store-index-cache-path`
+- **FIXED** Test case usage of temporary folders
+- **FIXED** Fixed help for `--storage-uri` option
+- **FIXED** Fixed help for `--s3-endpoint-resolver-uri` option
 - **UPDATED** Updated all golang dependencies
 - **UPDATED** Updated Github Actions Linux runners to 20.04
 

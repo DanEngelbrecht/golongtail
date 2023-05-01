@@ -614,7 +614,7 @@ func validateThatBlocksArePresent(generatedBlocksIndex longtaillib.Longtail_Stor
 func testStoreIndexSync(t *testing.T, blobStore longtailstorelib.BlobStore, tempDir string, maxStoreIndexSize int64) {
 
 	blockGenerateCount := 4
-	workerCount := 51
+	workerCount := 29
 	if tempDir != "" {
 		workerCount = 17
 	}

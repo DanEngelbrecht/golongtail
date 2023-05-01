@@ -18,6 +18,7 @@ func get(
 	targetFolderPath string,
 	targetIndexPath string,
 	localCachePath string,
+	storeIndexCachePath string,
 	retainPermissions bool,
 	validate bool,
 	includeFilterRegEx string,
@@ -34,6 +35,7 @@ func get(
 		"targetFolderPath":      targetFolderPath,
 		"targetIndexPath":       targetIndexPath,
 		"localCachePath":        localCachePath,
+		"storeIndexCachePath":   storeIndexCachePath,
 		"retainPermissions":     retainPermissions,
 		"validate":              validate,
 		"includeFilterRegEx":    includeFilterRegEx,
@@ -111,6 +113,7 @@ func get(
 		targetFolderPath,
 		targetIndexPath,
 		localCachePath,
+		storeIndexCachePath,
 		retainPermissions,
 		validate,
 		versionLocalStoreIndexPaths,
@@ -134,6 +137,7 @@ type GetCmd struct {
 	ValidateTargetOption
 	VersionLocalStoreIndexPathOption
 	CachePathOption
+	StoreIndexCachePathOption
 	RetainPermissionsOption
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
@@ -150,6 +154,7 @@ func (r *GetCmd) Run(ctx *Context) error {
 		r.TargetPath,
 		r.TargetIndexPath,
 		r.CachePath,
+		r.StoreIndexCachePath,
 		r.RetainPermissions,
 		r.Validate,
 		r.IncludeFilterRegEx,

@@ -35,6 +35,7 @@ func downsync(
 	targetFolderPath string,
 	targetIndexPath string,
 	localCachePath string,
+	storeIndexCachePath string,
 	retainPermissions bool,
 	validate bool,
 	versionLocalStoreIndexPaths []string,
@@ -53,6 +54,7 @@ func downsync(
 		"targetFolderPath":            targetFolderPath,
 		"targetIndexPath":             targetIndexPath,
 		"localCachePath":              localCachePath,
+		"storeIndexCachePath":         storeIndexCachePath,
 		"retainPermissions":           retainPermissions,
 		"validate":                    validate,
 		"versionLocalStoreIndexPaths": versionLocalStoreIndexPaths,
@@ -177,7 +179,7 @@ func downsync(
 	defer localFS.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPaths, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, storeIndexCachePath, 1024*1024*16, versionLocalStoreIndexPaths, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -206,7 +208,7 @@ func downsync(
 	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
-	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
+	_, err = hashRegistry.GetHashAPI(hashIdentifier)
 	if err != nil {
 		err = errors.Wrapf(err, "Unsupported hash identifier `%d`", hashIdentifier)
 		return storeStats, timeStats, errors.Wrap(err, fname)
@@ -417,6 +419,7 @@ type DownsyncCmd struct {
 	TargetPathOption
 	TargetIndexUriOption
 	CachePathOption
+	StoreIndexCachePathOption
 	RetainPermissionsOption
 	ValidateTargetOption
 	MultiVersionLocalStoreIndexPathsOption
@@ -436,6 +439,7 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.TargetPath,
 		r.TargetIndexPath,
 		r.CachePath,
+		r.StoreIndexCachePath,
 		r.RetainPermissions,
 		r.Validate,
 		r.VersionLocalStoreIndexPaths,

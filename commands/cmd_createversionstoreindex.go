@@ -15,7 +15,8 @@ func createVersionStoreIndex(
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	sourceFilePath string,
-	versionLocalStoreIndexPath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	versionLocalStoreIndexPath string,
+	storeIndexCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "createVersionStoreIndex"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -24,6 +25,7 @@ func createVersionStoreIndex(
 		"s3EndpointResolverURI":      s3EndpointResolverURI,
 		"sourceFilePath":             sourceFilePath,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
+		"storeIndexCachePath":        storeIndexCachePath,
 	})
 	log.Info(fname)
 
@@ -35,7 +37,7 @@ func createVersionStoreIndex(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, storeIndexCachePath, -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -91,6 +93,7 @@ type CreateVersionStoreIndexCmd struct {
 	S3EndpointResolverURLOption
 	SourceUriOption
 	VersionLocalStoreIndexPathOption
+	StoreIndexCachePathOption
 }
 
 func (r *CreateVersionStoreIndexCmd) Run(ctx *Context) error {
@@ -99,7 +102,8 @@ func (r *CreateVersionStoreIndexCmd) Run(ctx *Context) error {
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.SourcePath,
-		r.VersionLocalStoreIndexPath)
+		r.VersionLocalStoreIndexPath,
+		r.StoreIndexCachePath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

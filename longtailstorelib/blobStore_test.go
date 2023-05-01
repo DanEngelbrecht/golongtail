@@ -28,7 +28,7 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	blobStore, _ := NewMemBlobStore("the_path", true)
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	objects, err := client.GetObjects("")
+	objects, err := client.GetObjects("", "")
 	if err != nil {
 		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %s", err)
 	}
@@ -101,7 +101,7 @@ func TestListObjects(t *testing.T) {
 	obj.Write([]byte("my-fine-object2.txt"))
 	obj, _ = client.NewObject("my-fine-object3.txt")
 	obj.Write([]byte("my-fine-object3.txt"))
-	objects, err := client.GetObjects("")
+	objects, err := client.GetObjects("", "")
 	if err != nil {
 		t.Errorf("TestListObjects() client.GetObjects(\"\")) %s", err)
 	}

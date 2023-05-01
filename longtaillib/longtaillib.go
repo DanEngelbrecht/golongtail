@@ -421,8 +421,8 @@ func (b *NativeBuffer) Dispose() {
 	}
 }
 
-func (b *NativeBuffer) Size() int {
-	return int(b.size)
+func (b *NativeBuffer) Size() int64 {
+	return int64(b.size)
 }
 
 func carray2slice64(array *C.uint64_t, len int) []uint64 {
@@ -694,6 +694,13 @@ func (storeIndex *Longtail_StoreIndex) GetChunkSizes() []uint32 {
 	}
 	size := int(*storeIndex.cStoreIndex.m_ChunkCount)
 	return carray2slice32(storeIndex.cStoreIndex.m_ChunkSizes, size)
+}
+
+func (storeIndex *Longtail_StoreIndex) GetSize() int64 {
+	if storeIndex.cStoreIndex == nil {
+		return int64(C.Longtail_GetStoreIndexSize(0, 0))
+	}
+	return int64(C.Longtail_GetStoreIndexSize(*storeIndex.cStoreIndex.m_BlockCount, *storeIndex.cStoreIndex.m_ChunkCount))
 }
 
 func (versionIndex *Longtail_VersionIndex) IsValid() bool {
@@ -1829,6 +1836,28 @@ func MergeStoreIndex(local_store_index Longtail_StoreIndex, remote_store_index L
 		return Longtail_StoreIndex{cStoreIndex: nil}, errors.Wrap(errnoToError(errno), fname)
 	}
 	return Longtail_StoreIndex{cStoreIndex: sIndex}, nil
+}
+
+func SplitStoreIndex(store_index Longtail_StoreIndex, max_size uint64) ([]Longtail_StoreIndex, error) {
+	const fname = "SplitStoreIndex"
+
+	var sIndexes **C.struct_Longtail_StoreIndex
+	var sCount C.uint64_t
+	errno := C.Longtail_SplitStoreIndex(
+		store_index.cStoreIndex,
+		C.size_t(max_size),
+		&sIndexes,
+		&sCount)
+	if errno != 0 {
+		return nil, errors.Wrap(errnoToError(errno), fname)
+	}
+	indexes := unsafe.Slice((**C.struct_Longtail_StoreIndex)(sIndexes), int(sCount))
+	result_array := make([]Longtail_StoreIndex, int(sCount))
+	for i := 0; i < int(sCount); i++ {
+		result_array[i] = Longtail_StoreIndex{cStoreIndex: indexes[i]}
+	}
+	C.Longtail_Free(unsafe.Pointer(sIndexes))
+	return result_array, nil
 }
 
 func MergeVersionIndex(base_version_index Longtail_VersionIndex, overlay_version_index Longtail_VersionIndex) (Longtail_VersionIndex, error) {

@@ -70,7 +70,7 @@ func pruneStoreBlocks(
 	}()
 
 	getBlockObjectsStartTime := time.Now()
-	allObjects, err := client.GetObjects("")
+	allObjects, err := client.GetObjects("", "")
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}

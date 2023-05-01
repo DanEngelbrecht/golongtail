@@ -3,7 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -21,6 +20,7 @@ func put(
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetIndexFilePath string,
+	storeIndexCachePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -32,7 +32,8 @@ func put(
 	versionLocalStoreIndexPath string,
 	targetPath string,
 	disableVersionLocalStoreIndex bool,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	maxStoreIndexSize int64) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "put"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -42,6 +43,7 @@ func put(
 		"sourceFolderPath":           sourceFolderPath,
 		"sourceIndexPath":            sourceIndexPath,
 		"targetIndexFilePath":        targetIndexFilePath,
+		"storeIndexCachePath":        storeIndexCachePath,
 		"targetChunkSize":            targetChunkSize,
 		"targetBlockSize":            targetBlockSize,
 		"maxChunksPerBlock":          maxChunksPerBlock,
@@ -53,6 +55,7 @@ func put(
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"targetPath":                 targetPath,
 		"enableFileMapping":          enableFileMapping,
+		"maxStoreIndexSize":          maxStoreIndexSize,
 	})
 	log.Info(fname)
 
@@ -95,6 +98,7 @@ func put(
 		sourceFolderPath,
 		sourceIndexPath,
 		targetIndexFilePath,
+		storeIndexCachePath,
 		targetChunkSize,
 		targetBlockSize,
 		maxChunksPerBlock,
@@ -104,7 +108,8 @@ func put(
 		excludeFilterRegEx,
 		minBlockUsagePercent,
 		versionLocalStoreIndexPath,
-		enableFileMapping)
+		enableFileMapping,
+		maxStoreIndexSize)
 
 	storeStats = append(storeStats, downSyncStoreStats...)
 	timeStats = append(timeStats, downSyncTimeStats...)
@@ -122,7 +127,7 @@ func put(
 		if versionLocalStoreIndexPath != "" {
 			v.Set("version-local-store-index-path", versionLocalStoreIndexPath)
 		}
-		tmpFile, err := ioutil.TempFile(os.TempDir(), "longtail-")
+		tmpFile, err := os.CreateTemp(os.TempDir(), "longtail-")
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
@@ -134,7 +139,7 @@ func put(
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
 
-		bytes, err := ioutil.ReadFile(tmpFilePath)
+		bytes, err := os.ReadFile(tmpFilePath)
 		if err != nil {
 			return storeStats, timeStats, errors.Wrapf(err, fname)
 		}
@@ -157,11 +162,12 @@ type PutCmd struct {
 	GetConfigURI               string `name:"target-path" help:"File uri for json formatted get-config file" required:""`
 	TargetFileIndexPath        string `name:"target-version-index-path" help:"Target version index file uri"`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
-	OptionalStorageURI         string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)"`
+	OptionalStorageURI         string `name:"storage-uri" help:"Storage URI (local file system, GCS and S3 bucket URI supported)"`
 	S3EndpointResolverURLOption
 	SourcePath                    string `name:"source-path" help:"Source folder path" required:""`
 	SourceIndexPath               string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	DisableVersionLocalStoreIndex bool   `name:"no-version-local-store-index" help:"Disable saving of store index optimized for this particular version"`
+	StoreIndexCachePathOption
 	TargetChunkSizeOption
 	TargetBlockSizeOption
 	MaxChunksPerBlockOption
@@ -171,6 +177,7 @@ type PutCmd struct {
 	SourcePathExcludeRegExOption
 	MinBlockUsagePercentOption
 	EnableFileMappingOption
+	MaxStoreIndexSizeOption
 }
 
 func (r *PutCmd) Run(ctx *Context) error {
@@ -181,6 +188,7 @@ func (r *PutCmd) Run(ctx *Context) error {
 		r.SourcePath,
 		r.SourceIndexPath,
 		r.TargetFileIndexPath,
+		r.StoreIndexCachePath,
 		r.TargetChunkSize,
 		r.TargetBlockSize,
 		r.MaxChunksPerBlock,
@@ -192,7 +200,8 @@ func (r *PutCmd) Run(ctx *Context) error {
 		r.VersionLocalStoreIndexPath,
 		r.GetConfigURI,
 		r.DisableVersionLocalStoreIndex,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.MaxStoreIndexSize)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

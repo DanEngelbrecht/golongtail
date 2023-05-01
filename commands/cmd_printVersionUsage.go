@@ -17,7 +17,8 @@ func printVersionUsage(
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	versionIndexPath string,
-	localCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	localCachePath string,
+	storeIndexCachePath string) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "printVersionUsage"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                 fname,
@@ -26,6 +27,7 @@ func printVersionUsage(
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"versionIndexPath":      versionIndexPath,
 		"localCachePath":        localCachePath,
+		"storeIndexCachePath":   storeIndexCachePath,
 	})
 	log.Info(fname)
 
@@ -41,7 +43,7 @@ func printVersionUsage(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, storeIndexCachePath, -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -211,6 +213,7 @@ type PrintVersionUsageCmd struct {
 	S3EndpointResolverURLOption
 	VersionIndexPathOption
 	CachePathOption
+	StoreIndexCachePathOption
 }
 
 func (r *PrintVersionUsageCmd) Run(ctx *Context) error {
@@ -219,7 +222,8 @@ func (r *PrintVersionUsageCmd) Run(ctx *Context) error {
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.VersionIndexPath,
-		r.CachePath)
+		r.CachePath,
+		r.StoreIndexCachePath)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

@@ -5,11 +5,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
@@ -50,6 +51,7 @@ func NewFSBlobStore(prefix string, enableLocking bool) (BlobStore, error) {
 }
 
 func (blobStore *fsBlobStore) NewClient(ctx context.Context) (BlobClient, error) {
+	rand.Seed(time.Now().Unix())
 	return &fsBlobClient{store: blobStore}, nil
 }
 
@@ -62,7 +64,7 @@ func (blobClient *fsBlobClient) NewObject(filepath string) (BlobObject, error) {
 	return &fsBlobObject{client: blobClient, path: fsPath, metageneration: -1}, nil
 }
 
-func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+func (blobClient *fsBlobClient) GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error) {
 	const fname = "fsBlobClient.GetObjects"
 	searchPath := blobClient.store.prefix
 
@@ -81,13 +83,14 @@ func (blobClient *fsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 		if len(leafPath) < len(pathPrefix) {
 			return nil
 		}
-		if leafPath[:len(pathPrefix)] == pathPrefix {
+		if strings.HasPrefix(leafPath, pathPrefix) &&
+			strings.HasSuffix(leafPath, pathSuffix) {
 			props := BlobProperties{Size: info.Size(), Name: leafPath}
 			objects = append(objects, props)
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, errors.Wrap(err, fname)
 	}
 
@@ -128,7 +131,7 @@ func (blobObject *fsBlobObject) Read() ([]byte, error) {
 		defer filelock.Unlock()
 	}
 
-	data, err := ioutil.ReadFile(blobObject.path)
+	data, err := os.ReadFile(blobObject.path)
 	if err == nil {
 		return data, nil
 	}
@@ -143,7 +146,7 @@ func (blobObject *fsBlobObject) Read() ([]byte, error) {
 func (blobObject *fsBlobObject) getMetaGeneration() (int64, error) {
 	const fname = "fsBlobObject.getMetaGeneration"
 	metapath := blobObject.path + ".gen"
-	data, err := ioutil.ReadFile(metapath)
+	data, err := os.ReadFile(metapath)
 	if longtaillib.IsNotExist(err) {
 		return 0, nil
 	}
@@ -160,7 +163,7 @@ func (blobObject *fsBlobObject) setMetaGeneration(meta_generation int64) error {
 
 	data := make([]byte, 8)
 	binary.LittleEndian.PutUint64(data, uint64(meta_generation))
-	err := ioutil.WriteFile(metapath, data, 0644)
+	err := os.WriteFile(metapath, data, 0644)
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
@@ -258,8 +261,23 @@ func (blobObject *fsBlobObject) Write(data []byte) (bool, error) {
 		}
 	}
 
-	err = ioutil.WriteFile(blobObject.path, data, 0644)
+	tmpPath := fmt.Sprintf("%s.%d.tmp", blobObject.path, rand.Int())
+	err = os.WriteFile(tmpPath, data, 0644)
 	if err != nil {
+		return false, errors.Wrap(err, fname)
+	}
+	for {
+		err = os.Rename(tmpPath, blobObject.path)
+		if err == nil {
+			break
+		}
+		if _, existsErr := os.Stat(blobObject.path); existsErr == nil {
+			//			os.Remove(blobObject.path)
+			//continue
+			os.Remove(tmpPath)
+			err = nil
+			break
+		}
 		return false, errors.Wrap(err, fname)
 	}
 	if blobObject.client.store.enableLocking {
@@ -294,6 +312,7 @@ func (blobObject *fsBlobObject) Delete() error {
 			}
 		}
 	}
+
 	err := os.Remove(blobObject.path)
 	if err != nil {
 		return errors.Wrap(err, fname)

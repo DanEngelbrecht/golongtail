@@ -309,6 +309,26 @@ func splitURI(uri string) (string, string) {
 	return parent, name
 }
 
+func GetObjectsByURI(uri string, pathPrefix string, pathSuffix string, opts ...longtailstorelib.BlobStoreOption) ([]longtailstorelib.BlobProperties, error) {
+	const fname = "DeleteByURI"
+	log := logrus.WithFields(logrus.Fields{
+		"fname": fname,
+		"uri":   uri,
+	})
+	log.Debug(fname)
+	uriParent, uriName := splitURI(uri)
+	blobStore, err := longtailstorelib.CreateBlobStoreForURI(uriParent, opts...)
+	if err != nil {
+		return nil, errors.Wrap(err, fname)
+	}
+	client, err := blobStore.NewClient(context.Background())
+	if err != nil {
+		return nil, errors.Wrap(err, fname)
+	}
+	defer client.Close()
+	return client.GetObjects(uriName+"/"+pathPrefix, pathSuffix)
+}
+
 // ReadFromURI ...
 func ReadFromURI(uri string, opts ...longtailstorelib.BlobStoreOption) ([]byte, error) {
 	const fname = "ReadFromURI"
@@ -335,7 +355,7 @@ func ReadFromURI(uri string, opts ...longtailstorelib.BlobStoreOption) ([]byte, 
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
-	log.Infof("read %d bytes", len(vbuffer))
+	log.Debugf("read %d bytes from `%s`", len(vbuffer), uri)
 	return vbuffer, nil
 }
 
@@ -365,7 +385,7 @@ func WriteToURI(uri string, data []byte, opts ...longtailstorelib.BlobStoreOptio
 	if err != nil {
 		return errors.Wrap(err, fname)
 	}
-	log.Infof("wrote %d bytes", len(data))
+	log.Debugf("wrote %d bytes to `%s`", len(data), uri)
 	return nil
 }
 
@@ -395,7 +415,7 @@ func DeleteByURI(uri string, opts ...longtailstorelib.BlobStoreOption) error {
 	if err != nil && !longtaillib.IsNotExist(err) {
 		return errors.Wrap(err, fname)
 	}
-	log.Info("deleted file")
+	log.Debugf("deleted `%s`", uri)
 	return nil
 }
 
@@ -417,10 +437,7 @@ func ReadBlobWithRetry(
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
 	exists, err := objHandle.Exists()
-	if err != nil {
-		return nil, retryCount, errors.Wrap(err, fname)
-	}
-	if !exists {
+	if err == nil && !exists {
 		err = errors.Wrap(longtaillib.NotExistErr(), fmt.Sprintf("%s/%s does not exist", client.String(), key))
 		return nil, retryCount, errors.Wrap(err, fname)
 	}
@@ -442,8 +459,143 @@ func ReadBlobWithRetry(
 		retryCount++
 		blobData, err = objHandle.Read()
 	}
-	log.Infof("read %d bytes", len(blobData))
+	if retryCount > 0 {
+		log.Infof("read %d bytes from `%s` after %d retries", len(blobData), key, retryCount)
+	} else {
+		log.Debugf("read %d bytes from `%s`", len(blobData), key)
+	}
 	return blobData, retryCount, nil
+}
+
+func WriteBlobWithRetry(
+	ctx context.Context,
+	client longtailstorelib.BlobClient,
+	key string,
+	blob []byte) (int, error) {
+	const fname = "WriteBlobWithRetry"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"client": client,
+		"key":    key,
+	})
+
+	log.Debug(fname)
+
+	retryCount := 0
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return retryCount, errors.Wrap(err, fname)
+	}
+	if exists, err := objHandle.Exists(); err == nil && !exists {
+		var sleepTimes = [...]time.Duration{100 * time.Millisecond, 500 * time.Millisecond, 2 * time.Second}
+		ok, err := objHandle.Write(blob)
+		if err != nil {
+			err := errors.Wrap(err, fmt.Sprintf("failed putBlob at `%s` in `%s`", key, client))
+			err = errors.Wrap(err, fname)
+			log.Error(err)
+			return retryCount, err
+		}
+		if !ok {
+			for _, sleepTime := range sleepTimes {
+				retryCount++
+				log.Warningf("retrying putBlob (sleeping %s)", sleepTime)
+				time.Sleep(sleepTime)
+				ok, err = objHandle.Write(blob)
+				if err != nil {
+					err = errors.Wrap(err, fmt.Sprintf("failed putBlob at `%s` in `%s`", key, client))
+					err = errors.Wrap(err, fname)
+					log.Error(err)
+					return retryCount, err
+				}
+				if ok {
+					break
+				}
+			}
+			if !ok {
+				err = fmt.Errorf("putBlob at `%s` in `%s` even after retries", key, client)
+				err = errors.Wrap(err, fname)
+				log.Error(err)
+				return retryCount, err
+			}
+		}
+	}
+	if retryCount > 0 {
+		log.Infof("wrote %d bytes to `%s` after %d retries", len(blob), key, retryCount)
+	} else {
+		log.Debugf("wrote %d bytes to `%s`", len(blob), key)
+	}
+	return retryCount, nil
+}
+
+func DeleteBlobWithRetry(
+	ctx context.Context,
+	client longtailstorelib.BlobClient,
+	key string) (int, error) {
+	const fname = "DeleteBlob"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"client": client,
+		"key":    key,
+	})
+	log.Debug(fname)
+
+	retryCount := 0
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return retryCount, errors.Wrap(err, fname)
+	}
+	exists, err := objHandle.Exists()
+	if err == nil && !exists {
+		return retryCount, nil
+	}
+	retryDelay := []time.Duration{0, 100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
+	err = objHandle.Delete()
+	for err != nil {
+		if longtaillib.IsNotExist(err) {
+			if retryCount > 0 {
+				log.Infof("someone else deleted `%s` after %d retries", key, retryCount)
+			} else {
+				log.Debugf("someone else deleted `%s`", key)
+			}
+			return retryCount, nil
+		}
+		if retryCount == len(retryDelay) {
+			err = errors.Wrapf(err, "Failed deleteBlob %s in store %s", key, client.String())
+			log.Error(err)
+			return retryCount, errors.Wrap(err, fname)
+		}
+		err = errors.Wrapf(err, "Retrying deleteBlob %s in store %s with %s delay", key, client.String(), retryDelay[retryCount])
+		log.Info(err)
+
+		time.Sleep(retryDelay[retryCount])
+		retryCount++
+		err = objHandle.Delete()
+	}
+	if retryCount > 0 {
+		log.Infof("deleted `%s` after %d retries", key, retryCount)
+	} else {
+		log.Debugf("deleted `%s`", key)
+	}
+	return retryCount, nil
+}
+
+func BlobExists(ctx context.Context,
+	client longtailstorelib.BlobClient,
+	key string) (bool, error) {
+	const fname = "BlobExists"
+	log := logrus.WithFields(logrus.Fields{
+		"fname":  fname,
+		"client": client,
+		"key":    key,
+	})
+	log.Debug(fname)
+
+	objHandle, err := client.NewObject(key)
+	if err != nil {
+		return false, errors.Wrap(err, fname)
+	}
+	return objHandle.Exists()
 }
 
 func GetCompressionTypesForFiles(fileInfos longtaillib.Longtail_FileInfos, compressionType uint32) []uint32 {

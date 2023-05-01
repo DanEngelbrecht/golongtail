@@ -20,6 +20,7 @@ func upsync(
 	sourceFolderPath string,
 	sourceIndexPath string,
 	targetFilePath string,
+	lsiCacheStorePath string,
 	targetChunkSize uint32,
 	targetBlockSize uint32,
 	maxChunksPerBlock uint32,
@@ -29,7 +30,8 @@ func upsync(
 	excludeFilterRegEx string,
 	minBlockUsagePercent uint32,
 	versionLocalStoreIndexPath string,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	maxStoreIndexSize int64) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "upsync"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
@@ -39,6 +41,7 @@ func upsync(
 		"sourceFolderPath":           sourceFolderPath,
 		"sourceIndexPath":            sourceIndexPath,
 		"targetFilePath":             targetFilePath,
+		"lsiCacheStorePath":          lsiCacheStorePath,
 		"targetChunkSize":            targetChunkSize,
 		"targetBlockSize":            targetBlockSize,
 		"maxChunksPerBlock":          maxChunksPerBlock,
@@ -49,6 +52,7 @@ func upsync(
 		"minBlockUsagePercent":       minBlockUsagePercent,
 		"versionLocalStoreIndexPath": versionLocalStoreIndexPath,
 		"enableFileMapping":          enableFileMapping,
+		"maxStoreIndexSize":          maxStoreIndexSize,
 	})
 	log.Info(fname)
 
@@ -99,7 +103,7 @@ func upsync(
 		enableFileMapping,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, lsiCacheStorePath, maxStoreIndexSize, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -229,6 +233,7 @@ type UpsyncCmd struct {
 	SourceIndexPath            string `name:"source-index-path" help:"Optional pre-computed index of source-path"`
 	TargetPath                 string `name:"target-path" help:"Target file uri" required:""`
 	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Target file uri for a store index optimized for this particular version"`
+	StoreIndexCachePathOption
 	TargetChunkSizeOption
 	MaxChunksPerBlockOption
 	TargetBlockSizeOption
@@ -240,6 +245,7 @@ type UpsyncCmd struct {
 	SourcePathIncludeRegExOption
 	SourcePathExcludeRegExOption
 	EnableFileMappingOption
+	MaxStoreIndexSizeOption
 }
 
 func (r *UpsyncCmd) Run(ctx *Context) error {
@@ -250,6 +256,7 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 		r.SourcePath,
 		r.SourceIndexPath,
 		r.TargetPath,
+		r.StoreIndexCachePath,
 		r.TargetChunkSize,
 		r.TargetBlockSize,
 		r.MaxChunksPerBlock,
@@ -259,7 +266,8 @@ func (r *UpsyncCmd) Run(ctx *Context) error {
 		r.ExcludeFilterRegEx,
 		r.MinBlockUsagePercent,
 		r.VersionLocalStoreIndexPath,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.MaxStoreIndexSize)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

@@ -2,7 +2,6 @@ package longtailstorelib
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestFSBlobStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath := t.TempDir()
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -37,14 +36,14 @@ func TestFSBlobStore(t *testing.T) {
 }
 
 func TestListObjectsInEmptyFSStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath := t.TempDir()
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	objects, err := client.GetObjects("")
+	objects, err := client.GetObjects("", "")
 	if err != nil {
 		t.Errorf("TestListObjectsInEmptyFSStore() client.GetObjects(\"\")) %s", err)
 	}
@@ -62,7 +61,7 @@ func TestListObjectsInEmptyFSStore(t *testing.T) {
 }
 
 func TestFSBlobStoreVersioning(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath := t.TempDir()
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -120,7 +119,7 @@ func TestFSBlobStoreVersioning(t *testing.T) {
 	if err == nil {
 		t.Error("object.Delete() err != nil")
 	}
-	exists, err = object.LockWriteVersion()
+	_, err = object.LockWriteVersion()
 	if err != nil {
 		t.Errorf("object.LockWriteVersion() err == %s", err)
 	}
@@ -131,7 +130,7 @@ func TestFSBlobStoreVersioning(t *testing.T) {
 }
 
 func TestFSBlobStoreVersioningStressTest(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath := t.TempDir()
 	blobStore, err := NewFSBlobStore(storePath, true)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -180,7 +179,7 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 }
 
 func TestFSGetObjects(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath := t.TempDir()
 	blobStore, err := NewFSBlobStore(storePath, false)
 	if err != nil {
 		t.Errorf("NewFSBlobStore() err == %s", err)
@@ -200,7 +199,7 @@ func TestFSGetObjects(t *testing.T) {
 		object.Write([]byte(name))
 	}
 
-	blobs, err := client.GetObjects("")
+	blobs, err := client.GetObjects("", "")
 	if err != nil {
 		t.Errorf("blobStore.GetObjects() err == %s", err)
 	}
@@ -208,7 +207,7 @@ func TestFSGetObjects(t *testing.T) {
 		t.Errorf("Can't find all written files with client.GetObjects()")
 	}
 
-	nestedBlobs, err := client.GetObjects("nest")
+	nestedBlobs, err := client.GetObjects("nest", "")
 	if err != nil {
 		t.Errorf("blobStore.GetObjects() err == %s", err)
 	}

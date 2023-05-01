@@ -33,11 +33,11 @@ type TargetPathExcludeRegExOption struct {
 }
 
 type StorageURIOption struct {
-	StorageURI string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
+	StorageURI string `name:"storage-uri" help:"Storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
 }
 
 type S3EndpointResolverURLOption struct {
-	S3EndpointResolverURL string `name:"s3-endpoint-resolver-uri" help"Optional URI for S3 endpoint resolver"`
+	S3EndpointResolverURL string `name:"s3-endpoint-resolver-uri" help:"Optional URI for S3 endpoint resolver"`
 }
 
 type CachePathOption struct {
@@ -114,4 +114,12 @@ type CacheTargetIndexOption struct {
 
 type EnableFileMappingOption struct {
 	EnableFileMapping bool `name:"enable-file-mapping" help:"Enabled memory mapped file for file reads"`
+}
+
+type MaxStoreIndexSizeOption struct {
+	MaxStoreIndexSize int64 `name:"max-store-index-size" help:"Set the max size in bytes each remote store index should be, smaller number means more store<sha>.lsi files in remote store. Default is -1 which enables legacy behaviour with single store.lsi file. 0 disables all merging of remote .lsi files" default:"-1"`
+}
+
+type StoreIndexCachePathOption struct {
+	StoreIndexCachePath string `name:"store-index-cache-path" help:"Location for cached store indexes. If specified the new store index strategy is enabled regardless of max-store-index-size setting"`
 }

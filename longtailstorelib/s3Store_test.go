@@ -70,7 +70,7 @@ func TestS3BlobStore(t *testing.T) {
 		t.Error("object.Exists() false != true")
 	}
 
-	blobs, err := client.GetObjects("")
+	blobs, err := client.GetObjects("", "")
 	if err != nil {
 		t.Errorf("client.GetObjects(\"\") err == %s", err)
 	}
@@ -94,12 +94,12 @@ func TestS3BlobStore(t *testing.T) {
 	object.Delete()
 	_, _ = object.Write([]byte("cat"))
 
-	objects, _ := client.GetObjects("")
+	objects, _ := client.GetObjects("", "")
 	if len(objects) != 3 {
 		t.Errorf("len(objects) %d != 3", len(objects))
 	}
 
-	objects, _ = client.GetObjects("path/")
+	objects, _ = client.GetObjects("path/", "")
 	if len(objects) != 2 {
 		t.Errorf("len(objects) %d != 2", len(objects))
 	}
@@ -119,7 +119,7 @@ func TestListObjectsInEmptyS3Store(t *testing.T) {
 	}
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
-	objects, err := client.GetObjects("")
+	objects, err := client.GetObjects("", "")
 	if err != nil {
 		t.Errorf("TestListObjectsInEmptyS3Store() client.GetObjects(\"\")) %s", err)
 	}

@@ -3,9 +3,10 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/url"
 	"os"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
@@ -65,7 +66,7 @@ func (blobStore *gcsBlobStore) NewClient(ctx context.Context) (BlobClient, error
 	const fname = "gcsBlobStore.NewClient"
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		err := fmt.Errorf("Failed to create client for `%s`", blobStore.String())
+		err := fmt.Errorf("failed to create client for `%s`", blobStore.String())
 		return nil, errors.Wrap(err, fname)
 	}
 
@@ -89,7 +90,7 @@ func (blobClient *gcsBlobClient) NewObject(path string) (BlobObject, error) {
 		nil
 }
 
-func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties, error) {
+func (blobClient *gcsBlobClient) GetObjects(pathPrefix string, pathSuffix string) ([]BlobProperties, error) {
 	const fname = "gcsBlobClient.GetObjects"
 	var items []BlobProperties
 	it := blobClient.bucket.Objects(blobClient.ctx, &storage.Query{
@@ -105,7 +106,9 @@ func (blobClient *gcsBlobClient) GetObjects(pathPrefix string) ([]BlobProperties
 			return nil, errors.Wrap(err, fname)
 		}
 		itemName := attrs.Name[len(blobClient.store.prefix):]
-		items = append(items, BlobProperties{Size: attrs.Size, Name: itemName})
+		if strings.HasSuffix(itemName, pathSuffix) {
+			items = append(items, BlobProperties{Size: attrs.Size, Name: itemName})
+		}
 	}
 	return items, nil
 }
@@ -132,7 +135,7 @@ func (blobObject *gcsBlobObject) Read() ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
-	data, err := ioutil.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	err2 := reader.Close()
 	if errors.Is(err2, storage.ErrObjectNotExist) {
 		err = errors.Wrapf(os.ErrNotExist, "%v", err)

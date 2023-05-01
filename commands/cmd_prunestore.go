@@ -141,6 +141,7 @@ func gatherBlocksToKeep(
 	writeVersionLocalStoreIndex bool,
 	validateVersions bool,
 	skipInvalidVersions bool,
+	storeIndexCachePath string,
 	dryRun bool,
 	jobs longtaillib.Longtail_JobAPI) ([]uint64, error) {
 	const fname = "gatherBlocksToKeep"
@@ -152,10 +153,11 @@ func gatherBlocksToKeep(
 		"writeVersionLocalStoreIndex": writeVersionLocalStoreIndex,
 		"validateVersions":            validateVersions,
 		"skipInvalidVersions":         skipInvalidVersions,
+		"storeIndexCachePath":         storeIndexCachePath,
 		"dryRun":                      dryRun,
 	})
 	log.Debug(fname)
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, storeIndexCachePath, -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
@@ -268,6 +270,7 @@ func pruneStore(
 	writeVersionLocalStoreIndex bool,
 	validateVersions bool,
 	skipInvalidVersions bool,
+	storeIndexCachePath string,
 	dryRun bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "pruneStore"
 	log := logrus.WithFields(logrus.Fields{
@@ -280,6 +283,7 @@ func pruneStore(
 		"writeVersionLocalStoreIndex":  writeVersionLocalStoreIndex,
 		"validateVersions":             validateVersions,
 		"skipInvalidVersions":          skipInvalidVersions,
+		"storeIndexCachePath":          storeIndexCachePath,
 		"dryRun":                       dryRun,
 	})
 	log.Info(fname)
@@ -345,6 +349,7 @@ func pruneStore(
 		writeVersionLocalStoreIndex,
 		validateVersions,
 		skipInvalidVersions,
+		storeIndexCachePath,
 		dryRun,
 		jobs)
 
@@ -359,7 +364,8 @@ func pruneStore(
 		fmt.Printf("Prune would keep %d blocks", len(blocksToKeep))
 		return storeStats, timeStats, nil
 	}
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, storeIndexCachePath, -1, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -400,6 +406,7 @@ type PruneStoreCmd struct {
 	WriteVersionLocalStoreIndex bool   `name:"write-version-local-store-index" help:"Write a new version local store index for each version. This requires a valid version-local-store-index-paths input parameter"`
 	ValidateVersions            bool   `name:"validate-versions" help:"Verify that all content needed for a version is available in the store"`
 	SkipInvalidVersions         bool   `name:"skip-invalid-versions" help:"If an invalid version is found, disregard its blocks. If not set and validate-version is set, invalid version will abort with an error"`
+	StoreIndexCachePathOption
 }
 
 func (r *PruneStoreCmd) Run(ctx *Context) error {
@@ -412,6 +419,7 @@ func (r *PruneStoreCmd) Run(ctx *Context) error {
 		r.WriteVersionLocalStoreIndex,
 		r.ValidateVersions,
 		r.SkipInvalidVersions,
+		r.StoreIndexCachePath,
 		r.DryRun)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)

@@ -1,14 +1,14 @@
 package commands
 
 import (
-	"io/ioutil"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPruneIndex(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -20,29 +20,28 @@ func TestPruneIndex(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lvi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
-	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
+	storeIndexName := lsis[0].Name
+
+	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName)
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
+
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
+
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err == nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NotEqual(t, nil, err, cmd)
 }
 
 func TestPruneIndexWithLSI(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -59,7 +58,12 @@ func TestPruneIndexWithLSI(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lsi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
-	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
+	storeIndexName := lsis[0].Name
+
+	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName)
 	if err != nil {
 		t.Errorf("%s: %s", cmd, err)
 	}
@@ -81,7 +85,7 @@ func TestPruneIndexWithLSI(t *testing.T) {
 }
 
 func TestPruneIndexWithLSIAndWriteLSI(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -98,7 +102,12 @@ func TestPruneIndexWithLSIAndWriteLSI(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lsi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
-	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi", "--write-version-local-store-index")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
+	storeIndexName := lsis[0].Name
+
+	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--write-version-local-store-index")
 	if err != nil {
 		t.Errorf("%s: %s", cmd, err)
 	}
@@ -120,7 +129,7 @@ func TestPruneIndexWithLSIAndWriteLSI(t *testing.T) {
 }
 
 func TestPruneIndexDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -132,7 +141,12 @@ func TestPruneIndexDryRun(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lvi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
-	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi", "--dry-run")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
+	storeIndexName := lsis[0].Name
+
+	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--dry-run")
 	if err != nil {
 		t.Errorf("%s: %s", cmd, err)
 	}
@@ -154,7 +168,7 @@ func TestPruneIndexDryRun(t *testing.T) {
 }
 
 func TestPruneIndexWithLSIDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -171,7 +185,12 @@ func TestPruneIndexWithLSIDryRun(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lsi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
-	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi", "--dry-run")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
+	storeIndexName := lsis[0].Name
+
+	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--dry-run")
 	if err != nil {
 		t.Errorf("%s: %s", cmd, err)
 	}
@@ -193,7 +212,7 @@ func TestPruneIndexWithLSIDryRun(t *testing.T) {
 }
 
 func TestPruneIndexWithLSIAndWriteLSIDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath := t.TempDir()
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -210,7 +229,12 @@ func TestPruneIndexWithLSIAndWriteLSIDryRun(t *testing.T) {
 			fsBlobPathPrefix + "/index/v2.lsi" + "\n")
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
-	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi", "--write-version-local-store-index", "--dry-run")
+	lsis, err := longtailutils.GetObjectsByURI(fsBlobPathPrefix+"/storage", "store", ".lsi")
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 1, len(lsis))
+	storeIndexName := lsis[0].Name
+
+	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--store-index-path", fsBlobPathPrefix+"/"+storeIndexName, "--write-version-local-store-index", "--dry-run")
 	if err != nil {
 		t.Errorf("%s: %s", cmd, err)
 	}

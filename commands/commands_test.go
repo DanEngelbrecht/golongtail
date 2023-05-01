@@ -51,7 +51,7 @@ func validateContent(t *testing.T, baseURI string, path string, content map[stri
 	store, _ := longtailstorelib.CreateBlobStoreForURI(baseURI)
 	client, _ := store.NewClient(context.Background())
 	defer client.Close()
-	items, _ := client.GetObjects(path)
+	items, _ := client.GetObjects(path, "")
 	foundItems := map[string]string{}
 	for _, f := range items {
 		n := f.Name[len(path)+1:]

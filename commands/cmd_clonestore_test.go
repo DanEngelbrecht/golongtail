@@ -5,13 +5,14 @@ import (
 	"bufio"
 	"bytes"
 	"io"
-	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/pkg/errors"
 )
@@ -49,14 +50,14 @@ func createZipForFolder(searchPath string) (bytes.Buffer, error) {
 }
 
 func TestCloneStore(t *testing.T) {
-	sourcePath, _ := ioutil.TempDir("", "source")
+	sourcePath := path.Join(t.TempDir(), "source")
 	fsSourceBlobPathPrefix := "fsblob://" + sourcePath
 	createVersionData(t, fsSourceBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v1", "--target-path", fsSourceBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v2", "--target-path", fsSourceBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v3", "--target-path", fsSourceBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 
-	targetPath, _ := ioutil.TempDir("", "target")
+	targetPath := path.Join(t.TempDir(), "target")
 	fsTargetBlobPathPrefix := "fsblob://" + targetPath
 
 	sourceFilesContent := []byte(
@@ -77,24 +78,16 @@ func TestCloneStore(t *testing.T) {
 		"--source-paths", sourcePath+"/source-files.txt",
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v1.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v2.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v3.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
 
 	// Run again, now it will skip all existing
@@ -105,9 +98,7 @@ func TestCloneStore(t *testing.T) {
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current",
 		"--skip-validate")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 
 	// Run again, now it will validate all existing
 	cmd, err = executeCommandLine("clone-store",
@@ -116,19 +107,18 @@ func TestCloneStore(t *testing.T) {
 		"--source-paths", sourcePath+"/source-files.txt",
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 }
 
 func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {
-	sourcePath, _ := ioutil.TempDir("", "source")
+	sourcePath := path.Join(t.TempDir(), "source")
 	fsSourceBlobPathPrefix := "fsblob://" + sourcePath
 	createVersionData(t, fsSourceBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v1", "--target-path", fsSourceBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v2", "--target-path", fsSourceBlobPathPrefix+"/index/v2.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v3", "--target-path", fsSourceBlobPathPrefix+"/index/v3.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
-	targetPath, _ := ioutil.TempDir("", "target")
+
+	targetPath := path.Join(t.TempDir(), "target")
 	fsTargetBlobPathPrefix := "fsblob://" + targetPath
 
 	sourceFilesContent := []byte(
@@ -150,29 +140,23 @@ func TestCloneStoreCreateVersionLocalStoreIndex(t *testing.T) {
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current",
 		"--create-version-local-store-index")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v1.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--version-local-store-index-path", fsTargetBlobPathPrefix+"/index/v1.lsi", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v1FilesCreate)
+
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v2.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--version-local-store-index-path", fsTargetBlobPathPrefix+"/index/v2.lsi", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v2FilesCreate)
+
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v3.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--version-local-store-index-path", fsTargetBlobPathPrefix+"/index/v3.lsi", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestCloneStoreZipFallback(t *testing.T) {
-	sourcePath, _ := ioutil.TempDir("", "source")
+	sourcePath := path.Join(t.TempDir(), "source")
 	fsSourceBlobPathPrefix := "fsblob://" + sourcePath
 	createVersionData(t, fsSourceBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", sourcePath+"/version/v1", "--target-path", fsSourceBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsSourceBlobPathPrefix+"/storage")
@@ -185,7 +169,7 @@ func TestCloneStoreZipFallback(t *testing.T) {
 	v3ZipBuffer, _ := createZipForFolder(sourcePath + "/version/v3")
 	os.WriteFile(sourcePath+"/index/v3.zip", v3ZipBuffer.Bytes(), 0644)
 
-	targetPath, _ := ioutil.TempDir("", "target")
+	targetPath := path.Join(t.TempDir(), "target")
 	fsTargetBlobPathPrefix := "fsblob://" + targetPath
 
 	sourceFilesContent := []byte(
@@ -214,23 +198,17 @@ func TestCloneStoreZipFallback(t *testing.T) {
 		"--target-paths", targetPath+"/target-files.txt",
 		"--target-path", sourcePath+"/version/current",
 		"--create-version-local-store-index")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v1.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v1FilesCreate)
+
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v2.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v2FilesCreate)
+
 	cmd, err = executeCommandLine("downsync", "--source-path", fsTargetBlobPathPrefix+"/index/v3.lvi", "--target-path", targetPath+"/version/current", "--storage-uri", fsTargetBlobPathPrefix+"/storage", "--cache-path", targetPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Equal(t, nil, err, cmd)
 	validateContent(t, fsTargetBlobPathPrefix, "version/current", v3FilesCreate)
 }

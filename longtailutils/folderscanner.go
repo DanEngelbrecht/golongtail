@@ -2,7 +2,7 @@ package longtailutils
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -110,7 +110,7 @@ func GetFolderIndex(
 	}
 	startTime := time.Now()
 
-	vbuffer, err := ioutil.ReadFile(sourceIndexPath)
+	vbuffer, err := os.ReadFile(sourceIndexPath)
 	if err != nil {
 		return longtaillib.Longtail_VersionIndex{}, longtaillib.Longtail_HashAPI{}, time.Since(startTime), errors.Wrap(err, fname)
 	}

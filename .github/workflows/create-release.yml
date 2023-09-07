@@ -22,6 +22,7 @@ jobs:
           target: "./cmd/longtail/longtail"
           platform: macos
           tag: "${GITHUB_REF_NAME}"
+          arch: arm64
         - os: windows-latest
           target: "./cmd/longtail/longtail.exe"
           platform: win32
@@ -40,10 +41,14 @@ jobs:
 
       - name: Build
         run: |
+          echo "GOARCH: " $GOARCH
           pushd ./cmd/longtail
           echo matrix.tag ${{ matrix.tag }}
           go build -ldflags="-s -w -X 'github.com/DanEngelbrecht/golongtail/commands.BuildVersion=${{ matrix.tag }}'" .
           popd
+        env:
+          GOARCH: ${{matrix.arch}}
+          CGO_ENABLED: 1
 
       - name: build dist
         run: |
@@ -53,7 +58,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@master
         with:
-          name: dist-${{matrix.platform}}-x64
+          name: dist-${{matrix.platform}}-${{matrix.arch}}
           path: dist
 
   create-release:
@@ -69,41 +74,54 @@ jobs:
     - name: Download Linux artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-linux-x64
-        path: dist-linux-x64
+        name: dist-linux-amd64
+        path: dist-linux-amd64
 
-    - name: Download MacOs artifacts
+    - name: Download MacOs x64 artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-macos-x64
-        path: dist-macos-x64
+        name: dist-macos-amd64
+        path: dist-macos-amd64
+
+    - name: Download MacOs arm64 artifacts
+      uses: actions/download-artifact@v1
+      with:
+        name: dist-macos-arm64
+        path: dist-macos-arm64
 
     - name: Download Win32 artifacts
       uses: actions/download-artifact@v1
       with:
-        name: dist-win32-x64
-        path: dist-win32-x64
-
-    - name: Set execute permission
-      run: |
-        chmod +x dist-linux-x64/longtail
-        chmod +x dist-macos-x64/longtail
+        name: dist-win32-amd64
+        path: dist-win32-amd64
 
     - name: Rename artifacts
       run: |
-        cp dist-linux-x64/longtail longtail-linux-x64
-        cp dist-macos-x64/longtail longtail-macos-x64
-        cp dist-win32-x64/longtail.exe longtail-win32-x64.exe
+        cp dist-linux-amd64/longtail longtail-linux-x64
+        cp dist-macos-amd64/longtail longtail-macos-x64
+        cp dist-macos-arm64/longtail longtail-macos-arm64
+        cp dist-win32-amd64/longtail.exe longtail-win32-x64.exe
+
+    - name: Set execute permission
+      run: |
+        chmod +x longtail-linux-x64
+        chmod +x longtail-macos-x64
+        chmod +x longtail-macos-arm64
 
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./linux-x64.zip ./dist-linux-x64
 
-    - name: Zip MacOS artifacts
+    - name: Zip MacOS x64 artifacts
       uses: montudor/action-zip@v0.1.0
       with:
         args: zip -qq -r ./macos-x64.zip ./dist-macos-x64
+
+    - name: Zip MacOS arm64 artifacts
+      uses: montudor/action-zip@v0.1.0
+      with:
+        args: zip -qq -r ./macos-arm64.zip ./dist-macos-arm64
 
     - name: Zip Win32 artifacts
       uses: montudor/action-zip@v0.1.0
@@ -143,6 +161,8 @@ jobs:
           win32-x64.zip
           linux-x64.zip
           macos-x64.zip
+          macos-arm64.zip
           longtail-linux-x64
           longtail-macos-x64
+          longtail-macos-arm64
           longtail-win32-x64.exe

@@ -12,6 +12,7 @@ jobs:
 
     strategy:
       matrix:
+        arch: [amd64]
         include:
         - os: ubuntu-20.04
           target: "./cmd/longtail/longtail"

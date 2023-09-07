@@ -80,13 +80,13 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: dist-linux-amd64
-        path: dist-linux-amd64
+        path: dist-linux-x64
 
     - name: Download MacOs x64 artifacts
       uses: actions/download-artifact@v1
       with:
         name: dist-macos-amd64
-        path: dist-macos-amd64
+        path: dist-macos-x64
 
     - name: Download MacOs arm64 artifacts
       uses: actions/download-artifact@v1
@@ -98,23 +98,13 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: dist-win32-amd64
-        path: dist-win32-amd64
-
-    - name: Rename artifacts
-      run: |
-        mv dist-linux-amd64/longtail dist-linux-amd64/longtail-linux-x64
-        mv dist-macos-amd64/longtail dist-macos-amd64/longtail-macos-x64
-        mv dist-win32-amd64/longtail.exe dist-win32-amd64/longtail-win32-x64.exe
-
-        mv dist-linux-amd64 dist-linux-x64
-        mv dist-macos-amd64 dist-macos-x64
-        mv dist-win32-amd64 dist-win32-x64
+        path: dist-win32-x64
 
     - name: Set execute permission
       run: |
-        chmod +x dist-linux-x64/longtail-linux-x64
-        chmod +x dist-macos-x64/longtail-macos-x64
-        chmod +x dist-macos-x64/longtail-macos-x64
+        chmod +x dist-linux-x64/longtail
+        chmod +x dist-macos-x64/longtail
+        chmod +x dist-macos-arm64/longtail
 
     - name: Copy executables
       run: |

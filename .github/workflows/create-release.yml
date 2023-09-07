@@ -114,14 +114,14 @@ jobs:
       run: |
         chmod +x dist-linux-x64/longtail-linux-x64
         chmod +x dist-macos-x64/longtail-macos-x64
-        chmod +x dist-macos-amd64/longtail-macos-amd64
+        chmod +x dist-macos-x64/longtail-macos-x64
 
     - name: Copy executables
       run: |
         cp dist-linux-x64/longtail longtail-linux-x64
         cp dist-macos-x64/longtail longtail-macos-x64
-        cp dist-macos-arm64/longtail longtail-macos-arm64
         cp dist-win32-x64/longtail.exe longtail-win32-x64.exe
+        cp dist-macos-arm64/longtail longtail-macos-arm64
 
     - name: Zip Linux artifacts
       uses: montudor/action-zip@v0.1.0

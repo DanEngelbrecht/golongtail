@@ -39,16 +39,16 @@ jobs:
       - name: test
         run: |
           pushd ./longtaillib
-          go test . -ldflags '-w -s -extldflags "-lresolv"'
+          go test .
           popd
           pushd ./longtailstorelib
-          go test . -ldflags '-w -s -extldflags "-lresolv"'
+          go test .
           popd
           pushd ./commands
-          go test .  -ldflags '-w -s -extldflags "-lresolv"'
+          go test .
           popd
           pushd ./remotestore
-          go test . -ldflags '-w -s -extldflags "-lresolv"'
+          go test .
           popd
         env:
           GOARCH: ${{matrix.arch}}
@@ -58,7 +58,7 @@ jobs:
       - name: build cmd
         run: |
           pushd ./cmd/longtail
-          go build . -ldflags '-w -s -extldflags "-lresolv"'
+          go build .
           popd
         env:
           GOARCH: ${{matrix.arch}}

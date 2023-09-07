@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-20.04, macos-latest, windows-latest]
-        arch: [amd64, arm64]
+        arch: [amd64]
         include:
           - os: ubuntu-20.04
             target: "./cmd/longtail/longtail"
@@ -23,15 +23,11 @@ jobs:
             target: "./cmd/longtail/longtail"
             platform: macos
             tag: "${GITHUB_REF_NAME}"
+            arch: arm64
           - os: windows-latest
             target: "./cmd/longtail/longtail.exe"
             platform: win32
             tag: "${env:GITHUB_REF_NAME}"
-        exclude:
-          - os: ubuntu-20.04
-            arch: arm64
-          - os: windows-latest
-            arch: arm64
 
     runs-on: ${{matrix.os}}
 

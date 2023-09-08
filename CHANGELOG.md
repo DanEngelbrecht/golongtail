@@ -1,4 +1,9 @@
 ##
+- **NEW** added builds for Arm64 flavours
+  - meow hash option is not supported on Arm64 and will return 0 if called
+  - blake2 hash option is not supported on Arm64 and will return 0 if called
+  - `macos-arm64.zip` and `longtail-macos-arm64` artifacts are produced when creating a release
+- **UPDATED** Updated to longtail 0.4.0
 - **UPDATED** Updated all golang dependencies
 - **UPDATED** Updated Github Actions Linux runners to 20.04
 

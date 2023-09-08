@@ -1,5 +1,5 @@
 ##
-- **NEW** Longtail can now build Arm64 flavours of all components
+- **NEW** added builds for Arm64 flavours
   - meow hash option is not supported on Arm64 and will return 0 if called
   - blake2 hash option is not supported on Arm64 and will return 0 if called
   - `macos-arm64.zip` and `longtail-macos-arm64` artifacts are produced when creating a release

@@ -13,6 +13,7 @@
 #include "longtail/include/lib/compressionregistry/longtail_compression_registry.h"
 #include "longtail/include/lib/compressionregistry/longtail_full_compression_registry.h"
 #include "longtail/include/lib/compressionregistry/longtail_zstd_compression_registry.h"
+#include "longtail/include/lib/concurrentchunkwrite/longtail_concurrentchunkwrite.h"
 #include "longtail/include/lib/hashregistry/longtail_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_full_hash_registry.h"
 #include "longtail/include/lib/hashregistry/longtail_blake3_hash_registry.h"

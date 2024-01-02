@@ -42,7 +42,8 @@ func downsync(
 	excludeFilterRegEx string,
 	scanTarget bool,
 	cacheTargetIndex bool,
-	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
+	enableFileMapping bool,
+	useLegacyWrite bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "downsync"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                       fname,
@@ -61,6 +62,7 @@ func downsync(
 		"scanTarget":                  scanTarget,
 		"cacheTargetIndex":            cacheTargetIndex,
 		"enableFileMapping":           enableFileMapping,
+		"useLegacyWrite":              useLegacyWrite,
 	})
 	log.Info(fname)
 
@@ -201,9 +203,15 @@ func downsync(
 	defer localIndexStore.Dispose()
 	defer compressBlockStore.Dispose()
 
-	lruBlockStore := longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
+	var indexStore longtaillib.Longtail_BlockStoreAPI
+	var lruBlockStore longtaillib.Longtail_BlockStoreAPI
+	if useLegacyWrite {
+		lruBlockStore = longtaillib.CreateLRUBlockStoreAPI(compressBlockStore, 32)
+		indexStore = longtaillib.CreateShareBlockStore(lruBlockStore)
+	} else {
+		indexStore = longtaillib.CreateShareBlockStore(compressBlockStore)
+	}
 	defer lruBlockStore.Dispose()
-	indexStore := longtaillib.CreateShareBlockStore(lruBlockStore)
 	defer indexStore.Dispose()
 
 	hash, err := hashRegistry.GetHashAPI(hashIdentifier)
@@ -259,18 +267,38 @@ func downsync(
 	changeVersionStartTime := time.Now()
 	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
-	err = longtaillib.ChangeVersion(
-		indexStore,
-		fs,
-		hash,
-		jobs,
-		&changeVersionProgress,
-		retargettedVersionStoreIndex,
-		targetVersionIndex,
-		sourceVersionIndex,
-		versionDiff,
-		longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
-		retainPermissions)
+	concurrentChunkWriteAPI := longtaillib.CreateConcurrentChunkWriteAPI(fs, longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath))
+	defer concurrentChunkWriteAPI.Dispose()
+
+	if useLegacyWrite {
+		err = longtaillib.ChangeVersion(
+			indexStore,
+			fs,
+			hash,
+			jobs,
+			&changeVersionProgress,
+			retargettedVersionStoreIndex,
+			targetVersionIndex,
+			sourceVersionIndex,
+			versionDiff,
+			longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
+			retainPermissions)
+	} else {
+		err = longtaillib.ChangeVersion2(
+			indexStore,
+			fs,
+			concurrentChunkWriteAPI,
+			hash,
+			jobs,
+			&changeVersionProgress,
+			retargettedVersionStoreIndex,
+			targetVersionIndex,
+			sourceVersionIndex,
+			versionDiff,
+			longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath),
+			retainPermissions)
+	}
+
 	if err != nil {
 		err = errors.Wrapf(err, "Failed writing version `%s` to `%s`", sourceFilePaths[0], targetFolderPath)
 		return storeStats, timeStats, errors.Wrap(err, fname)
@@ -281,13 +309,24 @@ func downsync(
 
 	flushStartTime := time.Now()
 
-	stores := []longtaillib.Longtail_BlockStoreAPI{
-		indexStore,
-		lruBlockStore,
-		compressBlockStore,
-		cacheBlockStore,
-		localIndexStore,
-		remoteIndexStore,
+	var stores []longtaillib.Longtail_BlockStoreAPI
+	if useLegacyWrite {
+		stores = []longtaillib.Longtail_BlockStoreAPI{
+			indexStore,
+			lruBlockStore,
+			compressBlockStore,
+			cacheBlockStore,
+			localIndexStore,
+			remoteIndexStore,
+		}
+	} else {
+		stores = []longtaillib.Longtail_BlockStoreAPI{
+			indexStore,
+			compressBlockStore,
+			cacheBlockStore,
+			localIndexStore,
+			remoteIndexStore,
+		}
 	}
 	err = longtailutils.FlushStoresSync(stores)
 	if err != nil {
@@ -301,9 +340,11 @@ func downsync(
 	if err == nil {
 		storeStats = append(storeStats, longtailutils.StoreStat{"Share", shareStoreStats})
 	}
-	lruStoreStats, err := lruBlockStore.GetStats()
-	if err == nil {
-		storeStats = append(storeStats, longtailutils.StoreStat{"LRU", lruStoreStats})
+	if lruBlockStore.IsValid() {
+		lruStoreStats, err := lruBlockStore.GetStats()
+		if err == nil {
+			storeStats = append(storeStats, longtailutils.StoreStat{"LRU", lruStoreStats})
+		}
 	}
 	compressStoreStats, err := compressBlockStore.GetStats()
 	if err == nil {
@@ -425,6 +466,7 @@ type DownsyncCmd struct {
 	ScanTargetOption
 	CacheTargetIndexOption
 	EnableFileMappingOption
+	UseLegacyWriteOption
 }
 
 func (r *DownsyncCmd) Run(ctx *Context) error {
@@ -443,7 +485,8 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		r.ExcludeFilterRegEx,
 		r.ScanTarget,
 		r.CacheTargetIndex,
-		r.EnableFileMapping)
+		r.EnableFileMapping,
+		r.UseLegacyWrite)
 	ctx.StoreStats = append(ctx.StoreStats, storeStats...)
 	ctx.TimeStats = append(ctx.TimeStats, timeStats...)
 	return err

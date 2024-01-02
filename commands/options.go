@@ -115,3 +115,7 @@ type CacheTargetIndexOption struct {
 type EnableFileMappingOption struct {
 	EnableFileMapping bool `name:"enable-file-mapping" help:"Enabled memory mapped file for file reads"`
 }
+
+type UseLegacyWriteOption struct {
+	UseLegacyWrite bool `name:"use-legacy-write" help:"Uses legacy algorithm to update a version"`
+}

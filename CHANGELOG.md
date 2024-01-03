@@ -1,4 +1,12 @@
 ##
+- **UPDATED** Updated to golang 1.21
+- **UPDATED** Update longtaillib to v0.4.1
+- **UPDATED** Updated all golang dependencies
+- **ADDED** Switch to using `Longtail_ChangeVersion2`
+- **ADDED** Add `--use-legacy-write` option to switch back to `Longtail_ChangeVersion` where applicable
+- **CHANGED** Drop use of LRU block store
+
+## v0.4.0
 - **NEW** added builds for Arm64 flavours
   - meow hash option is not supported on Arm64 and will return 0 if called
   - blake2 hash option is not supported on Arm64 and will return 0 if called

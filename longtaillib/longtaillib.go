@@ -361,6 +361,10 @@ type Longtail_ChunkerAPI struct {
 	cChunkerAPI *C.struct_Longtail_ChunkerAPI
 }
 
+type Longtail_ConcurrentChunkWriteAPI struct {
+	cConcurrentChunkWriteAPI *C.struct_Longtail_ConcurrentChunkWriteAPI
+}
+
 type NativeBuffer struct {
 	buffer unsafe.Pointer
 	size   C.size_t
@@ -918,6 +922,21 @@ func (chunkerAPI *Longtail_ChunkerAPI) Dispose() {
 	if chunkerAPI.cChunkerAPI != nil {
 		C.Longtail_DisposeAPI(&chunkerAPI.cChunkerAPI.m_API)
 		chunkerAPI.cChunkerAPI = nil
+	}
+}
+
+// CreateConcurrentChunkWriteAPI ...
+func CreateConcurrentChunkWriteAPI(storageAPI Longtail_StorageAPI, basePath string) Longtail_ConcurrentChunkWriteAPI {
+	cBasePath := C.CString(basePath)
+	defer C.free(unsafe.Pointer(cBasePath))
+	return Longtail_ConcurrentChunkWriteAPI{cConcurrentChunkWriteAPI: C.Longtail_CreateConcurrentChunkWriteAPI(storageAPI.cStorageAPI, cBasePath)}
+}
+
+// Longtail_ConcurrentChunkWriteAPI.Dispose() ...
+func (concurrentChunkWrite *Longtail_ConcurrentChunkWriteAPI) Dispose() {
+	if concurrentChunkWrite.cConcurrentChunkWriteAPI != nil {
+		C.Longtail_DisposeAPI(&concurrentChunkWrite.cConcurrentChunkWriteAPI.m_API)
+		concurrentChunkWrite.cConcurrentChunkWriteAPI = nil
 	}
 }
 
@@ -2231,6 +2250,56 @@ func ChangeVersion(
 	errno := C.Longtail_ChangeVersion(
 		contentBlockStoreAPI.cBlockStoreAPI,
 		versionStorageAPI.cStorageAPI,
+		hashAPI.cHashAPI,
+		jobAPI.cJobAPI,
+		cProgressAPI,
+		nil,
+		nil,
+		storeIndex.cStoreIndex,
+		sourceVersionIndex.cVersionIndex,
+		targetVersionIndex.cVersionIndex,
+		versionDiff.cVersionDiff,
+		cVersionFolderPath,
+		cRetainPermissions)
+	if errno != 0 {
+		return errors.Wrap(errnoToError(errno), fname)
+	}
+	return nil
+}
+
+// ChangeVersion2 ...
+func ChangeVersion2(
+	contentBlockStoreAPI Longtail_BlockStoreAPI,
+	versionStorageAPI Longtail_StorageAPI,
+	concurrentChunkWriteApi Longtail_ConcurrentChunkWriteAPI,
+	hashAPI Longtail_HashAPI,
+	jobAPI Longtail_JobAPI,
+	progressAPI *Longtail_ProgressAPI,
+	storeIndex Longtail_StoreIndex,
+	sourceVersionIndex Longtail_VersionIndex,
+	targetVersionIndex Longtail_VersionIndex,
+	versionDiff Longtail_VersionDiff,
+	versionFolderPath string,
+	retainPermissions bool) error {
+	const fname = "ChangeVersion2"
+
+	var cProgressAPI *C.struct_Longtail_ProgressAPI
+	if progressAPI != nil {
+		cProgressAPI = progressAPI.cProgressAPI
+	}
+
+	cVersionFolderPath := C.CString(versionFolderPath)
+	defer C.free(unsafe.Pointer(cVersionFolderPath))
+
+	cRetainPermissions := C.int(0)
+	if retainPermissions {
+		cRetainPermissions = C.int(1)
+	}
+
+	errno := C.Longtail_ChangeVersion2(
+		contentBlockStoreAPI.cBlockStoreAPI,
+		versionStorageAPI.cStorageAPI,
+		concurrentChunkWriteApi.cConcurrentChunkWriteAPI,
 		hashAPI.cHashAPI,
 		jobAPI.cJobAPI,
 		cProgressAPI,

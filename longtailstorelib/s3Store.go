@@ -98,7 +98,7 @@ func (blobClient *s3BlobClient) GetObjects(pathPrefix string) ([]BlobProperties,
 	}
 	for _, object := range output.Contents {
 		itemName := aws.ToString(object.Key)[len(blobClient.store.prefix):]
-		items = append(items, BlobProperties{Size: object.Size, Name: itemName})
+		items = append(items, BlobProperties{Size: *object.Size, Name: itemName})
 	}
 	return items, nil
 }

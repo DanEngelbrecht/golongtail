@@ -1398,3 +1398,231 @@ func TestChangeVersion(t *testing.T) {
 		t.Errorf("TestChangeVersion() blockStoreProxy.Flush() OnComplete: %s", err)
 	}
 }
+
+func TestChangeVersion2(t *testing.T) {
+	storageAPI := createFilledStorage("content")
+	defer storageAPI.Dispose()
+	fileInfos, err := GetFilesRecursively(storageAPI, Longtail_PathFilterAPI{}, "content")
+	if err != nil {
+		t.Errorf("TestRewriteVersion() GetFilesRecursively() %s", err)
+	}
+	defer fileInfos.Dispose()
+
+	hashAPI := CreateBlake2HashAPI()
+	defer hashAPI.Dispose()
+	chunkerAPI := CreateHPCDCChunkerAPI()
+	defer chunkerAPI.Dispose()
+	jobAPI := CreateBikeshedJobAPI(uint32(runtime.NumCPU()), 0)
+	defer jobAPI.Dispose()
+
+	blockStore := &TestBlockStore{blocks: make(map[uint64]Longtail_StoredBlock), didClose: false}
+	blockStoreProxy := CreateBlockStoreAPI(blockStore)
+	blockStore.blockStoreAPI = blockStoreProxy
+	defer blockStoreProxy.Dispose()
+
+	compressionTypes := make([]uint32, fileInfos.GetFileCount())
+
+	createVersionProgress := CreateProgress(t, "CreateVersionIndex")
+	versionIndex, err := CreateVersionIndex(
+		storageAPI,
+		hashAPI,
+		chunkerAPI,
+		jobAPI,
+		&createVersionProgress,
+		"content",
+		fileInfos,
+		compressionTypes,
+		32768,
+		false)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() CreateVersionIndex() %s", err)
+	}
+	defer versionIndex.Dispose()
+
+	getExistingContentComplete := &testGetExistingContentCompletionAPI{}
+	getExistingContentComplete.wg.Add(1)
+	err = blockStoreProxy.GetExistingContent(versionIndex.GetChunkHashes(), 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete))
+	if err != nil {
+		t.Errorf("TestChangeVersion2() blockStoreAPI.GetExistingContent() %s", err)
+		getExistingContentComplete.wg.Done()
+	}
+	getExistingContentComplete.wg.Wait()
+	existingStoreIndex := getExistingContentComplete.storeIndex
+	defer existingStoreIndex.Dispose()
+
+	b, err := WriteStoreIndexToBuffer(existingStoreIndex)
+	defer b.Dispose()
+	if err != nil {
+		t.Errorf("TestChangeVersion2() WriteStoreIndexToBuffer() %s", err)
+	}
+	si2, err := ReadStoreIndexFromBuffer(b.ToBuffer())
+	if err != nil {
+		t.Errorf("TestChangeVersion2() ReadStoreIndexFromBuffer() %s", err)
+	}
+	si2.Dispose()
+	b2, err := existingStoreIndex.Copy()
+	if err != nil {
+		t.Errorf("TestChangeVersion2() existingStoreIndex.Copy() %s", err)
+	}
+	b2.Dispose()
+
+	versionMissingStoreIndex, err := CreateMissingContent(
+		hashAPI,
+		existingStoreIndex,
+		versionIndex,
+		65536,
+		1024)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() CreateMissingContent() %s", err)
+	}
+	defer versionMissingStoreIndex.Dispose()
+
+	expectedStoreIndex, err := MergeStoreIndex(existingStoreIndex, versionMissingStoreIndex)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() MergeStoreIndex() %s", err)
+	}
+	defer expectedStoreIndex.Dispose()
+
+	writeContentProgress := CreateProgress(t, "WriteContent")
+	defer writeContentProgress.Dispose()
+
+	err = WriteContent(
+		storageAPI,
+		blockStoreProxy,
+		jobAPI,
+		&writeContentProgress,
+		versionMissingStoreIndex,
+		versionIndex,
+		"content")
+	if err != nil {
+		t.Errorf("TestChangeVersion2() WriteContent() %s", err)
+	}
+
+	storageAPI2 := createFilledStorage("content2")
+	fileInfos2, err := GetFilesRecursively(storageAPI2, Longtail_PathFilterAPI{}, "content2")
+	if err != nil {
+		t.Errorf("TestRewriteVersion() GetFilesRecursively() %s", err)
+	}
+	defer fileInfos2.Dispose()
+
+	compressionTypes = make([]uint32, fileInfos2.GetFileCount())
+
+	createVersionProgress2 := CreateProgress(t, "CreateVersionIndex")
+	versionIndex2, err := CreateVersionIndex(
+		storageAPI2,
+		hashAPI,
+		chunkerAPI,
+		jobAPI,
+		&createVersionProgress2,
+		"content2",
+		fileInfos2,
+		compressionTypes,
+		32768,
+		false)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() CreateVersionIndex() %s", err)
+	}
+	defer versionIndex2.Dispose()
+
+	versionDiff2, err := CreateVersionDiff(hashAPI, versionIndex, versionIndex2)
+	defer versionDiff2.Dispose()
+	if err != nil {
+		t.Errorf("TestChangeVersion2() CreateVersionDiff() %s", err)
+	}
+
+	chunkHashes2, err := GetRequiredChunkHashes(versionIndex2, versionDiff2)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() GetRequiredChunkHashes() %s", err)
+	}
+
+	getExistingContentComplete2 := &testGetExistingContentCompletionAPI{}
+	getExistingContentComplete2.wg.Add(1)
+	err = blockStoreProxy.GetExistingContent(chunkHashes2, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete2))
+	if err != nil {
+		t.Errorf("TestChangeVersion2() blockStoreAPI.GetExistingContent() %s", err)
+		getExistingContentComplete2.wg.Done()
+	}
+	getExistingContentComplete2.wg.Wait()
+	existingStoreIndex2 := getExistingContentComplete2.storeIndex
+	defer existingStoreIndex2.Dispose()
+
+	versionMissingStoreIndex2, err := CreateMissingContent(
+		hashAPI,
+		existingStoreIndex2,
+		versionIndex2,
+		65536,
+		1024)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() CreateMissingContent() %s", err)
+	}
+	defer versionMissingStoreIndex2.Dispose()
+
+	writeContentProgress2 := CreateProgress(t, "WriteContent")
+	defer writeContentProgress2.Dispose()
+
+	err = WriteContent(
+		storageAPI2,
+		blockStoreProxy,
+		jobAPI,
+		&writeContentProgress2,
+		versionMissingStoreIndex2,
+		versionIndex2,
+		"content2")
+	if err != nil {
+		t.Errorf("TestChangeVersion2() WriteContent() %s", err)
+	}
+
+	chunkHashes3, err := GetRequiredChunkHashes(
+		versionIndex2,
+		versionDiff2)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() GetRequiredChunkHashes() %s", err)
+	}
+
+	getExistingContentComplete3 := &testGetExistingContentCompletionAPI{}
+	getExistingContentComplete3.wg.Add(1)
+	err = blockStoreProxy.GetExistingContent(chunkHashes3, 0, CreateAsyncGetExistingContentAPI(getExistingContentComplete3))
+	if err != nil {
+		t.Errorf("TestChangeVersion2() blockStoreAPI.GetExistingContent() %s", err)
+		getExistingContentComplete3.wg.Done()
+	}
+	getExistingContentComplete3.wg.Wait()
+	existingStoreIndex3 := getExistingContentComplete3.storeIndex
+	defer existingStoreIndex3.Dispose()
+
+	changeVersionProgress := CreateProgress(t, "ChangeVersion2")
+	defer changeVersionProgress.Dispose()
+
+	concurrentChunkWriteAPI := CreateConcurrentChunkWriteAPI(storageAPI, "content")
+	defer concurrentChunkWriteAPI.Dispose()
+
+	err = ChangeVersion2(
+		blockStoreProxy,
+		storageAPI,
+		concurrentChunkWriteAPI,
+		hashAPI,
+		jobAPI,
+		&changeVersionProgress,
+		existingStoreIndex3,
+		versionIndex,
+		versionIndex2,
+		versionDiff2,
+		"content",
+		true)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() ChangeVersion() %s", err)
+	}
+
+	targetStoreFlushComplete := &flushCompletionAPI{}
+	targetStoreFlushComplete.wg.Add(1)
+	targetStoreFlushComplete.asyncFlushAPI = CreateAsyncFlushAPI(targetStoreFlushComplete)
+	err = blockStoreProxy.Flush(targetStoreFlushComplete.asyncFlushAPI)
+	if err != nil {
+		t.Errorf("TestChangeVersion2() blockStoreProxy.Flush() %s", err)
+		targetStoreFlushComplete.wg.Done()
+	}
+	targetStoreFlushComplete.wg.Wait()
+	if targetStoreFlushComplete.err != nil {
+		t.Errorf("TestChangeVersion2() blockStoreProxy.Flush() OnComplete: %s", err)
+	}
+}

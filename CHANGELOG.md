@@ -1,5 +1,5 @@
 ##
-- **UPDATED** Updated to golang 1.21
+- **UPDATED** Update to golang 1.21
 - **UPDATED** Update longtaillib to v0.4.1
 - **UPDATED** Updated all golang dependencies
 - **ADDED** Switch to using `Longtail_ChangeVersion2`

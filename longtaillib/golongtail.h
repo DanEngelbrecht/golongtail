@@ -29,6 +29,7 @@
 #include "longtail/include/lib/meowhash/longtail_meowhash.h"
 #include "longtail/include/lib/zstd/longtail_zstd.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
@@ -264,6 +265,10 @@ static void DisableMemtrace() {
     Longtail_SetAllocAndFree(0,  0);
     Longtail_MemTracer_Dispose();
 }
+
+#if defined(_MSC_VER) && (_MSC_VER >= 1900)
+    extern "C" { FILE __iob_func[3] = { *stdin,*stdout,*stderr }; } 
+#endif
 
 #ifdef __cplusplus
 }

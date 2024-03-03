@@ -31,11 +31,16 @@ type fsBlobObject struct {
 }
 
 const UNCPrefix = "\\\\?\\"
+const NetworkPrefix = "\\"
 
 func NormalizeFileSystemPath(path string) string {
 	if strings.HasPrefix(path, UNCPrefix) {
 		forwardSlashReplaced := strings.Replace(path, "/", "\\", -1)
 		doubleBackwardRemoved := UNCPrefix + strings.Replace(forwardSlashReplaced[len(UNCPrefix):], "\\\\", "\\", -1)
+		return doubleBackwardRemoved
+	} else if strings.HasPrefix(path, NetworkPrefix) {
+		forwardSlashReplaced := strings.Replace(path, "/", "\\", -1)
+		doubleBackwardRemoved := NetworkPrefix + strings.Replace(forwardSlashReplaced[len(NetworkPrefix):], "\\\\", "\\", -1)
 		return doubleBackwardRemoved
 	}
 	backwardRemoved := strings.Replace(path, "\\", "/", -1)

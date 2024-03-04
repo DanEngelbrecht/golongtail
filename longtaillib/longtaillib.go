@@ -926,10 +926,10 @@ func (chunkerAPI *Longtail_ChunkerAPI) Dispose() {
 }
 
 // CreateConcurrentChunkWriteAPI ...
-func CreateConcurrentChunkWriteAPI(storageAPI Longtail_StorageAPI, basePath string) Longtail_ConcurrentChunkWriteAPI {
+func CreateConcurrentChunkWriteAPI(storageAPI Longtail_StorageAPI, versionIndex Longtail_VersionIndex, versionDiff Longtail_VersionDiff, basePath string) Longtail_ConcurrentChunkWriteAPI {
 	cBasePath := C.CString(basePath)
 	defer C.free(unsafe.Pointer(cBasePath))
-	return Longtail_ConcurrentChunkWriteAPI{cConcurrentChunkWriteAPI: C.Longtail_CreateConcurrentChunkWriteAPI(storageAPI.cStorageAPI, cBasePath)}
+	return Longtail_ConcurrentChunkWriteAPI{cConcurrentChunkWriteAPI: C.Longtail_CreateConcurrentChunkWriteAPI(storageAPI.cStorageAPI, versionIndex.cVersionIndex, versionDiff.cVersionDiff, cBasePath)}
 }
 
 // Longtail_ConcurrentChunkWriteAPI.Dispose() ...
@@ -1540,6 +1540,20 @@ func GetFilesRecursively(storageAPI Longtail_StorageAPI, pathFilter Longtail_Pat
 	defer C.free(unsafe.Pointer(cFolderPath))
 	var fileInfos *C.struct_Longtail_FileInfos
 	errno := C.Longtail_GetFilesRecursively(storageAPI.cStorageAPI, pathFilter.cPathFilterAPI, nil, nil, cFolderPath, &fileInfos)
+	if errno != 0 {
+		return Longtail_FileInfos{cFileInfos: nil}, errors.Wrap(errnoToError(errno), fname)
+	}
+	return Longtail_FileInfos{cFileInfos: fileInfos}, nil
+}
+
+// GetFilesRecursively2 ...
+func GetFilesRecursively2(storageAPI Longtail_StorageAPI, jobAPI Longtail_JobAPI, pathFilter Longtail_PathFilterAPI, rootPath string) (Longtail_FileInfos, error) {
+	const fname = "GetFilesRecursively"
+
+	cFolderPath := C.CString(rootPath)
+	defer C.free(unsafe.Pointer(cFolderPath))
+	var fileInfos *C.struct_Longtail_FileInfos
+	errno := C.Longtail_GetFilesRecursively2(storageAPI.cStorageAPI, jobAPI.cJobAPI, pathFilter.cPathFilterAPI, nil, nil, cFolderPath, &fileInfos)
 	if errno != 0 {
 		return Longtail_FileInfos{cFileInfos: nil}, errors.Wrap(errnoToError(errno), fname)
 	}

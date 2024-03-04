@@ -359,6 +359,7 @@ typedef int (*Longtail_Storage_UnlockFileFunc)(struct Longtail_StorageAPI* stora
 typedef char* (*Longtail_Storage_GetParentPathFunc)(struct Longtail_StorageAPI* storage_api, const char* path);
 typedef int (*Longtail_Storage_MapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 typedef void (*Longtail_Storage_UnmapFileFunc)(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
+typedef int (*Longtail_Storage_OpenAppendFileFunc)(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 
 struct Longtail_StorageAPI
 {
@@ -388,6 +389,7 @@ struct Longtail_StorageAPI
     Longtail_Storage_GetParentPathFunc GetParentPath;
     Longtail_Storage_MapFileFunc MapFile;
     Longtail_Storage_UnmapFileFunc UnMapFile;
+    Longtail_Storage_OpenAppendFileFunc OpenAppendFile;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetStorageAPISize();
@@ -419,7 +421,8 @@ LONGTAIL_EXPORT struct Longtail_StorageAPI* Longtail_MakeStorageAPI(
     Longtail_Storage_UnlockFileFunc unlock_file_func,
     Longtail_Storage_GetParentPathFunc get_parent_path_func,
     Longtail_Storage_MapFileFunc map_file_func,
-    Longtail_Storage_UnmapFileFunc unmap_file_func);
+    Longtail_Storage_UnmapFileFunc unmap_file_func,
+    Longtail_Storage_OpenAppendFileFunc open_append_file_func);
 
 LONGTAIL_EXPORT int Longtail_Storage_OpenReadFile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 LONGTAIL_EXPORT int Longtail_Storage_GetSize(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t* out_size);
@@ -446,16 +449,16 @@ LONGTAIL_EXPORT int Longtail_Storage_UnlockFile(struct Longtail_StorageAPI* stor
 LONGTAIL_EXPORT char* Longtail_Storage_GetParentPath(struct Longtail_StorageAPI* storage_api, const char* path);
 LONGTAIL_EXPORT int Longtail_Storage_MapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HOpenFile f, uint64_t offset, uint64_t length, Longtail_StorageAPI_HFileMap* out_file_map, const void** out_data_ptr);
 LONGTAIL_EXPORT void Longtail_Storage_UnmapFile(struct Longtail_StorageAPI* storage_api, Longtail_StorageAPI_HFileMap m);
+LONGTAIL_EXPORT void Longtail_Storage_OpenAppendfile(struct Longtail_StorageAPI* storage_api, const char* path, Longtail_StorageAPI_HOpenFile* out_open_file);
 
 ////////////// Longtail_ConcurrentChunkWriteAPI
 
 struct Longtail_ConcurrentChunkWriteAPI;
 
-typedef struct Longtail_ConcurrentChunkWriteAPI_OpenFile* Longtail_ConcurrentChunkWriteAPI_HOpenFile;
-
-typedef int (*Longtail_ConcurrentChunkWrite_CreateDirFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
-typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
-typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input);
+typedef int (*Longtail_ConcurrentChunkWrite_CreateDirFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index);
+typedef int (*Longtail_ConcurrentChunkWrite_OpenFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index);
+typedef void (*Longtail_ConcurrentChunkWrite_CloseFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index);
+typedef int (*Longtail_ConcurrentChunkWrite_WriteFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, uint64_t offset, uint32_t size, const void* input);
 typedef int (*Longtail_ConcurrentChunkWrite_FlushFunc)(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
 
 struct Longtail_ConcurrentChunkWriteAPI
@@ -463,6 +466,7 @@ struct Longtail_ConcurrentChunkWriteAPI
     struct Longtail_API m_API;
     Longtail_ConcurrentChunkWrite_CreateDirFunc CreateDir;
     Longtail_ConcurrentChunkWrite_OpenFunc Open;
+    Longtail_ConcurrentChunkWrite_CloseFunc Close;
     Longtail_ConcurrentChunkWrite_WriteFunc Write;
     Longtail_ConcurrentChunkWrite_FlushFunc Flush;
 };
@@ -474,12 +478,15 @@ LONGTAIL_EXPORT struct Longtail_ConcurrentChunkWriteAPI* Longtail_MakeConcurrent
     Longtail_DisposeFunc dispose_func,
     Longtail_ConcurrentChunkWrite_CreateDirFunc create_dir_func,
     Longtail_ConcurrentChunkWrite_OpenFunc open_func,
+    Longtail_ConcurrentChunkWrite_CloseFunc close_func,
     Longtail_ConcurrentChunkWrite_WriteFunc write_func,
-    Longtail_ConcurrentChunkWrite_FlushFunc flush_func);
+    Longtail_ConcurrentChunkWrite_FlushFunc flush_func
+);
 
-LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path);
-LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, const char* path, uint32_t chunk_write_count, Longtail_ConcurrentChunkWriteAPI_HOpenFile* out_open_file);
-LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, Longtail_ConcurrentChunkWriteAPI_HOpenFile in_open_file, uint64_t offset, uint32_t size, uint32_t chunk_count, const void* input);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_CreateDir(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Open(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index);
+LONGTAIL_EXPORT void Longtail_ConcurrentChunkWrite_Close(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index);
+LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Write(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api, uint32_t asset_index, uint64_t offset, uint32_t size, const void* input);
 LONGTAIL_EXPORT int Longtail_ConcurrentChunkWrite_Flush(struct Longtail_ConcurrentChunkWriteAPI* concurrent_file_write_api);
 
 ////////////// Longtail_ProgressAPI
@@ -507,7 +514,7 @@ LONGTAIL_EXPORT void Longtail_Progress_OnProgress(struct Longtail_ProgressAPI* p
 
 struct Longtail_JobAPI;
 typedef void* Longtail_JobAPI_Jobs;
-typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id, int is_cancelled);
+typedef int (*Longtail_JobAPI_JobFunc)(void* context, uint32_t job_id, int detected_error);
 typedef void* Longtail_JobAPI_Group;
 
 typedef uint32_t (*Longtail_Job_GetWorkerCountFunc)(struct Longtail_JobAPI* job_api);
@@ -529,7 +536,7 @@ struct Longtail_JobAPI
     Longtail_Job_ReadyJobsFunc ReadyJobs;
     Longtail_Job_WaitForAllJobsFunc WaitForAllJobs;
     Longtail_Job_ResumeJobFunc ResumeJob;
-    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCountFunc;
+    Longtail_Job_GetMaxBatchCountFunc GetMaxBatchCount;
 };
 
 LONGTAIL_EXPORT uint64_t Longtail_GetJobAPISize();
@@ -816,6 +823,40 @@ LONGTAIL_EXPORT int Longtail_BlockStore_Flush(struct Longtail_BlockStoreAPI* blo
 typedef void (*Longtail_Assert)(const char* expression, const char* file, int line);
 LONGTAIL_EXPORT void Longtail_SetAssert(Longtail_Assert assert_func);
 
+typedef void (*Longtail_MonitorGetStoredBlockPrepare)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorGetStoredBlockLoad)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorGetStoredBlockLoaded)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
+typedef void (*Longtail_MonitorGetStoredBlockComplete)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
+typedef void (*Longtail_MonitorAssetRemove)(const struct Longtail_VersionIndex* source_version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorAssetOpen)(const struct Longtail_VersionIndex* target_version_index, uint32_t asset_index, int err);
+typedef void (*Longtail_MonitorAssetWrite)(const struct Longtail_StoreIndex* target_store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t write_offset, uint32_t size, uint32_t chunk_index, uint32_t chunk_index_in_block, uint32_t chunk_count_in_block, uint32_t block_index, uint32_t block_data_offset, int err);
+typedef void (*Longtail_MonitorChunkRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* target_version_index, uint32_t block_index, uint32_t chunk_index, uint32_t chunk_index_in_block, int err);
+typedef void (*Longtail_MonitorBlockCompose)(const struct Longtail_StoreIndex* store_index, uint32_t block_index);
+typedef void (*Longtail_MonitorBlockSave)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, uint64_t block_size);
+typedef void (*Longtail_MonitorBlockSaved)(const struct Longtail_StoreIndex* store_index, uint32_t block_index, int err);
+typedef void (*Longtail_MonitorAssetRead)(const struct Longtail_StoreIndex* store_index, const struct Longtail_VersionIndex* version_index, uint32_t asset_index, uint64_t read_offset, uint32_t size, TLongtail_Hash chunk_hash, uint32_t block_index, uint32_t block_data_offset, int err);
+typedef void (*Longtail_MonitorAssetClose)(const struct Longtail_VersionIndex* version_index, uint32_t asset_index);
+
+struct Longtail_Monitor
+{
+    uint64_t StructSize;
+    Longtail_MonitorGetStoredBlockPrepare   BlockPrepare;
+    Longtail_MonitorGetStoredBlockLoad      BlockLoad;
+    Longtail_MonitorGetStoredBlockLoaded    BlockLoaded;
+    Longtail_MonitorGetStoredBlockComplete  BlockLoadComplete;
+    Longtail_MonitorAssetRemove             AssetRemove;
+    Longtail_MonitorAssetOpen               AssetOpen;
+    Longtail_MonitorAssetWrite              AssetWrite;
+    Longtail_MonitorChunkRead               ChunkRead;
+    Longtail_MonitorBlockCompose            BlockCompose;
+    Longtail_MonitorBlockSave               BlockSave;
+    Longtail_MonitorBlockSaved              BlockSaved;
+    Longtail_MonitorAssetClose              AssetClose;
+    Longtail_MonitorAssetRead               AssetRead;
+};
+
+LONGTAIL_EXPORT void Longtail_SetMonitor(struct Longtail_Monitor* monitor);
+
 struct Longtail_LogField {
     const char* name;
     const char* value;
@@ -916,12 +957,20 @@ LONGTAIL_EXPORT int Longtail_GetLogLevel();
     }
 #endif // defined(LONGTAIL_ASSERTS)
 
+#ifdef STBDS_REALLOC
+    extern void* Longtail_STBRealloc(void* context, void* old_ptr, size_t size);
+    extern void Longtail_STBFree(void* context, void* ptr);
+#endif // STBDS_REALLOC
 
-typedef void* (*Longtail_Alloc_Func)(const char* context, size_t s);
 typedef void (*Longtail_Free_Func)(void* p);
-LONGTAIL_EXPORT void Longtail_SetAllocAndFree(Longtail_Alloc_Func alloc, Longtail_Free_Func free);
 
 LONGTAIL_EXPORT void* Longtail_Alloc(const char* context, size_t s);
+
+typedef void* (*Longtail_ReAlloc_Func)(const char* context, void* old, size_t s);
+LONGTAIL_EXPORT void Longtail_SetReAllocAndFree(Longtail_ReAlloc_Func alloc, Longtail_Free_Func free);
+
+LONGTAIL_EXPORT void* Longtail_ReAlloc(const char* context, void* old, size_t s);
+
 LONGTAIL_EXPORT void Longtail_Free(void* p);
 
 /*! @brief Ensures the full parent path exists.
@@ -943,7 +992,31 @@ LONGTAIL_EXPORT int EnsureParentPathExists(struct Longtail_StorageAPI* storage_a
  */
 LONGTAIL_EXPORT char* Longtail_Strdup(const char* str);
 
-/*! @brief Get all files and directories in a path recursivley.
+/*! @brief Runs jobs in batched mode.
+ *
+ * Runs the jobs using the job_api submitting the jobs in batches to handle job counts that exceeds Longtail_JobAPI::GetMaxBatchCount()
+ *
+ * @param[in] job_api               An implementation of struct Longtail_JobAPI interface
+ * @param[in] progress_api          An implementation of struct Longtail_JobAPI interface or null if no progress indication is required
+ * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
+ * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
+ * @param[in] total_job_count       Total number of jobs to execute
+ * @param[in] job_funcs             Array of job functions to execute, array must be at least of size @p total_job_count
+ * @param[in] job_ctxs              Array of job contexts for job functions, array must be at least of size @p total_job_count
+ * @param[out] out_jobs_submitted   Number of jobs submitted (and executed), this may be less than @p total_job_count if an error occurs
+ * @return                          Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_RunJobsBatched(
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_ProgressAPI* progress_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    uint32_t total_job_count,
+    Longtail_JobAPI_JobFunc * job_funcs,
+    void** job_ctxs,
+    uint32_t * out_jobs_submitted);
+
+/*! @brief Get all files and directories in a path recursively.
  *
  * Gets all the files and directories and allocates a struct Longtail_FileInfos structure with the details.
  * Free the struct Longtail_FileInfos using Longtail_Free()
@@ -964,7 +1037,30 @@ LONGTAIL_EXPORT int Longtail_GetFilesRecursively(
     const char* root_path,
     struct Longtail_FileInfos** out_file_infos);
 
-/*! @brief Get the size of a constructedV VersionIndex.
+/*! @brief Get all files and directories in a path recursively.
+ *
+ * Gets all the files and directories and allocates a struct Longtail_FileInfos structure with the details.
+ * Free the struct Longtail_FileInfos using Longtail_Free()
+ *
+ * @param[in] storage_api           An implementation of struct Longtail_StorageAPI interface.
+ * @param[in] optional_job_api      An implementation of struct Longtail_JobAPI interface or null if multithreading should not be used
+ * @param[in] path_filter_api       An implementation of struct Longtail_PathFilter interface or null if no filtering is required
+ * @param[in] optional_cancel_api   An implementation of struct Longtail_CancelAPI interface or null if no cancelling is required
+ * @param[in] optional_cancel_token A cancel token or null if @p optional_cancel_api is null
+ * @param[in] root_path             Root path to search for files and directories - may not be null
+ * @param[out] out_file_infos       Pointer to a struct Longtail_FileInfos* pointer which will be set on success
+ * @return                          Return code (errno style), zero on success
+ */
+LONGTAIL_EXPORT int Longtail_GetFilesRecursively2(
+    struct Longtail_StorageAPI* storage_api,
+    struct Longtail_JobAPI* job_api,
+    struct Longtail_PathFilterAPI* path_filter_api,
+    struct Longtail_CancelAPI* optional_cancel_api,
+    Longtail_CancelAPI_HCancelToken optional_cancel_token,
+    const char* root_path,
+    struct Longtail_FileInfos** out_file_infos);
+
+/*! @brief Get the size of a constructed VersionIndex.
  *
  * @param[in] asset_count             The number of assets (files and directories) in the index
  * @param[in] chunk_count             The number of chunks in the version index

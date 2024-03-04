@@ -22,13 +22,15 @@ type AsyncFolderScanner struct {
 func (scanner *AsyncFolderScanner) Scan(
 	sourceFolderPath string,
 	pathFilter longtaillib.Longtail_PathFilterAPI,
-	fs longtaillib.Longtail_StorageAPI) {
+	fs longtaillib.Longtail_StorageAPI,
+	jobs longtaillib.Longtail_JobAPI) {
 	const fname = "AsyncFolderScanner.Scan"
 	scanner.wg.Add(1)
 	go func() {
 		startTime := time.Now()
-		fileInfos, err := longtaillib.GetFilesRecursively(
+		fileInfos, err := longtaillib.GetFilesRecursively2(
 			fs,
+			jobs,
 			pathFilter,
 			longtailstorelib.NormalizeFileSystemPath(sourceFolderPath))
 		if err != nil {

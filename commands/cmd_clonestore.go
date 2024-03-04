@@ -232,7 +232,7 @@ func updateCurrentVersionFromLongtail(
 		}
 	} else {
 		targetFolderScanner := longtailutils.AsyncFolderScanner{}
-		targetFolderScanner.Scan(targetPath, pathFilter, fs)
+		targetFolderScanner.Scan(targetPath, pathFilter, fs, jobs)
 
 		targetIndexReader := longtailutils.AsyncVersionIndexReader{}
 		targetIndexReader.Read(targetPath,
@@ -299,7 +299,9 @@ func updateCurrentVersionFromLongtail(
 			longtailstorelib.NormalizeFileSystemPath(targetPath),
 			retainPermissions)
 	} else {
-		concurrentChunkWriteAPI := longtaillib.CreateConcurrentChunkWriteAPI(fs, longtailstorelib.NormalizeFileSystemPath(targetPath))
+		concurrentChunkWriteAPI := longtaillib.CreateConcurrentChunkWriteAPI(fs, sourceVersionIndex,
+			versionDiff,
+			longtailstorelib.NormalizeFileSystemPath(targetPath))
 		defer concurrentChunkWriteAPI.Dispose()
 		err = longtaillib.ChangeVersion2(
 			sourceStore,
@@ -326,7 +328,7 @@ func updateCurrentVersionFromLongtail(
 		return longtaillib.Longtail_VersionIndex{}, hash, errors.Wrap(err, fname)
 	}
 	targetFolderScanner := longtailutils.AsyncFolderScanner{}
-	targetFolderScanner.Scan(targetPath, pathFilter, fs)
+	targetFolderScanner.Scan(targetPath, pathFilter, fs, jobs)
 
 	targetIndexReader := longtailutils.AsyncVersionIndexReader{}
 	targetIndexReader.Read(targetPath,

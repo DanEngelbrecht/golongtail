@@ -258,11 +258,11 @@ static struct Longtail_VersionIndex* GetArchiveVersionIndex(struct Longtail_Arch
 
 static void EnableMemtrace() {
     Longtail_MemTracer_Init();
-    Longtail_SetAllocAndFree(Longtail_MemTracer_Alloc, Longtail_MemTracer_Free);
+    Longtail_SetReAllocAndFree(Longtail_MemTracer_ReAlloc, Longtail_MemTracer_Free);
 }
 
 static void DisableMemtrace() {
-    Longtail_SetAllocAndFree(0,  0);
+    Longtail_SetReAllocAndFree(0,  0);
     Longtail_MemTracer_Dispose();
 }
 

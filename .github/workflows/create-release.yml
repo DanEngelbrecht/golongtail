@@ -42,7 +42,7 @@ jobs:
           go-version: 1.21
 
       - name: Check out source code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build
         run: |
@@ -61,7 +61,7 @@ jobs:
           cp ${{matrix.target}} dist/
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: dist-${{matrix.platform}}-${{matrix.arch}}
           path: dist
@@ -74,28 +74,28 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Download Linux artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-linux-amd64
         path: dist-linux-x64
 
     - name: Download MacOs x64 artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-macos-amd64
         path: dist-macos-x64
 
     - name: Download MacOs arm64 artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-macos-arm64
         path: dist-macos-arm64
 
     - name: Download Win32 artifacts
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v4
       with:
         name: dist-win32-amd64
         path: dist-win32-x64

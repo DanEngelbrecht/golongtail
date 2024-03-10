@@ -1,5 +1,8 @@
 ##
 - **FIXED** Networks share paths that starts with \\ no longer need to be manually escaped (fixes https://github.com/DanEngelbrecht/golongtail/issues/249)
+- **UPDATED** Update longtaillib to v0.4.2
+
+## v0.4.1
 - **UPDATED** Update to golang 1.21
 - **UPDATED** Update longtaillib to v0.4.1
 - **UPDATED** Updated all golang dependencies

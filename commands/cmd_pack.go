@@ -72,15 +72,15 @@ func pack(
 	fs := longtaillib.CreateFSStorageAPI()
 	defer fs.Dispose()
 
-	sourceFolderScanner := longtailutils.AsyncFolderScanner{}
-	if sourceIndexPath == "" {
-		sourceFolderScanner.Scan(sourceFolderPath, pathFilter, fs)
-	}
-
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 	hashRegistry := longtaillib.CreateFullHashRegistry()
 	defer hashRegistry.Dispose()
+
+	sourceFolderScanner := longtailutils.AsyncFolderScanner{}
+	if sourceIndexPath == "" {
+		sourceFolderScanner.Scan(sourceFolderPath, pathFilter, fs, jobs)
+	}
 
 	compressionType, err := longtailutils.GetCompressionType(compressionAlgorithm)
 	if err != nil {

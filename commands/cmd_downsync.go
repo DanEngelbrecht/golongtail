@@ -121,7 +121,7 @@ func downsync(
 
 	targetFolderScanner := longtailutils.AsyncFolderScanner{}
 	if scanTarget && targetIndexPath == "" {
-		targetFolderScanner.Scan(resolvedTargetFolderPath, pathFilter, fs)
+		targetFolderScanner.Scan(resolvedTargetFolderPath, pathFilter, fs, jobs)
 	}
 
 	hashRegistry := longtaillib.CreateFullHashRegistry()
@@ -267,7 +267,7 @@ func downsync(
 	changeVersionStartTime := time.Now()
 	changeVersionProgress := longtailutils.CreateProgress("Updating version          ", 1)
 	defer changeVersionProgress.Dispose()
-	concurrentChunkWriteAPI := longtaillib.CreateConcurrentChunkWriteAPI(fs, longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath))
+	concurrentChunkWriteAPI := longtaillib.CreateConcurrentChunkWriteAPI(fs, sourceVersionIndex, versionDiff, longtailstorelib.NormalizeFileSystemPath(resolvedTargetFolderPath))
 	defer concurrentChunkWriteAPI.Dispose()
 
 	if useLegacyWrite {

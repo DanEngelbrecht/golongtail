@@ -1015,14 +1015,14 @@ func randomArray(size int) []byte {
 
 func createFilledStorage(rootPath string) Longtail_StorageAPI {
 	storageAPI := CreateInMemStorageAPI()
-	storageAPI.WriteToStorage(rootPath, "first_folder/my_file.txt", []byte("the content of my_file"))
-	storageAPI.WriteToStorage(rootPath, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
-	storageAPI.WriteToStorage(rootPath, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
-	storageAPI.WriteToStorage(rootPath, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 	storageAPI.WriteToStorage(rootPath, "bin/small.bin", randomArray(8192))
 	storageAPI.WriteToStorage(rootPath, "bin/huge.bin", randomArray(65535*16))
 	storageAPI.WriteToStorage(rootPath, "bin/medium.bin", randomArray(32768))
 	storageAPI.WriteToStorage(rootPath, "bin/large.bin", randomArray(65535))
+	storageAPI.WriteToStorage(rootPath, "first_folder/my_file.txt", []byte("the content of my_file"))
+	storageAPI.WriteToStorage(rootPath, "second_folder/my_second_file.txt", []byte("second file has different content than my_file"))
+	storageAPI.WriteToStorage(rootPath, "top_level.txt", []byte("the top level file is also a text file with dummy content"))
+	storageAPI.WriteToStorage(rootPath, "first_folder/empty/file/deeply/nested/file/in/lots/of/nests.txt", []byte{})
 	return storageAPI
 }
 
@@ -1046,8 +1046,8 @@ func TestGetFileRecursively(t *testing.T) {
 		t.Errorf("TestGetFileRecursively() GetFilePermissions() %d != %d", len(permissions), fileCount)
 	}
 	path := fileInfos.GetPath(0)
-	if path != "first_folder/" {
-		t.Errorf("TestGetFileRecursively() GetPaths().GetPath() %s != %s", path, "first_folder/")
+	if path != "bin/" {
+		t.Errorf("TestGetFileRecursively() GetPaths().GetPath() %s != %s", path, "bin/")
 	}
 }
 
@@ -1593,7 +1593,7 @@ func TestChangeVersion2(t *testing.T) {
 	changeVersionProgress := CreateProgress(t, "ChangeVersion2")
 	defer changeVersionProgress.Dispose()
 
-	concurrentChunkWriteAPI := CreateConcurrentChunkWriteAPI(storageAPI, "content")
+	concurrentChunkWriteAPI := CreateConcurrentChunkWriteAPI(storageAPI, versionIndex2, versionDiff2, "content")
 	defer concurrentChunkWriteAPI.Dispose()
 
 	err = ChangeVersion2(

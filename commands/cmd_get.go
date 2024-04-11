@@ -130,7 +130,7 @@ func get(
 }
 
 type GetCmd struct {
-	GetConfigURIs []string `name:"source-path" help:"File uri(s) for json formatted get-config file" required:"" sep:" "`
+	GetConfigURIs []string `name:"source-path" help:"File uri(s) for json formatted get-config file" required:"" sep:"|"`
 	S3EndpointResolverURLOption
 	TargetPathOption
 	TargetIndexUriOption

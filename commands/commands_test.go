@@ -8,11 +8,20 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/alecthomas/kong"
+	"github.com/sirupsen/logrus"
 )
 
 func executeCommandLine(command string, params ...string) (string, error) {
+	log := logrus.WithFields(logrus.Fields{
+		"command":      command,
+		"params": params,
+	})
+
 	args := []string{command}
 	args = append(args, params...)
+
+	log.Info("++++++ running command")
+
 	//	args := strings.Split(commandLine, " ")
 	parser, err := kong.New(&Cli)
 	if err != nil {

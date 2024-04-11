@@ -1,4 +1,8 @@
 ##
+- **CHANGED** For multi-source downsync/get the separator for paths is changed to | to avoid problems with path that contains spaces
+- **FIXED** Network paths with spaces in them don't work - #252
+
+## v0.4.2
 - **FIXED** Networks share paths that starts with \\ no longer need to be manually escaped (fixes https://github.com/DanEngelbrecht/golongtail/issues/249)
 - **UPDATED** Update longtaillib to v0.4.2
 

@@ -316,7 +316,7 @@ func TestMultiVersionDownsync(t *testing.T) {
 	executeCommandLine("upsync", "--include-filter-regex", ".*/$**.*\\.layer2$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer2.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer2.lsi")
 	executeCommandLine("upsync", "--include-filter-regex", ".*/$**.*\\.layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer3.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer3.lsi")
 
-	cmd, err := executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/base.lvi "+fsBlobPathPrefix+"/index/layer2.lvi "+fsBlobPathPrefix+"/index/layer3.lvi", "--target-path", testPath+"/target", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi "+fsBlobPathPrefix+"/index/layer2.lsi "+fsBlobPathPrefix+"/index/layer3.lsi")
+	cmd, err := executeCommandLine("downsync", "--source-paths", fsBlobPathPrefix+"/index/base.lvi|"+fsBlobPathPrefix+"/index/layer2.lvi|"+fsBlobPathPrefix+"/index/layer3.lvi", "--target-path", testPath+"/target", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi|"+fsBlobPathPrefix+"/index/layer2.lsi|"+fsBlobPathPrefix+"/index/layer3.lsi")
 	if err != nil {
 		t.Errorf("%s: %s", cmd, err)
 	}

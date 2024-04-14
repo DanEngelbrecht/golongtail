@@ -13,6 +13,7 @@ import (
 
 func get(
 	numWorkerCount int,
+	getConfigPath string,
 	getConfigPaths []string,
 	s3EndpointResolverURI string,
 	targetFolderPath string,
@@ -30,6 +31,7 @@ func get(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                 fname,
 		"numWorkerCount":        numWorkerCount,
+		"getConfigPath":         getConfigPath,
 		"getConfigPaths":        getConfigPaths,
 		"s3EndpointResolverURI": s3EndpointResolverURI,
 		"targetFolderPath":      targetFolderPath,
@@ -50,6 +52,10 @@ func get(
 	timeStats := []longtailutils.TimeStat{}
 
 	readGetConfigStartTime := time.Now()
+
+	if getConfigPath != "" {
+		getConfigPaths = []string{getConfigPath}
+	}
 
 	if len(getConfigPaths) < 1 {
 		err := fmt.Errorf("source-path is missing")
@@ -109,12 +115,14 @@ func get(
 		numWorkerCount,
 		blobStoreURI,
 		s3EndpointResolverURI,
+		"",
 		sourceFilePaths,
 		targetFolderPath,
 		targetIndexPath,
 		localCachePath,
 		retainPermissions,
 		validate,
+		"",
 		versionLocalStoreIndexPaths,
 		includeFilterRegEx,
 		excludeFilterRegEx,
@@ -130,7 +138,8 @@ func get(
 }
 
 type GetCmd struct {
-	GetConfigURIs []string `name:"source-path" help:"File uri(s) for json formatted get-config file" required:"" sep:" "`
+	GetConfigURI  string   `name:"source-path" help:"File uri(s) for json formatted get-config file" xor:"source-path,source-paths" required:""`
+	GetConfigURIs []string `name:"source-paths" help:"File uri(s) for json formatted get-config file" xor:"source-path,source-paths" required:"" sep:"|"`
 	S3EndpointResolverURLOption
 	TargetPathOption
 	TargetIndexUriOption
@@ -149,6 +158,7 @@ type GetCmd struct {
 func (r *GetCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := get(
 		ctx.NumWorkerCount,
+		r.GetConfigURI,
 		r.GetConfigURIs,
 		r.S3EndpointResolverURL,
 		r.TargetPath,

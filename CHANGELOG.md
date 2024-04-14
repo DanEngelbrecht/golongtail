@@ -4,6 +4,7 @@
   -- `--source-path` vs `--source-paths`
   -- `--version-local-store-index-path` vs `--version-local-store-index-paths`
 - **FIXED** Network paths with spaces in them don't work - #252
+- **UPDATED** Updated all golang dependencies
 
 ## v0.4.2
 - **FIXED** Networks share paths that starts with \\ no longer need to be manually escaped (fixes https://github.com/DanEngelbrecht/golongtail/issues/249)

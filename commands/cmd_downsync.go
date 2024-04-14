@@ -31,12 +31,14 @@ func downsync(
 	numWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
+	sourceFilePath string,
 	sourceFilePaths []string,
 	targetFolderPath string,
 	targetIndexPath string,
 	localCachePath string,
 	retainPermissions bool,
 	validate bool,
+	versionLocalStoreIndexPath string,
 	versionLocalStoreIndexPaths []string,
 	includeFilterRegEx string,
 	excludeFilterRegEx string,
@@ -50,12 +52,14 @@ func downsync(
 		"numWorkerCount":              numWorkerCount,
 		"blobStoreURI":                blobStoreURI,
 		"s3EndpointResolverURI":       s3EndpointResolverURI,
+		"sourceFilePath":              sourceFilePath,
 		"sourceFilePaths":             sourceFilePaths,
 		"targetFolderPath":            targetFolderPath,
 		"targetIndexPath":             targetIndexPath,
 		"localCachePath":              localCachePath,
 		"retainPermissions":           retainPermissions,
 		"validate":                    validate,
+		"versionLocalStoreIndexPath":  versionLocalStoreIndexPath,
 		"versionLocalStoreIndexPaths": versionLocalStoreIndexPaths,
 		"includeFilterRegEx":          includeFilterRegEx,
 		"excludeFilterRegEx":          excludeFilterRegEx,
@@ -73,6 +77,10 @@ func downsync(
 
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
+
+	if sourceFilePath != "" {
+		sourceFilePaths = []string{sourceFilePath}
+	}
 
 	if len(sourceFilePaths) < 1 {
 		err := fmt.Errorf("please provide at least one source path uri")
@@ -177,6 +185,10 @@ func downsync(
 
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
+
+	if versionLocalStoreIndexPath != "" {
+		versionLocalStoreIndexPaths = append([]string{versionLocalStoreIndexPath}, versionLocalStoreIndexPaths...)
+	}
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
 	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPaths, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
@@ -454,12 +466,14 @@ func downsync(
 type DownsyncCmd struct {
 	StorageURIOption
 	S3EndpointResolverURLOption
+	SourceUriOption
 	MultiSourceUrisOption
 	TargetPathOption
 	TargetIndexUriOption
 	CachePathOption
 	RetainPermissionsOption
 	ValidateTargetOption
+	VersionLocalStoreIndexPathOption
 	MultiVersionLocalStoreIndexPathsOption
 	TargetPathIncludeRegExOption
 	TargetPathExcludeRegExOption
@@ -474,12 +488,14 @@ func (r *DownsyncCmd) Run(ctx *Context) error {
 		ctx.NumWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
+		r.SourcePath,
 		r.SourcePaths,
 		r.TargetPath,
 		r.TargetIndexPath,
 		r.CachePath,
 		r.RetainPermissions,
 		r.Validate,
+		r.VersionLocalStoreIndexPath,
 		r.VersionLocalStoreIndexPaths,
 		r.IncludeFilterRegEx,
 		r.ExcludeFilterRegEx,

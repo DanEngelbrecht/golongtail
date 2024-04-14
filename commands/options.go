@@ -33,11 +33,11 @@ type TargetPathExcludeRegExOption struct {
 }
 
 type StorageURIOption struct {
-	StorageURI string `name:"storage-uri" help"Storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
+	StorageURI string `name:"storage-uri" help:"Storage URI (local file system, GCS and S3 bucket URI supported)" required:""`
 }
 
 type S3EndpointResolverURLOption struct {
-	S3EndpointResolverURL string `name:"s3-endpoint-resolver-uri" help"Optional URI for S3 endpoint resolver"`
+	S3EndpointResolverURL string `name:"s3-endpoint-resolver-uri" help:"Optional URI for S3 endpoint resolver"`
 }
 
 type CachePathOption struct {
@@ -57,11 +57,11 @@ type TargetIndexUriOption struct {
 }
 
 type SourceUriOption struct {
-	SourcePath string `name:"source-path" help:"Source file uri" required:""`
+	SourcePath string `name:"source-path" help:"Source file uri" xor:"source-path,source-paths" required:""`
 }
 
 type MultiSourceUrisOption struct {
-	SourcePaths []string `name:"source-path" help:"Source file uri(s)" required:"" sep:" "`
+	SourcePaths []string `name:"source-paths" help:"Source file uri(s)" xor:"source-path,source-paths" required:"" sep:"|"`
 }
 
 type ValidateTargetOption struct {
@@ -69,11 +69,11 @@ type ValidateTargetOption struct {
 }
 
 type VersionLocalStoreIndexPathOption struct {
-	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file cant be read it will fall back to the master store index"`
+	VersionLocalStoreIndexPath string `name:"version-local-store-index-path" help:"Path to an optimized store index for this particular version. If the file cant be read it will fall back to the master store index" xor:"version-local-store-index-path,version-local-store-index-paths"`
 }
 
 type MultiVersionLocalStoreIndexPathsOption struct {
-	VersionLocalStoreIndexPaths []string `name:"version-local-store-index-path" help:"Path(s) to an optimized store index matching the source. If any of the file(s) cant be read it will fall back to the master store index" sep:" "`
+	VersionLocalStoreIndexPaths []string `name:"version-local-store-index-paths" help:"Path(s) to an optimized store index matching the source. If any of the file(s) cant be read it will fall back to the master store index" xor:"version-local-store-index-path,version-local-store-index-paths" sep:"|"`
 }
 
 type VersionIndexPathOption struct {

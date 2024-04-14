@@ -10,14 +10,6 @@ cloud.google.com/go/iam v1.1.7/go.mod h1:J4PMPg8TtyurAUvSmPj8FF3EDgY1SPRZxcUGrn7
 cloud.google.com/go/storage v1.40.0 h1:VEpDQV5CJxFmJ6ueWNsKxcr1QAYOXEgxDa+sBbJahPw=
 cloud.google.com/go/storage v1.40.0/go.mod h1:Rrj7/hKlG87BLqDJYtwR0fbPld8uJPbQ2ucUMY7Ir0g=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/DanEngelbrecht/golongtail/longtaillib v0.0.22 h1:5or54HyoAxd3dkRKZ5Bg3/Sb4p2fWtHoS5COVuFe6fY=
-github.com/DanEngelbrecht/golongtail/longtaillib v0.0.22/go.mod h1:ejpeLHDNZcsHACYHjP2aupKUtItLWdmdhJiMrQOJcQ0=
-github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0-20240414131145-63d18ae8c68a h1:YNGIJO3zX1L0aDVD1mWfRM1g/0I4H+yXpqmnkaLxmpA=
-github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0-20240414131145-63d18ae8c68a/go.mod h1:C8Jng+aCTuoZIM/3tGOXuT+6cvIDeaBCLOUeRbNhdro=
-github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0-20240414131145-63d18ae8c68a h1:pbfCg8neJtz7Z8vWGFv5UHUfapf+Yw06tnqiWPDhrCk=
-github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0-20240414131145-63d18ae8c68a/go.mod h1:9jo+gNdfoBSIMPLJFOcTZC9csKN8E8YZuWlVK/BWn1U=
-github.com/DanEngelbrecht/golongtail/remotestore v0.0.0-20240414131145-63d18ae8c68a h1:HbcZOs6vFYudTkiER6rwBhlbCaw3fTxgZjaRvh93XsQ=
-github.com/DanEngelbrecht/golongtail/remotestore v0.0.0-20240414131145-63d18ae8c68a/go.mod h1:sn7D0KwBO290YtRt5IewE/eUdlM46VjS1Xj4h/PjEX0=
 github.com/alecthomas/assert/v2 v2.6.0 h1:o3WJwILtexrEUk3cUVal3oiQY2tfgr/FHWiz/v2n4FU=
 github.com/alecthomas/assert/v2 v2.6.0/go.mod h1:Bze95FyfUr7x34QZrjL+XP+0qgp/zg8yS+TtBj1WA3k=
 github.com/alecthomas/kong v0.9.0 h1:G5diXxc85KvoV2f0ZRVuMsi45IrBgx9zDNGNj165aPA=

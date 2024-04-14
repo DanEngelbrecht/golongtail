@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/sirupsen/logrus"
 )
 

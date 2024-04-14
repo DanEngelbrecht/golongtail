@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/alecthomas/kong"
 )
 

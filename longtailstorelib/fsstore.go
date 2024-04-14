@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
 )
 

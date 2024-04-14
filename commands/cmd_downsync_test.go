@@ -5,8 +5,6 @@ import (
 	"os"
 	"path"
 	"testing"
-
-	"github.com/DanEngelbrecht/golongtail/longtailutils"
 )
 
 func TestDownsync(t *testing.T) {

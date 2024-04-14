@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"

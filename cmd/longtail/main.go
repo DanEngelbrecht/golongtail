@@ -7,12 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/DanEngelbrecht/golongtail/commands"
-	"github.com/DanEngelbrecht/golongtail/longtaillib"
-	"github.com/DanEngelbrecht/golongtail/longtailutils"
-	"github.com/alecthomas/kong"
-	"github.com/sirupsen/logrus"
 )
 
 const appDescriptionTemplate = "Incremental asset delivery tool. Version %s"

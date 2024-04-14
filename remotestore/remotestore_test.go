@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/pkg/errors"
 )
 

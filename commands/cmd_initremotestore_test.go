@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/alecthomas/kong"
 )

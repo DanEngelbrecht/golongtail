@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )

@@ -11,6 +11,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // AccessType defines how we will access the data in the store

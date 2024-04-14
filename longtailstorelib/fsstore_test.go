@@ -1,13 +1,12 @@
 package longtailstorelib
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
 	"sync"
 	"testing"
-
-	"golang.org/x/net/context"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )

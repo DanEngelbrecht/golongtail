@@ -1,0 +1,10 @@
+go 1.22.0
+
+use (
+    ./cmd/longtail
+    ./commands
+    ./longtaillib
+    ./longtailstorelib
+    ./longtailutils
+    ./remotestore
+)

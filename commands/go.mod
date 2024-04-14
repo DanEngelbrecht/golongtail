@@ -1,14 +1,12 @@
 module github.com/DanEngelbrecht/golongtail/commands
 
-go 1.21
-
-toolchain go1.22.0
+go 1.22.0
 
 require (
-	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0-00010101000000-000000000000
-	github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0-00010101000000-000000000000
-	github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0-00010101000000-000000000000
-	github.com/DanEngelbrecht/golongtail/remotestore v0.0.0-00010101000000-000000000000
+	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0
+	github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0
+	github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0
+	github.com/DanEngelbrecht/golongtail/remotestore v0.0.0
 	github.com/alecthomas/kong v0.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3

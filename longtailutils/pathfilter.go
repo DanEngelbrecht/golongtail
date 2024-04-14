@@ -6,7 +6,6 @@ import (
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/pkg/errors"
-
 	log "github.com/sirupsen/logrus"
 )
 

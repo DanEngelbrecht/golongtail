@@ -1,10 +1,9 @@
 package longtailstorelib
 
 import (
+	"context"
 	"net/url"
 	"testing"
-
-	"golang.org/x/net/context"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 )

@@ -1,17 +1,14 @@
 module github.com/DanEngelbrecht/golongtail/longtailstorelib
 
-go 1.21
-
-toolchain go1.22.0
+go 1.22.0
 
 require (
 	cloud.google.com/go/storage v1.40.0
-	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0-00010101000000-000000000000
+	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0
 	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
 	github.com/pkg/errors v0.9.1
-	golang.org/x/net v0.24.0
 	google.golang.org/api v0.172.0
 )
 
@@ -51,6 +48,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.25.0 // indirect
 	go.opentelemetry.io/otel/trace v1.25.0 // indirect
 	golang.org/x/crypto v0.22.0 // indirect
+	golang.org/x/net v0.24.0 // indirect
 	golang.org/x/oauth2 v0.19.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.19.0 // indirect

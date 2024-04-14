@@ -10,7 +10,6 @@ import (
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
 	"github.com/pkg/errors"
-
 	"github.com/sirupsen/logrus"
 )
 

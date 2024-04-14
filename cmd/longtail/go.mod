@@ -1,13 +1,11 @@
 module github.com/DanEngelbrecht/golongtail/cmd/longtail
 
-go 1.21
-
-toolchain go1.22.0
+go 1.22.0
 
 require (
-	github.com/DanEngelbrecht/golongtail/commands v0.0.0-00010101000000-000000000000
-	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0-00010101000000-000000000000
-	github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0-00010101000000-000000000000
+	github.com/DanEngelbrecht/golongtail/commands v0.0.0
+	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0
+	github.com/DanEngelbrecht/golongtail/longtailutils v0.0.0
 	github.com/alecthomas/kong v0.9.0
 	github.com/sirupsen/logrus v1.9.3
 )
@@ -18,8 +16,8 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.7 // indirect
 	cloud.google.com/go/storage v1.40.0 // indirect
-	github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0-20240310103413-f8a9c5526cf0 // indirect
-	github.com/DanEngelbrecht/golongtail/remotestore v0.0.0-20240310103413-f8a9c5526cf0 // indirect
+	github.com/DanEngelbrecht/golongtail/longtailstorelib v0.0.0 // indirect
+	github.com/DanEngelbrecht/golongtail/remotestore v0.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.26.1 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.27.11 // indirect

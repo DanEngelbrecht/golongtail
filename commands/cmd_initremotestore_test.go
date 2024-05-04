@@ -2,40 +2,35 @@ package commands
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"runtime"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
+	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/kong"
 )
 
 func runInitRemoteStore(t *testing.T, storageURI string) {
 	parser, err := kong.New(&Cli)
-	if err != nil {
-		t.Errorf("kong.New(Cli) failed with %s", err)
-	}
+	assert.NoError(t, err, "kong.New(Cli)")
 	args := []string{
 		"init-remote-store",
 		"--storage-uri", storageURI,
 	}
 	ctx, err := parser.Parse(args)
-	if err != nil {
-		t.Errorf("parser.Parse() failed with %s", err)
-	}
+	assert.NoError(t, err, "parser.Parse(%v)", args)
 
 	context := &Context{
 		NumWorkerCount: runtime.NumCPU(),
 	}
 	err = ctx.Run(context)
-	if err != nil {
-		t.Errorf("ctx.Run(context) failed with %s", err)
-	}
+	assert.NoError(t, err, "ctx.Run(context)")
 }
 
 func TestInitRemoteStore(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 
 	// Init an empty store
@@ -56,9 +51,7 @@ func TestInitRemoteStore(t *testing.T) {
 
 	// Init the store again to pick up existing blocks
 	cmd, err := executeCommandLine("init-remote-store", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
@@ -76,9 +69,7 @@ func TestInitRemoteStore(t *testing.T) {
 
 	// Force rebuilding the index even though it exists
 	cmd, err = executeCommandLine("init-remote-store", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current")
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)

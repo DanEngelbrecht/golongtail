@@ -1,12 +1,14 @@
 package commands
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
+
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestGet(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 
@@ -15,24 +17,18 @@ func TestGet(t *testing.T) {
 	executeCommandLine("put", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.json", "--storage-uri", fsBlobPathPrefix+"/storage")
 
 	cmd, err := executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v2.json", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestGetWithVersionLSI(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 
@@ -41,24 +37,18 @@ func TestGetWithVersionLSI(t *testing.T) {
 	executeCommandLine("put", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v3.lsi")
 
 	cmd, err := executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v2.json", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestGetWithCache(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("put", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.json", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -66,24 +56,18 @@ func TestGetWithCache(t *testing.T) {
 	executeCommandLine("put", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.json", "--storage-uri", fsBlobPathPrefix+"/storage")
 
 	cmd, err := executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current", "--cache-path", testPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v2.json", "--target-path", testPath+"/version/current", "--cache-path", testPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current", "--cache-path", testPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestGetWithLSIAndCache(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("put", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -91,24 +75,18 @@ func TestGetWithLSIAndCache(t *testing.T) {
 	executeCommandLine("put", "--source-path", testPath+"/version/v3", "--target-path", fsBlobPathPrefix+"/index/v3.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v3.lsi")
 
 	cmd, err := executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v1.json", "--target-path", testPath+"/version/current", "--cache-path", testPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v2.json", "--target-path", testPath+"/version/current", "--cache-path", testPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("get", "--source-path", fsBlobPathPrefix+"/index/v3.json", "--target-path", testPath+"/version/current", "--cache-path", testPath+"/cache")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v3FilesCreate)
 }
 
 func TestMultiVersionGet(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createLayeredData(t, fsBlobPathPrefix)
 	executeCommandLine("put", "--exclude-filter-regex", ".*layer2$**.*layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/base.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi")
@@ -116,14 +94,12 @@ func TestMultiVersionGet(t *testing.T) {
 	executeCommandLine("put", "--include-filter-regex", ".*/$**.*\\.layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer3.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer3.lsi")
 
 	cmd, err := executeCommandLine("get", "--source-paths", fsBlobPathPrefix+"/index/base.json|"+fsBlobPathPrefix+"/index/layer2.json|"+fsBlobPathPrefix+"/index/layer3.json", "--target-path", testPath+"/target")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "target", layerData)
 }
 
 func TestMultiVersionGetMismatchStoreURI(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createLayeredData(t, fsBlobPathPrefix)
 	executeCommandLine("put", "--exclude-filter-regex", ".*layer2$**.*layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/base.json", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/base.lsi")
@@ -131,7 +107,5 @@ func TestMultiVersionGetMismatchStoreURI(t *testing.T) {
 	executeCommandLine("put", "--include-filter-regex", ".*/$**.*\\.layer3$", "--source-path", testPath+"/source", "--target-path", fsBlobPathPrefix+"/index/layer3.json", "--storage-uri", fsBlobPathPrefix+"/bad_storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/layer3.lsi")
 
 	cmd, err := executeCommandLine("get", "--source-paths", fsBlobPathPrefix+"/index/base.json|"+fsBlobPathPrefix+"/index/layer2.json|"+fsBlobPathPrefix+"/index/layer3.json", "--target-path", testPath+"/target")
-	if err == nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Error(t, err, cmd)
 }

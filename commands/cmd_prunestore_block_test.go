@@ -2,15 +2,16 @@ package commands
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailstorelib"
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestPruneStoreBlocks(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -23,47 +24,30 @@ func TestPruneStoreBlocks(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	blobStore, err := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
-	if err != nil {
-		t.Errorf("%s: %s", "longtailstorelib.CreateBlobStoreForURI", err)
-	}
+	assert.NoError(t, err, cmd)
 
 	blobClient, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("%s: %s", "blobStore.CreateClient", err)
-	}
+	assert.NoError(t, err, cmd)
 	defer blobClient.Close()
 
 	blobObjects, err := blobClient.GetObjects("storage/chunks")
-	if err != nil {
-		t.Errorf("%s: %s", "blobClient.NewClient", err)
-	}
+	assert.NoError(t, err, cmd)
 
-	if len(blobObjects) != 3 {
-		t.Errorf("%d: %d", len(blobObjects), 3)
-	}
+	assert.Equal(t, len(blobObjects), 3)
 
 	cmd, err = executeCommandLine("prune-store-blocks", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi", "--blocks-root-path", fsBlobPathPrefix+"/storage/chunks")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	blobObjects, err = blobClient.GetObjects("storage/chunks")
-	if err != nil {
-		t.Errorf("%s: %s", "blobClient.GetObjects", err)
-	}
-
-	if len(blobObjects) != 2 {
-		t.Errorf("%d: %d", len(blobObjects), 2)
-	}
+	assert.NoError(t, err, "blobClient.GetObjects(%s)", "storage/chunks")
+	assert.Equal(t, len(blobObjects), 2)
 }
 
 func TestPruneStoreBlocksDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -76,41 +60,25 @@ func TestPruneStoreBlocksDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	cmd, err := executeCommandLine("prune-store-index", "--source-paths", testPath+"/files.txt", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	blobStore, err := longtailstorelib.CreateBlobStoreForURI(fsBlobPathPrefix)
-	if err != nil {
-		t.Errorf("%s: %s", "longtailstorelib.CreateBlobStoreForURI", err)
-	}
+	assert.NoError(t, err, "longtailstorelib.CreateBlobStoreForURI(%s)", fsBlobPathPrefix)
 
 	blobClient, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("%s: %s", "blobStore.NewClient", err)
-	}
+	assert.NoError(t, err, "blobStore.NewClient")
 	defer blobClient.Close()
 
 	blobObjects, err := blobClient.GetObjects("storage/chunks")
-	if err != nil {
-		t.Errorf("%s: %s", "blobClient.GetObjects", err)
-	}
+	assert.NoError(t, err, "blobClient.GetObjects(%s)", "storage/chunks")
 
-	if len(blobObjects) != 3 {
-		t.Errorf("%d: %d", len(blobObjects), 3)
-	}
+	assert.Equal(t, len(blobObjects), 3)
 
 	cmd, err = executeCommandLine("prune-store-blocks", "--store-index-path", fsBlobPathPrefix+"/storage/store.lsi", "--blocks-root-path", fsBlobPathPrefix+"/storage/chunks", "--dry-run")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	blobObjects, err = blobClient.GetObjects("storage/chunks")
-	if err != nil {
-		t.Errorf("%s: %s", "blobClient.GetObjects", err)
-	}
+	assert.NoError(t, err, "blobClient.GetObjects(%s)", "storage/chunks")
 
-	if len(blobObjects) != 3 {
-		t.Errorf("%d: %d", len(blobObjects), 3)
-	}
+	assert.Equal(t, len(blobObjects), 3)
 }

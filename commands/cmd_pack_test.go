@@ -1,42 +1,32 @@
 package commands
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
+
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestPack(t *testing.T) {
 
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	createVersionData(t, testPath)
 	cmd, err := executeCommandLine("pack", "--source-path", testPath+"/version/v1", "--target-path", testPath+"/index/v1.la")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	cmd, err = executeCommandLine("pack", "--source-path", testPath+"/version/v2", "--target-path", testPath+"/index/v2.la")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	cmd, err = executeCommandLine("pack", "--source-path", testPath+"/version/v3", "--target-path", testPath+"/index/v3.la")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 }
 
 func TestPackCompressionAlgos(t *testing.T) {
 
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	createVersionData(t, testPath)
 	cmd, err := executeCommandLine("pack", "--source-path", testPath+"/version/v1", "--target-path", testPath+"/index/v1.la", "--compression-algorithm", "none")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	cmd, err = executeCommandLine("pack", "--source-path", testPath+"/version/v2", "--target-path", testPath+"/index/v2.la", "--compression-algorithm", "brotli_min")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	cmd, err = executeCommandLine("pack", "--source-path", testPath+"/version/v3", "--target-path", testPath+"/index/v3.la", "--compression-algorithm", "zstd_max")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 }

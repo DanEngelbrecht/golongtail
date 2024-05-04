@@ -1,14 +1,15 @@
 package commands
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtailutils"
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestPrune(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -21,28 +22,20 @@ func TestPrune(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err == nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Error(t, err, cmd)
 }
 
 func TestPruneWithValidate(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -55,28 +48,20 @@ func TestPruneWithValidate(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--storage-uri", fsBlobPathPrefix+"/storage", "--validate-versions")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err == nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Error(t, err, cmd)
 }
 
 func TestPruneWithLSI(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -94,28 +79,20 @@ func TestPruneWithLSI(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err == nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Error(t, err, cmd)
 }
 
 func TestPruneWithLSIAndWriteLSI(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -133,28 +110,20 @@ func TestPruneWithLSIAndWriteLSI(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--storage-uri", fsBlobPathPrefix+"/storage", "--write-version-local-store-index")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err == nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.Error(t, err, cmd)
 }
 
 func TestPruneDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage")
@@ -167,28 +136,20 @@ func TestPruneDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files.txt", sourceFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--storage-uri", fsBlobPathPrefix+"/storage", "--dry-run")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 }
 
 func TestPruneWithLSIDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -206,28 +167,20 @@ func TestPruneWithLSIDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--storage-uri", fsBlobPathPrefix+"/storage", "--dry-run")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 }
 
 func TestPruneWithLSIAndWriteLSIDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -245,28 +198,20 @@ func TestPruneWithLSIAndWriteLSIDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--storage-uri", fsBlobPathPrefix+"/storage", "--write-version-local-store-index", "--dry-run")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 }
 
 func TestPruneWithValidateAndLSIAndWriteLSIDryRun(t *testing.T) {
-	testPath, _ := ioutil.TempDir("", "test")
+	testPath, _ := os.MkdirTemp("", "test")
 	fsBlobPathPrefix := "fsblob://" + testPath
 	createVersionData(t, fsBlobPathPrefix)
 	executeCommandLine("upsync", "--source-path", testPath+"/version/v1", "--target-path", fsBlobPathPrefix+"/index/v1.lvi", "--storage-uri", fsBlobPathPrefix+"/storage", "--version-local-store-index-path", fsBlobPathPrefix+"/index/v1.lsi")
@@ -284,22 +229,14 @@ func TestPruneWithValidateAndLSIAndWriteLSIDryRun(t *testing.T) {
 	longtailutils.WriteToURI(fsBlobPathPrefix+"/files-lsi.txt", lsiFilesContent)
 
 	cmd, err := executeCommandLine("prune-store", "--source-paths", testPath+"/files.txt", "--version-local-store-index-paths", testPath+"/files-lsi.txt", "--storage-uri", fsBlobPathPrefix+"/storage", "--write-version-local-store-index", "--dry-run", "--validate-versions")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v1.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v1FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v2.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 	validateContent(t, fsBlobPathPrefix, "version/current", v2FilesCreate)
 	cmd, err = executeCommandLine("downsync", "--source-path", fsBlobPathPrefix+"/index/v3.lvi", "--target-path", testPath+"/version/current", "--storage-uri", fsBlobPathPrefix+"/storage")
-	if err != nil {
-		t.Errorf("%s: %s", cmd, err)
-	}
+	assert.NoError(t, err, cmd)
 }

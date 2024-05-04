@@ -10,17 +10,14 @@ import (
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestCreateStoreAndClient(t *testing.T) {
 	blobStore, err := NewMemBlobStore("the_path", true)
-	if err != nil {
-		t.Errorf("TestCreateStoreAndClient() NewMemBlobStore() %s", err)
-	}
+	assert.NoError(t, err, "NewMemBlobStore()")
 	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("TestCreateStoreAndClient() blobStore.NewClient(context.Background()) %s", err)
-	}
+	assert.NoError(t, err, "blobStore.NewClient(context.Background())")
 	defer client.Close()
 }
 
@@ -29,20 +26,12 @@ func TestListObjectsInEmptyStore(t *testing.T) {
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 	objects, err := client.GetObjects("")
-	if err != nil {
-		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %s", err)
-	}
-	if len(objects) != 0 {
-		t.Errorf("TestListObjectsInEmptyStore() client.GetObjects(\"\")) %d != %d", len(objects), 0)
-	}
+	assert.NoError(t, err, "client.GetObjects(\"\"))")
+	assert.Equal(t, len(objects), 0)
 	obj, _ := client.NewObject("should-not-exist")
 	data, err := obj.Read()
-	if !longtaillib.IsNotExist(err) {
-		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %s", err)
-	}
-	if data != nil {
-		t.Errorf("TestListObjectsInEmptyStore() obj.Read()) %v != %v", nil, data)
-	}
+	assert.True(t, longtaillib.IsNotExist(err))
+	assert.Equal(t, data, nil)
 }
 
 func TestSingleObjectStore(t *testing.T) {
@@ -50,32 +39,20 @@ func TestSingleObjectStore(t *testing.T) {
 	client, _ := blobStore.NewClient(context.Background())
 	defer client.Close()
 	obj, err := client.NewObject("my-fine-object.txt")
-	if err != nil {
-		t.Errorf("TestSingleObjectStore() client.NewObject(\"my-fine-object.txt\")) %s", err)
-	}
-	if exists, _ := obj.Exists(); exists {
-		t.Errorf("TestSingleObjectStore() obj.Exists()) %t != %t", exists, false)
-	}
+	assert.NoError(t, err, "client.NewObject(\"my-fine-object.txt\")")
+	exists, _ := obj.Exists()
+	assert.False(t, exists, "obj.Exists()")
 	testContent := "the content of the object"
 	ok, err := obj.Write([]byte(testContent))
-	if !ok {
-		t.Errorf("TestSingleObjectStore() obj.Write([]byte(testContent)) %t != %t", ok, true)
-	}
-	if err != nil {
-		t.Errorf("TestSingleObjectStore() obj.Write([]byte(testContent)) %s", err)
-	}
+	assert.NoError(t, err, "obj.Write([]byte(testContent))")
+	assert.True(t, ok, "obj.Write([]byte(testContent))")
+	assert.NoError(t, err, "obj.Write([]byte(testContent)")
 	data, err := obj.Read()
-	if err != nil {
-		t.Errorf("TestSingleObjectStore() obj.Read()) %s", err)
-	}
+	assert.NoError(t, err, "obj.Read()")
 	dataString := string(data)
-	if dataString != testContent {
-		t.Errorf("TestSingleObjectStore() string(data)) %s != %s", dataString, testContent)
-	}
+	assert.Equal(t, dataString, testContent)
 	err = obj.Delete()
-	if err != nil {
-		t.Errorf("TestSingleObjectStore() obj.Delete()) %s", err)
-	}
+	assert.NoError(t, err, "obj.Delete()")
 }
 
 func TestDeleteObject(t *testing.T) {
@@ -86,9 +63,9 @@ func TestDeleteObject(t *testing.T) {
 	testContent := "the content of the object"
 	_, _ = obj.Write([]byte(testContent))
 	obj.Delete()
-	if exists, _ := obj.Exists(); exists {
-		t.Errorf("TestSingleObjectStore() obj.Exists()) %t != %t", exists, false)
-	}
+	exists, err := obj.Exists()
+	assert.NoError(t, err, "obj.Exists()")
+	assert.False(t, exists, "obj.Exists()")
 }
 
 func TestListObjects(t *testing.T) {
@@ -102,28 +79,16 @@ func TestListObjects(t *testing.T) {
 	obj, _ = client.NewObject("my-fine-object3.txt")
 	obj.Write([]byte("my-fine-object3.txt"))
 	objects, err := client.GetObjects("")
-	if err != nil {
-		t.Errorf("TestListObjects() client.GetObjects(\"\")) %s", err)
-	}
-	if len(objects) != 3 {
-		t.Errorf("TestListObjects() client.GetObjects(\"\")) %d != %d", len(objects), 3)
-	}
+	assert.NoError(t, err, "TestListObjects() client.GetObjects(\"\")")
+	assert.Equal(t, len(objects), 3)
 	for _, o := range objects {
 		readObj, err := client.NewObject(o.Name)
-		if err != nil {
-			t.Errorf("TestListObjects() o.client.NewObject(o.Name)) %d != %d", len(objects), 3)
-		}
-		if readObj == nil {
-			t.Errorf("TestListObjects() o.client.NewObject(o.Name)) %v == %v", readObj, nil)
-		}
+		assert.NoError(t, err)
+		assert.NotEqual(t, readObj, nil)
 		data, err := readObj.Read()
-		if err != nil {
-			t.Errorf("TestListObjects() readObj.Read()) %s", err)
-		}
+		assert.NoError(t, err, nil)
 		stringData := string(data)
-		if stringData != o.Name {
-			t.Errorf("TestListObjects() string(data) != o.Name) %s != %s", stringData, o.Name)
-		}
+		assert.Equal(t, stringData, o.Name)
 	}
 }
 
@@ -136,64 +101,33 @@ func TestGenerationWrite(t *testing.T) {
 	testContent2 := "the content of the object2"
 	testContent3 := "the content of the object3"
 	exists, err := obj.LockWriteVersion()
-	if exists {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %t != %t", exists, false)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %s", err)
-	}
+	assert.False(t, exists)
+	assert.NoError(t, err, "obj.LockWriteVersion()")
 	ok, err := obj.Write([]byte(testContent1))
-	if !ok {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent1)) %t != %t", ok, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent1)) %s", err)
-	}
+	assert.True(t, ok)
+	assert.True(t, ok)
+	assert.NoError(t, err, "obj.Write([]byte(testContent1)")
 	ok, err = obj.Write([]byte(testContent2))
-	if ok {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %t != %t", ok, false)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %s", err)
-	}
+	assert.False(t, ok)
+	assert.NoError(t, err, "obj.Write([]byte(testContent2))")
 	obj2, _ := client.NewObject("my-fine-object.txt")
 	exists, err = obj.LockWriteVersion()
-	if !exists {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %t != %t", exists, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.LockWriteVersion()) %s", err)
-	}
+	assert.True(t, exists)
+	assert.NoError(t, err, "obj.LockWriteVersion()")
 	exists, err = obj2.LockWriteVersion()
-	if !exists {
-		t.Errorf("TestGenerationWrite() obj2.LockWriteVersion()) %t != %t", exists, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj2.LockWriteVersion()) %s", err)
-	}
+	assert.True(t, exists)
+	assert.NoError(t, err, "obj2.LockWriteVersion()")
 	ok, err = obj.Write([]byte(testContent2))
-	if !ok {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %t != %t", ok, true)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Write([]byte(testContent2))) %s", err)
-	}
+	assert.True(t, ok)
+	assert.NoError(t, err, "obj.Write([]byte(testContent2))")
 	ok, err = obj2.Write([]byte(testContent3))
-	if ok {
-		t.Errorf("TestGenerationWrite() obj2.Write([]byte(testContent3))) %t != %t", ok, false)
-	}
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj2.Write([]byte(testContent3))) %s", err)
-	}
+	assert.False(t, ok)
+	assert.NoError(t, err, "obj2.Write([]byte(testContent3))")
 	err = obj.Delete()
-	if err == nil {
-		t.Errorf("TestGenerationWrite() obj.Delete()) %s", err)
-	}
+	assert.Error(t, err)
 	obj.LockWriteVersion()
 	err = obj.Delete()
-	if err != nil {
-		t.Errorf("TestGenerationWrite() obj.Delete()) %s", err)
-	}
+	assert.NoError(t, err, "obj.Delete()")
 }
 
 func writeANumberWithRetry(number int, blobStore BlobStore) error {
@@ -242,69 +176,45 @@ func writeANumberWithRetry(number int, blobStore BlobStore) error {
 
 func TestCreateFSBlobStoreFromURI(t *testing.T) {
 	blobStore, err := CreateBlobStoreForURI("fsblob://my-blob-store")
-	if err != nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
-	}
+	assert.NoError(t, err, "TestCreateStores() CreateBlobStoreForURI()")
 	name := blobStore.String()
-	if !strings.Contains(name, "my-blob-store") {
-		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
-	}
+	assert.True(t, strings.Contains(name, "my-blob-store"))
 }
 
 func TestCreateGCSBlobStoreFromURI(t *testing.T) {
 	blobStore, err := CreateBlobStoreForURI("gs://my-blob-store")
-	if err != nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
-	}
+	assert.NoError(t, err, "TestCreateStores() CreateBlobStoreForURI()")
 	name := blobStore.String()
-	if !strings.Contains(name, "my-blob-store") {
-		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
-	}
+	assert.True(t, strings.Contains(name, "my-blob-store"))
 }
 
 func TestCreateS3BlobStoreFromURI(t *testing.T) {
 	blobStore, err := CreateBlobStoreForURI("s3://my-blob-store")
-	if err != nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
-	}
+	assert.NoError(t, err, "TestCreateStores() CreateBlobStoreForURI()")
 	name := blobStore.String()
-	if !strings.Contains(name, "my-blob-store") {
-		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
-	}
+	assert.True(t, strings.Contains(name, "my-blob-store"))
 }
 
 func TestCreateFileBlobStoreFromURI(t *testing.T) {
 	blobStore, err := CreateBlobStoreForURI("file://my-blob-store")
-	if err != nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
-	}
+	assert.NoError(t, err, "TestCreateStores() CreateBlobStoreForURI()")
 	name := blobStore.String()
-	if !strings.Contains(name, "my-blob-store") {
-		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
-	}
+	assert.True(t, strings.Contains(name, "my-blob-store"))
 }
 
 func TestCreateFileBlobStoreFromPath(t *testing.T) {
 	blobStore, err := CreateBlobStoreForURI("c:\\temp\\my-blob-store")
-	if err != nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", err)
-	}
+	assert.NoError(t, err, "TestCreateStores() CreateBlobStoreForURI()")
 	name := blobStore.String()
-	if !strings.Contains(name, "my-blob-store") {
-		t.Errorf("TestCreateStores() blobStore.String()) %s", name)
-	}
+	assert.True(t, strings.Contains(name, "my-blob-store"))
 }
 
 func TestCreateAzureGen1BlobStoreFromPath(t *testing.T) {
 	_, err := CreateBlobStoreForURI("abfs://my-blob-store")
-	if err == nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", "should fail")
-	}
+	assert.Error(t, err)
 }
 
 func TestCreateAzureGen2BlobStoreFromPath(t *testing.T) {
 	_, err := CreateBlobStoreForURI("abfss://my-blob-store")
-	if err == nil {
-		t.Errorf("TestCreateStores() CreateBlobStoreForURI()) %s", "should fail")
-	}
+	assert.Error(t, err)
 }

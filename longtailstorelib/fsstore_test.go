@@ -3,138 +3,96 @@ package longtailstorelib
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestFSBlobStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
-	if err != nil {
-		t.Errorf("NewFSBlobStore() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, blobStore, nil)
 	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("blobStore.NewClient() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, client, nil)
 	defer client.Close()
 	object, err := client.NewObject("test.txt")
-	if err != nil {
-		t.Errorf("client.NewObject() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, object, nil)
 	ok, err := object.Write([]byte("apa"))
-	if !ok {
-		t.Errorf("object.Write() ok != true")
-	}
-	if err != nil {
-		t.Errorf("object.Write() err == %s", err)
-	}
+	assert.True(t, ok)
+	assert.NoError(t, err)
 }
 
 func TestListObjectsInEmptyFSStore(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
-	if err != nil {
-		t.Errorf("NewFSBlobStore() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, blobStore, nil)
 	client, _ := blobStore.NewClient(context.Background())
+	assert.NoError(t, err)
+	assert.NotEqual(t, client, nil)
 	defer client.Close()
 	objects, err := client.GetObjects("")
-	if err != nil {
-		t.Errorf("TestListObjectsInEmptyFSStore() client.GetObjects(\"\")) %s", err)
-	}
-	if len(objects) != 0 {
-		t.Errorf("TestListObjectsInEmptyFSStore() client.GetObjects(\"\")) %d != %d", len(objects), 0)
-	}
-	obj, _ := client.NewObject("should-not-exist")
+	assert.NoError(t, err)
+	assert.Equal(t, len(objects), 0)
+	obj, err := client.NewObject("should-not-exist")
+	assert.NoError(t, err)
+	assert.NotEqual(t, obj, nil)
 	data, err := obj.Read()
-	if !longtaillib.IsNotExist(err) {
-		t.Errorf("TestListObjectsInEmptyFSStore() obj.Read()) %s", err)
-	}
-	if data != nil {
-		t.Errorf("TestListObjectsInEmptyFSStore() obj.Read()) %v != %v", nil, data)
-	}
+	assert.True(t, longtaillib.IsNotExist(err))
+	assert.Equal(t, data, nil)
 }
 
 func TestFSBlobStoreVersioning(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
-	if err != nil {
-		t.Errorf("NewFSBlobStore() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, blobStore, nil)
 	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("blobStore.NewClient() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, client, nil)
 	defer client.Close()
 	object, err := client.NewObject("test.txt")
-	if err != nil {
-		t.Errorf("client.NewObject() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, object, nil)
 	object.Delete()
 	exists, err := object.LockWriteVersion()
-	if err != nil {
-		t.Errorf("object.LockWriteVersion() err == %s", err)
-	}
-	if exists {
-		t.Errorf("object.LockWriteVersion() exists != false")
-	}
+	assert.NoError(t, err)
+	assert.False(t, exists)
 	ok, err := object.Write([]byte("apa"))
-	if !ok {
-		t.Errorf("object.Write() ok != true")
-	}
-	if err != nil {
-		t.Errorf("object.Write() err == %s", err)
-	}
+	assert.True(t, ok)
+	assert.NoError(t, err)
 	ok, err = object.Write([]byte("skapa"))
-	if ok {
-		t.Errorf("object.Write() ok != false")
-	}
-	if err != nil {
-		t.Errorf("object.Write() err == %s", err)
-	}
+	assert.False(t, ok)
+	assert.NoError(t, err)
 	exists, err = object.LockWriteVersion()
-	if err != nil {
-		t.Errorf("object.LockWriteVersion() err == %s", err)
-	}
-	if !exists {
-		t.Errorf("object.LockWriteVersion() exists == false")
-	}
+	assert.NoError(t, err)
+	assert.True(t, exists)
 	ok, err = object.Write([]byte("skapa"))
-	if !ok {
-		t.Errorf("object.Write() ok == false")
-	}
-	if err != nil {
-		t.Errorf("object.Write() err == %s", err)
-	}
+	assert.True(t, ok)
+	assert.NoError(t, err)
 	_, err = object.Read()
-	if err != nil {
-		t.Errorf("object.Read() err == %s", err)
-	}
+	assert.NoError(t, err)
 	err = object.Delete()
-	if err == nil {
-		t.Error("object.Delete() err != nil")
-	}
+	assert.Error(t, err)
 	exists, err = object.LockWriteVersion()
-	if err != nil {
-		t.Errorf("object.LockWriteVersion() err == %s", err)
-	}
+	assert.True(t, exists)
+	assert.NoError(t, err)
 	err = object.Delete()
-	if err != nil {
-		t.Errorf("object.Delete() err == %s", err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestFSBlobStoreVersioningStressTest(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, true)
-	if err != nil {
-		t.Errorf("NewFSBlobStore() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, blobStore, nil)
 
 	var wg sync.WaitGroup
 
@@ -154,41 +112,31 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 	}
 
 	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("blobStore.NewClient() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, client, nil)
 	defer client.Close()
 	object, err := client.NewObject("test.txt")
-	if err != nil {
-		t.Errorf("client.NewObject() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, object, nil)
 	data, err := object.Read()
-	if err != nil {
-		t.Errorf("object.Read() err == %s", err)
-	}
+	assert.NoError(t, err)
 	sliceData := strings.Split(string(data), "\n")
-	if len(sliceData) != 5*5 {
-		t.Errorf("strings.Split() err == %s", err)
-	}
+	assert.Equal(t, len(sliceData), 5*5)
 	for i := 0; i < 5*5; i++ {
 		expected := fmt.Sprintf("%05d", i+1)
-		if sliceData[i] != expected {
-			t.Errorf("strings.Split() %q == %q", sliceData[i], expected)
-		}
+		assert.Equal(t, sliceData[i], expected)
 	}
 }
 
 func TestFSGetObjects(t *testing.T) {
-	storePath, _ := ioutil.TempDir("", "test")
+	storePath, _ := os.MkdirTemp("", "test")
 	blobStore, err := NewFSBlobStore(storePath, false)
-	if err != nil {
-		t.Errorf("NewFSBlobStore() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, blobStore, nil)
 
 	client, err := blobStore.NewClient(context.Background())
-	if err != nil {
-		t.Errorf("blobStore.NewClient() err == %s", err)
-	}
+	assert.NoError(t, err)
+	assert.NotEqual(t, client, nil)
 	defer client.Close()
 	files := []string{"first.txt", "second.txt", "third.txt", "fourth.txt", "nested/first_nested.txt", "nested/second_nested.txt"}
 	for _, name := range files {
@@ -200,18 +148,10 @@ func TestFSGetObjects(t *testing.T) {
 	}
 
 	blobs, err := client.GetObjects("")
-	if err != nil {
-		t.Errorf("blobStore.GetObjects() err == %s", err)
-	}
-	if len(blobs) != len(files) {
-		t.Errorf("Can't find all written files with client.GetObjects()")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, len(blobs), len(files))
 
 	nestedBlobs, err := client.GetObjects("nest")
-	if err != nil {
-		t.Errorf("blobStore.GetObjects() err == %s", err)
-	}
-	if len(nestedBlobs) != 2 {
-		t.Errorf("Can't find all written files with client.GetObjects()")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, len(nestedBlobs), 2)
 }

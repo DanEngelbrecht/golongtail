@@ -1,6 +1,7 @@
 ##
 - **ADDED** New option to control the number of worker thread in remote stores to avoid overflowing the network connection.
   -- `--remote-worker-count` Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores
+- **FIXED** Don't update store index if we failed to upload blocks
 
 ## v0.4.3
 - **CHANGED** For multi-source downsync/get the separator for paths is changed to | to avoid problems with path that contains spaces

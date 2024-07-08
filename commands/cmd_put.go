@@ -16,6 +16,7 @@ import (
 
 func put(
 	numWorkerCount int,
+	numRemoteWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	sourceFolderPath string,
@@ -37,6 +38,7 @@ func put(
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
+		"numRemoteWorkerCount":       numRemoteWorkerCount,
 		"blobStoreURI":               blobStoreURI,
 		"s3EndpointResolverURI":      s3EndpointResolverURI,
 		"sourceFolderPath":           sourceFolderPath,
@@ -90,6 +92,7 @@ func put(
 
 	downSyncStoreStats, downSyncTimeStats, err := upsync(
 		numWorkerCount,
+		numRemoteWorkerCount,
 		blobStoreURI,
 		s3EndpointResolverURI,
 		sourceFolderPath,
@@ -176,6 +179,7 @@ type PutCmd struct {
 func (r *PutCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := put(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.OptionalStorageURI,
 		r.S3EndpointResolverURL,
 		r.SourcePath,

@@ -14,6 +14,7 @@ import (
 
 func cpVersionIndex(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	versionIndexPath string,
@@ -23,15 +24,16 @@ func cpVersionIndex(
 	enableFileMapping bool) ([]longtailutils.StoreStat, []longtailutils.TimeStat, error) {
 	const fname = "cpVersionIndex"
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
-		"fname":                 fname,
-		"numWorkerCount":        numWorkerCount,
-		"blobStoreURI":          blobStoreURI,
-		"s3EndpointResolverURI": s3EndpointResolverURI,
-		"versionIndexPath":      versionIndexPath,
-		"localCachePath":        localCachePath,
-		"sourcePath":            sourcePath,
-		"targetPath":            targetPath,
-		"enableFileMapping":     enableFileMapping,
+		"fname":                  fname,
+		"numWorkerCount":         numWorkerCount,
+		"remoteStoreWorkerCount": remoteStoreWorkerCount,
+		"blobStoreURI":           blobStoreURI,
+		"s3EndpointResolverURI":  s3EndpointResolverURI,
+		"versionIndexPath":       versionIndexPath,
+		"localCachePath":         localCachePath,
+		"sourcePath":             sourcePath,
+		"targetPath":             targetPath,
+		"enableFileMapping":      enableFileMapping,
 	})
 	log.Info(fname)
 
@@ -48,7 +50,7 @@ func cpVersionIndex(
 	defer hashRegistry.Dispose()
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -220,6 +222,7 @@ type CpCmd struct {
 func (r *CpCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := cpVersionIndex(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.VersionIndexPath,

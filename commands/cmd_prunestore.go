@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -133,7 +134,7 @@ func pruneOne(
 }
 
 func gatherBlocksToKeep(
-	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	storageURI string,
 	s3EndpointResolverURI string,
 	sourceFilePaths []string,
@@ -146,7 +147,7 @@ func gatherBlocksToKeep(
 	const fname = "gatherBlocksToKeep"
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                       fname,
-		"numWorkerCount":              numWorkerCount,
+		"remoteStoreWorkerCount":      remoteStoreWorkerCount,
 		"storageURI":                  storageURI,
 		"s3EndpointResolverURI":       s3EndpointResolverURI,
 		"writeVersionLocalStoreIndex": writeVersionLocalStoreIndex,
@@ -155,7 +156,7 @@ func gatherBlocksToKeep(
 		"dryRun":                      dryRun,
 	})
 	log.Debug(fname)
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return nil, errors.Wrap(err, fname)
 	}
@@ -163,7 +164,12 @@ func gatherBlocksToKeep(
 
 	usedBlocks := make(map[uint64]uint32)
 
-	resultChannel := make(chan pruneOneResult, numWorkerCount)
+	workerCount := remoteStoreWorkerCount
+	if workerCount == 0 {
+		workerCount = runtime.NumCPU()
+	}
+
+	resultChannel := make(chan pruneOneResult, workerCount)
 	activeWorkerCount := 0
 
 	progress := longtailutils.CreateProgress("Processing versions       ", 0)
@@ -178,7 +184,7 @@ func gatherBlocksToKeep(
 			versionLocalStoreIndexFilePath = versionLocalStoreIndexFilePaths[i]
 		}
 
-		if activeWorkerCount == numWorkerCount {
+		if activeWorkerCount == workerCount {
 			result := <-resultChannel
 			completed++
 			if result.err == nil {
@@ -261,6 +267,7 @@ func gatherBlocksToKeep(
 
 func pruneStore(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	storageURI string,
 	s3EndpointResolverURI string,
 	sourcePaths string,
@@ -273,6 +280,7 @@ func pruneStore(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
 		"numWorkerCount":               numWorkerCount,
+		"remoteStoreWorkerCount":       remoteStoreWorkerCount,
 		"storageURI":                   storageURI,
 		"s3EndpointResolverURI":        s3EndpointResolverURI,
 		"sourcePaths":                  sourcePaths,
@@ -337,7 +345,7 @@ func pruneStore(
 
 	gatherBlocksToKeepStartTime := time.Now()
 	blocksToKeep, err := gatherBlocksToKeep(
-		numWorkerCount,
+		remoteStoreWorkerCount,
 		storageURI,
 		s3EndpointResolverURI,
 		sourceFilePaths,
@@ -359,7 +367,7 @@ func pruneStore(
 		fmt.Printf("Prune would keep %d blocks", len(blocksToKeep))
 		return storeStats, timeStats, nil
 	}
-	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadWrite, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(storageURI, nil, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadWrite, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -405,6 +413,7 @@ type PruneStoreCmd struct {
 func (r *PruneStoreCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := pruneStore(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.SourcePaths,

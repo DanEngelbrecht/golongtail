@@ -12,6 +12,7 @@ import (
 
 func createVersionStoreIndex(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	sourceFilePath string,
@@ -20,6 +21,7 @@ func createVersionStoreIndex(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
+		"remoteStoreWorkerCount":     remoteStoreWorkerCount,
 		"blobStoreURI":               blobStoreURI,
 		"s3EndpointResolverURI":      s3EndpointResolverURI,
 		"sourceFilePath":             sourceFilePath,
@@ -35,7 +37,7 @@ func createVersionStoreIndex(
 	jobs := longtaillib.CreateBikeshedJobAPI(uint32(numWorkerCount), 0)
 	defer jobs.Dispose()
 
-	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	indexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -96,6 +98,7 @@ type CreateVersionStoreIndexCmd struct {
 func (r *CreateVersionStoreIndexCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := createVersionStoreIndex(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.SourcePath,

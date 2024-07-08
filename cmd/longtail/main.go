@@ -96,6 +96,8 @@ func runCommand() error {
 		context.NumWorkerCount = commands.Cli.WorkerCount
 	}
 
+	context.NumRemoteWorkerCount = commands.Cli.RemoteWorkerCount
+
 	if commands.Cli.MemTrace || commands.Cli.MemTraceDetailed || commands.Cli.MemTraceCSV != "" {
 		longtaillib.EnableMemtrace()
 		defer func() {

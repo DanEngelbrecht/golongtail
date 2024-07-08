@@ -8,7 +8,8 @@ var Cli struct {
 	MemTrace                bool                       `name:"mem-trace" help:"Output summary memory statistics from longtail"`
 	MemTraceDetailed        bool                       `name:"mem-trace-detailed" help:"Output detailed memory statistics from longtail"`
 	MemTraceCSV             string                     `name:"mem-trace-csv" help:"Output path for detailed memory statistics from longtail in csv format"`
-	WorkerCount             int                        `name:"worker-count" help:"Limit number of workers created, defaults to match number of logical CPUs (zero for default count)" default:"0"`
+	WorkerCount             int                        `name:"worker-count" help:"Set number of workers created, defaults to match number of logical CPUs (zero for default count)" default:"0"`
+	RemoteWorkerCount       int                        `name:"remote-worker-count" help:"Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores (zero for default count)" default:"0"`
 	LogToConsole            bool                       `name:"log-to-console" help:"Enable logging to console" default:"true" negatable:""`
 	LogFilePath             string                     `name:"log-file-path" help:"Path to log file for json formatted logging"`
 	LogColoring             bool                       `name:"log-coloring" help:"Use colored logging for stdout"`

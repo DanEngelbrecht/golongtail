@@ -13,6 +13,7 @@ import (
 
 func get(
 	numWorkerCount int,
+	numRemoteWorkerCount int,
 	getConfigPath string,
 	getConfigPaths []string,
 	s3EndpointResolverURI string,
@@ -31,6 +32,7 @@ func get(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                 fname,
 		"numWorkerCount":        numWorkerCount,
+		"numRemoteWorkerCount":  numRemoteWorkerCount,
 		"getConfigPath":         getConfigPath,
 		"getConfigPaths":        getConfigPaths,
 		"s3EndpointResolverURI": s3EndpointResolverURI,
@@ -113,6 +115,7 @@ func get(
 
 	downSyncStoreStats, downSyncTimeStats, err := downsync(
 		numWorkerCount,
+		numRemoteWorkerCount,
 		blobStoreURI,
 		s3EndpointResolverURI,
 		"",
@@ -158,6 +161,7 @@ type GetCmd struct {
 func (r *GetCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := get(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.GetConfigURI,
 		r.GetConfigURIs,
 		r.S3EndpointResolverURL,

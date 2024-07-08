@@ -29,6 +29,7 @@ func readVersionIndex(sourceFilePath string, opts ...longtailstorelib.BlobStoreO
 
 func downsync(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	sourceFilePath string,
@@ -50,6 +51,7 @@ func downsync(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                       fname,
 		"numWorkerCount":              numWorkerCount,
+		"remoteStoreWorkerCount":      remoteStoreWorkerCount,
 		"blobStoreURI":                blobStoreURI,
 		"s3EndpointResolverURI":       s3EndpointResolverURI,
 		"sourceFilePath":              sourceFilePath,
@@ -191,7 +193,7 @@ func downsync(
 	}
 
 	// MaxBlockSize and MaxChunksPerBlock are just temporary values until we get the remote index settings
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPaths, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, versionLocalStoreIndexPaths, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -486,6 +488,7 @@ type DownsyncCmd struct {
 func (r *DownsyncCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := downsync(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.SourcePath,

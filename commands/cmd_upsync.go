@@ -14,6 +14,7 @@ import (
 
 func upsync(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	sourceFolderPath string,
@@ -33,6 +34,7 @@ func upsync(
 	log := logrus.WithContext(context.Background()).WithFields(logrus.Fields{
 		"fname":                      fname,
 		"numWorkerCount":             numWorkerCount,
+		"remoteStoreWorkerCount":     remoteStoreWorkerCount,
 		"blobStoreURI":               blobStoreURI,
 		"s3EndpointResolverURI":      s3EndpointResolverURI,
 		"sourceFolderPath":           sourceFolderPath,
@@ -98,7 +100,7 @@ func upsync(
 		enableFileMapping,
 		&sourceFolderScanner)
 
-	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, remoteStoreWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrapf(err, fname)
 	}
@@ -244,6 +246,7 @@ type UpsyncCmd struct {
 func (r *UpsyncCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := upsync(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.SourcePath,

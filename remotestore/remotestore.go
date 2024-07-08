@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1960,6 +1961,11 @@ func CreateBlockStoreForURI(
 		if err != nil {
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		}
+
+		if numWorkerCount == 0 {
+			numWorkerCount = runtime.NumCPU()
+		}
+
 		fsBlockStore, err := NewRemoteBlockStore(
 			jobAPI,
 			fsBlobStore,
@@ -1981,6 +1987,14 @@ func CreateBlockStoreForURI(
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}
+
+			if numWorkerCount == 0 {
+				numWorkerCount = runtime.NumCPU()
+				if numWorkerCount > 8 {
+					numWorkerCount = 8
+				}
+			}
+
 			gcsBlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				gcsBlobStore,
@@ -1997,6 +2011,14 @@ func CreateBlockStoreForURI(
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}
+
+			if numWorkerCount == 0 {
+				numWorkerCount = runtime.NumCPU()
+				if numWorkerCount > 8 {
+					numWorkerCount = 8
+				}
+			}
+
 			s3BlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				s3BlobStore,

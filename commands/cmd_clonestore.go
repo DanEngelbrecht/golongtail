@@ -516,6 +516,7 @@ func cloneOneVersion(
 
 func cloneStore(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	sourceStoreURI string,
 	sourceEndpointResolverURI string,
 	targetStoreURI string,
@@ -539,6 +540,7 @@ func cloneStore(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                        fname,
 		"numWorkerCount":               numWorkerCount,
+		"remoteStoreWorkerCount":       remoteStoreWorkerCount,
 		"sourceStoreURI":               sourceStoreURI,
 		"sourceEndpointResolverURI":    sourceEndpointResolverURI,
 		"targetStoreURI":               targetStoreURI,
@@ -578,7 +580,7 @@ func cloneStore(
 	localFS := longtaillib.CreateFSStorageAPI()
 	defer localFS.Dispose()
 
-	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(sourceEndpointResolverURI))
+	sourceRemoteIndexStore, err := remotestore.CreateBlockStoreForURI(sourceStoreURI, nil, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadOnly, enableFileMapping, longtailutils.WithS3EndpointResolverURI(sourceEndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -612,7 +614,7 @@ func cloneStore(
 	defer sourceLRUBlockStore.Dispose()
 	defer sourceStore.Dispose()
 
-	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, nil, jobs, numWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
+	targetRemoteStore, err := remotestore.CreateBlockStoreForURI(targetStoreURI, nil, jobs, remoteStoreWorkerCount, targetBlockSize, maxChunksPerBlock, remotestore.ReadWrite, enableFileMapping, longtailutils.WithS3EndpointResolverURI(targetEndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -736,6 +738,7 @@ type CloneStoreCmd struct {
 func (r *CloneStoreCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := cloneStore(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.SourceStorageURI,
 		r.SourceS3EndpointResolverURL,
 		r.TargetStorageURI,

@@ -125,7 +125,7 @@ func TestFSBlobStoreVersioningStressTest(t *testing.T) {
 	for i := 0; i < 5*5; i++ {
 		expected := fmt.Sprintf("%05d", i+1)
 		assert.Equal(t, sliceData[i], expected)
-	}
+	}g
 }
 
 func TestFSGetObjects(t *testing.T) {

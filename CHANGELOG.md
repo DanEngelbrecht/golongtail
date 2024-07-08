@@ -1,11 +1,13 @@
 ##
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
- update longtaillib to 0.4.3 (#260)
+- **ADDED** New option to control the number of worker thread in remote stores to avoid overflowing the network connection.
+  -- `--remote-worker-count` Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores
+- **FIXED** Don't update store index if we failed to upload blocks
 - **UPDATED** Update to golang 1.23
 - **UPDATED** Updated all golang dependencies
 - **UPDATED** Update longtaillib to v0.4.3
 
-## 0.4.3
+## v0.4.3
 - **CHANGED** For multi-source downsync/get the separator for paths is changed to | to avoid problems with path that contains spaces
 - **CHANGED** Made multi-path options separate from single-path
   -- `--source-path` vs `--source-paths`

@@ -1,7 +1,7 @@
 ##
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
 - **ADDED** New option to control the number of worker thread in remote stores to avoid overflowing the network connection.
-  -- `--remote-worker-count` Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores
+  - `--remote-worker-count` Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores
 - **FIXED** Don't update store index if we failed to upload blocks
 - **UPDATED** Update to golang 1.23
 - **UPDATED** Updated all golang dependencies

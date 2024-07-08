@@ -843,6 +843,10 @@ func contentIndexWorker(
 
 		select {
 		case <-flushMessages:
+			if err != nil {
+				flushReplyMessages <- err
+				continue
+			}
 			if len(addedBlockIndexes) > 0 && accessType != ReadOnly {
 				newStoreIndex, err := addBlocksToRemoteStoreIndex(ctx, s, client, addedBlockIndexes)
 				if err != nil {
@@ -913,6 +917,11 @@ func contentIndexWorker(
 				pruneBlocksMessage.asyncCompleteAPI.OnComplete(prunedCount, errors.Wrap(err, fname))
 			}
 		}
+	}
+
+	if err != nil {
+		storeIndex.Dispose()
+		return err
 	}
 
 	if accessType == ReadOnly {

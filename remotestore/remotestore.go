@@ -845,12 +845,14 @@ func contentIndexWorker(
 		case <-flushMessages:
 			if err != nil {
 				flushReplyMessages <- err
+				err = nil
 				continue
 			}
 			if len(addedBlockIndexes) > 0 && accessType != ReadOnly {
 				newStoreIndex, err := addBlocksToRemoteStoreIndex(ctx, s, client, addedBlockIndexes)
 				if err != nil {
 					flushReplyMessages <- err
+					err = nil
 					continue
 				}
 				addedBlockIndexes = nil
@@ -919,7 +921,7 @@ func contentIndexWorker(
 		}
 	}
 
-	if err != nil {
+	if err != nil && !longtaillib.IsNotExist(err) {
 		storeIndex.Dispose()
 		return err
 	}

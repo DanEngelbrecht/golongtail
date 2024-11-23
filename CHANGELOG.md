@@ -6,6 +6,11 @@
 - **UPDATED** Update to golang 1.23
 - **UPDATED** Updated all golang dependencies
 - **UPDATED** Update longtaillib to v0.4.3
+  - **FIXED** Fixed file corruption on Linux when using `--use-legacy-write` option. [chris-believer](https://github.com/chris-believer)
+  - **FIXED** Fixed large file corruption. [timsjostrand](https://github.com/timsjostrand)
+  - **UPDATED** Update of ZStd: 1.5.6 https://github.com/facebook/zstd/releases/tag/v1.5.6
+  - **UPDATED** Update of LZ4: 1.10.0 https://github.com/lz4/lz4/releases/tag/v1.10.0
+  - **UPDATED** Update of Blake3: 1.5.4 https://github.com/BLAKE3-team/BLAKE3/releases/tag/1.5.4
 
 ## v0.4.3
 - **CHANGED** For multi-source downsync/get the separator for paths is changed to | to avoid problems with path that contains spaces

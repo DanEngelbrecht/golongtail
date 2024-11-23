@@ -3,9 +3,10 @@ package commands
 import "github.com/DanEngelbrecht/golongtail/longtailutils"
 
 type Context struct {
-	NumWorkerCount int
-	StoreStats     []longtailutils.StoreStat
-	TimeStats      []longtailutils.TimeStat
+	NumWorkerCount       int
+	NumRemoteWorkerCount int
+	StoreStats           []longtailutils.StoreStat
+	TimeStats            []longtailutils.TimeStat
 }
 
 type CompressionOption struct {

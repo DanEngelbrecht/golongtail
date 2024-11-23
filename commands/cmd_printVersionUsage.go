@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/DanEngelbrecht/golongtail/longtaillib"
@@ -14,6 +15,7 @@ import (
 
 func printVersionUsage(
 	numWorkerCount int,
+	remoteStoreWorkerCount int,
 	blobStoreURI string,
 	s3EndpointResolverURI string,
 	versionIndexPath string,
@@ -41,7 +43,7 @@ func printVersionUsage(
 
 	var indexStore longtaillib.Longtail_BlockStoreAPI
 
-	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, numWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
+	remoteIndexStore, err := remotestore.CreateBlockStoreForURI(blobStoreURI, nil, jobs, remoteStoreWorkerCount, 8388608, 1024, remotestore.ReadOnly, false, longtailutils.WithS3EndpointResolverURI(s3EndpointResolverURI))
 	if err != nil {
 		return storeStats, timeStats, errors.Wrap(err, fname)
 	}
@@ -103,7 +105,10 @@ func printVersionUsage(
 	defer progress.Dispose()
 
 	blockHashes := existingStoreIndex.GetBlockHashes()
-	maxBatchSize := int(numWorkerCount)
+	maxBatchSize := int(remoteStoreWorkerCount)
+	if maxBatchSize == 0 {
+		maxBatchSize = runtime.NumCPU()
+	}
 	for i := 0; i < len(blockHashes); {
 		batchSize := len(blockHashes) - i
 		if batchSize > maxBatchSize {
@@ -216,6 +221,7 @@ type PrintVersionUsageCmd struct {
 func (r *PrintVersionUsageCmd) Run(ctx *Context) error {
 	storeStats, timeStats, err := printVersionUsage(
 		ctx.NumWorkerCount,
+		ctx.NumRemoteWorkerCount,
 		r.StorageURI,
 		r.S3EndpointResolverURL,
 		r.VersionIndexPath,

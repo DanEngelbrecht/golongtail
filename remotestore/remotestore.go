@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -842,10 +843,16 @@ func contentIndexWorker(
 
 		select {
 		case <-flushMessages:
+			if err != nil {
+				flushReplyMessages <- err
+				err = nil
+				continue
+			}
 			if len(addedBlockIndexes) > 0 && accessType != ReadOnly {
 				newStoreIndex, err := addBlocksToRemoteStoreIndex(ctx, s, client, addedBlockIndexes)
 				if err != nil {
 					flushReplyMessages <- err
+					err = nil
 					continue
 				}
 				addedBlockIndexes = nil
@@ -912,6 +919,11 @@ func contentIndexWorker(
 				pruneBlocksMessage.asyncCompleteAPI.OnComplete(prunedCount, errors.Wrap(err, fname))
 			}
 		}
+	}
+
+	if err != nil && !longtaillib.IsNotExist(err) {
+		storeIndex.Dispose()
+		return err
 	}
 
 	if accessType == ReadOnly {
@@ -1960,6 +1972,11 @@ func CreateBlockStoreForURI(
 		if err != nil {
 			return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 		}
+
+		if numWorkerCount == 0 {
+			numWorkerCount = runtime.NumCPU()
+		}
+
 		fsBlockStore, err := NewRemoteBlockStore(
 			jobAPI,
 			fsBlobStore,
@@ -1981,6 +1998,14 @@ func CreateBlockStoreForURI(
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}
+
+			if numWorkerCount == 0 {
+				numWorkerCount = runtime.NumCPU()
+				if numWorkerCount > 8 {
+					numWorkerCount = 8
+				}
+			}
+
 			gcsBlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				gcsBlobStore,
@@ -1997,6 +2022,14 @@ func CreateBlockStoreForURI(
 			if err != nil {
 				return longtaillib.Longtail_BlockStoreAPI{}, errors.Wrap(err, fname)
 			}
+
+			if numWorkerCount == 0 {
+				numWorkerCount = runtime.NumCPU()
+				if numWorkerCount > 8 {
+					numWorkerCount = 8
+				}
+			}
+
 			s3BlockStore, err := NewRemoteBlockStore(
 				jobAPI,
 				s3BlobStore,

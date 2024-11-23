@@ -19,10 +19,10 @@ jobs:
     runs-on: ${{matrix.os}}
 
     steps:
-      - name: Set up Go 1.22
+      - name: Set up Go 1.23
         uses: actions/setup-go@v5
         with:
-          go-version: 1.22
+          go-version: 1.23
 
       - name: Check out source code
         uses: actions/checkout@v4

@@ -1,5 +1,9 @@
 ##
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
+ update longtaillib to 0.4.3 (#260)
+- **UPDATED** Update to golang 1.23
+- **UPDATED** Updated all golang dependencies
+- **UPDATED** Update longtaillib to v0.4.3
 
 ## 0.4.3
 - **CHANGED** For multi-source downsync/get the separator for paths is changed to | to avoid problems with path that contains spaces

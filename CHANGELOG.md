@@ -1,4 +1,7 @@
 ##
+- **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
+
+## 0.4.3
 - **CHANGED** For multi-source downsync/get the separator for paths is changed to | to avoid problems with path that contains spaces
 - **CHANGED** Made multi-path options separate from single-path
   -- `--source-path` vs `--source-paths`

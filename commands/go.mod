@@ -1,6 +1,6 @@
 module github.com/DanEngelbrecht/golongtail/commands
 
-go 1.23
+go 1.23.3
 
 require (
 	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0

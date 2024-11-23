@@ -1,9 +1,9 @@
-##
+## v0.4.3
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
 - **ADDED** New option to control the number of worker thread in remote stores to avoid overflowing the network connection.
   - `--remote-worker-count` Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores
 - **FIXED** Don't update store index if we failed to upload blocks
-- **UPDATED** Update to golang 1.23
+- **UPDATED** Update to golang 1.23.3
 - **UPDATED** Updated all golang dependencies
 - **UPDATED** Update longtaillib to v0.4.3
   - **FIXED** Fixed file corruption on Linux when using `--use-legacy-write` option. [chris-believer](https://github.com/chris-believer)

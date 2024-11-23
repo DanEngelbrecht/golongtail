@@ -1,4 +1,4 @@
-## v0.4.3
+## v0.4.4
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
 - **ADDED** New option to control the number of worker thread in remote stores to avoid overflowing the network connection.
   - `--remote-worker-count` Set number of workers created for the remote store, defaults to match number of logical CPUs with upper limit of 8 for networked remote stores

@@ -144,14 +144,14 @@ func (blobObject *s3BlobObject) LockWriteVersion() (bool, error) {
 
 func (blobObject *s3BlobObject) Exists() (bool, error) {
 	const fname = "s3BlobObject.Exists()"
-	input := &s3.GetObjectAclInput{
+	input := &s3.HeadObjectInput{
 		Bucket: aws.String(blobObject.client.store.bucketName),
 		Key:    aws.String(blobObject.path),
 	}
-	_, err := blobObject.client.client.GetObjectAcl(blobObject.client.ctx, input)
+	_, err := blobObject.client.client.HeadObject(blobObject.client.ctx, input)
 	if err != nil {
-		var nsk *types.NoSuchKey
-		if errors.As(err, &nsk) {
+		var notFoundErr *types.NotFound
+		if errors.As(err, &notFoundErr) {
 			return false, nil
 		}
 		return false, errors.Wrap(err, fname)

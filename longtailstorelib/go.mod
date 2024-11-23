@@ -1,6 +1,6 @@
 module github.com/DanEngelbrecht/golongtail/longtailstorelib
 
-go 1.23
+go 1.23.3
 
 require (
 	cloud.google.com/go/storage v1.47.0

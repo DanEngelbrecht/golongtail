@@ -34,4 +34,6 @@ var Cli struct {
 	Pack                    PackCmd                    `cmd:"" name:"pack" help:"Pack a source to an archive"`
 	Unpack                  UnpackCmd                  `cmd:"" name:"unpack" help:"Unpack an archive"`
 	Put                     PutCmd                     `cmd:"" name:"put" help:"Upload a folder"`
+	Push                    PushCmd                    `cmd:"" name:"push" help:"Makes a snapshot of the current folder and store in .longtail folder"`
+	Pop                     PopCmd                     `cmd:"" name:"pop" help:"Restores the most current snapshot to the current folder from store in .longtail folder"`
 }

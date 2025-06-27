@@ -606,7 +606,7 @@ func onPreflightMessage(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":            fname,
 		"s":                s,
-		"len(blockHashes)": message.blockHashes,
+		"len(blockHashes)": len(message.blockHashes),
 	})
 	log.Debug(fname)
 
@@ -624,7 +624,7 @@ func onGetExistingContentMessage(
 	log := logrus.WithFields(logrus.Fields{
 		"fname":                fname,
 		"s":                    s,
-		"len(chunkHashes)":     message.chunkHashes,
+		"len(chunkHashes)":     len(message.chunkHashes),
 		"minBlockUsagePercent": message.minBlockUsagePercent,
 	})
 	log.Debug(fname)

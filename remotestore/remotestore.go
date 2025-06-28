@@ -597,16 +597,16 @@ func addBlocksToRemoteStoreIndex(
 	return addToRemoteStoreIndex(ctx, blobClient, addedStoreIndex)
 }
 
-func onPreflighMessage(
+func onPreflightMessage(
 	s *remoteStore,
 	storeIndex longtaillib.Longtail_StoreIndex,
 	message preflightGetMessage,
 	prefetchBlockMessages chan<- prefetchBlockMessage) {
-	const fname = "onPreflighMessage"
+	const fname = "onPreflightMessage"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":   fname,
-		"s":       s,
-		"message": message,
+		"fname":            fname,
+		"s":                s,
+		"len(blockHashes)": len(message.blockHashes),
 	})
 	log.Debug(fname)
 
@@ -622,9 +622,10 @@ func onGetExistingContentMessage(
 	message getExistingContentMessage) {
 	const fname = "onGetExistingContentMessage"
 	log := logrus.WithFields(logrus.Fields{
-		"fname":   fname,
-		"s":       s,
-		"message": message,
+		"fname":                fname,
+		"s":                    s,
+		"len(chunkHashes)":     len(message.chunkHashes),
+		"minBlockUsagePercent": message.minBlockUsagePercent,
 	})
 	log.Debug(fname)
 
@@ -781,10 +782,10 @@ func contentIndexWorker(
 				storeIndex.Dispose()
 				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, errors.Wrap(err, fname))
 			} else if updatedStoreIndex.IsValid() {
-				onPreflighMessage(s, updatedStoreIndex, preflightGetMsg, prefetchBlockMessages)
+				onPreflightMessage(s, updatedStoreIndex, preflightGetMsg, prefetchBlockMessages)
 				updatedStoreIndex.Dispose()
 			} else {
-				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
+				onPreflightMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
 			}
 		case blockIndexMsg, more := <-blockIndexMessages:
 			if more {
@@ -868,10 +869,10 @@ func contentIndexWorker(
 				storeIndex.Dispose()
 				preflightGetMsg.asyncCompleteAPI.OnComplete([]uint64{}, errors.Wrap(err, fname))
 			} else if updatedStoreIndex.IsValid() {
-				onPreflighMessage(s, updatedStoreIndex, preflightGetMsg, prefetchBlockMessages)
+				onPreflightMessage(s, updatedStoreIndex, preflightGetMsg, prefetchBlockMessages)
 				updatedStoreIndex.Dispose()
 			} else {
-				onPreflighMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
+				onPreflightMessage(s, storeIndex, preflightGetMsg, prefetchBlockMessages)
 			}
 		case blockIndexMsg, more := <-blockIndexMessages:
 			if more {

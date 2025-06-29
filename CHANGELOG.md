@@ -1,3 +1,7 @@
+##
+- **FIXED** Fix excessive block/chunk hash logging (@webbju)
+- **FIXED** Bump deprecated unbuntu-20.04 builders to ubuntu-22.04 (@webbju)
+
 ## v0.4.4
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
 - **ADDED** New option to control the number of worker thread in remote stores to avoid overflowing the network connection.

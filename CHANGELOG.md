@@ -1,6 +1,6 @@
 ##
-- **FIXED** Fix excessive block/chunk hash logging (@webbju)
-- **FIXED** Bump deprecated unbuntu-20.04 builders to ubuntu-22.04 (@webbju)
+- **FIXED** Fix excessive block/chunk hash logging [webbju](https://github.com/webbju)
+- **FIXED** Bump deprecated unbuntu-20.04 builders to ubuntu-22.04 [webbju](https://github.com/webbju)
 - **UPDATED** Update longtaillib to v0.4.4
 
 ## v0.4.4

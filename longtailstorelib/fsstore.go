@@ -294,7 +294,7 @@ func (blobObject *fsBlobObject) Delete() error {
 				return errors.Wrap(err, fname)
 			}
 			if currentMetaGeneration != blobObject.metageneration {
-				err = fmt.Errorf(fmt.Sprintf("Failed to delete `%s`, meta generation mismatch", blobObject.path))
+				err = fmt.Errorf("Failed to delete `%s`, meta generation mismatch", blobObject.path)
 				return errors.Wrap(err, fname)
 			}
 		}

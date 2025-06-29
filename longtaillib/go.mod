@@ -1,9 +1,9 @@
 module github.com/DanEngelbrecht/golongtail/longtaillib
 
-go 1.23.3
+go 1.24.4
 
 require (
-	github.com/alecthomas/assert/v2 v2.8.1
+	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/pkg/errors v0.9.1
 )
 

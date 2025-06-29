@@ -2,6 +2,8 @@
 - **FIXED** Fix excessive block/chunk hash logging [webbju](https://github.com/webbju)
 - **FIXED** Bump deprecated unbuntu-20.04 builders to ubuntu-22.04 [webbju](https://github.com/webbju)
 - **UPDATED** Update longtaillib to v0.4.4
+- **UPDATED** golang to 1.24.4
+- **UPDATED** Updated all golang dependencies
 
 ## v0.4.4
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)

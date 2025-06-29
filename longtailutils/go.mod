@@ -1,6 +1,6 @@
 module github.com/DanEngelbrecht/golongtail/longtailutils
 
-go 1.23.3
+go 1.24.4
 
 require (
 	github.com/DanEngelbrecht/golongtail/longtaillib v0.0.0

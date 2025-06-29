@@ -1,6 +1,7 @@
 ##
 - **FIXED** Fix excessive block/chunk hash logging (@webbju)
 - **FIXED** Bump deprecated unbuntu-20.04 builders to ubuntu-22.04 (@webbju)
+- **UPDATED** Update longtaillib to v0.4.4
 
 ## v0.4.4
 - **FIXED** fix(s3): use HeadObject for checking if blob exists [bergemalm](https://github.com/bergemalm)
